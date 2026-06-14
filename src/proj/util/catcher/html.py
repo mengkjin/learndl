@@ -8,7 +8,7 @@ from functools import cached_property
 
 from typing import Any , TYPE_CHECKING
 from src.proj.env import PATH , MACHINE , Proj
-from src.proj.core import Duration
+from src.proj.core import Elapsed , Since
 from src.proj.log import Logger
 
 from .basic import OutputCatcher , TimedOutput , DeflectorGroup , _get_html_templates
@@ -124,7 +124,7 @@ class HtmlCatcher(OutputCatcher):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, cost {Duration(since = self.start_time)}" , vb_level = 1 if self.is_primary else 2)
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, cost {Since(self.start_time)}" , vb_level = 1 if self.is_primary else 2)
         self.export()
         if self.is_primary:
             self.deflectors.end_catching()
@@ -216,7 +216,7 @@ class HtmlCatcher(OutputCatcher):
             'Command' : ' '.join(sys.argv),
             'Start at' : f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}',
             'Finish at' : f'{finish_time.strftime("%Y-%m-%d %H:%M:%S")}',
-            'Duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
+            'Duration' : Elapsed(finish_time - self.start_time).fmtstr,
         }
         other_types : list[str] = list(set([output.type_str for output in self.outputs if output.type not in ['stdout' , 'stderr' , 'dataframe' , 'image']]))
         output_infos = {

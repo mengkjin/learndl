@@ -7,7 +7,7 @@
 # email: True
 # mode: shell
 
-from src.api import ModelAPI , SummaryAPI
+from src.api.pkgs import ModelAPI , SummaryAPI
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
 

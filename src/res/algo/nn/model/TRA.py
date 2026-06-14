@@ -90,7 +90,7 @@ class block_tra(nn.Module):
                 Logger.stdout(preds , x)
                 Logger.stdout(probs)
                 Logger.stdout(latent_representation , temporal_pred_error)
-                from src import api
+                import src.api as api
                 setattr(api , 'net' , self)
                 setattr(api , 'x' , x)
                 setattr(api , 'hist_loss' , hist_loss)
@@ -100,7 +100,7 @@ class block_tra(nn.Module):
             probs = nn.functional.gumbel_softmax(probs, dim=-1, tau=self.tau, hard=False)
             if probs.isnan().any():
                 Logger.stdout(probs)
-                from src import api
+                import src.api as api
                 setattr(api , 'net' , self)
                 setattr(api , 'x' , x)
                 setattr(api , 'hist_loss' , hist_loss)
@@ -158,7 +158,7 @@ class block_tra(nn.Module):
             Logger.stdout(lamb , self.gamma , self.rho , self.global_steps)
             Logger.stdout(self.probs.isnan().any())
             Logger.stdout((self.probs + 1e-4).log().isnan().any())
-            from src import api
+            import src.api as api
             setattr(api , 'net' , self)
             raise ValueError
         return loss

@@ -1,136 +1,209 @@
-"""Optional ``torch.compile`` integration for NN predictors.
-
-Lifecycle (answers common questions)
-------------------------------------
-1. **Fit → test transition** — No explicit "uncompile" step is required. Each
-   ``reload_model()`` / ``load_model()`` calls ``init_model()`` and builds a
-   fresh ``self.net``. The previous compiled wrapper is dropped with the old
-   reference. Configure ``train.torch_compile.stage`` to control which stages
-   compile (default: ``fit`` only).
-
-2. **Mutable values used in ``forward``** —
-   * ``nn.Parameter`` / ``register_buffer`` — safe; updated in-place, traced as
-     graph inputs.
-   * Plain Python ``float`` / ``int`` on ``self`` changed between steps — may
-     cause **guard failures** and recompilation, or be **specialized as
-     constants** at first compile (stale value bug). Prefer ``nn.Parameter``,
-     ``register_buffer``, or pass values as forward arguments.
-   * Custom setters that replace tensors — treat like structure change; may
-     require a new module instance / recompile.
-
-3. **Dict returns and graph breaks** — A *graph break* means TorchDynamo stops
-   tracing and runs the rest in eager Python. Returning
-   ``{'hidden': tensor, ...}`` where **all values are tensors produced inside
-   the traced region** usually keeps the heavy compute compiled; only dict
-   construction / tuple unpacking at the boundary may graph-break with small
-   overhead. Breaks are costly when values are **non-tensors**, keys are
-   dynamic, or tensors are built outside the traced subgraph.
-"""
+"""Optional ``torch.compile`` integration for NN predictors via :class:`TorchCompiler`."""
 from __future__ import annotations
 
+
 import torch
+from datetime import datetime
 from torch import nn
-from typing import Any , Literal , cast
+from typing import TYPE_CHECKING , Any , Literal , cast
 
-from src.proj import Logger
-from src.res.model.util.config import ModelConfig
+from src.proj import MACHINE , Base
 
-__all__ = [
-    'CompileStage',
-    'apply_torch_compile',
-    'unwrap_compiled_module',
-    'is_compiled_module',
-]
+if TYPE_CHECKING:
+    from src.proj.bases.classes.bound_logger import ModuleLogger
+    from src.res.model.util.trainer import PredictorModel
+    from src.res.model.util.config import ModelConfig
+
+__all__ = ['CompileStage', 'TorchCompiler']
 
 CompileStage = Literal['fit', 'test']
 
 _COMPILED_MARK = '_learndl_torch_compiled'
 
+class TorchCompiler:
+    """Manage torch.compile wrap, warmup timing, and eager fallback for one predictor."""
 
-def is_compiled_module(module: nn.Module) -> bool:
-    """Return True if *module* was wrapped by :func:`apply_torch_compile`."""
-    return bool(getattr(module, _COMPILED_MARK, False))
+    def __init__(self, predictor: PredictorModel) -> None:
+        self._disabled = not MACHINE.cuda_server
+        self._predictor = predictor
 
+        self._raw: nn.Module | None = None
+        self._active: nn.Module | None = None
+        self._warmup_logged = False
 
-def unwrap_compiled_module(module: nn.Module) -> nn.Module:
-    """Return the inner ``nn.Module`` if *module* is torch-compiled, else *module*."""
-    if is_compiled_module(module):
-        return getattr(module, '_orig_mod', module)
-    # PyTorch >= 2.0 may wrap without our mark when compile is applied externally.
-    orig = getattr(module, '_orig_mod', None)
-    return orig if isinstance(orig, nn.Module) else module
+    @classmethod
+    def is_compiled(cls, module: nn.Module) -> bool:
+        """Return True if *module* was wrapped by this helper."""
+        return bool(getattr(module, _COMPILED_MARK, False))
 
+    @classmethod
+    def set_compiled(cls, module: nn.Module) -> None:
+        """Set the compiled mark to True."""
+        setattr(module, _COMPILED_MARK, True)
 
-def _stage_enabled(config_stage: str, current_stage: CompileStage | None) -> bool:
-    stage = (config_stage or 'fit').lower().replace(' ', '')
-    if stage in ('both', 'all', 'fit+test'):
-        return True
-    if current_stage is None:
-        return stage == 'fit'
-    return stage == current_stage
+    @classmethod
+    def reset_compiled(cls, module: nn.Module) -> None:
+        """Set the compiled mark to False."""
+        if cls.is_compiled(module):
+            setattr(module, _COMPILED_MARK, False)
 
+    @classmethod
+    def unwrap_module(cls, module: nn.Module) -> nn.Module:
+        """PyTorch-only unwrap via ``_orig_mod`` when no :class:`TorchCompiler` context."""
+        if cls.is_compiled(module):
+            return getattr(module, '_orig_mod', module)
+        orig = getattr(module, '_orig_mod', None)
+        return orig if isinstance(orig, nn.Module) else module
 
-def apply_torch_compile(
-    module: nn.Module,
-    *,
-    enabled: bool,
-    mode: str = 'default',
-    dynamic: Literal[True] = True,
-    fullgraph: bool = False,
-    config_stage: str = 'fit',
-    current_stage: CompileStage | None = None,
-    logger: Logger | Any | None = None,
-) -> nn.Module:
-    """Wrap *module* with ``torch.compile`` when *enabled* and stage matches.
+    @property
+    def raw(self) -> nn.Module | None:
+        """The unwrapped module passed to :meth:`wrap` (authoritative when set)."""
+        return self._raw
 
-    Args:
-        module:         Fresh ``nn.Module`` (already on target device).
-        enabled:        Master switch (``train.torch_compile``).
-        mode:           ``torch.compile`` mode (``default``, ``reduce-overhead``,
-                        ``max-autotune``, …).
-        dynamic:        Pass ``dynamic=`` to ``torch.compile`` (recommended for
-                        varying daily stock counts).
-        fullgraph:      If True, error on graph breaks instead of falling back.
-        config_stage:   ``fit``, ``test``, or ``both`` / ``all``.
-        current_stage:  Active trainer stage when the module is created.
-        logger:         Optional logger for one-line compile notice.
-    """
-    if not enabled or not _stage_enabled(config_stage, current_stage):
-        return module
-    if not hasattr(torch, 'compile'):
-        (logger or Logger).warning('train.torch_compile is enabled but torch.compile is unavailable')
-        return module
+    def unwrap(self, module: nn.Module | None = None) -> nn.Module:
+        """Return the eager ``nn.Module``, preferring :attr:`raw` over PyTorch ``_orig_mod``."""
+        mod = self.net if module is None else module
+        if mod is None:
+            raise RuntimeError('TorchCompiler.unwrap called with no module')
+        if self._raw is not None and (mod is self._raw or mod is self._active):
+            return self._raw
+        return self.unwrap_module(mod)
 
-    compile_kwargs: dict[str, Any] = {'mode': mode, 'fullgraph': fullgraph}
-    assert dynamic is True , 'dynamic must be True in this project'
-    compile_kwargs['dynamic'] = True
+    @classmethod
+    def is_compile_error(cls, exc: BaseException) -> bool:
+        """True when *exc* originates from torch.compile / Dynamo / Inductor."""
+        inductor_error = getattr(getattr(torch, '_inductor', None), 'exc', None)
+        if inductor_error is not None and isinstance(exc, getattr(inductor_error, 'InductorError', ())):
+            return True
+        seen: set[int] = set()
+        current: BaseException | None = exc
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            module_name = type(current).__module__
+            type_name = type(current).__name__
+            if module_name.startswith(('torch._dynamo', 'torch._inductor')):
+                return True
+            if type_name in {'InductorError', 'BackendCompilerFailed', 'LoweringException'}:
+                return True
+            current = current.__cause__ or current.__context__
+        return False
 
-    compiled = cast(nn.Module, torch.compile(module, **compile_kwargs))
-    setattr(compiled, _COMPILED_MARK, True)
+    @classmethod
+    def stage_enabled(cls, config_stage: str, current_stage: CompileStage | None) -> bool:
+        stage = (config_stage or 'fit').lower().replace(' ', '')
+        if stage in ('both', 'all', 'fit+test'):
+            return True
+        if current_stage is None:
+            return stage == 'fit'
+        return stage == current_stage
 
-    log = logger or Logger
-    log.info(
-        f'torch.compile applied (stage={current_stage or "fit"}, mode={mode}, '
-        f'dynamic={dynamic}, fullgraph={fullgraph})'
-    )
-    return compiled
+    @property
+    def eligible(self) -> bool:
+        return self.model.AllowTorchCompile
 
+    @property
+    def enabled(self) -> bool:
+        if not self.eligible or self._disabled:
+            return False
+        config = self._predictor.config
+        if not config or not bool(config['train.torch_compile']):
+            return False
+        if not hasattr(torch, 'compile'):
+            return False
+        return self.stage_enabled(
+            str(config['train.torch_compile.stage']),
+            self.stage,
+        )
 
-def apply_torch_compile_from_config(
-    module: nn.Module,
-    config: ModelConfig,
-    current_stage: CompileStage | None,
-    *,
-    logger: Logger | Any | None = None,
-) -> nn.Module:
-    """Convenience wrapper reading ``train.torch_compile*`` keys from *config*."""
-    return apply_torch_compile(
-        module,
-        enabled=bool(config['train.torch_compile']),
-        mode=str(config['train.torch_compile.mode']),
-        dynamic=True,
-        fullgraph=bool(config['train.torch_compile.fullgraph']),
-        config_stage=str(config['train.torch_compile.stage']),
-        current_stage=current_stage,
-        logger=logger,
-    )
+    @property
+    def disabled(self) -> bool:
+        return self._disabled
+
+    @property
+    def logger(self) -> ModuleLogger:
+        return self._predictor.logger
+
+    @property
+    def model(self) -> PredictorModel:
+        return self._predictor
+
+    @property
+    def net(self) -> nn.Module | None:
+        return self._predictor.net
+
+    @property
+    def config(self) -> ModelConfig:
+        return self._predictor.config
+
+    @property
+    def stage(self) -> CompileStage:
+        if self._predictor.bounded_with_trainer:
+            stage = self._predictor.trainer.status.stage
+            assert stage == 'fit' or stage == 'test', f'Invalid stage: {stage}'
+            return stage
+        return 'fit'
+
+    def reset(self) -> None:
+        """Clear per-model lifecycle state before wrapping a fresh ``nn.Module``."""
+        self._raw = None
+        self._active = None
+        self._warmup_logged = False
+        if self.net is not None:
+            self.reset_compiled(self.net)
+
+    def wrap(self, module: nn.Module) -> nn.Module:
+        """Optionally wrap *module* with ``torch.compile``; always store raw/active refs."""
+        assert self.eligible , f'TorchCompiler is not eligible, predictor.AllowTorchCompile is {self._predictor.AllowTorchCompile} , net is {self._predictor.net is not None}'
+        self._raw = module
+        self._active = module
+        if not self.enabled:
+            return module
+        t0 = datetime.now()
+        compile_kwargs: dict[str, Any] = {
+            'mode': str(self.config['train.torch_compile.mode']),
+            'fullgraph': bool(self.config['train.torch_compile.fullgraph']),
+            'dynamic': True,
+        }
+        compiled = cast(nn.Module, torch.compile(module, **compile_kwargs))
+        self.set_compiled(compiled)
+        self._active = compiled
+        
+        self.logger.note(
+            f'torch.compile enabled (stage={self.stage}, '
+            f'mode={compile_kwargs["mode"]}, dynamic=True, fullgraph={compile_kwargs["fullgraph"]})'
+            f'elapsed: {Base.Since(t0)}'
+        )
+        return compiled
+
+    def run(self, *args: Any, **kwargs: Any) -> Any:
+        """Forward through compiled module with eager fallback on compile errors."""
+        if self._raw is None or self._active is None:
+            raise RuntimeError('TorchCompiler.run called before wrap()')
+        if self._disabled or self._active is self._raw:
+            return self._raw(*args, **kwargs)
+
+        t0 = datetime.now()
+        try:
+            output = self._active(*args, **kwargs)
+        except Exception as exc:
+            if not self.is_compile_error(exc):
+                raise
+            self.logger.alert2(
+                f'torch.compile set to disabled due to compile error, falling back to eager mode for this model'
+                f'Failed after {Base.Since(t0)} ({type(exc).__name__}: {exc}); '
+            )
+            self.logger.print_exc(exc)
+            self._fallback()
+            return self._raw(*args, **kwargs)
+
+        if not self._warmup_logged:
+            self.logger.note(f'torch.compile warmup finished in {Base.Since(t0)}')
+            self._warmup_logged = True
+        return output
+
+    def _fallback(self) -> None:
+        assert self._raw is not None
+        self._disabled = True
+        self._active = self._raw
+        self.model.net = self._raw
+

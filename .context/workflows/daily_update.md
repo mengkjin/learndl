@@ -45,9 +45,7 @@ Uses `TradingAPI.update()` from [[trading]]. Generates today's trade suggestions
 ## API Equivalents
 
 ```python
-from src.api.data import DataAPI
-from src.api.factor import FactorAPI
-from src.api.trading import TradingAPI
+from src.api.pkgs import DataAPI, FactorAPI, TradingAPI
 
 DataAPI.update('trade', start=today, end=today)
 FactorAPI.update('all', start=today, end=today)

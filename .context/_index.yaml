@@ -24,19 +24,19 @@
 - doc: context/modules/data_pipeline.md
   sources:
     - src/data/
-    - src/api/data.py
+    - src/api/pkgs/data.py
 
 - doc: context/modules/factor_engine.md
   sources:
     - src/res/factor/
-    - src/api/factor.py
+    - src/api/pkgs/factor.py
     - configs/util/factor/
 
 - doc: context/modules/nn_models.md
   sources:
     - src/res/algo/nn/
     - src/res/model/
-    - src/api/model.py
+    - src/api/pkgs/model.py
     - configs/algo/nn/
     - configs/model/
 
@@ -53,14 +53,19 @@
 - doc: context/modules/trading.md
   sources:
     - src/res/trading/
-    - src/api/trading.py
-    - src/api/summary.py
+    - src/api/pkgs/trading.py
+    - src/api/pkgs/summary.py
     - configs/setting/trading_port.yaml
+
+- doc: context/modules/api_layer.md
+  sources:
+    - src/api/pkgs/
+    - src/api/calls/
+    - src/api/util/
 
 - doc: context/modules/interactive_app.md
   sources:
-    - src/app/
-    - src/api/
+    - src/api/interactive/
 
 - doc: context/workflows/daily_update.md
   sources:

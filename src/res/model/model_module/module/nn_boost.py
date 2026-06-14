@@ -10,13 +10,14 @@ from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , BatchOutput , Optimizer
-from src.res.model.util.advance.torch_compile import apply_torch_compile_from_config , CompileStage
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
 __all__ = ['NNBoost']
 class NNBoost(PredictorModel):
-    """A Very restricted type of nn, direcly use nn as feature extractor, and use boost as prediction head"""    
+    """A Very restricted type of nn, direcly use nn as feature extractor, and use boost as prediction head"""
+    AllowTorchCompile = True
+
     @property
     def boost_param(self): 
         assert self.config.boost_head , f'{self.config.boost_head} is not a valid boost head'
@@ -40,10 +41,7 @@ class NNBoost(PredictorModel):
         cuda   = self.device.is_cuda     if self.config else None
         seed   = self.config.random_seed if self.config else None
 
-        self.net = AlgoModule.get_nn(nn_module , nn_param , device)
-        self.net = apply_torch_compile_from_config(
-            self.net , self.config , self._compile_stage() , logger = self.logger,
-        )
+        self.net = self.wrap_net(AlgoModule.get_nn(nn_module , nn_param , device))
         self.reset_submodels(*args , **kwargs)
         self.boost = AlgoModule.get_boost(
             boost_module , boost_param, cuda , seed , given_name = self.model_full_name, 
@@ -53,11 +51,6 @@ class NNBoost(PredictorModel):
         self.complete_model_param = nn_param | boost_param
         return self
 
-    def _compile_stage(self) -> CompileStage | None:
-        if self.bounded_with_trainer:
-            return self.trainer.status.stage  # type: ignore[return-value]
-        return 'fit'
-    
     def reset_submodels(self , *args , **kwargs):
         if hasattr(self , 'submodels'):
             [submodel.reset() for submodel in self.submodels.values()]
@@ -72,7 +65,7 @@ class NNBoost(PredictorModel):
         if self.trainer and self.trainer.if_transfer:
             prev_model_file = self.deposition.load_model(self.model_num , self.trainer.prev_model_date)
             if prev_model_file.exists() and prev_model_file['state_dict']:
-                self.net.load_state_dict(prev_model_file['state_dict'])
+                self.persist_net().load_state_dict(prev_model_file['state_dict'])
                 transferred = True
         self.optimizer : Optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
         return self
@@ -83,7 +76,7 @@ class NNBoost(PredictorModel):
         assert self.model_submodel == 'best' , f'{self.model_submodel} does not defined in {self.__class__.__name__}'
         if not cache_model or self.current_model_file.model_path != model_file.model_path:
             self.init_model(*args , **kwargs)
-            self.net.load_state_dict(model_file['state_dict'])
+            self.persist_net().load_state_dict(model_file['state_dict'])
             self.boost.load_dict(model_file['boost_head'])
             self.current_model_file = model_file
         return self
@@ -93,13 +86,13 @@ class NNBoost(PredictorModel):
         return {
             'epoch' : self.status.epoch,
             'phase' : self.status.phase,
-            'net' : self.net.state_dict() ,
+            'net' : self.persist_net().state_dict() ,
             'optimizer' : self.optimizer.optimizer.state_dict() ,
             'scheduler' : self.optimizer.scheduler.state_dict() ,
         }
 
     def load_state_dict(self , state_dict : dict):
-        self.net.load_state_dict(state_dict['net'])
+        self.persist_net().load_state_dict(state_dict['net'])
         self.boost.load_dict(state_dict['boost'])
         self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
         self.optimizer.scheduler.load_state_dict(state_dict['scheduler'])
@@ -113,7 +106,7 @@ class NNBoost(PredictorModel):
         if len(batch_input) == 0: 
             return None
         x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
-        return self.net(x , *args , **kwargs)
+        return self.run_net(x , *args , **kwargs)
     
     def forward_full(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs): 
         """model object that can be called to forward"""
@@ -182,4 +175,8 @@ class NNBoost(PredictorModel):
         set_grad_enabled(False)
 
     def on_before_stack_model(self):
-        self.net = self.net.cpu()
+        net = self.persist_net().cpu()
+        self.net = net
+        if self.torch_compile is not None:
+            self.torch_compile._raw = net
+            self.torch_compile._active = net

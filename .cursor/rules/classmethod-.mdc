@@ -1,0 +1,11 @@
+---
+alwaysApply: true
+---
+
+@classmethod
+    def unwrap(cls, module: nn.Module) -> nn.Module:
+        """Return the inner ``nn.Module`` if *module* is compiled, else *module*."""
+        if cls.is_compiled(module):
+            return getattr(module, '_orig_mod', module)
+        orig = getattr(module, '_orig_mod', None)
+        return orig if isinstance(orig, nn.Module) else module

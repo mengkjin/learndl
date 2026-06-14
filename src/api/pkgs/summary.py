@@ -1,0 +1,197 @@
+"""
+API for summary operations of this project.
+"""
+
+from __future__ import annotations
+import pandas as pd
+from pathlib import Path
+from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
+from src.res.model.model_module.application.trainer import ModelTrainer
+from src.res.factor.util.stats.aggregate import eval_period_ic_multi
+from src.proj import Logger , PATH , Const , Load
+
+from src.api.util import wrap_update
+
+__all__ = ['SummaryAPI']
+
+def display_account_summary(accounts : dict[str , dict[str , Path]] , account_type : str , by_max_columns : int = 12):
+    """
+    Render account period-return tables for *accounts* via ``Logger.display``.
+
+    Args:
+        accounts: Map model/port name to column→tar path dicts.
+        account_type: Label used in captions.
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in accounts.items()}
+    dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
+    for i , df in enumerate(dfs):
+        caption = f'Summary of {account_type.title()} Account Period Return (Total {len(dfs)} Tables):' if i == 0 else None
+        Logger.display(df , title = caption)
+    return dfs
+
+def model_account_summary(by_max_columns : int = 12):
+    """
+    Summarize model FMP account archives discovered under each resumable model path.
+
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    acc_paths : dict[str , dict[str , Path]] = {}
+    fmp_types = {'t50' : 't50' , 'scr' : 'screen' , 'rein' : 'reinforce'}
+    model_paths = ModelTrainer.all_resumable_models()
+    for model_path in model_paths:
+        acc_paths[model_path.model_name] = {}
+        for col , fmp in fmp_types.items():
+            available_paths = list(model_path.snapshot('detailed_alpha' , f'{fmp}_fmp_test' , 'account').glob('*best*.tar'))
+            if available_paths:
+                acc_paths[model_path.model_name][col] = available_paths[0]
+    return display_account_summary(acc_paths , 'Model FMP' , by_max_columns = by_max_columns)
+
+def tracking_port_account_summary(by_max_columns : int = 12):
+    """
+    Summarize tracking-portfolio ``account.tar`` artifacts for configured tracking ports.
+
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    acc_paths : dict[str , dict[str , Path]] = {}
+    for tport in Const.TradingPort.tracking_ports:
+        available_paths = list(PATH.rslt_trade.joinpath('tracking', tport).glob('account.tar'))
+        if available_paths:
+            acc_paths[tport] = {'port':available_paths[0]} 
+    return display_account_summary(acc_paths , 'Tracking Portfolio' , by_max_columns = by_max_columns)
+
+def backtest_port_account_summary(by_max_columns : int = 12):
+    """
+    Summarize backtest-portfolio ``account.tar`` artifacts for configured backtest ports.
+
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    acc_paths : dict[str , dict[str , Path]] = {}
+    for tport in Const.TradingPort.backtest_ports:
+        available_paths = list(PATH.rslt_trade.joinpath('backtest', tport).glob('account.tar'))
+        if available_paths:
+            acc_paths[tport] = {'port':available_paths[0]} 
+    return display_account_summary(acc_paths , 'Backtest Portfolio' , by_max_columns = by_max_columns)
+
+def model_ic_summary():
+    """
+    Aggregate per-model IC curves (best submodel) into a multi-model evaluation frame.
+
+    Returns:
+        ``eval_period_ic_multi`` dataframe.
+    """
+    paths : dict[str , Path] = {}
+    
+    model_paths = ModelTrainer.all_resumable_models()
+    for model_path in model_paths:
+        if (path := model_path.snapshot('basic_test' , f'test_by_date.feather')).exists():
+            paths[model_path.model_name] = path
+    ic_tables = {}
+    for name , path in paths.items():
+        df = Load.df(path)
+        ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['rankic'].mean().\
+            reset_index(drop = False).dropna().rename(columns = {'rankic' : 'ic'})
+    df = eval_period_ic_multi(ic_tables)
+    return df
+
+def ic_summaries(by_max_columns : int = 12):
+    """
+    Display ``model_ic_summary`` output split into column batches.
+
+    Args:
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    df = model_ic_summary()
+    for i in range(0, len(df.columns), by_max_columns):
+        Logger.display(df.iloc[:,i:i+by_max_columns].dropna(how = 'all'))
+
+def account_summaries(by_max_columns : int = 12):
+    """
+    Run model, tracking, and backtest account summaries in one call.
+
+    Args:
+        by_max_columns: Column batch size per table chunk.
+    """
+    model_account_summary(by_max_columns)
+    tracking_port_account_summary(by_max_columns)
+    backtest_port_account_summary(by_max_columns)
+
+def concat_dfs_split(dfs : dict[str,pd.DataFrame] , by_max_columns : int = 12) -> list[pd.DataFrame]:
+    """
+    Split wide name→dataframe map into batches whose total column count stays under *by_max_columns*.
+
+    Args:
+        dfs: Dictionary of dataframe names and dataframes.
+        by_max_columns: Column batch size per table chunk.
+
+    Returns:
+        List of displayed dataframe batches.
+    """
+    if not dfs:
+        return []
+    out_dfs : list[pd.DataFrame] = []
+    current_batch : dict[str,pd.DataFrame] = {}
+    for i , (name , df) in enumerate(dfs.items()):
+        if current_batch and sum([len(df.columns) for df in current_batch.values()]) + len(df.columns) > by_max_columns:
+            out_dfs.append(concat_dfs(current_batch))
+            current_batch.clear()
+        current_batch[name] = df
+    out_dfs.append(concat_dfs(current_batch))
+    out_dfs = [df for df in out_dfs if not df.empty]
+    return out_dfs
+
+def concat_dfs(accounts : dict[str,pd.DataFrame]) -> pd.DataFrame:
+    """
+    Horizontally concat named dataframes and reindex to the longest member index.
+
+    Args:
+        accounts: Dictionary of dataframe names and dataframes.
+
+    Returns:
+        Concatenated dataframe.
+    """
+    longest_index = max(accounts.values(), key=len).index
+    return pd.concat(accounts , axis = 1).reindex(index = longest_index).rename_axis(index = '')
+class SummaryAPI:
+    """API for summary operations of this project."""
+    @classmethod
+    def update(cls):
+        """
+        Run the wrapped summary refresh (IC + account tables).
+
+        [API Interaction]:
+          expose: true
+          email: true
+          roles: [developer, admin]
+          risk: read_only
+          lock_num: 1
+          lock_timeout: 1
+          disable_platforms: []
+          execution_time: short
+          memory_usage: low
+        """
+        def summary_process():
+            """
+            Emit IC summaries followed by combined account summaries.
+            """
+            ic_summaries()
+            account_summaries()
+        wrap_update(summary_process , 'Summary')

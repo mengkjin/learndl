@@ -372,7 +372,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         # gc.collect()
         self.logger.success(
             f'{status.upper()} Preprocessed ({self.frame}) of [{self.key.upper()}] at '
-            f'{Dates(data_block.date)} finished! Cost {Base.Duration(since = tt1)}' , 
+            f'{Dates(data_block.date)} finished! Cost {Base.Since(tt1)}' , 
             add_prefix = False)
         return Base.UpdateFlag.SUCCESS
     

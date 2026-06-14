@@ -272,7 +272,7 @@ class SummaryWriter(BaseCallBack):
         test_name = f'{self.config.base_path.full_name}'
 
         duration : dict[str,str] = {
-            stage : f'{Base.Duration(self.status.times[f'{stage}_end'] - self.status.times[f'{stage}_start'])}' for stage in self.config.queue_of_stages
+            stage : f'{Base.Elapsed(self.status.times[f'{stage}_end'] - self.status.times[f'{stage}_start'])}' for stage in self.config.queue_of_stages
         }
         metrics : dict[str,str] = {}
         for col in test_summary.columns:

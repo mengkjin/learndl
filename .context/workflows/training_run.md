@@ -13,7 +13,7 @@
 ## Quick Start
 
 ```python
-from src.api.model import ModelAPI
+from src.api.pkgs import ModelAPI
 
 ModelAPI.train_model('gru_ret1d')     # trains GRU on 1-day return
 ModelAPI.train_model('lgbm_of_factors')  # trains LightGBM on factor inputs
@@ -53,14 +53,14 @@ Training metrics (loss, val IC) are logged to `PATH.log/`.
 ## After Training
 
 ```python
-from src.api.model import ModelAPI
-from src.api.summary import SummaryAPI
+from src.api.pkgs import ModelAPI
+from src.api.pkgs import SummaryAPI
 
 # Check model performance
 SummaryAPI.model_account_summary('gru_ret1d')
 
 # Run backtest with the new predictions
-from src.api.trading import TradingAPI
+from src.api.pkgs import TradingAPI
 TradingAPI.Backtest('top50_gru')
 ```
 

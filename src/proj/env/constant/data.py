@@ -21,15 +21,15 @@ class DataUpdateConfig(metaclass=SingletonMeta):
     @cached_property
     def _use_schedule(self) -> Literal['production' , 'testing']:
         """use schedule"""
-        return MACHINE.preference('data' , 'machine_schedules').get(MACHINE.name , 'testing')
+        return MACHINE.preference('update_schedule' , 'machine_schedules').get(MACHINE.name , 'testing')
     @cached_property
     def _production(self) -> dict[str , Any]:
         """production schedule"""
-        return MACHINE.preference('data' , 'production')
+        return MACHINE.preference('update_schedule' , 'production')
     @cached_property
     def _testing(self) -> dict[str , Any]:
         """testing schedule"""
-        return MACHINE.preference('data' , 'testing')
+        return MACHINE.preference('update_schedule' , 'testing')
     @property
     def schedule(self) -> dict[str , Any]:
         """schedule"""

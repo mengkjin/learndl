@@ -368,7 +368,7 @@ class PortfolioGroupBuilder(Base.BoundLogger):
                 self.print_build_info(date , opt_count , builder)
 
         secs = (datetime.now() - t0).total_seconds()
-        self.logger.stdout(f'build finished! Cost {Base.Duration(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
+        self.logger.stdout(f'build finished! Cost {Base.Elapsed(secs)}, {(secs/max(opt_count,1)/1000):.1f} ms per building')
         self.save_portfolios()
         return self
 

@@ -1,6 +1,6 @@
 # Trading & Portfolio
 **Purpose:** Portfolio construction (top-N, screening, optimized), live tracking, and backtesting. Converts alpha signals into portfolio weights and evaluates performance metrics.
-**Key source paths:** `src/res/trading/`, `src/api/trading.py`, `src/api/summary.py`
+**Key source paths:** `src/res/trading/`, `src/api/pkgs/trading.py`, `src/api/pkgs/summary.py`
 **Depends on:** [[nn_models]], [[factor_engine]], [[data_pipeline]], [[project_infra]]
 
 ---
@@ -21,7 +21,7 @@ Three weight construction strategies, each a `PortfolioCreator` subclass:
 
 ## API Layer
 
-### `TradingAPI` (`src/api/trading.py`)
+### `TradingAPI` (`src/api/pkgs/trading.py`)
 
 | Method | Purpose |
 |--------|---------|
@@ -31,7 +31,7 @@ Three weight construction strategies, each a `PortfolioCreator` subclass:
 | `TradingAPI.Analyze(port_name)` | Run full performance analysis for a portfolio |
 | `TradingAPI.Backtest(port_name)` | Run backtest for a specific portfolio config |
 
-### `SummaryAPI` (`src/api/summary.py`)
+### `SummaryAPI` (`src/api/pkgs/summary.py`)
 
 | Function | Purpose |
 |----------|---------|

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any , Callable , Literal , Sequence
 
 from src.proj.env import PATH , Proj
-from src.proj.core import Duration , stdout , stderr , FormatStr , Once , Silence , StrEnum
+from src.proj.core import Elapsed , Since , stdout , stderr , FormatStr , Once , Silence , StrEnum
 from .display import Display
 from .logfile import LogFile
 
@@ -567,7 +567,7 @@ class Logger:
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.prefix} finished! Cost {Duration(since = self._init_time , high_precision = True)}'
+            return f'{self.prefix} finished! Cost {Since(self._init_time , high_precision = True)}'
 
     class Paragraph:
         """
@@ -596,8 +596,11 @@ class Logger:
             self._end_time = datetime.now()
             if self.exit_infos:
                 Logger.stdout(','.join(self.exit_infos) , indent = 1 , vb_level = self.vb_level , color = self.color , bold = True)
-            self.write(f'{self.key}{self.key_suffix} Finish at {self._end_time.strftime("%Y-%m-%d %H:%M:%S")}, Cost {Duration(self._end_time - self._init_time)}' ,
-                       vb_level = self.vb_level)
+            self.write(
+                f'{self.key}{self.key_suffix} Finish at' 
+                f'{self._end_time.strftime("%Y-%m-%d %H:%M:%S")},'
+                f'Cost {Elapsed(self._end_time - self._init_time)}' ,
+                vb_level = self.vb_level)
         def add_exit_infos(self , *msgs):
             """Set the infos"""
             self.exit_infos.extend(msgs)
@@ -642,7 +645,7 @@ class Logger:
         @property
         def exit_str(self):
             """Get the exit string"""
-            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Duration(since = self.start_time)}'
+            return f'{self.__class__.__name__}({self.key}{self.key_suffix}) finished! Cost {Since(self.start_time)}'
 
         def __enter__(self):
             if self.profiling: 

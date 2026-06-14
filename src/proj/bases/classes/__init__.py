@@ -4,7 +4,10 @@ from .filtered import FilteredIterable
 from .flatten_dict import FlattenDict
 from .updater import BasicUpdater
 
-from src.proj.core import Duration
+from src.proj.core import Elapsed , Since
 from src.proj.cal import Dates
 
-__all__ = ['CacheProps', 'BoundLogger', 'FilteredIterable', 'FlattenDict' , 'Duration' , 'Dates' , 'BasicUpdater']
+__all__ = [
+    'CacheProps', 'BoundLogger', 'FilteredIterable', 'FlattenDict' , 
+    'Elapsed' , 'Since' , 'Dates' , 'BasicUpdater'
+]

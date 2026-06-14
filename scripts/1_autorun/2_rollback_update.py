@@ -15,7 +15,7 @@
 #       required : True
 #       default : 20250814
 
-from src.api import UpdateAPI
+from src.api.pkgs import UpdateAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('rollback_update' , '@rollback_date')

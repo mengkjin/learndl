@@ -7,7 +7,7 @@
 # email: True
 # mode: shell
 
-from src.api import DataAPI
+from src.api.pkgs import DataAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('reconstruct_train_data')

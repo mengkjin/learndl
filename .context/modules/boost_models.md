@@ -226,7 +226,7 @@ through `AlgoModule.get_boost()`.
 ## Integration with ModelAPI
 
 ```python
-from src.api.model import ModelAPI
+from src.api.pkgs import ModelAPI
 ModelAPI.train_model('lgbm_of_factors')
 ```
 

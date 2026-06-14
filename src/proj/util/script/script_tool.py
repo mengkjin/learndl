@@ -92,7 +92,7 @@ class ScriptTool:
     @cached_property
     def backend_recorder(self):
         """Get the backend recorder"""
-        from src.interactive.backend import BackendTaskRecorder
+        from src.api.util.backend import BackendTaskRecorder
         backend_recorder = BackendTaskRecorder(**self._recorder_kwargs).resolve_task_id()
         return backend_recorder
 
@@ -114,7 +114,7 @@ class ScriptTool:
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
 
-        from src.api.contract import filter_kwargs_explicit_only
+        from src.api.util import filter_kwargs_explicit_only
         sig = inspect.signature(func)
         @wraps(func)
         def inner(*args: Any , **kwargs: Any) -> Any:
@@ -130,7 +130,7 @@ class ScriptTool:
             if self.source_mode == 'api':
                 data = self.interaction
                 if data is None:
-                    from src.api.contract import endpoint_schema
+                    from src.api.util import endpoint_schema
                     data = endpoint_schema(func)
                 if data is not None and 'email' in data:
                     self.autorun_task.kwargs['email'] = bool(data['email'])
@@ -138,7 +138,7 @@ class ScriptTool:
                     self.autorun_task.kwargs['email'] = False
             else:
                 if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
-                    from src.interactive.backend import ScriptHeader
+                    from src.api.util.backend import ScriptHeader
                     self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
             new_func = self.backend_recorder(self.script_lock(self.autorun_task(inner)))
             return new_func(*args , **kwargs)

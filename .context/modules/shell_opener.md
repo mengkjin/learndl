@@ -89,4 +89,4 @@ Set `SHELL_OPENER_DEBUG_WEZTERM=1` for GUI socket discovery logs (`discover_wezt
 | `shell/util/process.py` | `popen_detached` (str → `shell=True`), `spawn_native` |
 | `shell/windows/cmd_terminal/open.py` | `start cmd /c` via `popen_detached_shell_windows` |
 | `shell/util/pausing.py` | `done_action` suffixes |
-| `interactive/.../quick_calls/basic.py` | Builds `["uv", "run", "python", "-c", …]` argv |
+| `src/api/interactive/util/quick_calls/basic.py` | Builds `["uv", "run", "python", "-c", …]` argv |

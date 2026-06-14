@@ -53,5 +53,5 @@ class Proj(metaclass=ProjMeta):
     @classmethod
     def print_disk_info(cls):
         """Show disk space info in the best way."""
-        from src.call.computer import PrintDiskSpaceInfo
+        from src.api.calls.computer import PrintDiskSpaceInfo
         PrintDiskSpaceInfo.go()

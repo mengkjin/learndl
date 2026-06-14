@@ -40,8 +40,7 @@ src/
 │   ├── model/    # training framework: callback/, data_module/, model_module/, util/
 │   ├── gp/       # genetic programming: func/, param/, util/
 │   └── trading/  # portfolio construction & trading: util/
-├── api/          # stable public facade: data, factor, model, trading, update, summary
-└── interactive/  # Streamlit app: backend/, frontend/, main/
+├── api/          # unified API layer: pkgs/, calls/, interactive/, util/
 ```
 
 ## Config layout (`configs/`)
@@ -60,15 +59,13 @@ configs/
 │   ├── input.yaml
 │   ├── env.yaml
 │   └── conditional.yaml
-├── setting/
+├── strategy/
 │   ├── model.yaml         # project model settings
 │   └── trading_port.yaml  # portfolio specifications (NOT configs/trading/)
-├── preference/       # app preferences (project, interactive, logger, shell)
-└── util/
-    ├── factor/       # factor opt configs, risk_factors.yaml
-    ├── industry/     # industry classification (tushare.yaml)
-    ├── transform/    # preprocessing params
-    └── calendar/     # trading day overrides
+├── constant/         # app preferences (project, interactive, logger, shell)
+│   ├── data/         # reserved datas (code mappers , industry , names)
+│   ├── preference/   # preference settings in debug, factor, interactive, model, shell, verbosity
+│   └── project.yaml  # project level settings
 ```
 
 ## Key classes and entry points
@@ -81,11 +78,11 @@ configs/
 | Logging | `Logger` | `src.proj.log` |
 | Constants | `CONST` | `src.proj.env` |
 | Data access | `TRADE`, `BS`, `IS`, `CF`, `MKLINE`, … | `src.data` |
-| Data API | `DataAPI` | `src.api.data` |
+| Data API | `DataAPI` | `src.api.pkgs` |
 | Factor calc | `FactorCalculator` (base) | `src.res.factor.calculator` |
-| Factor API | `FactorAPI` | `src.api.factor` |
-| Model API | `ModelAPI` | `src.api.model` |
-| Trading API | `TradingAPI` | `src.api.trading` |
+| Factor API | `FactorAPI` | `src.api.pkgs` |
+| Model API | `ModelAPI` | `src.api.pkgs` |
+| Trading API | `TradingAPI` | `src.api.pkgs` |
 | Script tools | `ScriptTool`, `Options` | `src.proj.util` |
 
 ## Logging

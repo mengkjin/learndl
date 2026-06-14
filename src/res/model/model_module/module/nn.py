@@ -8,11 +8,12 @@ from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , Optimizer
-from src.res.model.util.advance.torch_compile import apply_torch_compile_from_config , CompileStage
 from src.res.model.model_module.util.swa import choose_swa_method
 
 __all__ = ['NNPredictor']
 class NNPredictor(PredictorModel):
+    AllowTorchCompile = True
+
     def init_model(self , 
                    model_module : str | None = None , 
                    model_param : dict | None = None , 
@@ -25,21 +26,13 @@ class NNPredictor(PredictorModel):
 
         device = self.config.device if self.config else None
 
-        self.net = AlgoModule.get_nn(module , param , device)
-        self.net = apply_torch_compile_from_config(
-            self.net , self.config , self._compile_stage() , logger = self.logger,
-        )
+        self.net = self.wrap_net(AlgoModule.get_nn(module , param , device))
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
         self.complete_model_param = param
         return self
 
-    def _compile_stage(self) -> CompileStage | None:
-        if self.bounded_with_trainer:
-            return self.trainer.status.stage  # type: ignore[return-value]
-        return 'fit'
-    
     def reset_submodels(self , *args , **kwargs):
         if hasattr(self , 'submodels'):
             [submodel.reset() for submodel in self.submodels.values()]
@@ -54,7 +47,7 @@ class NNPredictor(PredictorModel):
         if self.trainer and self.trainer.if_transfer:
             prev_model_file = self.deposition.load_model(self.model_num , self.trainer.prev_model_date)
             if prev_model_file.exists() and prev_model_file['state_dict']:
-                self.net.load_state_dict(prev_model_file['state_dict'])
+                self.persist_net().load_state_dict(prev_model_file['state_dict'])
                 transferred = True
         self.optimizer = Optimizer(self.net , self.config , transferred , lr_multiplier , trainer = self.trainer)
         return self
@@ -64,7 +57,7 @@ class NNPredictor(PredictorModel):
         model_file = self.load_model_file(model_num , model_date , submodel)
         if not cache_model or self.current_model_file.model_path != model_file.model_path:
             self.init_model(*args , **kwargs)
-            self.net.load_state_dict(model_file['state_dict'])
+            self.persist_net().load_state_dict(model_file['state_dict'])
             self.current_model_file = model_file
         return self
     
@@ -73,13 +66,13 @@ class NNPredictor(PredictorModel):
         return {
             'epoch' : self.status.epoch,
             'phase' : self.status.phase,
-            'net' : self.net.state_dict() ,
+            'net' : self.persist_net().state_dict() ,
             'optimizer' : self.optimizer.optimizer.state_dict() ,
             'scheduler' : self.optimizer.scheduler.state_dict() ,
         }
 
     def load_state_dict(self , state_dict : dict):
-        self.net.load_state_dict(state_dict['net'])
+        self.persist_net().load_state_dict(state_dict['net'])
         self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
         self.optimizer.scheduler.load_state_dict(state_dict['scheduler'])
         return self
@@ -89,7 +82,7 @@ class NNPredictor(PredictorModel):
         if len(batch_input) == 0: 
             return None
         x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
-        return self.net(x , *args , **kwargs)
+        return self.run_net(x , *args , **kwargs)
 
     def fit(self):
         for _ in self.trainer.iter_fit_epoches():
@@ -128,4 +121,8 @@ class NNPredictor(PredictorModel):
         set_grad_enabled(False)
 
     def on_before_stack_model(self):
-        self.net = self.net.cpu()
+        net = self.persist_net().cpu()
+        self.net = net
+        if self.torch_compile is not None:
+            self.torch_compile._raw = net
+            self.torch_compile._active = net

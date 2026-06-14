@@ -1,6 +1,6 @@
 # NN Models
 **Purpose:** PyTorch-based neural network training, prediction, and evaluation pipeline. 18 architecture implementations with Stochastic Weight Averaging and a shared ModelAPI interface.
-**Key source paths:** `src/res/algo/nn/` (architectures), `src/res/model/` (training framework), `src/api/model.py`
+**Key source paths:** `src/res/algo/nn/` (architectures), `src/res/model/` (training framework), `src/api/pkgs/model.py`
 **Depends on:** [[data_pipeline]], [[factor_engine]], [[project_infra]]
 
 ---
@@ -8,7 +8,7 @@
 ## `ModelAPI` — public interface
 
 ```python
-from src.api.model import ModelAPI
+from src.api.pkgs import ModelAPI
 
 ModelAPI.train_model(schedule_name)          # train using a schedule config
 ModelAPI.Trainer                             # training orchestrator

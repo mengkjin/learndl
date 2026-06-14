@@ -11,7 +11,6 @@ from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
-from src.res.model.util.advance.torch_compile import unwrap_compiled_module
 
 SWAEnsemblerType = Literal['best' , 'swabest' , 'swalast']
 
@@ -43,9 +42,12 @@ class SWAEnsembler(ABC):
     def collect(self , trainer : BaseTrainer , *args , **kwargs) -> nn.Module: 
         """output the final fittest model state dict"""
 
+def _persist_net(trainer: BaseTrainer) -> nn.Module:
+    return trainer.model.persist_net()
+
 class SWAModel:
     def __init__(self , module : nn.Module) -> None:
-        self.template = deepcopy(unwrap_compiled_module(module))
+        self.template = deepcopy(module)
         self.avgmodel = AveragedModel(self.template)
 
     def update_sd(self , state_dict):
@@ -106,7 +108,7 @@ class EnsembleBestOne(SWAEnsembler):
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         #return self.ckpt.load_epoch(self.epoch_fix)
-        net : nn.Module = deepcopy(unwrap_compiled_module(getattr(trainer.model , 'net')))
+        net : nn.Module = deepcopy(_persist_net(trainer))
         if not self.best_epoch:
             return net
         net.load_state_dict(self.ckpt.load(self.best_epoch.epoch , self.best_epoch.phase)['net'])
@@ -136,7 +138,7 @@ class EnsembleSWABest(SWAEnsembler):
                 self.ckpt.disjoin(self , drop_epoch.epoch , drop_epoch.phase)
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
-        swa = SWAModel(unwrap_compiled_module(getattr(trainer.model , 'net')))
+        swa = SWAModel(_persist_net(trainer))
         for epoch in self.top_epochs: 
             swa.update_sd(self.ckpt.load(epoch.epoch , epoch.phase)['net'])
         swa.update_bn(trainer)
@@ -185,7 +187,7 @@ class EnsembleSWALast(SWAEnsembler):
         return [(ep , phase) for ep in epochs]
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
-        swa = SWAModel(unwrap_compiled_module(getattr(trainer.model , 'net')))
+        swa = SWAModel(_persist_net(trainer))
         for ep , ph in self.adjacent_epochs[:self.n_last]:  
             swa.update_sd(self.ckpt.load(ep , ph)['net'])
         swa.update_bn(trainer)

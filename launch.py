@@ -2,5 +2,5 @@
 # coding: utf-8
 
 if __name__ == '__main__':
-    from src.call.app import LaunchApp
+    from src.api.calls.app import LaunchApp
     LaunchApp.go()

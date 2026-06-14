@@ -13,7 +13,7 @@
 #       required : True
 #       default : False
 
-from src.api import TradingAPI
+from src.api.pkgs import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('backtest_rebuild_all')

@@ -18,7 +18,7 @@
 ## `FactorAPI` — public interface
 
 ```python
-from src.api.factor import FactorAPI
+from src.api.pkgs import FactorAPI
 
 FactorAPI.calculate(factor_name, dates, universe)   # compute factor values → DataBlock
 FactorAPI.update(factor_name, start, end)           # compute and save to PATH.factor

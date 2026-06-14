@@ -10,6 +10,7 @@ from functools import cached_property
 from typing import Any
 
 from src.res.algo.nn.loss import MultiHeadLosses
+from src.res.model.util.advance.torch_compile import TorchCompiler
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , BatchData , ModelFile
 from src.res.model.util.config import ModelConfig
 from .pipeline import TrainerPipeline
@@ -20,7 +21,8 @@ __all__ = ['PredictorModel']
 class PredictorModel(TrainerPipeline):
     """a group of ensemble models , of same net structure"""
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
-    
+    AllowTorchCompile = False
+
     def __init__(self, *args , vb_level : Any = 1 , **kwargs) -> None:
         self.reset()
         self.net : torch.nn.Module | Any = None
@@ -59,8 +61,42 @@ class PredictorModel(TrainerPipeline):
         infos = {'Module Type' : self.__class__.__name__}
         self.logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     
-    def multiloss_params(self): 
-        return MultiHeadLosses.get_params(getattr(self , 'net' , None))
+    def multiloss_params(self):
+        try:
+            net = self.persist_net()
+        except RuntimeError:
+            net = None
+        return MultiHeadLosses.get_params(net)
+
+    @cached_property
+    def torch_compile(self) -> TorchCompiler | None:
+        if self.AllowTorchCompile:
+            return TorchCompiler(self)
+        else:
+            return None
+
+    def wrap_net(self, module: torch.nn.Module) -> torch.nn.Module:
+        """Reset compile state and optionally wrap *module* with torch.compile."""
+        if self.torch_compile is None:
+            return module
+        else:
+            self.torch_compile.reset()
+            return self.torch_compile.wrap(module)
+
+    def run_net(self, *args: Any, **kwargs: Any) -> Any:
+        """Forward through ``self.net`` with compile warmup timing and eager fallback."""
+        if self.torch_compile is None:
+            return self.net(*args, **kwargs)
+        else:
+            return self.torch_compile.run(*args, **kwargs)
+
+    def persist_net(self) -> torch.nn.Module:
+        """Unwrapped ``nn.Module`` for state_dict I/O, deepcopy, and deposition."""
+        if self.net is None:
+            raise RuntimeError(f'{self.__class__.__name__}.net is not initialized')
+        if self.torch_compile is not None:
+            return self.torch_compile.unwrap()
+        return TorchCompiler.unwrap_module(self.net)
 
     @property
     def model_full_name(self):

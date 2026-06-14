@@ -15,7 +15,8 @@ This folder is the living documentation vault for the `learndl` project. It is a
 | [[modules/boost_models]] | `src/res/algo/boost/`: GeneralBoostModel, OptunaBoostModel, BoostInput/Output |
 | [[modules/gp_strategy]] | `src/res/gp/`: GeneticProgramming, primitives, gpParameters, EliteGroup |
 | [[modules/trading]] | `src/res/trading/`: TradingPort, PortfolioBuilder, TradingAPI, SummaryAPI |
-| [[modules/interactive_app]] | Interactive dashboards and visualization tools |
+| [[modules/api_layer]] | `src/api/`: pkgs facades, calls (DirectCall), util (backend, contract) |
+| [[modules/interactive_app]] | `src/api/interactive/`: Streamlit script runner, task queue, API console |
 
 ## Workflow Docs
 

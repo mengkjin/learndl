@@ -103,12 +103,12 @@ class StatusDisplay(BaseCallBack):
     
     def on_test_end_before(self): 
         time_cost = datetime.now() - self.status.times['test_start']
-        self.logger.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Base.Duration(time_cost)}')
+        self.logger.stdout(f'In Stage [{self.status.stage}], Finish Iterating Test Batches! Cost {Base.Elapsed(time_cost)}')
         self.test_end_start = datetime.now()
 
     def on_test_end_after(self): 
         time_cost = datetime.now() - self.test_end_start
-        self.logger.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Base.Duration(time_cost)}')
+        self.logger.note(f'In Stage [{self.status.stage}], Finish Testing Callbacks! Cost {Base.Elapsed(time_cost)}')
 
     def on_train_batch_end(self):  
         if self.dataloader_info: 

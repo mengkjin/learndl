@@ -4,35 +4,20 @@ Positive elapsed time from a fixed length or from a past timestamp.
 from __future__ import annotations
 from datetime import datetime , timedelta
 
-__all__ = ['Duration']
+__all__ = ['Elapsed' , 'Since']
 
-class Duration:
-    """Non-negative elapsed seconds from either ``duration`` or time since ``since``."""
+class TimeDuration:
+    """Non-negative elapsed time from either ``duration`` or time since ``since``."""
     def __init__(
-        self , 
-        duration : int | float | timedelta | None = None , 
-        since : float | datetime | None = None ,
-        high_precision : bool = False
+        self , duration : float , * , high_precision : bool = False
     ) -> None:
         """
         Args:
             duration: Length of time; ``timedelta`` is converted to seconds.
             since: Start time as POSIX float or ``datetime``; elapsed time is ``now - since``.
         """
-        assert duration is not None or since is not None , "duration or since must be provided"
-        assert duration is None or since is None , f"duration and since cannot be provided at the same time, got duration = {duration} and since = {since}"
-        if duration is not None:
-            if isinstance(duration , timedelta):
-                dur = duration.total_seconds()
-            else:
-                dur = duration
-        elif since is not None:
-            if isinstance(since , datetime):
-                dur = (datetime.now() - since).total_seconds()
-            else:
-                dur = (datetime.now() - datetime.fromtimestamp(since)).total_seconds()
-        assert dur >= 0 , f"duration must be a positive duration , but got {dur}"
-        self.duration = dur
+        assert duration >= 0 , f"duration must be a positive duration , but got {duration}"
+        self.duration = duration
         self.high_precision = high_precision
     def __repr__(self):
         return self.fmtstr
@@ -77,3 +62,40 @@ class Duration:
             if seconds >= 1:
                 fmtstrs.append(f'{seconds:.4f} Sec') if self.high_precision else fmtstrs.append(f'{seconds:.0f} Sec')
             return ' '.join(fmtstrs)
+
+class Elapsed(TimeDuration):
+    """Non-negative elapsed time of duration."""
+    def __init__(
+        self , duration : int | float | timedelta | None = None , / , high_precision : bool = False
+    ) -> None:
+        """
+        Elapsed time of duration.
+        Args:
+            duration: Length of time; ``timedelta`` is converted to seconds.
+        """
+        if isinstance(duration , timedelta):
+            dur = duration.total_seconds()
+        else:
+            dur = float(duration) if duration else 0.
+        super().__init__(dur, high_precision = high_precision)
+    def __repr__(self):
+        return self.fmtstr
+
+class Since(TimeDuration):
+    """
+    Non-negative elapsed time from since to now.
+    """
+    def __init__(
+        self , since : float | datetime | None = None , / ,
+        high_precision : bool = False
+    ) -> None:
+        """
+        Since time to now.
+        Args:
+            since: Start time as POSIX float or ``datetime``; elapsed time is ``now - since``.
+        """
+        if isinstance(since , datetime):
+            dur = (datetime.now() - since).total_seconds()
+        else:
+            dur = (datetime.now() - datetime.fromtimestamp(since)).total_seconds() if since is not None else 0.
+        super().__init__(dur, high_precision = high_precision)

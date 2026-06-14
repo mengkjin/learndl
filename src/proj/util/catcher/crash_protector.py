@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Literal
 
 from src.proj.env import PATH
-from src.proj.core import Duration
+from src.proj.core import Since
 
 from .basic import OutputCatcher , DeflectorGroup , MarkdownWriter
 
@@ -50,7 +50,7 @@ class CrashProtectorCatcher(OutputCatcher):
         if self.task_id is None:
             return
         self.deflectors.end_catching()
-        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Duration(since = self.start_time)}")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Since(self.start_time)}")
         self.logger.footnote(f"crash protector file {self.filename} removed")
         self.is_catching = False
     

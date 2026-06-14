@@ -187,7 +187,7 @@ class JSDataUpdater(Base.BoundLogger):
             df , target_path = param()
             target_str = self.handle_result(df , target_path , result)
             if target_str: 
-                self.logger.success(f'Fetching {target_str}! Cost {Base.Duration(since = start_time)}')
+                self.logger.success(f'Fetching {target_str}! Cost {Base.Since(start_time)}')
         return result
     
     def fetch_by_date(self , db_src , start = None , end = None , force = False):
@@ -209,7 +209,7 @@ class JSDataUpdater(Base.BoundLogger):
                 if param.db_src == 'trade_js' and param.db_key == 'min': 
                     temporal['df_min'] = df
                 if target_str: 
-                    self.logger.success(f'Fetching {target_str}! Cost {Base.Duration(since = start_time)}')
+                    self.logger.success(f'Fetching {target_str}! Cost {Base.Since(start_time)}')
         return result
 
     def fetch_all(self ,start = None , end = None , force = False):
@@ -231,7 +231,7 @@ class JSDataUpdater(Base.BoundLogger):
             start_time = datetime.now()
             target_str = self.handle_result(path , path)
             if target_str: 
-                self.logger.success(f'Download {target_str}! Cost {Base.Duration(since = start_time)}')
+                self.logger.success(f'Download {target_str}! Cost {Base.Since(start_time)}')
             paths.append(path)
         return paths
 

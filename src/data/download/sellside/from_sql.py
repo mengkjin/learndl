@@ -279,7 +279,9 @@ class SellsideSQLDownloader(Base.BasicUpdater):
                 return False
             num_dates = self.save_data(df)
             if num_dates > 0:
-                self.logger.success(f'Download {self.DB_SRC}/{self.db_key} at {segment}, total {num_dates} dates, time cost {Base.Duration(since = t0)}')
+                self.logger.success(
+                    f'Download {self.DB_SRC}/{self.db_key} at {segment}, total {num_dates} dates,' 
+                    f'time cost {Base.Since(t0)}')
             else:
                 self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {segment}')
             return True
@@ -309,7 +311,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             if num_dates > 0:
                 self.logger.success(
                     f'Download {self.DB_SRC}/{self.db_key} at {dates}, '
-                    f'total {num_dates} dates, time cost {Base.Duration(since = t0)}'
+                    f'total {num_dates} dates, time cost {Base.Since(t0)}'
                 )
             else:
                 self.logger.skipping(f'No data for {self.DB_SRC}/{self.db_key} at {dates}')

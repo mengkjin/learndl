@@ -64,7 +64,7 @@ criterion.boost:
   rank_target_size: null
 
 # torch.compile (PyTorch 2+); see src/res/model/util/advance/torch_compile.py
-torch_compile: false
+torch_compile: true
 torch_compile.mode: default       # default | reduce-overhead | max-autotune
 torch_compile.fullgraph: false
 torch_compile.stage: fit          # fit | test | both

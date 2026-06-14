@@ -10,8 +10,9 @@
 └───────────────────────┬─────────────────────────────────────────┘
                         │ calls
 ┌───────────────────────▼─────────────────────────────────────────┐
-│                  src/api/  (API facade)                          │
-│   DataAPI  FactorAPI  ModelAPI  TradingAPI  UpdateAPI            │
+│                  src/api/  (unified API layer)                   │
+│  pkgs/ (facades)  calls/ (DirectCall)  interactive/ (Streamlit)│
+│  util/ (backend, contract, st_frontend)                         │
 └──────┬────────────┬────────────┬──────────────┬─────────────────┘
        │            │            │              │
 ┌──────▼──┐  ┌──────▼──────┐  ┌─▼────────────┐  ┌──────▼──────────┐
@@ -40,22 +41,33 @@
 | Model framework | `src/res/model/` | Training framework: DataModule, callbacks, model_module |
 | GP strategy | `src/res/gp/` | DEAP genetic programming for symbolic factor discovery |
 | Trading | `src/res/trading/` | Portfolio construction, live tracking, backtesting |
-| API facade | `src/api/` | Stable public interfaces over all research modules |
-| Interactive app | `src/interactive/` | Streamlit app (`launch.py`): script runner, task monitor |
+| API layer | `src/api/` | Facades (`pkgs/`), direct calls (`calls/`), Streamlit app (`interactive/`), shared `util/` |
 | Pipeline scripts | `scripts/` | Numbered end-to-end workflow scripts (0–7) |
 
-## API Facade (`src/api/`)
+## API Layer (`src/api/`)
 
-| File | Class / Functions | Key Methods |
-|------|-------------------|-------------|
-| `data.py` | `DataAPI` | `get_data()`, `update()`, `preprocess()` |
-| `factor.py` | `FactorAPI` | `calculate()`, `update()`, `test()`, `normalize()` |
-| `model.py` | `ModelAPI` | `train_model()`, `schedule_model()`, `test_factor()` |
-| `trading.py` | `TradingAPI` | `update()`, `Backtest()`, `Analyze()`, `backtest_rebuild()` |
-| `summary.py` | `SummaryAPI` | `model_account_summary()`, `backtest_port_account_summary()` |
-| `update.py` | `UpdateAPI` | Orchestrated multi-step update pipeline |
-| `tsboard.py` | `TSBoardAPI` | TensorBoard-style training monitor |
-| `notification.py` | `NotificationAPI` | Email / alert dispatch |
+See [[modules/api_layer]] for full detail. Summary:
+
+```
+src/api/
+├── pkgs/          # Research facades — import via from src.api.pkgs import …
+├── calls/         # DirectCall ops (LaunchApp, ArchiveCurrentModel, …)
+├── interactive/   # Streamlit app — uv run launch.py
+└── util/          # backend (TaskQueue), contract (APIEndpoint), st_frontend
+```
+
+### `pkgs/` — Research Facades
+
+| Module | Class | Key Methods |
+|--------|-------|-------------|
+| `pkgs/data.py` | `DataAPI` | `update()`, `preprocess()` |
+| `pkgs/factor.py` | `FactorAPI` | `calculate()`, `update()`, `test()`, `normalize()` |
+| `pkgs/model.py` | `ModelAPI` | `train_model()`, `schedule_model()`, `test_factor()` |
+| `pkgs/trading.py` | `TradingAPI` | `update()`, `Backtest()`, `Analyze()`, `backtest_rebuild()` |
+| `pkgs/summary.py` | `SummaryAPI` | `model_account_summary()`, `backtest_port_account_summary()` |
+| `pkgs/update.py` | `UpdateAPI` | Orchestrated multi-step update pipeline |
+| `pkgs/dashboard.py` | `DashboardAPI`, `TSBoardAPI` | TensorBoard / Optuna dashboards |
+| `pkgs/notification.py` | `NotificationAPI` | Email / alert dispatch |
 
 ## Pipeline Scripts (`scripts/`)
 
@@ -129,7 +141,9 @@ All model inputs, factor outputs, and data pipeline results flow through this sh
 | Singleton | `DateDataAccess` subclasses, `CALENDAR` | Single instance per type, lazy-initialized |
 | `SingletonMeta` | `src/proj/util/` | Thread-safe singleton metaclass |
 | Config-driven dispatch | `AlgoModule` | Selects NN vs boost from `model.module` field in schedule config |
-| API facade | `src/api/` | Stable public surface over `src/res/` and `src/data/` internals |
+| API layer | `src/api/pkgs/` | Stable public surface over `src/res/` and `src/data/` internals |
+| DirectCall | `src/api/calls/` | Imperative one-off operations from UI quick buttons or CLI |
+| Interactive app | `src/api/interactive/` | Streamlit script runner, task monitor, API console |
 | `@ScriptTool` | All `scripts/**/*.py` | Wraps `main()` for Streamlit task runner + email + locking |
 | Script header YAML | All `scripts/**/*.py` | `# key: value` comments parsed by `ScriptHeader.read_from_file()` |
 | Numbered pipeline | `scripts/` | Explicit ordering: 0_check → 1_autorun → … → 7_trading |

@@ -7,7 +7,7 @@ from functools import cached_property
 from typing import Literal
 
 from src.proj.env import PATH , MACHINE
-from src.proj.core import Duration
+from src.proj.core import Elapsed , Since
 from .basic import OutputCatcher , DeflectorGroup , MarkdownWriter
 
 __all__ = ['MarkdownCatcher']
@@ -110,7 +110,7 @@ class MarkdownCatcher(OutputCatcher):
         finish_time = datetime.now()
         kwargs = {
             'finish at' : finish_time,
-            'duration' : Duration((finish_time - self.start_time).total_seconds()).fmtstr,
+            'duration' : Elapsed(finish_time - self.start_time).fmtstr,
             'stdout lines' : self.stats['stdout_lines'],
             'stderr lines' : self.stats['stderr_lines'],
         }
@@ -119,7 +119,7 @@ class MarkdownCatcher(OutputCatcher):
         
     def export(self):
         """Export the running markdown file to the export file list, and then delete the running file"""
-        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Duration(since = self.start_time)}")
+        self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Since(self.start_time)}")
         self.markdown_file.close()
         for filename in self.export_file_list:
             filename.unlink(missing_ok=True)

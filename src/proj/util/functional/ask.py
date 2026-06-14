@@ -218,7 +218,21 @@ class AskFor:
         cls , ask = True , message : str = 'Do you want to try again?', * , 
         max_trials : int = 20
     ) -> Generator[LoopFlag, None, None]:
-        """Loop until the user exits."""
+        """
+        Loop until the user exits. Basic use:
+
+        >> 1. if there is ask inside loop:
+        for loop_flag in AskFor.LoopTillExit(True , message = f'Do you want to check more?' , max_trials = 100):
+            flag = AskFor.Confirmation(title = f'Do you want to check?')
+            if not loop_flag.set_flag(flag):
+                continue
+            # do something
+
+        >> 2. if there is no ask inside loop:
+        for _ in AskFor.LoopTillExit(True , message = f'Do you want to check more?' , max_trials = 100):
+            # do something
+        
+        """
         if cls.not_interactive:
             Logger.error('Not interactive mode, return!')
             return

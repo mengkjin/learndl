@@ -9,7 +9,7 @@
 
 from typing import Any
 
-from src.api.contract import APIEndpoint
+from src.api.util import APIEndpoint
 from src.proj.util.script import ScriptTool
 
 @ScriptTool("run_api_interaction" , "@qualname" , markdown_catcher = True)

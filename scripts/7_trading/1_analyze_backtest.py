@@ -18,7 +18,7 @@
 #       type : int
 #       desc : end yyyymmdd
 
-from src.api import TradingAPI
+from src.api.pkgs import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('analyze_tradeport' , '@port_name_starter' , lock_num = 0)

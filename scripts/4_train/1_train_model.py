@@ -25,7 +25,7 @@
 #   path: "configs/{module_name}.yaml"
 #   height : 300 # optional
 
-from src.api import ModelAPI
+from src.api.pkgs import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('train_model' , '@module_name' , markdown_catcher = True)

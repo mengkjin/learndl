@@ -7,7 +7,7 @@
 # email: False
 # mode: shell
 
-from src.api import DashboardAPI
+from src.api.pkgs import DashboardAPI
 
 if __name__ == '__main__':
     DashboardAPI.tensorboard()

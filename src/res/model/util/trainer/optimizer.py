@@ -124,7 +124,7 @@ class Optimizer:
                 nan_grads = True
                 break
         if nan_grads:
-            from src import api
+            import src.api as api
             from src.proj import Logger
             setattr(api , 'mod', self.trainer)
             Logger.stdout('total loss has nan gradients: ' , metric.total_loss)

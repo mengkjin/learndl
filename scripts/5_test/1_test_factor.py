@@ -27,7 +27,7 @@
 #       default : 99991231
 #       desc : end date
 
-from src.api import ModelAPI
+from src.api.pkgs import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('test_factor' , '@factor_name' , lock_num = 0)
