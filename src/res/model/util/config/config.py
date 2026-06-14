@@ -64,10 +64,9 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
         if not base_path and config:
             self.logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb = 1)
         if schedule_name and config:
-            if 'model.name' in config:
-                assert config['model.name'] == schedule_name, f"model.name {config['model.name']} is not the same as model_name {schedule_name}"
-            else:
-                config.update({'model.name': schedule_name} , relevant_only = False)
+            if 'model.name' in config and config['model.name'] != schedule_name:
+                self.logger.alert2(f'model.name {config['model.name']} is not the same as schedule_name {schedule_name}' , vb = 1)
+            config.update({'model.name': schedule_name} , relevant_only = False)
         return config
 
     @classmethod
