@@ -8,6 +8,7 @@ from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , Optimizer
+from src.res.model.util.advance.torch_compile import apply_torch_compile_from_config , CompileStage
 from src.res.model.model_module.util.swa import choose_swa_method
 
 __all__ = ['NNPredictor']
@@ -25,11 +26,19 @@ class NNPredictor(PredictorModel):
         device = self.config.device if self.config else None
 
         self.net = AlgoModule.get_nn(module , param , device)
+        self.net = apply_torch_compile_from_config(
+            self.net , self.config , self._compile_stage() , logger = self.logger,
+        )
         self.reset_submodels(*args , **kwargs)
 
         self.model_dict.reset()
         self.complete_model_param = param
         return self
+
+    def _compile_stage(self) -> CompileStage | None:
+        if self.bounded_with_trainer:
+            return self.trainer.status.stage  # type: ignore[return-value]
+        return 'fit'
     
     def reset_submodels(self , *args , **kwargs):
         if hasattr(self , 'submodels'):

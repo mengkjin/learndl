@@ -192,7 +192,7 @@ class _df_collection(ABC):
                 self.long_frame = long_frame
             else:
                 df0 = self.long_frame.loc[~self.long_frame.index.isin(long_frame.index)]
-                self.long_frame = pd.concat([df0 , long_frame] , copy = False)
+                self.long_frame = pd.concat([df0 , long_frame])
             self.long_frame = self.long_frame.sort_index()
             for d in pd.Index(self.long_frame.index).astype(np.int64).unique():
                 d = int(d)
@@ -309,11 +309,11 @@ class DFCollection(_df_collection):
             return
 
         df0 = self.long_frame.loc[~self.long_frame.index.isin(dates_to_do)]
-        dfs = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
+        dfs : list[pd.DataFrame] = [df0] + [df for df in self.data_frames.values() if df is not None and not df.empty]
         dfs = [df for df in dfs if df is not None and not df.empty]
         with warnings.catch_warnings():
             warnings.simplefilter(action='ignore', category=FutureWarning)
-            self.long_frame = pd.concat(dfs, copy=False).sort_index()
+            self.long_frame = pd.concat(dfs).sort_index()
         self.data_frames.clear()
 
 class PLDFCollection(_df_collection):

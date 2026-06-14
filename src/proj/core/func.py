@@ -8,7 +8,7 @@ from typing import Any , Iterable
 
 __all__ = ['as_int_array']
 
-def as_int_array(ints: Any) -> np.ndarray[int, Any]:
+def as_int_array(ints: Any) -> np.ndarray[Any, np.dtype[np.int_]]:
     """
     Convert the 'date' parameter of 'td_array' / '*_diff_array' to an integer array index key.
     Single element of this package 'TradeDate' will be expanded to its 'td'; 'pd.Series' will be converted to 'ndarray'.

@@ -240,7 +240,7 @@ class BasicCalendar(metaclass=SingletonMeta):
     def range(
         self , start: intDateNone, end: intDateNone , 
         type : lit.intDateType = 'td' , step: int = 1
-    ) -> np.ndarray[int, Any]:
+    ) -> np.ndarray[Any, np.dtype[np.int_]]:
         """return the range of dates between start and end"""
         dates = as_int_array(self._trade_calendar if type == 'td' else self._cds)
         dates = dates[(dates >= int(start or 0)) & (dates <= int(end or 99991231))]

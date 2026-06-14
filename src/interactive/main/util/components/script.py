@@ -261,15 +261,17 @@ def show_param_settings(runner : ScriptRunner | str | None) -> None:
         if runner.header.file_editor:
             with st.expander(runner.header.file_editor.get('name', 'File Editor') , expanded = False , icon = ":material/edit_document:"):
                 path = conditional_path(runner.header.file_editor['path'], params)
-                file_editor = YAMLFileEditor('param-settings-file-editor', 
-                                            file_root=path , file_input=False , 
-                                            height = runner.header.file_editor.get('height'))
-                file_editor.show_yaml_editor()
+                if path:
+                    file_editor = YAMLFileEditor(
+                        'param-settings-file-editor', file_root=path , file_input=False , 
+                        height = runner.header.file_editor.get('height'))
+                    file_editor.show_yaml_editor()
         if runner.header.file_previewer:
             with st.expander(runner.header.file_previewer.get('name', 'File Previewer') , expanded = False , icon = ":material/file_present:"):
                 path = conditional_path(runner.header.file_previewer['path'], params)
-                file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
-                file_previewer.preview()
+                if path:
+                    file_previewer = FilePreviewer(path , height = runner.header.file_previewer.get('height'))
+                    file_previewer.preview()
 
     SC.refresh_control_panel(runner)
 
@@ -297,7 +299,7 @@ def conditional_path(format_str : str , params : dict[str, Any] , root: Path = P
             path = s.format(**params)
             if Path(path).exists() or root.joinpath(path).exists():
                 return path
-        return path
+        return ''
     else:
         return format_str.strip().format(**params)
 

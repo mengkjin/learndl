@@ -101,7 +101,7 @@ class Plotter:
     def plot_ic_year(self , data : pd.DataFrame , show = False , title_prefix = None):
         self.plot_iter.set_args(data , show , title_prefix , '`Industr`y IC & IR' , ['factor_name' , 'benchmark'])
         for df , fig in self.plot_iter.iter():
-            df['direction'] = 'N(-)' if df['direction'].values[-1] < 0 else 'P(+)'
+            df['direction'] = 'N(-)' if df['direction'].iloc[-1] < 0 else 'P(+)'
             df = df.rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'abs(IC)_avg' , 'cum_mdd': 'IC_mdd'}, 
                         errors='raise').drop(columns=['sum']).rename(columns={'year':'Year'})
             plot_table(df.set_index('Year') , flt_cols = ['IC_avg' , 'IC_std' , 'IC(ann)' , 'ICIR', 'IC_mdd' , 'abs(IC)_avg'] , 

@@ -1,7 +1,7 @@
 """basic types for the project's research purposes"""
 from __future__ import annotations
 
-from src.proj.core.types import StrEnum
+from src.proj.core import StrEnum
 
 __all__ = [
     'ModuleType' , 'TestType' , 'FmpType' , 

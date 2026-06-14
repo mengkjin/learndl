@@ -210,7 +210,9 @@ class EpochMetrics(AggregatedMetrics):
             return self.collected_tables[f'epoch_{name}']
         batch_table = self.get_table(name)
         epoch_table = batch_table.mean(axis=0).to_frame().T
-        epoch_table.index = batch_table.index.droplevel('batch').drop_duplicates()
+        index = batch_table.index
+        assert isinstance(index, pd.MultiIndex)
+        epoch_table.index = index.droplevel('batch').drop_duplicates()
         return epoch_table
 
     @property
@@ -270,7 +272,7 @@ class EpochMetrics(AggregatedMetrics):
 
 class AttemptMetrics(AggregatedMetrics):
     """record a list of dataset metric and perform agg operations, usually used in an attempt"""
-    def new(self , attempt : int = 0 , redo : int = 0 , **kwargs):
+    def new(self , * , attempt : int = 0 , redo : int = 0 , **kwargs):
         super().new(attempt = attempt , redo = redo)
         self.epoch_metric_results : list[EpochMetricResult] = []
 

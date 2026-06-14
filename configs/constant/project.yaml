@@ -11,6 +11,7 @@ raise_warnings:
   - 'overflow encountered in multiply'
   - 'Mean of empty slice'
   - 'invalid value encountered in scalar divide'
+  - 'numpy.core.numeric'
 
 ignore_warnings:
   - 'missing from font(s) DejaVu Sans Mono'

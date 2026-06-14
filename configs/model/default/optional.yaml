@@ -1,8 +1,8 @@
 # Global optional default config of TrainParam / TrainConfig ,
 # if not exists, do not show any information and will use the default value
 # do not modify this file directly (unless change code of TrainParam / TrainConfig)
-model.name: null
 
+model.name: null
 model.special.global2top: false
 
 model.module.nn: gru
@@ -64,6 +64,11 @@ train.criterion.boost:
   objective: null # 'mse' ,'mae' , 'rank'
   n_bins: null # positive integer value
   rank_target_size: null
+
+train.torch_compile: false
+train.torch_compile.mode: default
+train.torch_compile.fullgraph: false
+train.torch_compile.stage: fit
 
 callbacks.LearnRateReset: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
 callbacks.CallbackTimer: {}

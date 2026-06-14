@@ -93,6 +93,8 @@ def process_factor(value : torch.Tensor | None , stream = 'inf_winsor_norm' , di
         med       = value.nanquantile(0.5, dim=dim,keepdim = True , interpolation='lower')
         bandwidth = (value.nanquantile(0.75 , dim , keepdim=True) - value.nanquantile(0.25 , dim , keepdim=True)) / 2
         lbound , ubound = med - trim_ratio * bandwidth , med + trim_ratio * bandwidth
+    else:
+        lbound , ubound = -np.inf , np.inf
     for _str in stream.split('_'):
         if _str == 'mean':
             value -= torch.nanmean(value , dim, keepdim=True)

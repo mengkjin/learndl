@@ -1,7 +1,6 @@
 """Machine identity, OS, secrets, and config loading for the current host."""
 from __future__ import annotations
 import sys , os , pytz , yaml , json
-
 from dataclasses import dataclass
 
 from pathlib import Path
@@ -38,6 +37,8 @@ def _load_config_file(path: Path) -> dict:
             content = yaml.safe_load(f)
         elif path.suffix == '.json':
             content = json.load(f)
+        else:
+            raise ValueError(f'{path} is not a yaml or json file')
     return content
 
 @dataclass
@@ -248,7 +249,7 @@ class MACHINE:
     assert setting.name == name , f'machine name mismatch: {setting.name} != {name}'
     
     cuda_server = setting.cuda_server
-    python_path = setting.python_path
+    python_path = main_path.joinpath(Path(setting.python_path).relative_to(setting.main_path))
     share_folder = Path(setting.share_folder) if setting.share_folder else None
     mosek_lic_path = Path(setting.mosek_lic_path) if setting.mosek_lic_path else None
     updatable = setting.updatable
@@ -274,7 +275,6 @@ class MACHINE:
     
     assert main_path.exists() , f'main_path not exists: {main_path}'
     assert Path(__file__).is_relative_to(main_path) , f'{__file__} is not in {main_path}'
-    sys.path.append(str(main_path))
     assert python_path , f'python_path not set for {name}'
 
     @classmethod

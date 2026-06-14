@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
+from matplotlib.typing import LegendLocType
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
@@ -231,12 +232,14 @@ def get_twin_axes(fig : Figure , pos = 111) -> tuple[Axes , Axes]:
     ax2 : Axes | Any = ax1.twinx()
     return ax1 , ax2
 
-def set_xaxis(ax : Axes , index : Any = None , labels = None , rotation : float | None = 45 , 
-              format : AxisFormatType = 'default' , digits = 1 , 
-              title = '' , title_color = None , 
-              tick_pos : Literal['top', 'bottom', 'both', 'default', 'none'] = 'default', 
-              tick_color = None , tick_size = None , tick_length = None ,
-              num_ticks = 10 , grid = True):
+def set_xaxis(
+    ax : Axes , index : Any = None , labels = None , rotation : float | None = 45 , 
+    format : AxisFormatType = 'default' , digits = 1 , 
+    title = '' , title_color = None , 
+    tick_pos : Literal['top', 'bottom', 'both', 'default', 'none'] = 'default', 
+    tick_color = None , tick_size = None , tick_length = None ,
+    num_ticks = 10 , grid = True
+):
     tick_args : dict[str , Any] = {}
     title_args : dict[str , Any] = {}
     if index is not None:  
@@ -310,7 +313,10 @@ def set_yaxis(ax : Axes , format : AxisFormatType = 'pct' , digits = 1 ,
     if tick_lim: 
         ax.set_ylim(*tick_lim)
 
-def sns_lineplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : bool = True , legend_loc : str = 'upper left'):
+def sns_lineplot(
+    df : pd.DataFrame , x : str , y : str , hue : str , legend : bool = True , 
+    legend_loc : LegendLocType | None = 'upper left'
+):
     import seaborn
     set_seaborn_theme()
     if isinstance(df[hue].dtype , pd.CategoricalDtype):
@@ -324,7 +330,10 @@ def sns_lineplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : bo
         ax.legend(handles=handles[0:], labels=labels[0:], loc=legend_loc)
     return ax
 
-def sns_barplot(df : pd.DataFrame , x : str , y : str , hue : str , legend : str | None = 'upper left'):
+def sns_barplot(
+    df : pd.DataFrame , x : str , y : str , hue : str , 
+    legend : LegendLocType | None = 'upper left'
+):
     import seaborn
     set_seaborn_theme()
     n_hues : int | Any = df[hue].nunique()

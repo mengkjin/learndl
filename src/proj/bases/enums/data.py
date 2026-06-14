@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Any , Iterable
 
-from src.proj.core.types import StrEnum
+from src.proj.core import StrEnum
 from src.proj.cal import Dates
 
 __all__ = ['UpdateType' , 'UpdateFlag' , 'UpdateFlagList']

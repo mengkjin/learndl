@@ -6,7 +6,7 @@ focused_ports:
 #   components (if it is a composite alpha): list of str or comma separated strings
 #   weights: null / equal is equal weights , or list of floats
 #   universe: str , default is 'top-1000'
-#   category: Literal['top' , 'screen' , 'reinforce'] , default is 'top' (automatically fallback if screener not provided)
+#   category: 'top' | 'screen' | 'reinforce' , default is 'top' (automatically fallback if screener not provided)
 #   top_num: int , default is 50
 #   freq: int or 'd' / 'w' / 'm' , default is 1
 #   test_start (for backtest): int , default is 20190101

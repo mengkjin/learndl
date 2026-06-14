@@ -100,9 +100,9 @@ class OptimizedPortfolioInput:
         return self.risk_model.analyze(port , bench , init)
     
     @property
-    def initial_position(self): 
+    def initial_position(self) -> float | None: 
         return None if self.initial_port is None else self.initial_port.position
 
     @property
-    def initial_value(self): 
+    def initial_value(self) -> float | None: 
         return None if self.initial_port is None else self.initial_port.value

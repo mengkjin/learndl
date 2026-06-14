@@ -116,7 +116,7 @@ def script_links() -> None:
         for name , page in SC.script_pages.items():
             if page['group'] != group:
                 with st.container(horizontal= True , vertical_alignment = 'center' , gap = 'xxsmall' , key = f"sidebar-script-links-divider-{page['group']}"):
-                    sac.divider(label=page['group'].title() , icon = ':material/folder:', color='gray' , align='center')
+                    sac.divider(label=page['group'].title() , icon = ':material/folder:', color='gray' , align='center') # type: ignore[reportUnknownReturnType]
             parts : list[str] = page['label'].split(' > ')
             with st.container(horizontal= True , vertical_alignment = 'center' , gap = 'xxsmall'):
                 runner : ScriptRunner = page['runner']

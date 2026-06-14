@@ -453,7 +453,7 @@ def lm_resid(y , x : np.ndarray | pd.Series | pd.DataFrame | None , weight : Any
         else:
             raise ValueError(f'x must be 1D or 2D, but got {x.ndim}')
         _x , _y = x[finite] , y[finite]
-        _w = weight if weight is None else weight[finite]
+        _w : Any = weight if weight is None else weight[finite]
         if weight is None:
             model = sm.OLS(_y , sm.add_constant(_x)).fit()
         else:

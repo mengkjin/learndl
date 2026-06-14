@@ -10,4 +10,4 @@ __all__ = ['strPath' , 'strPaths' , 'intNums']
 
 strPath : TypeAlias = Union[Path , str]
 strPaths : TypeAlias = Union[Mapping[int | Any, strPath] , Iterable[strPath]]
-intNums : TypeAlias = int | list[int] | np.ndarray[int, Any] | Sequence[int] | range
+intNums : TypeAlias = int | list[int] | np.ndarray[Any, np.dtype[np.int_]] | Sequence[int] | range

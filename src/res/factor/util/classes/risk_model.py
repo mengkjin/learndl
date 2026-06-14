@@ -425,8 +425,8 @@ class Attribution:
         
         source , industry , style = cls.aggregated_to_others(aggregated)
 
-        specific['industry'] = specific.loc[:,_indus].sum(1)
-        specific['style']    = specific.loc[:,_style].sum(1)
+        specific['industry'] = specific.loc[:,_indus].sum(axis=1)
+        specific['style']    = specific.loc[:,_style].sum(axis=1)
         specific = specific.drop(columns = _indus + _style).loc[:,cls.order_list[:-1]]
 
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)

@@ -84,7 +84,7 @@ class TradingPort(Base.BoundLogger):
         self.last_ports : dict[int , pd.DataFrame] = {}
     
     @classmethod
-    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> TradingPort:
+    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> TradingPort:
         """
         Load a trading port from given name.
         """
@@ -220,11 +220,11 @@ class TradingPort(Base.BoundLogger):
         else:
             return pd.DataFrame()
 
-    def get_last_port(self , date : int , reset_port = False) -> Portfolio:
+    def get_last_port(self , date : int , reset = False) -> Portfolio:
         """
         Get the last portfolio for the given date.
         """
-        if reset_port:
+        if reset:
             self.logger.alert1(f'Reset port for new build! {self.name}')
             port = self.empty_pre_portfolio(date)
         else:
@@ -343,7 +343,7 @@ class TrackingPort(TradingPort):
         Load a tracking port from given name.
         """
         if name in cls.candidate_ports:
-            kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
+            kwargs : dict[str , Any] = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : False}
             instance = cls(**kwargs)
             instance.set_vb(vb_level = vb_level , indent = indent)
             return instance
@@ -360,15 +360,15 @@ class TrackingPort(TradingPort):
     
     def build(self , date : int | None = None , reset = False , export = True):
         date = CALENDAR.updated(date)
-        df = self.build_portfolio(date , reset_port = reset , export = export , alpha_details = True)
+        df = self.build_portfolio(date , reset = reset , export = export , alpha_details = True)
         self.new_ports[date] = df
         return self
 
-    def rebuild(self , date : int , export = True):
+    def rebuild(self , date : int | None = None , export = True):
         raise TypeError(f'tracking port cannot rebuild. if you truely want to rebuild a tracking port, manually delete the portfolio folder and run build(end_date) again.')
     
     def build_portfolio(
-        self , date : int , reset_port = False , export = True , last_port = None ,
+        self , date : int , reset = False , export = True , last_port = None ,
         alpha_details = False
     ) -> pd.DataFrame:
         """
@@ -377,7 +377,7 @@ class TrackingPort(TradingPort):
         alpha = self.Alpha.get(date)
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
-            last_port = self.get_last_port(date , reset_port)
+            last_port = self.get_last_port(date , reset)
 
         self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
         builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
@@ -415,9 +415,9 @@ class BacktestPort(TradingPort):
     """
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.backtest_ports
     @classmethod
-    def load(cls , name : str , vb_level : Any | None = None , indent : int | None = None) -> BacktestPort:
+    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> BacktestPort:
         if name in cls.candidate_ports:
-            kwargs = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
+            kwargs : dict[str , Any] = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
             instance = cls(**kwargs)
             instance.set_vb(vb_level = vb_level , indent = indent)
             return instance
@@ -432,20 +432,20 @@ class BacktestPort(TradingPort):
     def portfolio_dir(self) -> Path:
         return PATH.rslt_trade.joinpath('backtest' , self.name , 'portfolio')
     
-    def build(self , date : int | None = None , reset_port = False , export = True):
+    def build(self , date : int | None = None , reset = False , export = True):
         date = CALENDAR.updated(date)
-        df = self.build_backward(date , reset_port = reset_port , export = export)
+        df = self.build_backward(date , reset = reset , export = export)
         self.new_ports[date] = df
         return self
 
     def rebuild(self , date : int | None = None , export = True):
         date = CALENDAR.updated(date)
         self.logger.stdout(f'Rebuild portfolio for {self.name} at {Dates(date)} start ...')
-        df = self.build_backward(date , reset_port = True , export = export)
+        df = self.build_backward(date , reset = True , export = export)
         self.new_ports[date] = df
         return self
     
-    def build_backward(self , date : int , reset_port = False , export = True) -> pd.DataFrame:
+    def build_backward(self , date : int , reset = False , export = True) -> pd.DataFrame:
         """
         Build the backtest portfolio up to the given date from the start date.
         """
@@ -456,7 +456,7 @@ class BacktestPort(TradingPort):
         if test_end < self.test_start: 
             return pd.DataFrame()
         
-        if reset_port:
+        if reset:
             self.logger.alert1(f'Reset {self.trading_portfolio_type.title()} Portfolio [{self.name}] for new build!')
             shutil.rmtree(self.portfolio_dir , ignore_errors = True)
             self.portfolio_dir.mkdir(parents = True , exist_ok = True)

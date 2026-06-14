@@ -81,7 +81,7 @@ class Dates(Sequence[int]):
         return self
 
     @cached_property
-    def dates(self) -> np.ndarray[int, Any]:
+    def dates(self) -> np.ndarray[Any, np.dtype[np.int_]]:
         """
         Return the actual dates array.
         """

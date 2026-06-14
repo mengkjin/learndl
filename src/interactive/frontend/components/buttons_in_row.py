@@ -80,7 +80,7 @@ class SacOnClickButtons:
             "key": row_key,
             **self._buttons_kwargs,
         }
-        picked = sac.buttons(items, **sac_kw)
+        picked = sac.buttons(items, **sac_kw) # type: ignore[reportUnknownReturnType]
         idx = self._picked_index(picked, len(handlers))
         if idx is not None:
             # Bump *before* handlers: e.g. ``ParamInputsForm.reset_options()`` calls

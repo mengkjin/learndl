@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from deap import gp , creator , tools , base
 from deap.algorithms import varAnd
-from typing import Any , Literal , Sequence , Callable
+from typing import Any , Literal , Sequence , Callable , overload
 from .fitness import FitnessObjectMin
 
 __all__ = ['BaseIndividual' , 'SyntaxRecord' , 'Population']
@@ -24,9 +24,6 @@ class BaseIndividual(gp.PrimitiveTree):
     fitness : FitnessObjectMin
     pset_raw : gp.PrimitiveSetTyped
     pset_pur : gp.PrimitiveSetTyped
-
-    def __hash__(self): 
-        return hash(id(self))
 
     def __init__(self , *args , **kwargs):
         super().__init__(*args , **kwargs)
@@ -197,7 +194,14 @@ class SyntaxRecord:
 
 class Population(Sequence):
     def __init__(self , population : Sequence[BaseIndividual]):
-        self.pop = list(set(population))
+        seen: set[int] = set()
+        unique: list[BaseIndividual] = []
+        for ind in population:
+            oid = id(ind)
+            if oid not in seen:
+                seen.add(oid)
+                unique.append(ind)
+        self.pop = unique
 
     def __iter__(self):
         return iter(self.pop)
@@ -208,10 +212,15 @@ class Population(Sequence):
     def __bool__(self):
         return len(self.pop) > 0
 
-    def __contains__(self , item : BaseIndividual) -> bool:
+    def __contains__(self , item : object) -> bool:
         return item in self.pop
-
+    @overload
     def __getitem__(self , index : int) -> BaseIndividual:
+        ...
+    @overload
+    def __getitem__(self , index : slice) -> list[BaseIndividual]:
+        ...
+    def __getitem__(self , index : int | slice) -> BaseIndividual | list[BaseIndividual]:
         return self.pop[index]
 
     def __setitem__(self , index : int , value : BaseIndividual):

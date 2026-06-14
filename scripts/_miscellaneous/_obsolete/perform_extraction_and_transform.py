@@ -2,12 +2,16 @@ import zipfile , argparse
 import numpy as np
 import pandas as pd
 
-from typing import Literal
-
 from src.proj import PATH , MACHINE , Logger , DB , Save , Load
+from src.proj.core import StrEnum
 from src.data.util import trade_min_fillna
 
 zip_path = PATH.miscel.joinpath('JSMinute')
+
+class SecType(StrEnum):
+    SEC = 'sec'
+    ETF = 'etf'
+    CB = 'cb'
 
 def get_js_min(date : int):
     renamer = {
@@ -102,11 +106,8 @@ def add_sec_type(df : pd.DataFrame):
     df = df.merge(df_sec , on = ['ticker' , 'exchangecd'])
     return df
 
-def filter_sec(
-    df : pd.DataFrame , 
-    sec_type : Literal['sec' , 'etf' , 'cb'] | str,
-):
-    df_sec_type = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}[sec_type]
+def filter_sec(df : pd.DataFrame , sec_type : SecType):
+    df_sec_type = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}[sec_type.value]
     return df[df['sec_type'] == df_sec_type]
 
 def transform_sec(df : pd.DataFrame):
@@ -120,7 +121,7 @@ def transform_sec(df : pd.DataFrame):
 
 def perform_extraction_and_transform(date : int):
     df = get_js_min(date)
-    for sec_type in ['sec' , 'etf' , 'cb']:
+    for sec_type in SecType:
         sec_df = filter_sec(df , sec_type)
         if sec_type == 'sec':
             sec_df = transform_sec(df)

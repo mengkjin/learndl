@@ -6,7 +6,7 @@ __all__ = [
     'DF_SUFFIX' , 'SRC_ALTERNATIVES' , 'DB_BY_NAME' , 'DB_BY_DATE' , 
     'EXPORT_BY_NAME' , 'EXPORT_BY_DATE' , 'TAR_SUFFIXES']
 
-DF_SUFFIX   : Literal['feather' , 'parquet'] = 'feather'
+DF_SUFFIX : Literal['feather' , 'parquet'] = 'feather'
 TAR_SUFFIXES : tuple[str, ...] = ('.tar' , '.tar.gz' , '.tar.bz2' , '.tar.xz' , '.tar.zst')
 
 SRC_ALTERNATIVES : dict[str , tuple[str,...]] = {

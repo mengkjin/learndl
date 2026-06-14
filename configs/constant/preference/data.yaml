@@ -7,7 +7,7 @@ production: # no constraints on the update_from and update_to
 
 testing:
   update_from: 20250416
-  update_to: 20250421
+  update_to: 20250422
   
   start:
   end:

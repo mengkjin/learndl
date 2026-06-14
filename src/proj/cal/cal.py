@@ -196,7 +196,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return updated_date
 
     @classmethod
-    def offset(cls, dates: intDates | None, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray[int, Any]:
+    def offset(cls, dates: intDates | None, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray[Any, np.dtype[np.int_]]:
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
         if dates is None:
             return np.array([], dtype=np.int64)
@@ -240,7 +240,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return BC.diff_days_array(date1_arr, date2_arr, type)
 
     @classmethod
-    def trailing(cls, date : intDate, n: int, type: lit.intDateType = 'td') -> np.ndarray[int, Any]:
+    def trailing(cls, date : intDate, n: int, type: lit.intDateType = 'td') -> np.ndarray[Any, np.dtype[np.int_]]:
         """The last 'n' trading days before 'date' (sorted slice)."""
         return BC.trailing_np(date, n, type)
 
@@ -264,7 +264,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
     def range(
         cls, start: intDateNone, end: intDateNone , type : lit.intDateType = 'td' ,
         step: int = 1 , until_today=True, updated=False,
-    ) -> np.ndarray[int, Any]:
+    ) -> np.ndarray[Any, np.dtype[np.int_]]:
         """return the range of dates between start and end"""
         dates = BC.range(start, end, type)
         if until_today:

@@ -6,7 +6,7 @@ Provides adjusted OHLCV, valuation, moneyflow, and limit data from the
 """
 from __future__ import annotations
 import pandas as pd
-from typing import Any , Literal
+from typing import Any , Literal , cast
 
 from src.proj import CALENDAR , DB , Base , Dates
 from src.data.util import INFO
@@ -14,6 +14,20 @@ from src.data.util import INFO
 from .access import DateDataAccess
 
 __all__ = ['TRADE']
+
+QuoteField = Literal['adjfactor','open','high','low','close','amount','volume', 
+'vwap','status','limit','pctchange','preclose','turn_tt', 'turn_fl','turn_fr']
+ValField = Literal['turnover_rate','turnover_rate_f','volume_ratio','pe','pe_ttm','pb',
+'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share','free_share','total_mv','circ_mv']
+MfField = Literal['buy_sm_vol','buy_sm_amount','sell_sm_vol','sell_sm_amount','buy_md_vol',
+'buy_md_amount','sell_md_vol','sell_md_amount','buy_lg_vol','buy_lg_amount','sell_lg_vol',
+'sell_lg_amount','buy_elg_vol','buy_elg_amount','sell_elg_vol','sell_elg_amount','net_mf_vol',
+'net_mf_amount']
+LimitField = Literal['up_limit','down_limit','pre_close']
+ReturnType = Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight']
+VolumeType = Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr']
+MvType = Literal['circ_mv' , 'total_mv']
+TurnoverType = Literal['tt' , 'fl' , 'fr']
 
 class TradeDataAccess(DateDataAccess):
     """
@@ -75,9 +89,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_quotes(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : Literal['adjfactor','open','high','low','close','amount','volume',
-                        'vwap','status','limit','pctchange','preclose','turn_tt',
-                        'turn_fl','turn_fr'] | list ,
+        field : QuoteField | list[QuoteField] ,
         mask = False , pivot = False , drop_old = False , adj_price = True
     ) -> pd.DataFrame:
         """
@@ -106,15 +118,13 @@ class TradeDataAccess(DateDataAccess):
         self , start : Base.alias.intDate , end : Base.alias.intDate , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return the daily adjustment factor series for ``[start, end]``."""
-        return self.get_specific_data(start , end , 'trd' , 'adjfactor' , prev = False , 
-                                      mask = False , pivot = pivot , drop_old = drop_old)
+        return self.get_specific_data(
+            start , end , 'trd' , 'adjfactor' , prev = False , 
+            mask = False , pivot = pivot , drop_old = drop_old)
     
     def get_val_data(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : Literal[
-            'turnover_rate','turnover_rate_f','volume_ratio','pe','pe_ttm','pb',
-            'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share',
-            'free_share','total_mv','circ_mv'] | list , 
+        field : ValField | list[ValField] ,
         prev = True , mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return valuation data (PE, PB, market cap, etc.) with point-in-time shifting."""
@@ -123,11 +133,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_mf_data(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : Literal[
-            'buy_sm_vol','buy_sm_amount','sell_sm_vol','sell_sm_amount','buy_md_vol',
-            'buy_md_amount','sell_md_vol','sell_md_amount','buy_lg_vol','buy_lg_amount',
-            'sell_lg_vol','sell_lg_amount','buy_elg_vol','buy_elg_amount','sell_elg_vol',
-            'sell_elg_amount','net_mf_vol','net_mf_amount'] | list , 
+        field : MfField | list[MfField] , 
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return money-flow data (large/medium/small buy-sell classifications)."""
@@ -136,7 +142,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_limit_data(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : Literal['up_limit','down_limit','pre_close',] | list ,
+        field : LimitField | list[LimitField] ,
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return limit-price data (daily limit-up / limit-down prices and previous close)."""
@@ -145,7 +151,7 @@ class TradeDataAccess(DateDataAccess):
     
     def get_returns(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        return_type : Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight'] = 'close' ,
+        return_type : ReturnType = 'close' ,
         pivot = True , mask = True
     ) -> pd.DataFrame:
         """
@@ -194,7 +200,7 @@ class TradeDataAccess(DateDataAccess):
     
     def get_volumes(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' , pivot = True , mask = True
+        volume_type : VolumeType = 'volume' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return daily trading volume / amount / turnover for the requested type."""
         volumes = self.get_quotes(start , end , volume_type , mask = mask , pivot = pivot)
@@ -202,16 +208,16 @@ class TradeDataAccess(DateDataAccess):
 
     def get_turnovers(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        turnover_type : Literal['tt' , 'fl' , 'fr'] = 'fr' , pivot = True , mask = True
+        turnover_type : TurnoverType = 'fr' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return turnover rate (0-1 scale) for ``'tt'`` / ``'fl'`` / ``'fr'`` types."""
-        symbol : Literal['turn_tt' , 'turn_fl' , 'turn_fr'] | Any = f'turn_{turnover_type}'
-        turns = self.get_volumes(start , end , symbol , mask = mask , pivot = pivot) / 100
+        volume_type = cast(VolumeType , f'turn_{turnover_type}')
+        turns = self.get_volumes(start , end , volume_type , mask = mask , pivot = pivot) / 100
         return turns
 
     def get_mv(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        mv_type : Literal['circ_mv' , 'total_mv'] = 'circ_mv' , prev = True , pivot = False , drop_old = False
+        mv_type : MvType = 'circ_mv' , prev = True , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return circulating or total market cap (unit: 万元 / 10,000 CNY)."""
         mv = self.get_val_data(start , end , mv_type , prev = prev , pivot = pivot , drop_old = drop_old)
@@ -223,7 +229,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_market_return(
         self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        return_type : Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight'] = 'close'
+        return_type : ReturnType = 'close'
     ) -> pd.DataFrame:
         """Return the cap-weighted market return series indexed by date."""
         rets = self.get_returns(start , end , return_type = return_type , mask = False , pivot = False)

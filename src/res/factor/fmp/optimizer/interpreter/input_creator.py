@@ -3,7 +3,7 @@ Input creator for Factor Model Portfolio
 """
 from __future__ import annotations
 import numpy as np
-from typing import Any
+from typing import Any , TYPE_CHECKING
 
 from src.proj import Logger
 from src.data import DATAVENDOR
@@ -11,6 +11,9 @@ from src.res.factor.util import Benchmark , Port , RISK_MODEL
 
 from .bound import StockBound , StockPool , IndustryPool , GeneralBound , ValidRange , STOCK_UB , STOCK_LB
 from .constr import LinearConstraint , TurnConstraint , CovConstraint , BoundConstraint , ShortConstraint
+
+if TYPE_CHECKING:
+    from src.res.factor.fmp.optimizer.interpreter.optim_input import OptimizedPortfolioInput
 
 __all__ = [
     'create_input_eq' , 'create_input_benchmark' , 'create_input_initial' ,
@@ -25,43 +28,47 @@ __all__ = [
 _stock_bound_list : list[StockBound] = []
 _linear_bound_list : list[LinearConstraint] = []
 
-def create_input_eq(opt_input : Any) -> float | Any:
+def create_input_eq(opt_input : OptimizedPortfolioInput) -> float | Any:
     config = opt_input.cfg_equity
     if config['target_position']:  
         eq = config['target_position']
     elif config['target_value']:   
+        assert opt_input.initial_value , 'initial_value is required'
         eq = config['target_value'] / opt_input.initial_value
     elif config['add_position']:   
+        assert opt_input.initial_position , 'initial_position is required'
         eq = config['add_position'] + opt_input.initial_position
     elif config['add_value']:      
+        assert opt_input.initial_value , 'initial_value is required'
+        assert opt_input.initial_position , 'initial_position is required'
         eq = config['add_value'] / opt_input.initial_value + opt_input.initial_position
     return eq
 
-def create_input_benchmark(opt_input : Any) -> np.ndarray | Any:
+def create_input_benchmark(opt_input : OptimizedPortfolioInput) -> np.ndarray | Any:
     bm_port = Benchmark.day_port(opt_input.benchmark  , opt_input.model_date , opt_input.cfg_benchmark['benchmark'])
     opt_input.benchmark_port = bm_port
     wb = bm_port.weight_align(opt_input.secid) * opt_input.eq if not bm_port.emtpy else None
     return wb
 
-def create_input_initial(opt_input : Any):
+def create_input_initial(opt_input : OptimizedPortfolioInput):
     pf : Port | Any = opt_input.initial_port
     w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.emtpy else np.zeros(len(opt_input.secid))
     if (w0 == 0).all(): 
         w0 = None
     return w0
 
-def create_input_turn_con(opt_input : Any):
+def create_input_turn_con(opt_input : OptimizedPortfolioInput):
     max_turn = None if opt_input.initial_port is None else opt_input.cfg_turnover['double']
     return TurnConstraint(max_turn , opt_input.cfg_utility['trade_cost_rho'])
 
-def create_input_cov_con(opt_input : Any):
+def create_input_cov_con(opt_input : OptimizedPortfolioInput):
     lmbd = opt_input.cfg_utility['lambda']
     te = opt_input.cfg_limitation['te_constraint']
     ignore_spec = opt_input.cfg_limitation['ignore_spec_risk']
     F , C , S = RISK_MODEL.get(opt_input.model_date).FCS_aligned(opt_input.secid)
     return CovConstraint(lmbd , te , F , C , None if ignore_spec else S , cov_type='model')
 
-def create_input_bnd_con(opt_input : Any):
+def create_input_bnd_con(opt_input : OptimizedPortfolioInput):
 
     # later ones has more priority
     append_bound_weight(opt_input)
@@ -79,10 +86,11 @@ def create_input_bnd_con(opt_input : Any):
     bnd_key[bound.ub == bound.lb] = 'fx'
     bnd_key[bound.ub >= STOCK_UB] = 'lo'
     bnd_key[bound.lb <= STOCK_LB] = 'up'
+    lb = bound.lb if isinstance(bound.lb , np.ndarray) else np.full(len(bnd_key) , bound.lb)
+    ub = bound.ub if isinstance(bound.ub , np.ndarray) else np.full(len(bnd_key) , bound.ub)
+    return BoundConstraint(bnd_key , lb , ub)
 
-    return BoundConstraint(bnd_key , bound.lb , bound.ub)
-
-def create_input_lin_con(opt_input : Any):
+def create_input_lin_con(opt_input : OptimizedPortfolioInput):
 
     append_linear_equity(opt_input) 
     append_linear_induspool(opt_input) 
@@ -96,25 +104,25 @@ def create_input_lin_con(opt_input : Any):
 
     return lin_con
 
-def create_input_short_con(opt_input : Any):
+def create_input_short_con(opt_input : OptimizedPortfolioInput):
     return ShortConstraint(opt_input.cfg_short['short_position'] , opt_input.cfg_short['short_cost'])
 
-def append_bound_weight(opt_input : Any):
+def append_bound_weight(opt_input : OptimizedPortfolioInput):
     bound_weight = StockBound.intersect_bounds([bnd.export(opt_input.wb) for bnd in opt_input.cfg_bound.values()])
     _stock_bound_list.append(bound_weight)
     #return bound_weight
 
-def append_bound_pool(opt_input : Any):
+def append_bound_pool(opt_input : OptimizedPortfolioInput):
     pool : StockPool = opt_input.cfg_pool
     bound_pool = pool.export(opt_input.secid , opt_input.wb , opt_input.w0)
     _stock_bound_list.append(bound_pool)
 
-def append_bound_induspool(opt_input : Any):
+def append_bound_induspool(opt_input : OptimizedPortfolioInput):
     induspool : IndustryPool = opt_input.cfg_induspool
     bound_induspool = induspool.export(opt_input.w0 , RISK_MODEL.get(opt_input.model_date).industry(opt_input.secid))
     _stock_bound_list.append(bound_induspool)
 
-def append_bound_limit(opt_input : Any):
+def append_bound_limit(opt_input : OptimizedPortfolioInput):
     w0 = 0 if opt_input.w0 is None else opt_input.w0
     secid : np.ndarray = opt_input.secid
     model_date : int = opt_input.model_date
@@ -141,7 +149,7 @@ def append_bound_limit(opt_input : Any):
 
     _stock_bound_list.append(bound_limit)
 
-def append_bound_range(opt_input : Any):
+def append_bound_range(opt_input : OptimizedPortfolioInput):
     secid : np.ndarray = opt_input.secid
     model_date : int = opt_input.model_date
     valid_ranges : dict[str,ValidRange] = opt_input.cfg_range
@@ -163,12 +171,12 @@ def append_bound_range(opt_input : Any):
 
     _stock_bound_list.append(bound_range)
 
-def append_linear_equity(opt_input : Any):
+def append_linear_equity(opt_input : OptimizedPortfolioInput):
     eq = np.array([opt_input.eq])
     eq_lin = LinearConstraint(np.ones((1,len(opt_input.secid))) , np.array(['fx']) , eq , eq)
     _linear_bound_list.append(eq_lin)
 
-def append_linear_induspool(opt_input : Any):
+def append_linear_induspool(opt_input : OptimizedPortfolioInput):
     induspool : IndustryPool = opt_input.cfg_induspool
     if not induspool.no_net_buy and not induspool.no_net_sell:  
         return
@@ -186,7 +194,7 @@ def append_linear_induspool(opt_input : Any):
         A = np.stack([industry == ind for ind in induspool.no_net_sell], axis=0)
         _linear_bound_list.append(LinearConstraint(A , np.full(K , 'lo') , A.dot(w0) , np.full(K , 1.)))
 
-def append_linear_board(opt_input : Any):
+def append_linear_board(opt_input : OptimizedPortfolioInput):
     board_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_board
     if not board_bounds: 
         return
@@ -213,7 +221,7 @@ def append_linear_board(opt_input : Any):
         A , lin_type , lb , ub = gen_bounds[0].export_lin(1. * where , opt_input.wb , gen_bounds[1:])
         _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
-def append_linear_industry(opt_input : Any):
+def append_linear_industry(opt_input : OptimizedPortfolioInput):
     indus_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_industry
     if not indus_bounds: 
         return
@@ -225,7 +233,7 @@ def append_linear_industry(opt_input : Any):
         A , lin_type , lb , ub = gen_bounds[0].export_lin(1. * where , opt_input.wb , gen_bounds[1:])
         _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
-def append_linear_style(opt_input : Any):
+def append_linear_style(opt_input : OptimizedPortfolioInput):
     style_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_style
     if not style_bounds: 
         return
@@ -237,7 +245,7 @@ def append_linear_style(opt_input : Any):
         A , lin_type , lb , ub = gen_bounds[0].export_lin(value , opt_input.wb , gen_bounds[1:])
         _linear_bound_list.append(LinearConstraint(A , lin_type , lb , ub))
 
-def append_linear_component(opt_input : Any):
+def append_linear_component(opt_input : OptimizedPortfolioInput):
     comp_bounds : dict[str,list[GeneralBound]] = opt_input.cfg_component
     if not comp_bounds or opt_input.wb is None: 
         return

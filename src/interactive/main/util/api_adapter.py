@@ -243,7 +243,7 @@ def show_api_browser() -> stAPIEndpoint | None:
                     if any(v not in valid_options for v in stored_option if v is not None):
                         del st.session_state[tree_key]
 
-                picked = sac.tree(
+                picked = sac.tree( # type: ignore[reportUnknownReturnType]
                     items = tree_items ,
                     index = default_index ,
                     format_func = stAPIEndpointList.label_formatter ,

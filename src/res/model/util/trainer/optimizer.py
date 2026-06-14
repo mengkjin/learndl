@@ -111,6 +111,8 @@ class Optimizer:
             scheduler = optim.lr_scheduler.StepLR(optimizer, **kwargs)
         elif key == 'cycle':
             scheduler = optim.lr_scheduler.CyclicLR(optimizer, max_lr=[pg['lr_param'] for pg in optimizer.param_groups],cycle_momentum=False,mode='triangular2',**kwargs)
+        else:
+            raise ValueError(f'Invalid scheduler key: {key}')
         return scheduler
     
     def check_nan_gradients(self , metric : BatchMetrics):

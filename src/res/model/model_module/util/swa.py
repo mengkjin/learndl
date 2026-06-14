@@ -11,6 +11,7 @@ from torch.optim.swa_utils import AveragedModel
 from typing import Any , Literal
 
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
+from src.res.model.util.advance.torch_compile import unwrap_compiled_module
 
 SWAEnsemblerType = Literal['best' , 'swabest' , 'swalast']
 
@@ -44,7 +45,7 @@ class SWAEnsembler(ABC):
 
 class SWAModel:
     def __init__(self , module : nn.Module) -> None:
-        self.template = deepcopy(module)
+        self.template = deepcopy(unwrap_compiled_module(module))
         self.avgmodel = AveragedModel(self.template)
 
     def update_sd(self , state_dict):
@@ -105,7 +106,7 @@ class EnsembleBestOne(SWAEnsembler):
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
         #return self.ckpt.load_epoch(self.epoch_fix)
-        net : nn.Module = deepcopy(getattr(trainer.model , 'net'))
+        net : nn.Module = deepcopy(unwrap_compiled_module(getattr(trainer.model , 'net')))
         if not self.best_epoch:
             return net
         net.load_state_dict(self.ckpt.load(self.best_epoch.epoch , self.best_epoch.phase)['net'])
@@ -135,7 +136,7 @@ class EnsembleSWABest(SWAEnsembler):
                 self.ckpt.disjoin(self , drop_epoch.epoch , drop_epoch.phase)
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
-        swa = SWAModel(getattr(trainer.model , 'net'))
+        swa = SWAModel(unwrap_compiled_module(getattr(trainer.model , 'net')))
         for epoch in self.top_epochs: 
             swa.update_sd(self.ckpt.load(epoch.epoch , epoch.phase)['net'])
         swa.update_bn(trainer)
@@ -184,7 +185,7 @@ class EnsembleSWALast(SWAEnsembler):
         return [(ep , phase) for ep in epochs]
 
     def collect(self , trainer : BaseTrainer , *args , **kwargs):
-        swa = SWAModel(getattr(trainer.model , 'net'))
+        swa = SWAModel(unwrap_compiled_module(getattr(trainer.model , 'net')))
         for ep , ph in self.adjacent_epochs[:self.n_last]:  
             swa.update_sd(self.ckpt.load(ep , ph)['net'])
         swa.update_bn(trainer)

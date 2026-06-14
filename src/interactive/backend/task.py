@@ -359,7 +359,7 @@ class TaskDatabase:
             cursor.execute('SELECT file_path FROM task_exit_files WHERE task_id = ?', (task_id,))
             files = [row['file_path'] for row in cursor.fetchall()]
 
-            task = dict(task) | {'exit_files': files}
+            task : dict[str, Any] = dict(task) | {'exit_files': files}
             item = TaskItem(**task)
         return item
     

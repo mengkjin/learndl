@@ -5,7 +5,8 @@ from __future__ import annotations
 import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any , ClassVar , Literal
+from functools import cached_property
+from typing import ClassVar , Literal
 
 from src.proj import Logger
 
@@ -17,11 +18,23 @@ STOCK_LB , STOCK_UB = -1. , +1.
 
 @dataclass
 class StockBound:
-    lb : np.ndarray | Any = None
-    ub : np.ndarray | Any = None
+    _lb : np.ndarray | float | None = None
+    _ub : np.ndarray | float | None = None
 
     def __bool__(self):
         return self.lb is not None or self.ub is not None
+
+    @cached_property
+    def lb(self) -> np.ndarray | float:
+        if self._lb is None:
+            return STOCK_LB
+        return self._lb
+
+    @cached_property
+    def ub(self) -> np.ndarray | float:
+        if self._ub is None:
+            return STOCK_UB
+        return self._ub
     
     def __len__(self):
         if isinstance(self.lb , np.ndarray):
@@ -58,9 +71,7 @@ class StockBound:
         assert diff if isinstance(diff , bool) else diff.all() , diff
         return self
 
-    def update_ub(self , new_val : np.ndarray | float , idx : np.ndarray | Any = None , type = 'intersect'):
-        if self.ub is None: 
-            self.ub = STOCK_UB
+    def update_ub(self , new_val : np.ndarray | float , idx : np.ndarray | None = None , type = 'intersect'):
         update_func = np.minimum if type == 'intersect' else np.maximum
         if idx is None: 
             self.ub = update_func(self.ub , new_val)
@@ -74,9 +85,7 @@ class StockBound:
         if self.lb is not None: 
             self.lb = np.minimum(self.ub , self.lb)
 
-    def update_lb(self , new_val : np.ndarray | float , idx : np.ndarray | Any = None , type = 'intersect'):
-        if self.lb is None: 
-            self.lb = STOCK_LB
+    def update_lb(self , new_val : np.ndarray | float , idx : np.ndarray | None = None , type = 'intersect'):
         update_func = np.maximum if type == 'intersect' else np.minimum
         if idx is None: 
             self.lb = update_func(self.lb , new_val)
@@ -139,22 +148,22 @@ class StockPool:
     @classmethod
     def bnd_ub(cls , secid : np.ndarray , pool : np.ndarray | list , 
                valin : np.ndarray | float = STOCK_UB , valout : np.ndarray | float = STOCK_UB):
-        return StockBound(ub = np.where(np.isin(secid , pool) , valin , valout))
+        return StockBound(None , np.where(np.isin(secid , pool) , valin , valout))
     
     @classmethod
     def bnd_lb(cls , secid : np.ndarray , pool : np.ndarray | list , 
                valin : np.ndarray | float = STOCK_LB , valout : np.ndarray | float = STOCK_LB):
-        return StockBound(lb = np.where(np.isin(secid , pool) , valin , valout))
+        return StockBound(np.where(np.isin(secid , pool) , valin , valout) , None)
         
-    def export(self , 
-              secid : np.ndarray , # full coverage
-              wb : np.ndarray | Any = None , # benchmark weight
-              w0 : np.ndarray | Any = None , # original weight
-        ):
+    def export(
+        self , secid : np.ndarray , # full coverage
+        wb : np.ndarray | None = None , # benchmark weight
+        w0 : np.ndarray | None = None , # original weight
+    ):
         if wb is None: 
-            wb = 0
+            wb = np.zeros_like(secid)
         if w0 is None: 
-            w0 = 0
+            w0 = np.zeros_like(secid)
         bound = StockBound(np.full(len(secid) , STOCK_LB) , np.full(len(secid) , STOCK_UB))
         allow = self.get_pool('allow')
         
@@ -198,19 +207,19 @@ class IndustryPool:
     no_net_buy  : list | np.ndarray | None = None # not for net bought
 
     def __bool__(self): 
-        return (self.no_sell is not None or 
-                self.no_buy is not None or 
-                self.no_net_sell is not None or 
-                self.no_net_buy is not None)
+        return (
+            self.no_sell is not None or 
+            self.no_buy is not None or 
+            self.no_net_sell is not None or 
+            self.no_net_buy is not None
+        )
     
-    def export(self , w0 : np.ndarray | Any = None , industry : np.ndarray | None = None):
+    def export(self , w0 : np.ndarray | None = None , industry : np.ndarray | None = None):
         if industry is None: 
             return StockBound()
-        if w0 is None: 
-            w0 = 0
         
-        lb = None if self.no_sell is None else np.where(np.isin(industry , self.no_sell) , w0 , STOCK_LB)
-        ub = None if self.no_buy  is None else np.where(np.isin(industry , self.no_buy)  , w0 , STOCK_UB)
+        lb = None if self.no_sell is None else np.where(np.isin(industry , self.no_sell) , 0 if w0 is None else w0 , STOCK_LB)
+        ub = None if self.no_buy  is None else np.where(np.isin(industry , self.no_buy)  , 0 if w0 is None else w0 , STOCK_UB)
 
         return StockBound(lb , ub)
 
@@ -226,9 +235,9 @@ class GeneralBound:
     def __bool__(self): 
         return self.lb is not None or self.ub is not None
     
-    def export(self , wb : np.ndarray | Any = None):
+    def export(self , wb : np.ndarray | None = None):
         assert wb is None or isinstance(wb , np.ndarray) , f'Only stock weight can be export , risk style/indus cannot'
-        if np.isnan(wb).any():
+        if wb is not None and np.isnan(wb).any():
             Logger.warning(f'GeneralBound {self.key} when export has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
             wb = np.nan_to_num(wb)
         if self.key == 'abs': 
@@ -244,13 +253,15 @@ class GeneralBound:
                 ub = None if self.ub is None else self.ub * wb
         return StockBound(lb , ub)
     
-    def export_lin(self , A : np.ndarray , wb : np.ndarray | Any = None , 
-                   others : list[GeneralBound] | None = None) -> tuple:
+    def export_lin(
+        self , A : np.ndarray , wb : np.ndarray | None = None , 
+        others : list[GeneralBound] | None = None
+    ) -> tuple:
         others = others or []
         if np.isnan(A).any():
             Logger.warning(f'GeneralBound {self.key} when export_lin has nan of A : {np.isnan(A).sum()} / {np.size(A)}')
             A = np.nan_to_num(A)
-        if np.isnan(wb).any():
+        if wb is not None and np.isnan(wb).any():
             Logger.warning(f'GeneralBound {self.key} when export_lin has nan of wb : {np.isnan(wb).sum()} / {np.size(wb)}')
             wb = np.nan_to_num(wb)
         #assert not isinstance(self.lb , np.ndarray) , self.lb
@@ -264,10 +275,12 @@ class GeneralBound:
             # new_b = a + b * old_b
             if self.key == 'abs':   
                 a , b = 0. , 1.
-            elif self.key == 'rel': 
+            elif self.key == 'rel' and wb is not None: 
                 a , b = A.dot(wb) , 1.
-            elif self.key == 'por': 
+            elif self.key == 'por' and wb is not None: 
                 a , b = 0. , A.dot(wb)
+            else:
+                a , b = 0. , 1.
             
             lb = STOCK_LB if self.lb is None else a + b * self.lb
             ub = STOCK_UB if self.ub is None else a + b * self.ub
@@ -339,5 +352,5 @@ class ValidRange:
         if self.ub is not None:
             v_max = self.ub if self.key == 'abs' else np.quantile(value , self.ub)
 
-        return StockBound(ub = (value < v_max) * (value > v_min) * STOCK_UB)
+        return StockBound(None , (value < v_max) * (value > v_min) * STOCK_UB)
 

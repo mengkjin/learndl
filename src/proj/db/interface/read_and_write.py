@@ -77,14 +77,20 @@ def load(
     df = dfHandler.load_process_pandas(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
-def load_pl(db_src : str , db_key : str , date : int | None = None , *, 
-            key_column = None , use_alt = False , closest = False , 
-            missing_ok = True , indent = 1 , vb_level : Any = 1 , **kwargs) -> pl.DataFrame: 
+def load_pl(
+    db_src : str , db_key : str , date : int | None = None , *, 
+    key_column = None , use_alt = False , closest = False , 
+    missing_ok = True , indent = 1 , vb_level : Any = 1 , **kwargs
+) -> pl.DataFrame: 
     """load dataframe from database but use polars to load"""
     db_path = DBPath(db_src , db_key)
-    df = load_df_pl(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , 
-                    missing_ok = missing_ok , key_column = None)
-    df = dfHandler.load_process_polars(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
+    df = load_df_pl(
+        db_path.path(date , use_alt = use_alt , closest = closest , 
+        indent = indent , vb_level = vb_level) , 
+        missing_ok = missing_ok , key_column = None)
+    df = dfHandler.load_process_polars(
+        df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , 
+        indent = indent , vb_level = vb_level , **kwargs)
     return df
 
 def loads(

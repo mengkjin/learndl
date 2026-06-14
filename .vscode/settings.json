@@ -1,11 +1,6 @@
 {
     "r.lsp.promptToInstall": false,
-    "python.analysis.typeCheckingMode": "basic",
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportUnboundVariable": "error",
-        "reportUndefinedVariable": "error",
-        "reportGeneralTypeIssues": "error"
-    },
+    "python.analysis.typeCheckingMode": "standard",
     "files.exclude": {
         "**/*.egg-info/": true,
         "**/__pycache__/": true,

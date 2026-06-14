@@ -10,6 +10,7 @@ from typing import Any
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput , BatchOutput , Optimizer
+from src.res.model.util.advance.torch_compile import apply_torch_compile_from_config , CompileStage
 from src.res.model.model_module.util.swa import choose_swa_method
 from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat
 
@@ -40,6 +41,9 @@ class NNBoost(PredictorModel):
         seed   = self.config.random_seed if self.config else None
 
         self.net = AlgoModule.get_nn(nn_module , nn_param , device)
+        self.net = apply_torch_compile_from_config(
+            self.net , self.config , self._compile_stage() , logger = self.logger,
+        )
         self.reset_submodels(*args , **kwargs)
         self.boost = AlgoModule.get_boost(
             boost_module , boost_param, cuda , seed , given_name = self.model_full_name, 
@@ -48,6 +52,11 @@ class NNBoost(PredictorModel):
         self.model_dict.reset()
         self.complete_model_param = nn_param | boost_param
         return self
+
+    def _compile_stage(self) -> CompileStage | None:
+        if self.bounded_with_trainer:
+            return self.trainer.status.stage  # type: ignore[return-value]
+        return 'fit'
     
     def reset_submodels(self , *args , **kwargs):
         if hasattr(self , 'submodels'):

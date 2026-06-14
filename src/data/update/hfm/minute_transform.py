@@ -13,16 +13,20 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-from typing import Literal
-
-from src.data.util import trade_min_fillna
 from src.proj import PATH , DB , Dates
+from src.proj.core import StrEnum
+from src.data.util import trade_min_fillna
 
 __all__ = [
     'get_js_min' , 'add_sec_type' , 'filter_sec' , 
     'transform_sec' , 'process_sec_min_files' , 'process_fut_min_files' ,
     'main'
 ]
+
+class SecType(StrEnum):
+    SEC = 'sec'
+    ETF = 'etf'
+    CB = 'cb'
 
 sec_min_path = PATH.miscel.joinpath('JSMinute')
 fut_min_path = PATH.miscel.joinpath('JSFutMinute')
@@ -127,12 +131,9 @@ def add_sec_type(df : pd.DataFrame):
     df = df.merge(df_sec , on = ['ticker' , 'exchangecd'])
     return df
 
-def filter_sec(
-    df : pd.DataFrame , 
-    sec_type : Literal['sec' , 'etf' , 'cb'] | str ,
-    sec_type_map : dict[str,str] = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}
-):
-    return df[df['sec_type'] == sec_type_map[sec_type]]
+def filter_sec(df : pd.DataFrame , sec_type : SecType):
+    df_sec_type = {'sec' : 'A' , 'etf' : 'etf' , 'cb' : 'convertible'}[sec_type.value]
+    return df[df['sec_type'] == df_sec_type]
 
 def transform_sec(df : pd.DataFrame):
     
@@ -154,7 +155,7 @@ def process_sec_min_files():
     dates = target_dates.diff(full_dates , inplace = False)
     for date in dates:
         df = get_js_min(date)
-        for sec_type in ['sec' , 'etf' , 'cb']:
+        for sec_type in SecType:
             sec_df = filter_sec(df , sec_type)
             if sec_type == 'sec':
                 sec_df = transform_sec(df)

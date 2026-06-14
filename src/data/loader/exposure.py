@@ -52,8 +52,9 @@ class ExposureAccess(DateDataAccess):
         Optionally applies listing-date masking and pivots to wide format.
         The underlying cache is truncated after each call (``drop_old=True``).
         """
-        qte = self.get_specific_data(start , end , 'daily_risk' , field = field , prev = prev , 
-                                     mask = mask , pivot = False , drop_old = True)
+        qte = self.get_specific_data(
+            start , end , 'daily_risk' , field = field , prev = prev , 
+            mask = mask , pivot = False , drop_old = True)
         
         if pivot:
             qte = qte.pivot_table(field , 'date' , 'secid')

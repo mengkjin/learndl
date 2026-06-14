@@ -49,18 +49,15 @@ class SingleDataPrenorm:
         2.histnorm: normalized by history avg and std
         3.channelnorm: normalized by channel avg
         """
-        option_divlast = self.divlast and x.shape[-2] > 1
-        option_histnorm = self.histnorm and histnorm is not None
-        option_channelnorm = self.channelnorm and x.ndim > 2
-        assert not (option_histnorm and option_channelnorm) , f'histnorm and channelnorm cannot be used together'
-        if option_divlast:
+        assert not ((self.histnorm and histnorm is not None) and (self.channelnorm and x.ndim > 2)) , f'histnorm and channelnorm cannot be used together'
+        if self.divlast and x.shape[-2] > 1:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if option_histnorm:
+        if self.histnorm and histnorm is not None:
             x = x - histnorm.avg[-x.shape[-2]:]
             x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
-            if option_divlast:
+            if self.divlast and x.shape[-2] > 1:
                 x[:,-1] = 0
-        if option_channelnorm:
+        if self.channelnorm and x.ndim > 2:
             norm_dim = tuple(range(1 , x.ndim - 1))
             x = x / (x.mean(dim = norm_dim, keepdim = True).abs() + 1e-6) - 1
         return x

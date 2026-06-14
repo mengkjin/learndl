@@ -162,7 +162,7 @@ class ArrayMemoryMap:
                 except Exception as e:
                     Logger.error(f'Memeory Map {path} is messed up: ' , e)
                     raise
-
+                
             if metas.array_type == 'Tensor':
                 import torch
                 val = torch.from_numpy(val)

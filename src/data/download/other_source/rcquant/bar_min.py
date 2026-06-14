@@ -219,8 +219,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         if isinstance(data , pd.DataFrame) and not data.empty:
             data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
             data['code'] = data['code'].map(code_map)
-            data['time'] = data['datetime'].map(lambda x: x.strftime('%H%M%S')).str.slice(0,4)
-            data['date'] = data['datetime'].map(lambda x: x.strftime('%Y%m%d'))
+            data['time'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%H%M%S')).str.slice(0,4)
+            data['date'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%Y%m%d'))
 
             write_min(data , date , data_type)
 

@@ -9,7 +9,7 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime , timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Callable , cast
 
 from src.proj import MACHINE , PATH , Logger , Base
 from src.call.basic import DirectCall
@@ -53,7 +53,8 @@ class GitClearPull(DirectCall):
         self.kwargs = kwargs | {'verbose_level': verbose_level}
     @property
     def verbose_level(self) -> Base.lit._0_3:
-        return self.kwargs['verbose_level']
+        verbose_level = self.kwargs['verbose_level']
+        return cast(Base.lit._0_3, verbose_level)
     def run(self) -> None:
         import shutil
         assert not MACHINE.platform_coding, "Git Pull is not available on coding platform"

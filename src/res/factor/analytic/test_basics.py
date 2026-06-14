@@ -115,8 +115,8 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         self.save_resumable = save_resumable
         self.start = start
         self.end = end
-        self.kwargs = kwargs
-        vb_kwgs = {'indent':self.indent + 1 , 'vb_level':self.vb_level + 2}
+        self.kwargs : dict[str,Any] = kwargs
+        vb_kwgs : dict[str,Any] = {'indent':self.indent + 1 , 'vb_level':self.vb_level + 2}
         if which == 'all':
             self.tasks = {k:v(**(self.kwargs | vb_kwgs)) for k,v in candidates.items()}
         else:
@@ -124,7 +124,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
                 which = [which]
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
-            self.tasks = {k:v(**self.kwargs | vb_kwgs) for k,v in candidates.items() if k in which}
+            self.tasks = {k:v(**(self.kwargs | vb_kwgs)) for k,v in candidates.items() if k in which}
 
     def __repr__(self):
         return f'{self.__class__.__name__}'

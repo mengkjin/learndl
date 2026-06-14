@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Any
 
-from src.proj.core.types import literals as lit
+from src.proj.core.types import lit
 from src.proj.cal import CALENDAR
 from src.proj.bases.enums import UpdateType , UpdateFlag
 

@@ -220,9 +220,13 @@ class CovConstraint:
             return
         if N is None:
             if self.cov_type == 'model':
-                assert self.F is None or self.F.ndim == 2 and self.C.ndim == 2 , (self.F , self.C)
-                assert self.C is None or self.C.shape == (self.F.shape[0], self.F.shape[0]) , (self.F.shape , self.C.shape)
-                assert self.S is None or (self.S.ndim == 1 and (self.S >= 0.0).all()) , self.S
+                if self.F is not None and self.C is not None:
+                    assert self.C.ndim == 2 and self.C.shape == (self.F.shape[0], self.F.shape[0]) , (self.F.shape , self.C.shape)
+                else:
+                    assert self.F is None and self.C is None , (self.F , self.C)
+                if self.S is not None:
+                    assert self.S.ndim == 1 and (self.S >= 0.0).all() , self.S
+                    assert self.F is None or len(self.S) == self.F.shape[1] , (self.S.shape , self.F.shape)
         else:
             if self.cov_type == 'model':
                 assert self.F is None or self.F.shape[-1] == N , (self.F.shape , N)

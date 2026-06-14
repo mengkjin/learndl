@@ -212,6 +212,8 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         if not self.base_path:
             full_name = self.generate_model_full_name()
             self.base_path.with_full_name(full_name)
+        else:
+            full_name = self.base_path.full_name
 
         # check base_path is set correctly
         assert self.base_path, f"base_path is still not set after generating model full name {full_name}"

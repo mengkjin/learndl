@@ -139,7 +139,7 @@ class ModelPath:
 
     def with_new_index(self , index : int):
         assert index > 0 , f'index {index} must be greater than 0'
-        new_full_name_kwargs = self.full_name_kwargs | {'model_name_index' : index}
+        new_full_name_kwargs : dict[str,Any] = self.full_name_kwargs | {'model_name_index' : index}
         self.parse_input(combine_full_name(**new_full_name_kwargs))
         return self
 

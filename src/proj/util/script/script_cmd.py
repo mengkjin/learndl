@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.proj.core import strPath
-from src.proj.core.types.literals import RunScriptMode
+from src.proj.core.types.core_literals import RunScriptMode
 
 __all__ = ['ScriptCmd']
 

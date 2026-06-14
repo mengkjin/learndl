@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import subprocess
 from datetime import datetime
-from typing import Literal
 
 from src.proj import MACHINE , Logger , PATH
+from src.proj.core import StrEnum
 from src.call.basic import DirectCall
 
 __all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo']
@@ -42,17 +42,31 @@ class SuspendThisMachine(DirectCall):
             Logger.critical(f'Suspension applied')
             subprocess.run(['systemctl', 'suspend'])
 
+class _PowerMode(StrEnum):
+    BALANCED = 'balanced'
+    POWER_SAVER = 'power-saver'
+    PERFORMANCE = 'performance'
+    NONE = 'none'
+
 class ChangePowerMode(DirectCall):
-    """Set Linux power profile via ``powerprofilesctl``; no-op log on Windows."""
+    """
+    Set Linux power profile via ``powerprofilesctl``; no-op log on Windows.
+    Accepted modes:
+    - 'balanced'
+    - 'power-saver'
+    - 'performance'
+    - 'none'
+    """
     category = 'Computer'
-    def __init__(self , mode : Literal['balanced' , 'power-saver' , 'performance'] | None = None , **kwargs):
-        self.kwargs = kwargs | {'mode': mode}
+    def __init__(self , mode : _PowerMode | str | None = None , **kwargs):
+        self.kwargs = kwargs | {'mode': _PowerMode(mode or 'none')}
     @property
-    def mode(self) -> Literal['balanced' , 'power-saver' , 'performance'] | None:
-        return self.kwargs['mode']
+    def mode(self) -> _PowerMode:
+        return _PowerMode(self.kwargs['mode'])
     @classmethod
-    def get_description(cls , mode : Literal['balanced' , 'power-saver' , 'performance'] | None = None , **kwargs) -> str:
-        if mode is None:
+    def get_description(cls , mode : _PowerMode | str | None = None , **kwargs) -> str:
+        mode = _PowerMode(mode or 'none')
+        if mode == 'none':
             return 'Power mode is not set, skip the operation.'
         return f'Set Linux power profile to {mode} via ``powerprofilesctl``; no-op log on Windows.'
     def run(self) -> None:

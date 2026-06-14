@@ -143,6 +143,12 @@ def new_print_traceback_stack(color : str = 'yellow' , bold : bool = True) -> st
     new_stderr(stack_str , color = color , bold = bold)
     return stack_str
 
+def _combine_kwargs(*kwgs : dict[str , Any]) -> dict[str , Any]:
+    ret : dict[str , Any] = {}
+    for kwg in kwgs:
+        ret.update(kwg)
+    return ret
+
 class Logger:
     """
     custom colored logger
@@ -276,26 +282,22 @@ class Logger:
     @classmethod
     def caption(cls , *args , **kwargs):
         """custom gray stdout message for caption (e.g. table / figure title)"""
-        kwargs = StdoutType.CAPTION.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.CAPTION.palette , kwargs))
 
     @classmethod
     def footnote(cls , *args , **kwargs):
         """custom gray stdout message for footnote (e.g. saved information)"""
-        kwargs = StdoutType.FOOTNOTE.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.FOOTNOTE.palette , kwargs))
         
     @classmethod
     def success(cls , *args , **kwargs):
         """custom green stdout message for success"""
-        kwargs = StdoutType.SUCCESS.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.SUCCESS.palette , kwargs))
     
     @classmethod
     def skipping(cls , *args , **kwargs):
         """custom skipping message"""
-        kwargs = StdoutType.SKIPPING.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.SKIPPING.palette , kwargs))
 
     @classmethod
     def alert1(cls , *args , **kwargs):
@@ -303,8 +305,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = StdoutType.ALERT1.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.ALERT1.palette , kwargs))
 
     @classmethod
     def alert2(cls , *args , **kwargs):
@@ -312,8 +313,7 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = StdoutType.ALERT2.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.ALERT2.palette , kwargs))
 
     @classmethod
     def alert3(cls , *args , **kwargs):
@@ -321,58 +321,49 @@ class Logger:
         custom stdout message with color for alert
         level: 1 for yellow (warning) , 2 for red (error) , 3 for purple (critical)
         """
-        kwargs = StdoutType.ALERT3.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.ALERT3.palette , kwargs))
 
     @classmethod
     def note(cls , *args , **kwargs):
         """
         custom lightblue stdout message for remark
         """
-        kwargs = StdoutType.NOTE.palette | kwargs
-        new_stdout(*args , **kwargs)
+        new_stdout(*args , **_combine_kwargs(StdoutType.NOTE.palette , kwargs))
 
     @classmethod
     def remark(cls , *args , **kwargs):
         """custom lightblue stderr"""
-        kwargs = StderrType.REMARK.palette | kwargs
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.REMARK.palette , kwargs))
 
     @classmethod
     def debug(cls , *args , **kwargs):
         """Debug level stderr"""
-        kwargs = StderrType.DEBUG.palette | kwargs
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.DEBUG.palette , kwargs))
 
     @classmethod
     def info(cls , *args , **kwargs):
         """Info level stderr"""
-        kwargs = StderrType.INFO.palette | kwargs
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.INFO.palette , kwargs))
 
     @classmethod
     def highlight(cls , *args , **kwargs):
         """custom lightcyan colored Highlight level message"""
-        kwargs = StderrType.HIGHLIGHT.palette | kwargs
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.HIGHLIGHT.palette , kwargs))
 
     @classmethod
     def warning(cls , *args , **kwargs):
         """Warning level stderr"""
-        kwargs = StderrType.WARNING.palette | kwargs
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.WARNING.palette , kwargs))
 
     @classmethod
     def error(cls , *args , **kwargs):
         """Error level stderr"""
-        kwargs = StderrType.ERROR.palette | kwargs | {'vb_level' : 0}
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.ERROR.palette , kwargs | {'vb_level' : 0}))
 
     @classmethod
     def critical(cls , *args , **kwargs):
         """Critical level stderr"""
-        kwargs = StderrType.CRITICAL.palette | kwargs | {'vb_level' : 0}
-        new_stderr(*args , **kwargs)
+        new_stderr(*args , **_combine_kwargs(StderrType.CRITICAL.palette , kwargs | {'vb_level' : 0}))
 
     @classmethod
     def only_once(cls , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):

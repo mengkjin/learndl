@@ -194,20 +194,20 @@ class DataBlock:
         if self.feature is not None:
             self.feature = as_array(self.feature)
 
-        if self.values is not None: 
+        if self.initiated:
+            assert self.secid is not None and self.date is not None and self.feature is not None, \
+                (self.secid, self.date, self.feature)
+            l0 , l1 , l3 = self.index_lens
             if isinstance(self.values , (int , float)):
-                self.values = torch.full((len(self.secid),len(self.date),1,len(self.feature)),self.values)
-            if not isinstance(self.values , torch.Tensor):
+                self.values = torch.full((l0,l1,1,l3),self.values)
+            elif not isinstance(self.values , torch.Tensor):
                 self.values = torch.Tensor(self.values)
             if self.ndim == 3: 
                 self.values = self.values.unsqueeze(2)
-
-        if self.initiated:
-            assert isinstance(self.values , torch.Tensor) , self.values
             assert self.ndim == 4 , self.shape
-            assert self.shape[0] == len(self.secid) , (self.shape[0] , len(self.secid))
-            assert self.shape[1] == len(self.date) , (self.shape[1] , len(self.date))
-            assert self.shape[3] == len(self.feature) , (self.shape[3] , len(self.feature))
+            assert self.shape[0] == l0 , (self.shape[0] , l0)
+            assert self.shape[1] == l1 , (self.shape[1] , l1)
+            assert self.shape[3] == l3 , (self.shape[3] , l3)
         return self
     
     def __repr__(self):
@@ -230,6 +230,15 @@ class DataBlock:
     def shape(self):
         """Shape of ``values`` as a tuple ``(N_secid, N_date, N_inday, N_feature)``."""
         return Base.shape(self.values)
+
+    @property
+    def index_lens(self) -> tuple[int, int, int]:
+        """Length of the index arrays as a tuple ``(N_secid, N_date, N_inday)``."""
+        return (
+            0 if self.secid is None else len(self.secid), 
+            0 if self.date is None else len(self.date), 
+            0 if self.feature is None else len(self.feature)
+        )
 
     @property
     def dtype(self):
@@ -574,6 +583,7 @@ class DataBlock:
         Returns a new block with features from all input blocks stacked in order.
         """
         blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiated] 
+        new_blk = DataBlock()
         for i , blk in enumerate(blocks): 
             if i == 0:
                 new_blk = blk.copy()
@@ -960,14 +970,17 @@ class DataBlock:
         Falls back to the first existing suffix in ``DumpSuffix``
         when ``find_if_not_exists=True`` and the canonical path does not exist.
         """
+        assert key , 'key is required'
         if key.lower() in ['y' , 'labels']: 
             path = PATH.datablock.joinpath(frame , f'Y{dump_suffix}')
         else:
             alias_list = data_type_alias(key)
+            path = None
             for new_key in alias_list:
                 path = PATH.datablock.joinpath(frame , f'X_{new_key}{dump_suffix}')
                 if path.exists(): 
                     break
+            assert path , f'path not found for {key}'
         if find_if_not_exists:
             return cls.find_existing_dump_path(path)
         return path
@@ -1342,8 +1355,10 @@ class DataBlockNorm:
         if key.lower() == 'y':
             return PATH.histnorm.joinpath(frame , 'Y.pt')
         alias_list = data_type_alias(key)
+        path = None
         for new_key in alias_list:
             path = PATH.histnorm.joinpath(frame , f'X_{new_key}.pt')
             if path.exists():
                 break
+        assert path , f'path not found for {key}'
         return path
