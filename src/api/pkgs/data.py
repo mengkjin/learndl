@@ -9,7 +9,7 @@ from src.data.crawler import AnnouncementAgent
 # from src.data import JSDataUpdater
 from src.res.factor.api import RiskModelUpdater
 
-from src.api.util import wrap_update
+from src.api.util.wrapper import wrap_update
 
 __all__ = ['DataAPI']
 

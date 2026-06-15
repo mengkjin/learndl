@@ -12,7 +12,7 @@ from src.res.factor.util import StockFactor
 from src.res.factor.api import RiskModelUpdater , FactorUpdaterAPI , FactorTestAPI
 from src.res.factor.calculator import StockFactorHierarchy
 
-from src.api.util import wrap_update
+from src.api.util.wrapper import wrap_update
 
 __all__ = [
     'FactorAPI' , 'get_random_factor' , 'get_real_factor' , 'get_factor' , 
@@ -465,7 +465,7 @@ class FactorAPI:
           execution_time: long
           memory_usage: high
         """
-        from src.api.pkgs import ModelAPI
+        from src.api.pkgs.model import ModelAPI
         for factor in Options.available_factors():
             title = f'Resume Testing Factor {factor}'
             with Logger.Paragraph(title , 1) if Proj.vb.vb > 1 else Logger.Timer(title):

@@ -8,7 +8,7 @@ from typing import Any
 import streamlit as st
 import streamlit_antd_components as sac
 
-from src.api.util import APIEndpoint
+from src.api.util.contract import APIEndpoint
 from src.api.util.st_frontend import subheader_expander , ParamInputsForm
 from src.api.interactive.util.script_detail import show_report_main , show_task_history
 from src.api.interactive.util.session_control import SC

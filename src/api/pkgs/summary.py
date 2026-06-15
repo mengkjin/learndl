@@ -10,7 +10,7 @@ from src.res.model.model_module.application.trainer import ModelTrainer
 from src.res.factor.util.stats.aggregate import eval_period_ic_multi
 from src.proj import Logger , PATH , Const , Load
 
-from src.api.util import wrap_update
+from src.api.util.wrapper import wrap_update
 
 __all__ = ['SummaryAPI']
 

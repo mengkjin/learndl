@@ -10,7 +10,7 @@ from src.proj import MACHINE , Logger , CALENDAR , DB , Options
 from src.proj.util.web.emailer import Email
 from src.proj.util.script import TaskRecorder
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
-from src.api.util import wrap_update
+from src.api.util.wrapper import wrap_update
 
 __all__ = ['NotificationAPI']
 

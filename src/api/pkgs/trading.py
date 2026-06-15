@@ -6,7 +6,7 @@ from __future__ import annotations
 from src.res.trading import TrackingPortfolioManager , BacktestPortfolioManager
 
 from src.proj import Logger , Const
-from src.api.util import wrap_update
+from src.api.util.wrapper import wrap_update
 
 __all__ = ['TradingAPI']
 

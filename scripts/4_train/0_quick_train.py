@@ -11,7 +11,7 @@
 #   path: "configs/model/model.yaml"
 #   height : 300 # optional
 
-from src.api.pkgs import ModelAPI
+from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('quick_train_model')

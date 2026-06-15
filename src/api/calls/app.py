@@ -7,7 +7,7 @@ import os
 import psutil
 
 from src.proj import MACHINE
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = ['LaunchApp' , 'KillAndRebootApp']
 

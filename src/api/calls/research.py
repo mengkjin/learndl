@@ -7,7 +7,7 @@ from datetime import datetime , timedelta
 from typing import Any
 
 from src.proj import MACHINE , PATH , Logger
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = ['CarryOutScheduleModelList' , 'CheckAllConfigFiles']
 

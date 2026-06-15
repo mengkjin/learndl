@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime , timedelta
 
 from src.proj import MACHINE , PATH , Logger
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = [
     'ClearOutdatedCatcherLogs' ,

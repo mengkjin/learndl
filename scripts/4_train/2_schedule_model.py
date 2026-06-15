@@ -32,7 +32,7 @@
 #   path: "{PATH.sched}/{schedule_name}.yaml | {PATH.sched_shared}/{schedule_name}.yaml"
 #   height : 300 # optional
 
-from src.api.pkgs import ModelAPI
+from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2 , markdown_catcher = True)

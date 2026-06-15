@@ -13,7 +13,7 @@ from typing import Callable , cast
 
 from src.proj import MACHINE , PATH , Logger , Base
 from src.proj.util.functional.ask import AskFor
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = [
     'GitCommitSync' , 'GitClearPull' , 

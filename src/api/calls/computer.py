@@ -8,7 +8,7 @@ from datetime import datetime
 
 from src.proj import MACHINE , Logger , PATH
 from src.proj.core import StrEnum
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo']
 

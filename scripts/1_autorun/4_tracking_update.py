@@ -9,7 +9,7 @@
 # email: true
 # mode: shell
 
-from src.api.pkgs import UpdateAPI
+from src.api.pkgs.update import UpdateAPI
 
 from src.proj.util.script import ScriptTool
 

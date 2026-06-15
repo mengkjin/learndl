@@ -114,7 +114,7 @@ class ScriptTool:
     def __call__(self , func : Callable):
         assert callable(func), 'func must be a callable'
 
-        from src.api.util import filter_kwargs_explicit_only
+        from src.api.util.contract import filter_kwargs_explicit_only
         sig = inspect.signature(func)
         @wraps(func)
         def inner(*args: Any , **kwargs: Any) -> Any:
@@ -130,7 +130,7 @@ class ScriptTool:
             if self.source_mode == 'api':
                 data = self.interaction
                 if data is None:
-                    from src.api.util import endpoint_schema
+                    from src.api.util.contract import endpoint_schema
                     data = endpoint_schema(func)
                 if data is not None and 'email' in data:
                     self.autorun_task.kwargs['email'] = bool(data['email'])

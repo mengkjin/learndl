@@ -28,7 +28,7 @@
 #   path: "models/{model_name}/results/training_output.html"
 #   height : 600 # optional
 
-from src.api.pkgs import ModelAPI
+from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('test_model' , '@model_name' , lock_num = 0)

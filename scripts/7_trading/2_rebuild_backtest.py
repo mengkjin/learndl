@@ -12,7 +12,7 @@
 #       desc : backtest trade port name
 #       required : True
 
-from src.api.pkgs import TradingAPI
+from src.api.pkgs.trading import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('backtest_rebuild' , '@port_name')

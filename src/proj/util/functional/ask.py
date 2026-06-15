@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from IPython.core.getipython import get_ipython
 from typing import Any , Literal , Generator , Generic , TypeVar , Self
 
 from src.proj.log import Logger
@@ -101,7 +102,16 @@ class AskFor:
         flag = AskFor.Retry('Do you want to archive more models?')
     """
    
-    not_interactive = not sys.stdin.isatty()
+    @classmethod
+    def check_interactive(cls) -> bool:
+        """Check if the current environment is interactive."""
+        if sys.stdin.isatty():
+            return True
+        try:
+            shell = get_ipython().__class__.__name__
+            return shell in {"ZMQInteractiveShell", "TerminalInteractiveShell"}
+        except NameError:
+            return False
 
     @classmethod
     def Confirmation(cls , timeout = -1 , ask_times = 1 , title = '') -> AskFlag[None]:
@@ -110,7 +120,7 @@ class AskFor:
         Returns:
             Tuple of (inputs list, bool list from ``proceed_condition``).
         """
-        if cls.not_interactive:
+        if not cls.check_interactive():
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
         assert ask_times > 0 , 'ask_times must be greater than 0'
@@ -145,7 +155,7 @@ class AskFor:
         multiple : bool = False , title : str = '' , start_index : int = 1 , 
     ) -> AskFlag[int]:
         """Ask for selections out of a number of options starting from a given index."""
-        if cls.not_interactive:
+        if not cls.check_interactive():
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
         if not options:
@@ -200,7 +210,7 @@ class AskFor:
     @classmethod
     def Retry(cls , title : str = '') -> AskFlag:
         """Ask for exit."""
-        if cls.not_interactive:
+        if not cls.check_interactive():
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
         _print_title(title)
@@ -219,7 +229,7 @@ class AskFor:
         multiple : bool = False , title : str = ''
     ) -> AskFlag[T]:
         """Ask for options from a list of options."""
-        if cls.not_interactive:
+        if not cls.check_interactive():
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
         _print_title(title)
@@ -252,7 +262,7 @@ class AskFor:
             do_something()
         
         """
-        if cls.not_interactive:
+        if not cls.check_interactive():
             Logger.error('Not interactive mode, return!')
             return
         for trial in range(max_trials):

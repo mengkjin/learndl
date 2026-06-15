@@ -14,7 +14,7 @@ from .trading import TradingAPI
 from .summary import SummaryAPI
 from .notification import NotificationAPI
 
-from src.api.util import wrap_update , print_update_records
+from src.api.util.wrapper import wrap_update , print_update_records
 
 __all__ = ['UpdateAPI']
 

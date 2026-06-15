@@ -4,7 +4,7 @@ Direct calls related to data operations of this project.
 
 from __future__ import annotations
 from src.proj import Logger , Proj , MACHINE
-from src.api.util import DirectCall
+from src.api.util.direct_call import DirectCall
 
 __all__ = ['ReconstructPreprocessedData']
 

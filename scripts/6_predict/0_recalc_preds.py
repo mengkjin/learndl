@@ -24,7 +24,7 @@
 
 
 from src.proj.util.script import ScriptTool
-from src.api.pkgs import ModelAPI
+from src.api.pkgs.model import ModelAPI
 
 @ScriptTool('recalc_preds')
 def main(start : int | None = None , end : int | None = None , **kwargs):
