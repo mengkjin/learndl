@@ -25,7 +25,9 @@ class BoostPredictor(PredictorModel):
         seed = self.config.random_seed if self.config else None
 
         self.boost = AlgoModule.get_boost(
-            module , param , cuda , seed , given_name = self.model_full_name ,
+            module , param , cuda , seed , 
+            given_name = f'{self.config.base_path.full_name}@{self.config.start_time.strftime("%Y%m%d%H%M%S")}' ,
+            sub_name = f'{self.config.model_clean_name}/{self.model_num}/{self.model_date}/{self.model_submodel}' ,
             optuna = self.config.boost_optuna , override_criterion = self.config.criterion_boost,
             n_trials = self.config.boost_optuna_trials)
 

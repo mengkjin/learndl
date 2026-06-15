@@ -7,9 +7,9 @@ Classes:
                        trial params are applied before the final fit.
 """
 from __future__ import annotations
-import optuna , random , string
+import optuna
 
-from datetime import datetime
+from pathlib import Path
 from typing import Any , Literal
 
 from src.proj import PATH , MACHINE , Proj
@@ -43,9 +43,8 @@ class OptunaBoostModel(GeneralBoostModel):
     Per-booster search spaces are defined in :meth:`trial_suggest_params`.
     """
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20
-    DEFAULT_SAVE_STUDIES = True
-    DEFAULT_STORAGE = f'sqlite:///{PATH.relative(PATH.optuna)}/boost_{datetime.now().strftime("%Y%m") }.sqlite3'
-
+    OPTUNA_SAVE_STUDIES = True
+    
     @property
     def best_params(self):
         return self.study.best_trial.params
@@ -116,15 +115,23 @@ class OptunaBoostModel(GeneralBoostModel):
         
         self.update_param(self.study.best_trial.params).boost.fit(silent=True)
         return self
-    
+
+    @property
+    def study_db_path(self) -> Path:
+        return PATH.optuna / self.boost_type / f'{self.given_name}.sqlite3'
+
+    @property
+    def study_storage(self) -> str:
+        return f'sqlite:///{self.study_db_path.resolve().as_posix()}'
+
     def study_create(self , direction='maximize'):
-        name_str = self.given_name if self.given_name else self.boost.__class__.__name__
-        time_str = datetime.now().strftime('%Y%m%d-%H%M%S') 
-        rand_str =''.join(random.choices(string.ascii_letters + string.digits, k=10))
-    
         with OptunaSilent(silent = not Proj.vb.is_max_level):
-            self.study = optuna.create_study(storage=self.DEFAULT_STORAGE if self.DEFAULT_SAVE_STUDIES else None, 
-                                             direction = direction , study_name=f'{name_str}_{time_str}_{rand_str}')
+            if self.OPTUNA_SAVE_STUDIES:
+                self.study_db_path.parent.mkdir(parents=True, exist_ok=True)
+                storage = self.study_storage
+            else:
+                storage = None
+            self.study = optuna.create_study(storage=storage,  direction = direction , study_name=self.sub_name)
         return self
     
     def study_objective(self , trial : optuna.Trial):

@@ -7,7 +7,6 @@ Classes:
 """
 from __future__ import annotations
 import torch
-
 from typing import Any , Literal
 
 from .nn.api import get_nn_module , get_nn_category , get_nn_datatype , AVAILABLE_NNS
@@ -87,11 +86,13 @@ class AlgoModule:
     def get_boost(
         cls , model_module : str , model_param : dict | None = None , 
         cuda = None , seed = None , model_dict : dict | None = None , 
-        given_name : str | None = None , override_criterion : dict | None = None , optuna : bool = False , **kwargs
+        given_name : str | None = None , sub_name : str | None = None , override_criterion : dict | None = None , 
+        optuna : bool = False , **kwargs
     ):
         boost_class = OptunaBoostModel if optuna else GeneralBoostModel
         boost = boost_class(
-            model_module , model_param , cuda = bool(cuda) , seed = seed , given_name = given_name , 
+            model_module , model_param , cuda = bool(cuda) , seed = seed , 
+            given_name = given_name , sub_name = sub_name , 
             override_criterion = override_criterion, **kwargs)
 
         if model_dict is not None: 

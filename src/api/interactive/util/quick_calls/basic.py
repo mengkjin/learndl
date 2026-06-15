@@ -48,6 +48,7 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
     - gold
     - cyan
     """
+    button_title : str = ''
     default_help : str = ''
     done_action : DoneActionType = 'pause'
     color : EncodedColor = 'green'
@@ -59,6 +60,8 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
 
     @property
     def title(self) -> str:
+        if self.button_title:
+            return self.button_title
         return self.key.replace('-', ' ').title()
 
     def run(self) -> None:

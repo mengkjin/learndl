@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from typing import Any , Literal , Generator
+from typing import Any , Literal , Generator , Generic , TypeVar , Self
 
 from src.proj.log import Logger
 
@@ -13,7 +13,8 @@ def _print_title(title : str):
         Logger.stdout(f'{title}' , color = 'lightpurple')
 
 AskFlagType = Literal['yes' , 'no' , 'abort']
-class AskFlag:
+T = TypeVar('T')
+class AskFlag(Generic[T]):
     """
     Ask for confirmation, selections, or retry.
     
@@ -32,15 +33,19 @@ class AskFlag:
     def __init__(
         self , 
         flag : AskFlagType ,
-        result : Any = None
     ):
         self.flag : AskFlagType = flag
-        self.result : Any = result
 
     def __repr__(self) -> str:
         return f'AskFlag({self.flag})'
     def __str__(self) -> str:
         return self.flag
+    def __bool__(self) -> bool:
+        return self.yes
+
+    def set_result(self , results : list[T]) -> Self:
+        self._results : list[T] = results
+        return self
 
     @property
     def yes(self) -> bool:
@@ -51,9 +56,15 @@ class AskFlag:
     @property
     def abort(self) -> bool:
         return self.flag == 'abort'
-
-    def __bool__(self) -> bool:
-        return self.yes
+    @property
+    def result(self) -> T | None:
+        assert len(self.results) <= 1 , f'result must be a single value'
+        return self.results[0] if self.results else None
+    @property
+    def results(self) -> list[T]:
+        if not hasattr(self , '_results'):
+            return []
+        return self._results
 
 class LoopFlag:
     """
@@ -71,7 +82,9 @@ class LoopFlag:
     def __bool__(self) -> bool:
         return self._flag.yes
 
-    def set_flag(self , flag : AskFlag) -> LoopFlag:
+    def set_flag(self , flag : AskFlag | None) -> LoopFlag:
+        if flag is None:
+            return self
         self._flag = flag
         return self
 
@@ -91,7 +104,7 @@ class AskFor:
     not_interactive = not sys.stdin.isatty()
 
     @classmethod
-    def Confirmation(cls , timeout = -1 , ask_times = 1 , title = '') -> AskFlag:
+    def Confirmation(cls , timeout = -1 , ask_times = 1 , title = '') -> AskFlag[None]:
         """Prompt up to ``recurrent`` times with optional per-prompt timeout.
 
         Returns:
@@ -128,36 +141,43 @@ class AskFor:
 
     @classmethod
     def Selections(
-        cls , options : int | list[Any] , start : int = 1 , confirm : bool = True , 
-        multiple : bool = False , title : str = ''
-    ) -> AskFlag:
+        cls , options : int | list[Any] , confirm : bool = True , 
+        multiple : bool = False , title : str = '' , start_index : int = 1 , 
+    ) -> AskFlag[int]:
         """Ask for selections out of a number of options starting from a given index."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
+        if not options:
+            Logger.alert1('No options provided')
         if isinstance(options , int):
             num = options
-            option_strs = [f'#{i+start:02d}' for i in range(num)]
+            option_strs = [f'#{i+start_index:02d}' for i in range(num)]
         else:
             num = len(options)
-            option_strs = [f'{i+start}.{option}' for i, option in enumerate(options)]
-        min , max = start , num + start - 1
+            option_strs = [f'{i+start_index}.{option}' for i, option in enumerate(options)]
+        min , max = start_index , num + start_index - 1
         _print_title(title)
         if multiple:
-            selection = input(f'Choose from {min} to {max}, seperated by comma , q to quit: ')
+            selection = input(f'Choose from {min} to {max}, (sep by "," or range by "-") , q to quit: ')
             if selection.lower() == 'q':
                 return AskFlag('no')
-            choices = [s.strip() for s in selection.split(',') if s.strip()]
-            if any(not s.isdigit() for s in choices):
+            if not selection.strip().replace('-', '').replace(',', '').replace(' ', '').isdigit():
                 Logger.error(f'Contains non-digit characters: {selection}')
                 return AskFlag('abort')
+            if '-' in selection:
+                start , end = selection.split('-')
+                start , end = int(start.strip()) , int(end.strip())
+                choices = list(range(start , end + 1))
+            elif ',' in selection:
+                choices = [int(s.strip()) for s in selection.split(',') if s.strip()]
+            else:
+                choices = [int(selection.strip())]
 
             choices = [int(i) for i in choices]
-            if any(s < start or s > num + start - 1 for s in choices):
+            if any(s < start_index or s > num + start_index - 1 for s in choices):
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
-            if len(choices) == 1:
-                choices = choices[0]
         else:
             selection = input(f'Choose from {min} to {max}, q to quit: ')
             if selection.lower() == 'q':
@@ -165,16 +185,17 @@ class AskFor:
             if not selection.isdigit():
                 Logger.error(f'Invalid input: {selection} , please choose from {min} to {max} or q to quit')
                 return AskFlag('abort')
-            choices = int(selection)
-            if choices < start or choices > num + start - 1:
+            choices = [int(selection)]
+            if choices[0] < start_index or choices[0] > num + start_index - 1:
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
                 return AskFlag('abort')
 
         if confirm:
-            flag = cls.Confirmation(title = f'Are you sure to select {option_strs[choices - start] if isinstance(choices , int) else choices}?')
-            return AskFlag('yes' , result = choices) if flag.yes else AskFlag('abort')
+            message = f'Are you sure to select {option_strs[choices[0] - start_index] if len(choices) == 1 else choices}?'
+            flag = cls.Confirmation(title = message)
+            return AskFlag('yes').set_result(choices) if flag.yes else AskFlag('abort')
         else:
-            return AskFlag('yes' , result = choices)
+            return AskFlag('yes').set_result(choices)
 
     @classmethod
     def Retry(cls , title : str = '') -> AskFlag:
@@ -194,9 +215,9 @@ class AskFor:
 
     @classmethod
     def Options(
-        cls , options : list[Any] , confirm : bool = True , 
+        cls , options : list[T] , confirm : bool = True , 
         multiple : bool = False , title : str = ''
-    ) -> AskFlag:
+    ) -> AskFlag[T]:
         """Ask for options from a list of options."""
         if cls.not_interactive:
             Logger.error('Not interactive mode, return false!')
@@ -205,13 +226,11 @@ class AskFor:
         Logger.stdout(f'There are {len(options)} options available...')
         for i , option in enumerate(options):
             Logger.stdout(f'{i+1:02d}. {option}' , indent = 1)
-        flag = cls.Selections(len(options) , confirm = confirm , multiple = multiple)
+        flag = cls.Selections(options , confirm = confirm , multiple = multiple)
+        new_flag = AskFlag(flag.flag)
         if flag.yes:
-            if multiple:
-                flag.result = [options[i - 1] for i in flag.result]
-            else:
-                flag.result = options[flag.result - 1]
-        return flag
+            new_flag.set_result([options[i - 1] for i in flag.results])
+        return new_flag
 
     @classmethod
     def LoopTillExit(
@@ -230,7 +249,7 @@ class AskFor:
 
         >> 2. if there is no ask inside loop:
         for _ in AskFor.LoopTillExit(True , message = f'Do you want to check more?' , max_trials = 100):
-            # do something
+            do_something()
         
         """
         if cls.not_interactive:

@@ -38,10 +38,8 @@ class ArchiveCurrentModel(DirectCall):
                     last_root = root_name
                 Logger.note(f'{i+1:02d}. {PATH.relative(rel_path)}' , indent = 1)
             flag = AskFor.Selections([rel_path for _, _, rel_path in paths] , multiple=True , title = f'Which model to archive?')
-            if not loop_flag.set_flag(flag):
-                continue
-            for i in flag.result:
-                ModelPath(paths[i - 1][1]).move_to_archive()
+            if loop_flag.set_flag(flag):
+                [ModelPath(paths[i - 1][1]).move_to_archive() for i in flag.results]
 
 class ResumeArchivedModel(DirectCall):
     """Resume archived model(s) from the archive directory."""
@@ -55,10 +53,11 @@ class ResumeArchivedModel(DirectCall):
             if not archive_paths:
                 Logger.note('No models found in the archive directory.')
                 return
-            flag = AskFor.Options(archive_paths , confirm = False , multiple=True , title = f'Which model to resume from archive?')
-            if not loop_flag.set_flag(flag):
-                continue
-            [ModelPath.resume_from_archive(path.name) for path in flag.result]
+            flag = AskFor.Options(
+                archive_paths , confirm = False , multiple=True , 
+                title = f'Which model to resume from archive?')
+            if loop_flag.set_flag(flag):
+                [ModelPath.resume_from_archive(path.name) for path in flag.results]
 
 # %% log files related operations ------------------------------------------------------------
 

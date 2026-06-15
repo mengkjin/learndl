@@ -11,6 +11,7 @@ import os, random, torch
 import numpy as np
 
 from dataclasses import dataclass
+from datetime import datetime
 from functools import cached_property
 from pathlib import Path
 from typing import Any, Literal, Type, cast
@@ -874,6 +875,7 @@ class ModelConfig(BaseModelConfig):
         return self
 
     def start_model(self):
+        self.start_time = datetime.now()
         self.process_parser()
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():

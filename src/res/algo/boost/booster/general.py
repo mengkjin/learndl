@@ -8,6 +8,7 @@ Classes:
 from __future__ import annotations
 import torch
 
+from datetime import datetime
 from functools import cached_property
 from typing import Any , Literal
 
@@ -39,13 +40,16 @@ class GeneralBoostModel:
         boost_type : Literal['ada' , 'lgbm' , 'xgboost' , 'catboost'] | str = 'lgbm' ,
         params : dict[str,Any] | None = None , * ,
         train : Any = None ,  valid : Any = None , test : Any = None , 
-        cuda = True , seed = None , given_name : str | None = None , 
-        override_criterion : dict | None = None ,
+        cuda = True , seed = None , 
+        given_name : str | None = None , 
+        sub_name : str | None = None ,
+        override_criterion : dict | None = None , 
         **kwargs
     ):
         assert boost_type in AVAILABLE_BOOSTS , f'{boost_type} is not a valid boost type'
         self.boost_type = boost_type
-        self.given_name = given_name
+        self.given_name = given_name or self.boost.__class__.__name__
+        self.sub_name = sub_name or datetime.now().strftime('%Y%m%d-%H%M%S')
         self.override_criterion = override_criterion or {}
         self.cuda = cuda
         self.seed = seed

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable , cast
 
 from src.proj import MACHINE , PATH , Logger , Base
+from src.proj.util.functional.ask import AskFor
 from src.api.util import DirectCall
 
 __all__ = [
@@ -148,6 +149,7 @@ class CheckCodeIssues(DirectCall):
 
     @classmethod
     def _run_check(cls , checker : Callable[[Path], bool]) -> None:
+        """Run the check."""
         Logger.note(f"{checker.__doc__}...")
         files = [file for file in PATH.main.joinpath('src').rglob('*.py') if not checker(file)]
         if files:
@@ -155,24 +157,29 @@ class CheckCodeIssues(DirectCall):
         else:
             Logger.success(f'No files found with the issue {checker.__doc__}.')
 
+    @classmethod
+    def _menu_for_checking(cls):
+        checkers : list[Callable[[Path], bool]] = [getattr(cls, name) for name in dir(cls) if name.startswith('_check_')]
+        options = ['All checks in one' , 'Run ruff pyright check' , *[checkers.__doc__ for checkers in checkers]]
+        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
+        if flag.result is None:
+            return flag
+        selection = options.index(flag.result)
+        if selection == 0:
+            for checker in checkers:
+                cls._run_check(checker)
+            RunRuffPyrightCheck.go()
+        elif selection == 1:
+            RunRuffPyrightCheck.go()
+        else:
+            checker = checkers[selection - 2]
+            cls._run_check(checker)
+        return flag
+
     def run(self) -> None:
-        from src.proj.util.functional.ask import AskFor
-        checkers : list[Callable[[Path], bool]] = [getattr(self.__class__, name) for name in dir(self.__class__) if name.startswith('_check_')]
         for loop_flag in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
-            options = ['All checks in one' , 'Run ruff pyright check' , *[checkers.__doc__ for checkers in checkers]]
-            flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
-            if not loop_flag.set_flag(flag):
-                continue
-            selection = options.index(flag.result)
-            if selection == 0:
-                for checker in checkers:
-                    self._run_check(checker)
-                RunRuffPyrightCheck.go()
-            elif selection == 1:
-                RunRuffPyrightCheck.go()
-            else:
-                checker = checkers[selection - 2]
-                self._run_check(checker)
+            flag = self._menu_for_checking()
+            loop_flag.set_flag(flag)
 
 class CheckDependencyVersion(DirectCall):
     """Check the dependency version in the project code if they are newer than the ones in pyproject.toml."""
@@ -251,6 +258,5 @@ class CheckDependencyVersion(DirectCall):
             Logger.success("\nAll installed packages perfectly match their lower '>=' boundaries.")
 
     def run(self) -> None:
-        from src.proj.util.functional.ask import AskFor
         for _ in AskFor.LoopTillExit(True , message = f'Do you want to check more dependency version?' , max_trials = 100):
             self.check_dependency_version()

@@ -23,22 +23,21 @@ class ReconstructPreprocessedData(DirectCall):
         with Proj.vb.temporary_vb('max'):
             for loop_flag in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
                 flag_key = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
-                if not loop_flag.set_flag(flag_key):
+                if not loop_flag.set_flag(flag_key) or flag_key.result is None:
                     continue
                 
                 Logger.note(f'Select [{flag_key.result}] data to reconstruct...')
                 flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
-                if not loop_flag.set_flag(flag_type):
+                if not loop_flag.set_flag(flag_type) or flag_type.result is None:
                     continue
-
                 data_type = flag_type.result
-                if MACHINE.platform_coding and data_type != 'predict':
+                if MACHINE.platform_coding and flag_type.result != 'predict':
                     Logger.alert1('This is a coding machine, skip the fit data reconstruct.')
-                elif data_type == 'fit':
+                elif flag_type.result == 'fit':
                     PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
-                elif data_type == 'predict':
+                elif flag_type.result == 'predict':
                     PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True)
-                elif data_type == 'both':
+                elif flag_type.result == 'both':
                     PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
                     PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True , confirm = False)
                 else:

@@ -86,7 +86,7 @@ class ButtonOperation(ABC , Base.BoundLogger):
 
     def render_title(self , font_size : int = 12 , uppercase : bool = True) -> None:
         """Render the title of the button operation."""
-        title = self.title.upper() if uppercase else self.title.title()
+        title = self.title.upper() if uppercase else self.title
         body = f"""
             <div style="margin-bottom: 0px;margin-top: -10px;padding: 0 0 20px 0;font-size: {font_size}px;font-weight: 600;
                 white-space: nowrap;">{title}</div>"""       

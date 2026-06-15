@@ -37,6 +37,7 @@ class Reboot(QuickCallButton):
 class TestLogger(QuickCallButton):
     """Button that tests the streamlit app."""
     key = "test-logger"
+    button_title = ".🩺 Logger"
     icon = ":material/keyboard_external_input:"
     default_help = 'Call Logger.test_logger() to test stdout.'
     color = 'cyan'
@@ -50,6 +51,7 @@ class TestLogger(QuickCallButton):
 class CheckCodeIssues(QuickCallButton):
     """Button that checks the code issues."""
     key = "check-code-issues"
+    button_title = "🔎 Code Issues"
     icon = ":material/troubleshoot:"
     default_help = 'Check the code issues in the project code.'
     color = 'cyan'
@@ -63,6 +65,7 @@ class CheckCodeIssues(QuickCallButton):
 class CheckDependencyVersion(QuickCallButton):
     """Button that checks the dependency version."""
     key = "check-dependency-version"
+    button_title = "🔎 Dependencies"
     icon = ":material/package:"
     default_help = 'Check the dependency version in the project code if they are newer than the ones in pyproject.toml.'
     color = 'cyan'
@@ -76,6 +79,7 @@ class CheckDependencyVersion(QuickCallButton):
 class ClearCatcherLogs(QuickCallButton):
     """Button that clears the catcher logs."""
     key = "clear-catcher-logs"
+    button_title = "🆑 CatcherLog"
     icon = ":material/auto_delete:"
     default_help = 'Clear outdated catcher logs , default is 30 days.'
     color = 'red'
@@ -88,8 +92,9 @@ class ClearCatcherLogs(QuickCallButton):
 class ReplaceWeztermConfig(QuickCallButton):
     """Button that replaces the wezterm config."""
     key = "replace-wezterm-config"
+    button_title = "⚙️ Wezterm"
     icon = ":material/component_exchange:"
-    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
+    default_help = 'Replace the wezterm config file by the project\'s default.'
     color = 'blue'
     
     def script_string(self) -> str:
@@ -101,6 +106,7 @@ class ReplaceWeztermConfig(QuickCallButton):
 class CarryOutSchedules(QuickCallButton):
     """Button that carries out the schedule model list."""
     key = "carry-out-schedules"
+    button_title = "▶️ Schedules"
     icon = ":material/order_play:"
     default_help = 'Carry out the schedule model list.'
     color = 'purple'
@@ -120,6 +126,7 @@ class CarryOutSchedules(QuickCallButton):
 class CheckConfigFiles(QuickCallButton):
     """Button that modifies the config files."""
     key = "check-configs"
+    button_title = "🔍 Config YAML"
     icon = ":material/search_insights:"
     default_help = 'Check and auto modify the config files.'
     color = 'cyan'
@@ -134,6 +141,7 @@ class CheckConfigFiles(QuickCallButton):
 class RebuildPreprocessedData(QuickCallButton):
     """Button that rebuilds the preprocessed data."""
     key = "rebuild-preprocess"
+    button_title = f"🧱 PreProcess"
     icon = ":material/calculate:"
     default_help = 'Rebuild the preprocessed data, you can choose which data and which type to rebuild.'
     color = 'purple'
@@ -148,6 +156,7 @@ class RebuildPreprocessedData(QuickCallButton):
 class ArchiveCurrentModel(QuickCallButton):
     """Button that archives the model."""
     key = "archive-current-model"
+    button_title = "📥 Current Model"
     icon = ":material/archive:"
     default_help = 'Archive models from model directory to model archive directory, you can choose which model to archive.'
     color = 'pink'
@@ -162,6 +171,7 @@ class ArchiveCurrentModel(QuickCallButton):
 class ResumeArchivedModel(QuickCallButton):
     """Button that resumes the model."""
     key = "resume-archived-model"
+    button_title = "📤 Archived Model"
     icon = ":material/unarchive:"
     default_help = 'Resume models from model archive directory, you can choose which model to resume.'
     color = 'green'
@@ -176,6 +186,7 @@ class ResumeArchivedModel(QuickCallButton):
 class Tensorboard(QuickCallButton):
     """Button that launches Tensorboard."""
     key = "tensorboard"
+    button_title = "TensorBoard"
     icon = ":material/network_intel_node:"
     default_help = 'Launch Tensorboard. You can choose which option to launch.'
     color = 'gold'
@@ -190,6 +201,7 @@ class Tensorboard(QuickCallButton):
 class OptunaDashboard(QuickCallButton):
     """Button that launches Optuna Dashboard."""
     key = "optuna"
+    button_title = "Optuna Dashboard"
     icon = ":material/target:"
     default_help = 'Launch Optuna Dashboard. You can choose which option to launch.'
     color = 'gold'

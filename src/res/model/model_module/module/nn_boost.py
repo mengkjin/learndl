@@ -44,7 +44,9 @@ class NNBoost(PredictorModel):
         self.net = self.wrap_net(AlgoModule.get_nn(nn_module , nn_param , device))
         self.reset_submodels(*args , **kwargs)
         self.boost = AlgoModule.get_boost(
-            boost_module , boost_param, cuda , seed , given_name = self.model_full_name, 
+            boost_module , boost_param, cuda , seed , 
+            given_name = f'{self.config.base_path.full_name}@{self.config.start_time.strftime("%Y%m%d%H%M%S")}' ,
+            sub_name = f'{self.config.model_clean_name}/{self.model_num}/{self.model_date}/{self.model_submodel}' ,
             override_criterion = self.config.criterion_boost)
 
         self.model_dict.reset()
