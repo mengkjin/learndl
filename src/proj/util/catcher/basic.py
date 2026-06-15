@@ -117,6 +117,12 @@ class OutputDeflector(BoundLogger):
     def flush(self) -> None:
         """Flush the original output stream and the catcher"""
         self.original_flush()
+
+    def isatty(self) -> bool:
+        """Delegate TTY check to the original stream (e.g. for colorlog / tqdm)."""
+        if self.original is not None and hasattr(self.original, 'isatty'):
+            return self.original.isatty()
+        return False
             
     def close(self) -> None:
         """Close the catcher"""

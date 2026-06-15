@@ -3,6 +3,7 @@
 from __future__ import annotations
 import sys
 from collections.abc import Callable
+from datetime import datetime , timedelta
 from typing import Any
 
 from src.proj import MACHINE , PATH , Logger
@@ -26,7 +27,9 @@ class CarryOutScheduleModelList(DirectCall):
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
     @classmethod
     def schedule_names(cls) -> str:
-        return ', '.join(cls.get_schedules())
+        all_schedules = cls.get_schedules()
+        recent_schedules = [schedule for schedule in all_schedules if not cls._is_schedule_created_recently(schedule)]
+        return ', '.join(recent_schedules)
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
@@ -47,6 +50,23 @@ class CarryOutScheduleModelList(DirectCall):
         for module in dynamic_modules(cls.SCHEDULE_SCRIPT):
             return module.main
         raise FileNotFoundError(f'Schedule model script not found: {cls.SCHEDULE_SCRIPT}')
+    @classmethod
+    def _get_latest_creation_time(cls , schedule_name: str , exclude_short_test: bool = True):
+        from src.res.model.util import ModelConfig
+        config = ModelConfig(schedule_name = schedule_name , vb_level = 'never')
+        candidates = config.base_path.find_resumable_candidates()
+        if exclude_short_test:
+            candidates = [cand for cand in candidates if not cand.is_short_test]
+        creation_time = [datetime.fromtimestamp(cand.base.stat().st_ctime) for cand in candidates]
+        return max(creation_time) if creation_time else None
+
+    @classmethod
+    def _is_schedule_created_recently(cls , schedule_name: str , days: int = 7 , exclude_short_test: bool = True):
+        max_creation_time = cls._get_latest_creation_time(schedule_name , exclude_short_test)
+        if max_creation_time is None:
+            return False
+        return max_creation_time > datetime.now() - timedelta(days = days)
+
     def run(self) -> None:
         self._ensure_main_script_file()
         Logger.critical(f'Training schedule model list {self.schedule_names()} started')
