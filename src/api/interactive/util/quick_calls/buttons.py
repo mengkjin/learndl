@@ -56,7 +56,7 @@ class CheckCodeIssues(QuickCallButton):
     
     def script_string(self) -> str:
         return """
-            from src.api.calls.files import CheckCodeIssues
+            from src.api.calls.source_code import CheckCodeIssues
             CheckCodeIssues.go()
         """
 
