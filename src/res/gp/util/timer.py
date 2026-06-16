@@ -6,7 +6,8 @@ import torch
 import pandas as pd
 from datetime import datetime
 from functools import wraps
-from typing import Any , Literal, Callable
+from typing import Any , Literal
+from collections.abc import Callable
 
 from src.proj import Base
 from src.res.gp.func import primas

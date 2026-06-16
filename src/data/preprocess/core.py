@@ -19,7 +19,7 @@ import numpy as np
 from abc import abstractmethod , ABCMeta
 from datetime import datetime
 from functools import cached_property
-from typing import Any , Type , cast , get_args
+from typing import Any , cast , get_args
 
 from src.proj import CALENDAR , Const , Base , Dates
 from src.data.util import DataBlock
@@ -40,7 +40,7 @@ class PreProcessorMeta(ABCMeta):
     The registration key is derived from the class name by stripping the
     ``'PrePro_'`` prefix and lowercasing (via ``PreProcessorProperty('key')``).
     """
-    registry : dict[str,Type[PreProcessor] | Any] = {}
+    registry : dict[str,type[PreProcessor] | Any] = {}
     def __new__(cls , name , bases , dct):
         """Create the class and register it if it satisfies the PrePro_ conditions."""
         new_cls = super().__new__(cls , name , bases , dct)
@@ -58,7 +58,7 @@ class _PPKey:
         """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
         self.cache_values = {}
 
-    def __get__(self , instance , owner : Type[PreProcessor]) -> str:
+    def __get__(self , instance , owner : type[PreProcessor]) -> str:
         """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
             self.cache_values[owner] = str(owner.__qualname__).removeprefix('PrePro_').lower()
@@ -72,7 +72,7 @@ class _FactorPPCategory0:
         """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
         self.cache_values = {}
 
-    def __get__(self , instance , owner : Type[FactorPreProcessor]) -> Base.lit.FactorCategory0:
+    def __get__(self , instance , owner : type[FactorPreProcessor]) -> Base.lit.FactorCategory0:
         """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
             self.cache_values[owner] = Const.Factor.STOCK.cat1_to_cat0(cast(Base.lit.FactorCategory1, owner.category1))
@@ -86,7 +86,7 @@ class _FactorPPCategory1:
         """Register which compute method to call (``'key'``, ``'category0'``, or ``'category1``)."""
         self.cache_values = {}
 
-    def __get__(self , instance , owner : Type[FactorPreProcessor]) -> Base.lit.FactorCategory1:
+    def __get__(self , instance , owner : type[FactorPreProcessor]) -> Base.lit.FactorCategory1:
         """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
             cat1 = owner.key
@@ -129,14 +129,14 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
-        mask : dict[str,Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs
+        mask : dict[str, Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs
     ) -> None:
         """
         Parameters
         ----------
-        frame : 'fit' | 'predict'
+        frame : 'fit' or 'predict'
             Controls the start date and whether dump saving is allowed.
-        mask : dict | None
+        mask : dict[str,Any] | None
             Masking rules forwarded to ``DataBlock.mask_values``.
             Defaults to ``{'list_dt': 91}`` (blank first 91 days post-IPO).
         """
@@ -170,7 +170,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         """Return the absolute start date (yyyyMMdd int) for the given ``frame``."""
         return CALENDAR.td(CALENDAR.updated() , cls.predict_start).td if frame == 'predict' else cls.fit_start
 
-    def load_blocks(self , start = None , end = None , secid : np.ndarray | None = None , **kwargs) -> dict[str,DataBlock]:
+    def load_blocks(self , start = None , end = None , secid : Base.alias.SecidType = None , **kwargs) -> dict[str,DataBlock]:
         """
         Load raw DataBlocks from all registered ``block_loaders``.
 
@@ -203,7 +203,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
     def pre_process(
         self , start : int | None = None , end : int | None = None , * , 
-        secid : np.ndarray | None = None , **kwargs
+        secid : Base.alias.SecidType = None , **kwargs
     ) -> DataBlock:
         """
         Load raw blocks, apply the transformation, slice to [start, end], and apply masking.
@@ -231,7 +231,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             
         return block
 
-    def load(self , dates : Base.alias.intDates, * , secid : np.ndarray | None = None) -> DataBlock:
+    def load(self , dates : Base.alias.DateType, * , secid : Base.alias.SecidType = None) -> DataBlock:
         """Load data for the given dates, disabling dump saving (query mode)."""
         return self.load_with_extension(dates_for_query = dates , secid = secid)
 
@@ -264,8 +264,8 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             block.hist_norm(self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(
-        self , dates_for_query : Base.alias.intDates | None = None, * , 
-        secid : np.ndarray | None = None , reconstruct : bool = False , rollback_date : int | None = None
+        self , dates_for_query : Base.alias.DateType = None, * , 
+        secid : Base.alias.SecidType = None , reconstruct : bool = False , rollback_date : int | None = None
     ) -> DataBlock:
         """
         load data with extension , try dumped data first , then extend to the end date
@@ -425,6 +425,6 @@ class MicellaneousPreProcessor(PreProcessor):
     @abstractmethod
     def pre_process(
         self , start : int | None = None , end : int | None = None , * , 
-        secid : np.ndarray | None = None , **kwargs
+        secid : Base.alias.SecidType = None , **kwargs
     ) -> DataBlock:
         raise NotImplementedError(f'{self.__class__.__name__} does not implement pre_process')

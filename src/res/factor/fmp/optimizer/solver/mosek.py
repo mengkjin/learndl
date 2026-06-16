@@ -40,9 +40,11 @@ def enum(num : int , args : list[Any] , start = 0):
     return enumerate(zip(*args) , start = start)
 
 class Solver:
-    def __init__(self , input : SolverInput , 
-                 prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
-                 **kwargs):
+    def __init__(
+        self , input : SolverInput , 
+        prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
+        **kwargs
+    ):
         self.input = input
         self.prob_type = Base.PortOptimProblem(prob_type)
 
@@ -144,9 +146,11 @@ class Solver:
         for key, val in _SOLVER_PARAM.items(): 
             task.putparam(key, val)
     
-    def task_addvars(self , task : mosek.Task , num : int ,
-                     bound_key : np.ndarray | Any , bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
-                     coef_obj : np.ndarray | Any = None):
+    def task_addvars(
+        self , task : mosek.Task , num : int , bound_key : np.ndarray | Any , 
+        bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
+        coef_obj : np.ndarray | Any = None
+    ):
         var_iter = enum(num , [bound_key , bound_lb , bound_ub , coef_obj] , start = task.getnumvar())
         task.appendvars(num)
         for j , (bkx , blx , bux , cj) in var_iter:
@@ -154,9 +158,11 @@ class Solver:
             if cj: 
                 task.putcj(j , cj)
     
-    def task_addlcons(self , task : mosek.Task , num : int ,
-                      bound_key : np.ndarray | Any , bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
-                      lcon_sub : np.ndarray | list , lcon_val : np.ndarray | list):
+    def task_addlcons(
+        self , task : mosek.Task , num : int , bound_key : np.ndarray | Any , 
+        bound_lb : np.ndarray | Any , bound_ub : np.ndarray | Any ,
+        lcon_sub : Base.ArrayLike , lcon_val : Base.ArrayLike
+    ):
         con_iter = enum(num , [bound_key , bound_lb , bound_ub , lcon_sub , lcon_val] , start = task.getnumcon())
         task.appendcons(num)
         for i , (bkx , blx , bux , subi , vali) in con_iter:
@@ -284,7 +290,7 @@ class Solver:
 
             # common risk
             idx   = np.tril_indices(len(self.cov_con.F))
-            qcub  = -0.5 * self.cov_con.F.dot(self.wb).T.dot(self.cov_con.C).dot(self.cov_con.F.dot(self.wb))
+            qcub  = -0.5 * self.cov_con.F.dot(self.wb).T.dot(self.cov_con.C).dot(self.cov_con.F).dot(self.wb)
             qcsub = np.concatenate([self.start_of.L + np.arange(len(self.cov_con.F)) , [self.start_of.Q]])
             qcval = np.concatenate([-self.cov_con.F.dot(self.wb).T.dot(self.cov_con.C) , [-0.5]])
 

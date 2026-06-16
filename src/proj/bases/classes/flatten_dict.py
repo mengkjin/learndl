@@ -1,11 +1,13 @@
 """flatten_dict class for the project"""
 
 from __future__ import annotations
-from typing import Any , Callable
+from typing import Any
+from collections.abc import Callable
 from pathlib import Path
 from copy import deepcopy
-from src.proj import Logger , PATH
 
+from src.proj import Logger , PATH
+from src.proj.core.literals import VerbosityLevel
 __all__ = ['FlattenDict']
 
 class FlattenDict:
@@ -97,7 +99,10 @@ class FlattenDict:
         return cls.nested_dict({k.removeprefix(f'{key}.'): v for k, v in d.items() if k.startswith(f'{key}.')})
 
     @classmethod
-    def flatten_dict(cls , d: dict[str, Any] | FlattenDict , prefix: str = '' , * , keep_nested: Callable[[str], bool] | None = None) -> dict[str, Any]:
+    def flatten_dict(
+        cls , d: dict[str, Any] | FlattenDict , prefix: str = '' , * , 
+        keep_nested: Callable[[str], bool] | None = None
+    ) -> dict[str, Any]:
         """Recursively flatten dicts to dot keys unless ``keep_nested`` keeps a prefix."""
         if isinstance(d, FlattenDict):
             d = d.raw
@@ -128,7 +133,7 @@ class FlattenDict:
         """Return the flattened mapping (alias of internal store)."""
         return self.flattened
 
-    def dump_yaml(self, path: Path , overwrite: bool = False , vb_level: Any = 1):
+    def dump_yaml(self, path: Path , overwrite: bool = False , vb_level : VerbosityLevel = 1):
         """Write flattened dict to YAML via ``PATH.dump_yaml``."""
         if path.exists() and not overwrite:
             Logger.alert1(f'{path} already exists' , vb_level = vb_level)

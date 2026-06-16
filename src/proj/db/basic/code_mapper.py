@@ -4,7 +4,8 @@ Code mapper tools, used to transform between code and secid.
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-from typing import Any , TypeVar , Iterable
+from typing import Any , TypeVar 
+from collections.abc import Iterable
 
 from src.proj.env import MACHINE
 

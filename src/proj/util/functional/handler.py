@@ -3,13 +3,17 @@ from __future__ import annotations
 import httpx
 import time
 from curl_cffi.requests import exceptions
-from typing import Callable , Literal , TypeVar , Generic , Any , Type , Union , Tuple
+from typing import Literal , TypeVar , Generic , Any , TypeAlias
+from collections.abc import Callable
 from src.proj.log import Logger
 
 __all__ = ['retry_call' , 'ErrorHandler']
 
 T = TypeVar("T")
 TInside = TypeVar('TInside')
+HandlerResult : TypeAlias = str | Exception
+HandlerType : TypeAlias = Callable[[Exception], HandlerResult]
+RetryResult : TypeAlias = T | Exception
 
 class UnattainableException(Exception):
     """Marker for control-flow paths that should be unreachable after retries."""
@@ -20,14 +24,14 @@ def get_exception_name(e: Exception) -> str:
     return f"{exc_type.__module__}.{exc_type.__qualname__}"
 
 def retry_on_exceptions(
-    func: Callable[..., T], error_handler: Callable[[Exception], str | Exception] , * , label: str, 
+    func: Callable[..., T], error_handler: HandlerType , * , label: str, 
     attempts: int = 1, base_delay: float = 1.5
-) -> Callable[..., T | Exception]:
+) -> Callable[..., RetryResult[T]]:
     """
     Retry on exceptions with a given error handler
     """
     assert attempts > 0 and base_delay >= 0 , f"attempts {attempts} and base_delay {base_delay} invalid"
-    def wrapper(*args, **kwargs) -> T | Exception:
+    def wrapper(*args, **kwargs) -> RetryResult[T]:
         for i in range(attempts):
             try:
                 return func(*args, **kwargs)
@@ -46,13 +50,13 @@ def retry_on_exceptions(
             return UnattainableException(f"Unattainable Exception: reached maximum retry attempts ({attempts}), giving up")
     return wrapper
 
-def exception_handler(e : Exception , exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception) -> str | Exception:
+def exception_handler(e : Exception , exceptions: type[Exception] | tuple[type[Exception], ...] = Exception) -> HandlerResult:
     """Return a string summary if ``e`` matches ``exceptions``; otherwise return ``e`` unchanged."""
     if isinstance(e, exceptions):
         return f"{e!s}"
     return e
 
-def http_handler(e: Exception) -> str | Exception:
+def http_handler(e: Exception) -> HandlerResult:
     """Classify httpx/curl_cffi HTTP errors; retryable status codes become short messages."""
     if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError , httpx.HTTPError , exceptions.RequestException)):
         if isinstance(e, (httpx.HTTPStatusError , exceptions.HTTPError)) and e.response is not None and e.response.status_code in (429, 502, 503, 504):
@@ -61,17 +65,17 @@ def http_handler(e: Exception) -> str | Exception:
             return f"HTTP exception [{get_exception_name(e)}]"
     return e
 
-def all_handler(e: Exception) -> str | Exception:
+def all_handler(e: Exception) -> HandlerResult:
     """Fallback handler: always returns a string with exception type name."""
     return f"Unhandled exception [{get_exception_name(e)}]"
 
 def retry_call(
     func: Callable[..., T], args: tuple = (), kwargs: dict | None = None,
     attempts: int = 3,
-    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = Exception,
+    exceptions: type[Exception] | tuple[type[Exception], ...] = Exception,
     base_delay: float = 1.5,
     error: Literal['raise' , 'return'] = 'raise',
-) -> T | Exception:
+) -> RetryResult[T]:
     """
     retry a function call with a given exceptions and delay
     """
@@ -101,7 +105,7 @@ class ErrorHandler(Generic[T]):
         - is_http_error: bool
         - error_type: str
         - unwrap: callable
-            - error: 'raise' | 'return'
+            - error: 'raise' or 'return'
             - return the raw result or raise the exception
     example:
         result = ErrorHandler(func, catch_errors={'http' : {'attempts' : 2 , 'base_delay' : 1.5}}, label='func')
@@ -116,8 +120,8 @@ class ErrorHandler(Generic[T]):
         'all' : {'attempts' : 1 , 'base_delay' : 0},
     }
     def __init__(
-        self, func: Callable[..., T | Exception] , 
-        handle_types: dict[str , dict[str,Any]] | list[str] | tuple[str,...] = () , * , 
+        self, func: Callable[..., RetryResult[T]] , 
+        handle_types: dict[str, dict[str, Any]] | list[str] | tuple[str, ...] = () , * , 
         label: str = ''):
         self.raw_func = func
         for error_type in handle_types:
@@ -136,7 +140,7 @@ class ErrorHandler(Generic[T]):
         raw_result = self.wrapped_func(*args, **kwargs)
         return self.WrappedResult(raw_result)
 
-    def handler(self, handler_type: str) -> Callable[[Exception], str | Exception]:
+    def handler(self, handler_type: str) -> HandlerType:
         match handler_type:
             case 'http':
                 return http_handler
@@ -148,7 +152,7 @@ class ErrorHandler(Generic[T]):
     class WrappedResult(Generic[T]): # type: ignore
         """Result of ``ErrorHandler.__call__``; inspect ``success`` / ``unwrap``."""
 
-        def __init__(self, raw_result: T | Exception):
+        def __init__(self, raw_result: RetryResult[T]):
             self.raw_result = raw_result
 
         @property
@@ -171,7 +175,7 @@ class ErrorHandler(Generic[T]):
             else:
                 return type(self.raw_result).__name__
 
-        def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> T | Exception:
+        def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> RetryResult[T]:
             """Return value or exception; ``error='raise'`` re-raises if result is an exception."""
             if isinstance(self.raw_result, Exception) and error == 'raise':
                 raise self.raw_result

@@ -4,7 +4,7 @@ Toolbox for genetic programming
 from __future__ import annotations
 
 import operator
-from typing import Callable
+from collections.abc import Callable
 from deap import base , creator , tools , gp
 
 from src.res.gp.param import gpParameters

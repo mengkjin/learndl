@@ -9,7 +9,8 @@ and calls their ``update()`` or ``rollback()`` methods.
 CSV backup data that supplements the live Tushare pipeline.
 """
 from __future__ import annotations
-from typing import Generator , Type , Any
+from typing import Any
+from collections.abc import Generator
 
 from src.proj import Base
 from src.data.download.tushare.basic import TushareFetcher , TSBackUpDataTransform
@@ -21,7 +22,7 @@ class TushareDataDownloader(Base.BasicUpdater):
     UPDATE_ALIAS = 'download'
     ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , Base.UpdateType.ROLLBACK)
     @classmethod
-    def iter_fetchers(cls) -> Generator[Type[TushareFetcher] , None , None]:
+    def iter_fetchers(cls) -> Generator[type[TushareFetcher] , None , None]:
         """iterate over all tushare fetchers"""
         TushareFetcher.load_tasks()
         for fetcher in TushareFetcher.registry.values():

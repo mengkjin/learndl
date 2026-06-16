@@ -18,7 +18,8 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Any , Callable , Literal
+from typing import Any  , Literal
+from collections.abc import Callable
 
 from src.proj import PATH , MACHINE , DB , Base , Logger , Dates
 from src.data.util import (
@@ -345,16 +346,16 @@ class JSFetcher:
         price_feat  = ['open','close','high','low','vwap']
         volume_feat = ['amount','volume','turn_tt','turn_fl','turn_fr']
 
-        data = []
+        dfs : list[pd.DataFrame] = []
         for d in rolling_dates:
             tmp = cls.trade_day(d , with_date=True)
             if isinstance(tmp , pd.DataFrame): 
-                data.append(tmp)
+                dfs.append(tmp)
             else:
                 return FailedData(f'{x}day' , date)
         
         with np.errstate(invalid='ignore' , divide = 'ignore'):
-            data = pd.concat(data , axis = 0)
+            data = pd.concat(dfs , axis = 0)
             data.loc[:,price_feat] = data.loc[:,price_feat] * data.loc[:,'adjfactor'].to_numpy(float)[:,None]
             data['pctchange'] = data['pctchange'] / 100 + 1
             data['vwap'] = data['vwap'] * data['volume']
@@ -440,7 +441,7 @@ class JSFetcher:
             df = pd.read_csv(path , sep='\t' , low_memory=False).query('ticker.str.isdigit()').astype({'ticker':int})
             def cond_stock(x,y):
                 return ((600000<=x)&(x<=699999)&(y=='XSHG'))|((0<=x)&(x<=398999)&(y=='XSHE'))
-            df = row_filter(df,('ticker','exchangecd'),cond_stock)
+            df = row_filter(df,['ticker','exchangecd'],cond_stock)
             df = df.loc[:,list(data_params.keys())].rename(columns=data_params)
             df['minute'] = (df['minute'] / 60).astype(int)
             df['minute'] = (df['minute'] - 90) * (df['minute'] <= 240) + (df['minute'] - 180) * (df['minute'] > 240)

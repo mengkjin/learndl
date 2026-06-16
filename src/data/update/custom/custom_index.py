@@ -15,7 +15,8 @@ import numpy as np
 
 from abc import ABCMeta , abstractmethod
 from functools import cached_property
-from typing import Type , Any
+from typing import Any
+
 from src.proj import CALENDAR , DB , Load , Save , Base , Dates
 from src.data.loader.data_vendor import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
@@ -27,7 +28,7 @@ DB_SRC = 'index_daily_custom'
 
 class CustomIndexMeta(ABCMeta):
     """Metaclass that auto-registers concrete ``CustomIndex`` subclasses."""
-    registry : dict[str , Type[CustomIndex] | Any] = {}
+    registry : dict[str , type[CustomIndex] | Any] = {}
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         assert name not in cls.registry or cls.registry[name].__module__ == new_cls.__module__ , \
@@ -114,7 +115,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
             return 0.
         return prev_port.fut_ret(date)
 
-    def update_dates(self , dates : Base.alias.intDates | None , indent : int = 1 , vb_level : Any = 1) -> None:
+    def update_dates(self , dates : Base.alias.DateType , indent : int = 1 , vb_level : Any = 1) -> None:
         """update index return for given dates"""
         dates = Dates(dates)
         if dates.empty:

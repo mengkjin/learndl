@@ -38,7 +38,10 @@ class MultiHeadLosses(Base.BoundLogger):
         mt_param: Default per-step parameters forwarded at call time
                   (e.g. ``{'alpha': module.multiloss_alpha}`` for RUW/Hybrid).
     """
-    def __init__(self , num_head = -1 , name : str | None = None , params : dict[str,Any] | None = None , mt_param : dict[str,Any] | None = None , **kwargs):
+    def __init__(
+        self , num_head = -1 , name : str | None = None , 
+        params : dict[str, Any] | None = None , mt_param : dict[str, Any] | None = None , **kwargs
+    ):
         """
         example:
             import torch
@@ -101,7 +104,10 @@ class MultiHeadLosses(Base.BoundLogger):
             self.multiloss = None
         return self
     
-    def __call__(self , losses : Tensor | dict[str,Tensor] , mt_param : dict[str,Any] | None = None , **kwargs) -> Tensor | dict[str,Tensor]:
+    def __call__(
+        self , losses : Tensor | dict[str, Tensor] , 
+        mt_param : dict[str, Any] | None = None , **kwargs
+    ) -> Tensor | dict[str, Tensor]:
         """Apply the multi-head loss combination strategy.
 
         Args:
@@ -197,7 +203,7 @@ class MultiHeadLosses(Base.BoundLogger):
         plt.show()
         #plt.close(fig)
 
-class BaseMHLCalculator():
+class BaseMHLCalculator:
     """Abstract base class for multi-head loss calculators.
 
     Tracks a rolling history of per-head loss tensors (``record_losses``) to
@@ -213,7 +219,9 @@ class BaseMHLCalculator():
         self.record_losses : list[Tensor] = []
         self.kwargs = kwargs
         self.reset(**kwargs)
-    def __call__(self , losses : Tensor , mt_param : dict[str,Any] | None = None , **kwargs) -> dict[str,Tensor]:
+    def __call__(
+        self , losses : Tensor , mt_param : dict[str, Any] | None = None , **kwargs
+    ) -> dict[str,Tensor]:
         multihead_losses = self.multihead_losses(losses , mt_param or {})
         penalty = self.penalty(losses , mt_param)
         losses_dict = {
@@ -227,15 +235,15 @@ class BaseMHLCalculator():
     def record_loss(self , losses : Tensor):
         self.record_num += 1
         self.record_losses.append(losses.detach())
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def weight(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         return torch.ones_like(losses)
-    def penalty(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor | None: 
+    def penalty(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor | None: 
         return None
-    def multihead_losses(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def multihead_losses(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         losses = losses * self.weight(losses , mt_param)
         self.record_loss(losses)
         return losses
-    def total_loss(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def total_loss(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         multi_losses = self(losses , mt_param)
         return torch.concatenate([v.detach().flatten() for v in multi_losses.values()]).sum()
     @property
@@ -252,12 +260,12 @@ class Hybrid(BaseMHLCalculator):
     ``alpha`` parameter passed in ``mt_param`` at each step.
 
     Weight formula: ``DWA_weight + 1/alpha²``
-    Penalty: RUW uncertainty penalty + optional L1 constraint on ``|log alpha|``
+    Penalty: RUW uncertainty penalty + optional L1 constraint on ``abs(log alpha)``
     """
     def reset(self , **kwargs):
         self.tau : float = kwargs['tau']
         self.phi : float = kwargs['phi']
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def weight(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         assert mt_param is not None , f'mt_param should be provided'
         alpha : Tensor = mt_param['alpha']
         if self.record_num < 2:
@@ -266,7 +274,7 @@ class Hybrid(BaseMHLCalculator):
             weight = (self.record_losses[-1] / self.record_losses[-2] / self.tau).exp()
             weight = weight / weight.sum() * weight.numel()
         return weight + 1 / alpha.square()
-    def penalty(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor: 
+    def penalty(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor | None: 
         assert mt_param is not None , f'mt_param should be provided'
         alpha : Tensor = mt_param['alpha']
         penalty = (alpha.log().square()+1).log().sum()
@@ -288,7 +296,7 @@ class DWA(BaseMHLCalculator):
     """
     def reset(self , **kwargs):
         self.tau : float = kwargs['tau']
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def weight(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         if self.record_num < 2:
             weight = torch.ones_like(losses)
         else:
@@ -301,7 +309,7 @@ class RUW(BaseMHLCalculator):
 
     Weight formula: ``w_i = 1 / alpha_i²`` where ``alpha`` is a learnable
     parameter injected via ``MultiHeadLosses.add_params()``.
-    Penalty: ``sum(log(log(alpha²) + 1)) + |phi - sum|log(alpha)||``
+    Penalty: ``sum(log(log(alpha²) + 1)) + abs(phi - sum(log(alpha)))``
     when ``phi`` is provided.
 
     Requires ``params={'phi': float | None}`` and ``mt_param={'alpha': Tensor}``.
@@ -310,11 +318,11 @@ class RUW(BaseMHLCalculator):
     """
     def reset(self , **kwargs):
         self.phi : float = kwargs['phi']
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def weight(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         assert mt_param is not None , f'mt_param should be provided'
         alpha : Tensor = mt_param['alpha']
         return 1 / alpha.square()
-    def penalty(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor: 
+    def penalty(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor | None: 
         assert mt_param is not None , f'mt_param should be provided'
         alpha : Tensor = mt_param['alpha']
         penalty = (alpha.log().square()+1).log().sum()
@@ -329,7 +337,7 @@ class GLS(BaseMHLCalculator):
     ``(prod(L_i^w_i))^(1/sum(w_i))``
 
     """
-    def multihead_losses(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def multihead_losses(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         weight = self.weight(losses , mt_param)
         return losses.pow(weight).prod().pow(1 / weight.sum())
 
@@ -341,5 +349,5 @@ class RWS(BaseMHLCalculator):
 
     Reference: https://arxiv.org/pdf/2111.10603.pdf
     """
-    def weight(self , losses : Tensor , mt_param : dict[str,Any] | None = None) -> Tensor:
+    def weight(self , losses : Tensor , mt_param : dict[str, Any] | None = None) -> Tensor:
         return nn.functional.softmax(torch.rand_like(losses),-1)

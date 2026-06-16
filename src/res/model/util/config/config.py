@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal, Type, cast
+from typing import Any, Literal, cast
 
 from src.proj import PATH, MACHINE, Const, Proj , Base
 from src.proj.util.functional.device import Device
@@ -59,7 +59,7 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     def get(self, key: str, default: Any = None) -> Any:
         return self.Param.get(key, default)
 
-    def get_config_dict(self , base_path: ModelPath | None, schedule_name: str | None) -> Base.FlattenDict:
+    def get_config_dict(self , base_path: ModelPath | None = None, schedule_name: str | None = None) -> Base.FlattenDict:
         config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if not base_path and config:
@@ -71,7 +71,7 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
         return config
 
     @classmethod
-    def find_path(cls , base_path: ModelPath | None, name: str | None) -> Path | None:
+    def find_path(cls , base_path: ModelPath | None = None, name: str | None = None) -> Path | None:
         if base_path:
             config_path = base_path.conf_file("schedule")
             return config_path if config_path.exists() else None
@@ -102,7 +102,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     OPTIONAL_CONFIG_PARAM = get_config_dict(PATH.conf.joinpath("model", "default", "optional.yaml"))
 
     def __init__(
-        self, base_path: ModelPath | Base.strPath | None, *,
+        self, base_path: ModelPath | Base.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None, 
         indent: int = 1 , vb_level: Any = 2, **kwargs,
     ):
@@ -618,7 +618,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return self["train.trainer.gradient.clip_value"]
 
     @property
-    def factor_calculator(self) -> Type[FactorCalculator]:
+    def factor_calculator(self) -> type[FactorCalculator]:
         assert self.module_type == "factor", (
             f"{self.module_type} is not a factor module"
         )

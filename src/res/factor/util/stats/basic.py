@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Any
+from typing import Any , TypeAlias
 
 from src.proj import Base , CALENDAR
 
@@ -16,13 +16,22 @@ __all__ = [
     'eval_stats' , 'eval_ic_stats' , 'eval_qtile_by_day'
 ]
 
-def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
-            groupby : str | list[str] | None = None):
+InputDataType : TypeAlias = pd.Series | pd.DataFrame | np.ndarray
+
+def _get_groupby(groupby : Base.alias.NamesType) -> list[str] | None:
+    groupby = Base.ensure_name_list(groupby , [])
+    return None if len(groupby) == 0 else groupby
+
+def eval_cum_ret(
+    ret : InputDataType , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
+    groupby : Base.alias.NamesType = None
+):
     assert not isinstance(ret , np.ndarray) or groupby is None , 'groupby is not supported for numpy array'
     if isinstance(ret , np.ndarray): 
         ret = pd.Series(ret)
     ret = ret.fillna(0)
-    if groupby is None:
+    groupby = _get_groupby(groupby)
+    if not groupby:
         if how == 'lin':
             return ret.cumsum()
         else:
@@ -33,30 +42,41 @@ def eval_cum_ret(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.Ti
         else:
             return (ret + 1).groupby(groupby , observed=True).cumprod() - 1
 
-def eval_cum_peak(ret : pd.Series | pd.DataFrame | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' ,
-                  groupby : str | list[str] | None = None):
+def eval_cum_peak(
+    ret : InputDataType , how : Base.lit.TimeSeriesAccMethod = 'lin' ,
+    groupby : Base.alias.NamesType = None
+):
+    groupby = _get_groupby(groupby)
     cum_ret = eval_cum_ret(ret , how , groupby)
-    return cum_ret.cummax() if groupby is None else cum_ret.groupby(groupby , observed=True).cummax()
+    return cum_ret.cummax() if not groupby else cum_ret.groupby(groupby , observed=True).cummax()
 
-def eval_drawdown(ret : pd.DataFrame | pd.Series | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
-                  groupby : str | list[str] | None = None):
+def eval_drawdown(
+    ret : InputDataType , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
+    groupby : Base.alias.NamesType = None
+):
+    groupby = _get_groupby(groupby)
     cum_ret = eval_cum_ret(ret , how , groupby)
-    cum_peak = cum_ret.cummax() if groupby is None else cum_ret.groupby(groupby , observed=True).cummax()
+    cum_peak = cum_ret.cummax() if not groupby else cum_ret.groupby(groupby , observed=True).cummax()
     if how == 'lin':
         return cum_ret - cum_peak
     else:
         return (cum_ret + 1) / (cum_peak + 1) - 1
 
-def eval_drawdown_start(ret : pd.DataFrame | pd.Series | np.ndarray , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
-                        groupby : str | list[str] | None = None):
-    if groupby is None:
+def eval_drawdown_start(
+    ret : InputDataType , how : Base.lit.TimeSeriesAccMethod = 'lin' , 
+    groupby : Base.alias.NamesType = None
+):
+    groupby = _get_groupby(groupby)
+    if not groupby:
         cum = eval_cum_ret(ret , how , groupby)
         return cum.expanding().apply(lambda x: x.argmax(), raw=True).astype(int)
     else:
         assert not isinstance(ret , np.ndarray) , 'groupby is not supported for numpy array'
         return ret.groupby(groupby , observed=True).apply(eval_drawdown_start , how = how)
 
-def eval_max_drawdown(ret : pd.Series | np.ndarray | pd.DataFrame , how : Base.lit.TimeSeriesAccMethod = 'lin'):
+def eval_max_drawdown(
+    ret : InputDataType , how : Base.lit.TimeSeriesAccMethod = 'lin'
+):
     dd , st = eval_drawdown(ret , how) , eval_drawdown_start(ret , how)
     assert isinstance(dd , pd.Series) and isinstance(st , pd.Series) , 'dd and st must be pd.Series'
     mdd = -dd.min()
@@ -65,7 +85,9 @@ def eval_max_drawdown(ret : pd.Series | np.ndarray | pd.DataFrame , how : Base.l
 
     return mdd , idx_st , idx_ed
 
-def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
+def eval_pf_stats(
+    grp : pd.DataFrame , mdd_period : bool = True , **kwargs
+) -> pd.DataFrame:
     period_len = abs(CALENDAR.diff_days(grp['start'].min() , grp['end'].max() , 'cd')) + 1
     period_n   = len(grp)
 
@@ -86,7 +108,10 @@ def eval_pf_stats(grp : pd.DataFrame , mdd_period = True , **kwargs):
         rslt['mdd_period'] = ['{}-{}'.format(grp['end'].iloc[ex_mdd_st] , grp['end'].iloc[ex_mdd_ed])]
     return rslt.assign(**kwargs)
 
-def eval_uncovered_max_drawdown(dd : pd.Series | Any , groupby : str | list[str] | None = None):
+def eval_uncovered_max_drawdown(
+    dd : pd.Series , groupby : Base.alias.NamesType = None
+) -> pd.Series:
+    groupby = _get_groupby(groupby)
     if groupby is None:
         umd = dd * 0.
         umd.iloc[0] = dd.iloc[0]
@@ -97,7 +122,9 @@ def eval_uncovered_max_drawdown(dd : pd.Series | Any , groupby : str | list[str]
         umd = dd.groupby(groupby , observed=True , group_keys = False).apply(eval_uncovered_max_drawdown)
     return umd
 
-def eval_detailed_drawdown(pf : pd.Series , groupby : str | list[str] | None = None):
+def eval_detailed_drawdown(
+    pf : pd.Series , groupby : Base.alias.NamesType = None
+) -> pd.DataFrame:
     """
     based on the pf , calculate the detailed drawdown , including:
     cum_ret , peak , drawdown , uncovered_max_drawdown , recover_ratio
@@ -132,8 +159,8 @@ def eval_ic_stats(ic_table : pd.DataFrame , nday : int = 5 , **kwargs):
     ic_stats['ir']       = ic_stats['ir'] * np.sqrt(n_periods)
 
     melt_table = ic_table.reset_index().melt(id_vars=['date'],var_name='factor_name',value_name='ic').dropna().reset_index()
-    min_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].min()
-    max_date : pd.Series | Any = melt_table.groupby('factor_name')['date'].max()
+    min_date : pd.Series = melt_table.groupby('factor_name')['date'].min()
+    max_date : pd.Series = melt_table.groupby('factor_name')['date'].max()
 
     range_date = pd.concat([min_date.rename('start') , max_date.rename('end')] , axis=1).reset_index()
     range_date['range'] = range_date['start'].astype(str) + '-' + range_date['end'].astype(str)

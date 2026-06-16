@@ -4,11 +4,12 @@ Model configs modifier for the project, use it to modify the config files
 from __future__ import annotations
 
 from src.proj import PATH , Base
-from typing import Callable , TypeAlias
+from typing import TypeAlias
+from collections.abc import Callable
 
 __all__ = ['ModelConfigModifier' , 'ModelConfigsBatchModifier']
 
-DictLoader : TypeAlias = Callable[[] , dict] | dict
+DictLoader : TypeAlias = Callable[[], dict] | dict
 
 class ModelConfigModifier(Base.BoundLogger):
     @classmethod
@@ -155,7 +156,7 @@ class ModelConfigModifier(Base.BoundLogger):
     
     @classmethod
     def remove_NanLossRetrain(cls , key : str , config : DictLoader) -> DictLoader:
-        if not key.endswith(('.model')):
+        if not key.endswith('.model'):
             return config
         if not isinstance(config , dict):
             config = config()

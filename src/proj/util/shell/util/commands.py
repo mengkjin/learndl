@@ -7,7 +7,8 @@ import shlex
 import sys
 import subprocess
 from pathlib import Path
-from typing import Sequence, Any
+from typing import Any
+from collections.abc import Sequence
 
 from src.proj.core import strPath
 

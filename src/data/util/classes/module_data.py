@@ -85,7 +85,7 @@ class ModuleData(Base.BoundLogger):
         Block keys to load in addition to ``'y'`` (e.g. ``['day', '15m']``).
     y_labels : list[str] | None
         Sub-set of features to expose via the ``y`` property.
-    use_data : 'fit' | 'predict' | 'both'
+    use_data : 'fit' or 'predict' or 'both'
         Controls the date range and whether the disk cache is used.
     factor_names : list[str] | None
         Optional list of named factors to load via ``FactorLoader``.
@@ -302,7 +302,7 @@ class ModuleData(Base.BoundLogger):
         return self
 
     def load_one(
-        self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
+        self, key: str, *, dates : Base.alias.DateType, secid : Base.alias.SecidType = None, **kwargs
     ) -> DataBlock:
         """
         Load a single block for the given key and date array.
@@ -311,6 +311,8 @@ class ModuleData(Base.BoundLogger):
         or ``load_special_block`` for special dataset candidates.
         Returns an empty ``DataBlock`` when ``dates`` is empty.
         """
+        dates = Base.ensure_date(dates , np.array([]))
+        secid = Base.ensure_secid(secid , np.array([]))
         if len(dates) == 0:
             return DataBlock()
         from src.data.preprocess import PrePros
@@ -326,7 +328,7 @@ class ModuleData(Base.BoundLogger):
             raise ValueError(f"key [{key}] is not supported")
 
     def load_preprocess_block(
-        self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
+        self, key: str, *, dates : Base.alias.DateType, secid : Base.alias.SecidType = None, **kwargs
     ) -> DataBlock:
         """Load a block via the registered ``PreProcessor`` for ``key``."""
         from src.data.preprocess import PrePros
@@ -335,7 +337,7 @@ class ModuleData(Base.BoundLogger):
         return block
 
     def load_special_block(
-        self, key: str, *, dates: np.ndarray, secid: np.ndarray | None = None, **kwargs
+        self, key: str, *, dates : Base.alias.DateType, secid : Base.alias.SecidType = None, **kwargs
     ) -> DataBlock:
         """Load a block via ``SpecialDataSet`` for non-standard dataset keys."""
         block = SpecialDataSet.load(
@@ -446,9 +448,9 @@ class SecidFilter:
                     f"input.filter.secid {value} is not valid , should be random.200 , first.200 , csi300 , csi500 , csi1000"
                 )
 
-    def __call__(self, secid: np.ndarray) -> np.ndarray:
+    def __call__(self, secid : Base.alias.SecidType) -> np.ndarray:
         """Apply the configured filter to ``secid`` and return the filtered array."""
-        return self.filter(secid)
+        return self.filter(Base.ensure_secid(secid , np.array([])))
 
     def filter_block(self, block: DataBlock , inplace: bool = True) -> DataBlock:
         """Apply the filter to a single block."""
@@ -464,19 +466,19 @@ class SecidFilter:
         return blocks
 
     @staticmethod
-    def none(secid: np.ndarray) -> np.ndarray:
+    def none(secid : Base.alias.SecidType) -> np.ndarray:
         """Pass-through filter; returns ``secid`` unchanged."""
-        return secid
+        return Base.ensure_secid(secid , np.array([]))
 
     @staticmethod
-    def random(secid: np.ndarray, num: int) -> np.ndarray:
+    def random(secid : Base.alias.SecidType, num: int) -> np.ndarray:
         """Return a random sample of ``num`` secids without replacement."""
-        return np.random.choice(secid, num, replace=False)
+        return np.random.choice(Base.ensure_secid(secid , np.array([])), num, replace=False)
 
     @staticmethod
-    def first(secid: np.ndarray, num: int) -> np.ndarray:
+    def first(secid : Base.alias.SecidType, num: int) -> np.ndarray:
         """Return the first ``num`` secids in the input array."""
-        return secid[:num]
+        return Base.ensure_secid(secid , np.array([]))[:num]
 
     @classmethod
     def Benchmark(cls):
@@ -488,7 +490,7 @@ class SecidFilter:
         return cls._benchmark
 
     @classmethod
-    def benchmark(cls, secid: np.ndarray, bm: str, date: int = 20200104) -> np.ndarray:
+    def benchmark(cls, secid : Base.alias.SecidType, bm: str, date: int = 20200104) -> np.ndarray:
         """Return the constituent secids of benchmark ``bm`` as of ``date``."""
         return cls.Benchmark()(bm).get(date, True).secid
 

@@ -3,6 +3,7 @@ module-wise attention, and positional encoding modules.
 """
 from __future__ import annotations
 import torch
+from collections.abc import Sequence
 from torch import nn , Tensor
 
 __all__ = ['mod_transformer' , 'TimeWiseAttention' , 'ModuleWiseAttention' , 'PositionalEncoding' , 'SampleWiseTranformer' , 'TimeWiseTranformer']
@@ -113,7 +114,7 @@ class ModuleWiseAttention(nn.Module):
         self.in_fc = nn.ModuleList([nn.Linear(inp_d , att_dim) for inp_d in input_dim])
         self.task_mha = nn.MultiheadAttention(att_dim, num_heads = num_heads, batch_first=True , dropout = dropout)
 
-    def forward(self, x : list | tuple) -> list | tuple:
+    def forward(self, x : Sequence[Tensor]) -> Sequence[Tensor]:
         hidden = torch.stack([f(xx) for xx,f in zip(x , self.in_fc)],dim=-2)
         hidden = self.task_mha(hidden , hidden , hidden)[0] + hidden
         return tuple([hidden.select(-2,i) for i in range(hidden.shape[-2])])
@@ -134,7 +135,7 @@ class PositionalEncoding(nn.Module):
         Output: ``[bs, seq_len, input_dim]``
     """
     def __init__(self, input_dim, dropout=0.0, max_len=1000,**kwargs):
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.seq_len = max_len
         self.P = torch.zeros(1 , self.seq_len, input_dim)

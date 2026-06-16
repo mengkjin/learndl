@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 from ...util.process import popen_detached
 from ...util.basic import BasicOpener
 from .verify import CmdTerminalVerifier

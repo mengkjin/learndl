@@ -99,7 +99,7 @@ class MPOutputCatcher(OutputCatcher):
         cls.PrimaryInstance.__enter__()
 
     @classmethod
-    def merge_into_html(cls , run_id: str | None = None , *, keep_on_error: bool = False, indent: int = 0) -> None:
+    def merge_into_html(cls , run_id: str | None = None , *, keep_on_error: bool = False, indent : int = 0) -> None:
         """
         Load worker ``jsonl`` logs for ``run_id`` and append to ``HtmlCatcher.PrimaryInstance``.
 

@@ -3,17 +3,17 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime , timedelta
-from typing import Any , Callable , Literal , Mapping , Iterable , TypeVar , TYPE_CHECKING
+from typing import Any  , Literal   , TypeVar , TYPE_CHECKING , TypeAlias
+from collections.abc import Callable, Mapping, Iterable
 from uuid import uuid4
 
 from src.proj import MACHINE , Logger
 
 if TYPE_CHECKING:
     T = TypeVar('T')
-    INPUT_TYPE = (
-        Callable[..., T] 
-        | tuple[Callable[..., T], Iterable[Any] | None] 
-        | tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
+    INPUT_TYPE : TypeAlias = (
+        Callable[..., T] | tuple[Callable[..., T], Iterable[Any] | None] |
+        tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
     )
 
 __all__ = ['parallel' , 'is_main_process']
@@ -27,9 +27,9 @@ def is_main_process() -> bool:
     return mp.current_process().name == 'MainProcess'
 
 def parallel(
-    inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
+    inputs : Mapping[Any, INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
     method : int | bool | ParallelMethodType = 'thread' , 
-    max_workers = MAX_WORKERS , ignore_error = False , timeout : float = -1 , indent : int = 0 ,
+    max_workers : int = MAX_WORKERS , ignore_error : bool = False , timeout : float = -1 , indent : int = 0 ,
     capture_mp_output : bool = False , keep_mp_output_on_error : bool = False , **kwargs
 ) -> dict[Any , T]:
     """Execute ``FuncCall`` inputs; populate and return the shared results dict.
@@ -151,9 +151,11 @@ class _FuncCall:
         return func , tuple(args) , kwargs
 
     @classmethod
-    def try_call(cls , func_input : INPUT_TYPE[T] , key : Any | None = None , 
-                 result_dict : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
-                 **kwargs) -> T | None:
+    def try_call(
+        cls , func_input : INPUT_TYPE[T] , key : Any | None = None , 
+        result_dict : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
+        **kwargs
+    ) -> T | None:
         """Invoke unwrapped func; store return in ``result_dict[key]`` on success."""
         func , args , kwargs = cls.unwrap(func_input , **kwargs)
         try:
@@ -181,8 +183,10 @@ class _FuncCall:
         return pool.submit(self.go)
 
     @classmethod
-    def from_func_calls(cls , inputs : Mapping[Any , INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
-                        ignore_error : bool = False , **kwargs) -> tuple[dict[Any , T] , list[_FuncCall]]:
+    def from_func_calls(
+        cls , inputs : Mapping[Any, INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
+        ignore_error : bool = False , **kwargs
+    ) -> tuple[dict[Any , T] , list[_FuncCall]]:
         """Build result dict and ``FuncCall`` list from a mapping or iterable."""
         iterance = inputs.items() if isinstance(inputs , dict) else enumerate(inputs)
         result = {}

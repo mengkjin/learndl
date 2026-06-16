@@ -19,9 +19,10 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Any , Callable
-from src.proj import CALENDAR , DB , Base , Dates
+from typing import Any
+from collections.abc import Callable
 
+from src.proj import CALENDAR , DB , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
 
 __all__ = ['DailyRiskUpdater']
@@ -95,7 +96,7 @@ def calc_daily_risk(date : int):
     return result
 
 def day_true_range(quote : pd.DataFrame , **kwargs) -> pd.Series:
-    """Normalised true range: max(high-low, |high-preclose|, |low-preclose|) / preclose."""
+    """Normalised true range: max(high-low, abs(high-preclose), abs(low-preclose)) / preclose."""
     tr = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['preclose']).abs() , (quote['low'] - quote['preclose']).abs()] , axis = 1).max(axis = 1)
     tr = _fillinf((tr / quote['preclose']).rename('true_range') , 0)
     return tr

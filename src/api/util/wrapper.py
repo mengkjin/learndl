@@ -6,7 +6,8 @@ from __future__ import annotations
 import pandas as pd
 from datetime import datetime
 from dataclasses import dataclass
-from typing import Callable , TypeVar
+from typing import TypeVar
+from collections.abc import Callable
 from src.proj import Logger , Base
 
 T = TypeVar('T')

@@ -64,7 +64,7 @@ class TradeDataAccess(DateDataAccess):
             if data_key == db_key:
                 self.collections[data_type].add_long_frame(df.set_index(self.DATE_KEY))
 
-    def loads(self , dates: Base.alias.intDates | None , data_type : str):
+    def loads(self , dates : Base.alias.DateType , data_type : str):
         dates = Dates(dates).to_td()
         if dates.empty:
             return
@@ -88,8 +88,8 @@ class TradeDataAccess(DateDataAccess):
         return self.get(date , 'limit' , field)
 
     def get_quotes(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : QuoteField | list[QuoteField] ,
+        self , start : Base.intDate , end : Base.intDate ,
+        field : Base.ArrayLike[QuoteField | str] ,
         mask = False , pivot = False , drop_old = False , adj_price = True
     ) -> pd.DataFrame:
         """
@@ -99,6 +99,7 @@ class TradeDataAccess(DateDataAccess):
         are multiplied by the rolling adjfactor.  Use ``mask=True`` to apply the
         listing-date mask.  Use ``pivot=True`` for a (date × secid) wide frame.
         """
+        field = Base.ensure_name_list(field , [])
         qte = self.get_specific_data(start , end , 'trd' , field , prev = False , 
                                      mask = mask , pivot = False , drop_old = drop_old)
         if adj_price:
@@ -115,7 +116,7 @@ class TradeDataAccess(DateDataAccess):
         return qte
     
     def get_adjfactor(
-        self , start : Base.alias.intDate , end : Base.alias.intDate , pivot = False , drop_old = False
+        self , start : Base.intDate , end : Base.intDate , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return the daily adjustment factor series for ``[start, end]``."""
         return self.get_specific_data(
@@ -123,8 +124,8 @@ class TradeDataAccess(DateDataAccess):
             mask = False , pivot = pivot , drop_old = drop_old)
     
     def get_val_data(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : ValField | list[ValField] ,
+        self , start : Base.intDate , end : Base.intDate ,
+        field : Base.ArrayLike[ValField | str] ,
         prev = True , mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return valuation data (PE, PB, market cap, etc.) with point-in-time shifting."""
@@ -132,8 +133,8 @@ class TradeDataAccess(DateDataAccess):
                                       prev = prev , mask = mask , pivot = pivot , drop_old = drop_old)
 
     def get_mf_data(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : MfField | list[MfField] , 
+        self , start : Base.intDate , end : Base.intDate ,
+        field : Base.ArrayLike[MfField | str] , 
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return money-flow data (large/medium/small buy-sell classifications)."""
@@ -141,8 +142,8 @@ class TradeDataAccess(DateDataAccess):
                                       prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
 
     def get_limit_data(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : LimitField | list[LimitField] ,
+        self , start : Base.intDate , end : Base.intDate ,
+        field : Base.ArrayLike[LimitField | str] ,
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return limit-price data (daily limit-up / limit-down prices and previous close)."""
@@ -150,7 +151,7 @@ class TradeDataAccess(DateDataAccess):
                                       prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
     
     def get_returns(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        self , start : Base.intDate , end : Base.intDate ,
         return_type : ReturnType = 'close' ,
         pivot = True , mask = True
     ) -> pd.DataFrame:
@@ -199,7 +200,7 @@ class TradeDataAccess(DateDataAccess):
         return rets
     
     def get_volumes(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        self , start : Base.intDate , end : Base.intDate ,
         volume_type : VolumeType = 'volume' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return daily trading volume / amount / turnover for the requested type."""
@@ -207,7 +208,7 @@ class TradeDataAccess(DateDataAccess):
         return volumes
 
     def get_turnovers(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        self , start : Base.intDate , end : Base.intDate ,
         turnover_type : TurnoverType = 'fr' , pivot = True , mask = True
     ) -> pd.DataFrame:
         """Return turnover rate (0-1 scale) for ``'tt'`` / ``'fl'`` / ``'fr'`` types."""
@@ -216,7 +217,7 @@ class TradeDataAccess(DateDataAccess):
         return turns
 
     def get_mv(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        self , start : Base.intDate , end : Base.intDate ,
         mv_type : MvType = 'circ_mv' , prev = True , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return circulating or total market cap (unit: 万元 / 10,000 CNY)."""
@@ -228,7 +229,7 @@ class TradeDataAccess(DateDataAccess):
         return mv
 
     def get_market_return(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
+        self , start : Base.intDate , end : Base.intDate ,
         return_type : ReturnType = 'close'
     ) -> pd.DataFrame:
         """Return the cap-weighted market return series indexed by date."""
@@ -240,7 +241,7 @@ class TradeDataAccess(DateDataAccess):
         return mkt_ret.rename('market').to_frame()
     
     def get_market_amount(
-        self , start : Base.alias.intDate , end : Base.alias.intDate
+        self , start : Base.intDate , end : Base.intDate
     ) -> pd.DataFrame:
         """Return total market trading amount (sum across all stocks) indexed by date."""
         amount = self.get_volumes(start , end , volume_type = 'amount' , mask = False , pivot = False)

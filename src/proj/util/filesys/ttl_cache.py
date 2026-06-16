@@ -9,7 +9,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, ClassVar, Iterator, TypeVar
+from typing import Any, ClassVar, TypeVar
+from collections.abc import Callable, Iterator
 import portalocker
 
 from src.proj.cal import BJ_TZ
@@ -128,7 +129,8 @@ class DiskTTLCacheEntry:
     def from_dict(
         cls, namespace: NamespaceType | str, key: str, value: Any | None = None, 
         created_at: str | None = None , expires_at: str | None = None, 
-        ttl_hours: float | None = None) -> DiskTTLCacheEntry:
+        ttl_hours: float | None = None
+    ) -> DiskTTLCacheEntry:
         """Build from on-disk dict; return ``None`` if required fields are invalid."""
         namespace = NamespaceType(namespace)
         if value is None or created_at is None or expires_at is None or ttl_hours is None:

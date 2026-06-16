@@ -14,7 +14,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any , ClassVar , Literal , Iterable , get_args
+from typing import Any , ClassVar , Literal  , get_args
+from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
 from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice , IndexMergeMethod
@@ -91,14 +92,6 @@ def load_dict(file_path : Base.strPath , keys = None) -> dict[str,Any]:
     keys = file.keys() if keys is None else np.intersect1d(keys , list(file.keys()))
     data = {k:file[k] for k in keys}
     return data
-
-def as_array(values : np.ndarray | torch.Tensor | list | tuple | str | int | float | Any) -> np.ndarray:
-    """Convert various array-like inputs to a 1-D or N-D numpy array."""
-    if isinstance(values , torch.Tensor):
-        array = values.cpu().numpy()
-    else:
-        array = np.asarray(values)
-    return np.atleast_1d(array)
 
 @dataclass
 class DataBlock:
@@ -187,12 +180,9 @@ class DataBlock:
           when a 3-D tensor is provided).
         - Asserts shape consistency between ``values`` and the coordinate arrays.
         """
-        if self.secid is not None:
-            self.secid = as_array(self.secid)
-        if self.date is not None:
-            self.date = as_array(self.date)
-        if self.feature is not None:
-            self.feature = as_array(self.feature)
+        self.secid = Base.ensure_secid(self.secid)
+        self.date = Base.ensure_date(self.date)
+        self.feature = Base.ensure_feature(self.feature)
 
         if self.initiated:
             assert self.secid is not None and self.date is not None and self.feature is not None, \
@@ -380,8 +370,8 @@ class DataBlock:
         return deepcopy(self)
 
     def align(
-        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
-        feature : list[str] | np.ndarray | None = None , inplace = False
+        self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , 
+        feature : Base.alias.NamesType = None , inplace = False
     ) -> DataBlock:
         """Convenience wrapper: align secid+date then feature in one call."""
         if not self.initiated:
@@ -391,8 +381,8 @@ class DataBlock:
         return blk
 
     def subset(
-        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
-        feature : list[str] | np.ndarray | None = None , inday : np.ndarray | None = None , 
+        self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , 
+        feature : Base.alias.NamesType = None , inday : Base.intNums | None = None , 
         fillna : Any = None
     ) -> DataBlock:
         """
@@ -409,7 +399,7 @@ class DataBlock:
         feature = self.feature if feature is None else feature
         return self.__class__(values , secid , date , feature)
 
-    def align_secid(self , secid : np.ndarray | None = None , inplace = False) -> DataBlock:
+    def align_secid(self , secid : Base.alias.SecidType = None , inplace = False) -> DataBlock:
         """
         Re-index the security axis to ``secid``.
 
@@ -419,7 +409,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        secid = None if secid is None else as_array(secid)
+        secid = Base.ensure_secid(secid)
         if not inplace:
             self = self.copy()
         if secid is None or len(secid) == 0 or np.array_equal(secid , self.secid): 
@@ -431,7 +421,7 @@ class DataBlock:
         values[tar_pos] = self.values[src_pos]
         return self.update(values = values , secid = secid)
        
-    def align_date(self , date : np.ndarray | None = None , inplace = False) -> DataBlock:
+    def align_date(self , date : Base.alias.DateType = None , inplace = False) -> DataBlock:
         """
         Re-index the date axis to ``date``.
 
@@ -440,7 +430,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        date = None if date is None else as_array(date)
+        date = Base.ensure_date(date)
         if not inplace:
             self = self.copy()
         if date is None or len(date) == 0 or np.array_equal(date , self.date): 
@@ -464,7 +454,7 @@ class DataBlock:
             return self
     
     def align_secid_date(
-        self , secid : np.ndarray | None = None , date : np.ndarray | None = None , 
+        self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , 
         inplace = False
     ) -> DataBlock:
         """
@@ -476,8 +466,8 @@ class DataBlock:
         # to speed up than .align_secid(secid = secid).align_date(date = date)
         if not self.initiated:
             return self
-        secid = None if secid is None else as_array(secid)
-        date = None if date is None else as_array(date)
+        secid = Base.ensure_secid(secid)
+        date = Base.ensure_date(date)
         if not inplace:
             self = self.copy()
         if (secid is None or len(secid) == 0) and (date is None or len(date) == 0): 
@@ -496,7 +486,7 @@ class DataBlock:
             return self.update(values = values , secid = secid , date = date)
     
     def align_feature(
-        self , feature : list[str] | np.ndarray | None = None , inplace = False
+        self , feature : Base.alias.NamesType = None , inplace = False
     ) -> DataBlock:
         """
         Re-index the feature axis to ``feature``.
@@ -507,7 +497,7 @@ class DataBlock:
         """
         if not self.initiated:
             return self
-        feature = None if feature is None else as_array(feature) 
+        feature = Base.ensure_feature(feature) 
         if not inplace:
             self = self.copy()
         if feature is None or len(feature) == 0 or np.array_equal(feature , self.feature): 
@@ -544,8 +534,8 @@ class DataBlock:
         return self
     
     def loc(
-        self , secid : Any | None = None , date : Any | None = None , 
-        feature : Any | None = None , inday : Any | None = None , fillna : Any = None
+        self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , 
+        feature : Base.alias.NamesType = None , inday : Base.intNums | None = None , fillna : Any = None
     ) -> torch.Tensor | Any:
         """
         Extract a sub-tensor by positional index matching (not alignment).
@@ -941,7 +931,7 @@ class DataBlock:
 
     def extend_to(
         self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
-        dates : Base.alias.intDates | None = None , feature : list[str] | None = None , use_alt = True , inplace = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , inplace = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """
         Extend this block by loading missing dates from the database.
@@ -1076,19 +1066,17 @@ class DataBlock:
 
     @classmethod
     def load_preprocess_norms(
-        cls , keys : list[str] | str , 
+        cls , keys : Base.alias.NamesType , 
         frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None
     ) -> dict[str,DataBlockNorm]:
         """Load the normalisation stats for the data block"""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        if isinstance(keys , str):
-            keys = [keys]
         return DataBlockNorm.load_keys(keys, frame , dtype = dtype)
 
     @classmethod
     def load_from_db(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """Load the data block from the database"""
         return cls.load_from_db_polars(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
@@ -1096,7 +1084,7 @@ class DataBlock:
     @classmethod
     def load_from_db_pandas(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """Load the data block from the database using pandas dataframe , usually slower than polars"""
         dates = Dates(dates , start , end)
@@ -1109,7 +1097,7 @@ class DataBlock:
     @classmethod
     def load_from_db_polars(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """Load the data block from the database using polars dataframe , usually faster than pandas"""
         dates = Dates(dates , start , end)
@@ -1122,7 +1110,7 @@ class DataBlock:
     @classmethod
     def load_raw(
         cls , db_src : str , db_key : str , start = None , end = None , * ,
-        dates : Base.alias.intDates | None = None , feature = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
     ) -> DataBlock:
         """
         Load a block from the database, with smart caching for frequent DB keys.
@@ -1334,12 +1322,11 @@ class DataBlockNorm:
         save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
 
     @classmethod
-    def load_keys(cls , keys : str | list[str] , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
+    def load_keys(cls , keys : Base.alias.NamesType , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
         """Load normalisation stats for multiple keys from disk; skips missing keys silently."""
         assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        if not isinstance(keys , list): 
-            keys = [keys]
-        norms = {}
+        keys = Base.ensure_name_list(keys , [])
+        norms : dict[str,DataBlockNorm] = {}
         for key in keys:
             path = cls.norm_path(key , frame)
             if not path.exists(): 

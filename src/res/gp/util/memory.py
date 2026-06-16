@@ -27,9 +27,11 @@ class MemoryManager(Base.BoundLogger):
     def initiated(self) -> bool:
         return hasattr(self , 'cuda_avail')
 
-    def initiate(self , device : torch.device | None = None) -> None:
+    def initiate(self , device : torch.device | str | None = None) -> None:
         if self.initiated:
             return
+        if isinstance(device , str):
+            device = torch.device(device)
         if device is not None:
             self.device = device
             self.gmem_total = self.gmem_total = torch.cuda.mem_get_info(self.device)[1] / self.unit if self.device.type == 'cuda' else 0.

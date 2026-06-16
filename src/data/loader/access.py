@@ -17,7 +17,6 @@ Concrete singletons in this package
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-
 from abc import abstractmethod
 from typing import Any
 
@@ -86,41 +85,41 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
             if data_type in self.pl_collections: 
                 self.pl_collections[data_type].truncate()
 
-    def loads(self , dates: Base.alias.intDates | None , data_type : str , rename_date_key = None):
+    def loads(self , dates : Base.alias.DateType , data_type : str , rename_date_key = None):
         """Bulk-load ``data_type`` for all dates that are not yet cached."""
         # overwrite=True: reload every requested date (double-checked in ``ensure_dates``).
         self.collections[data_type].ensure_dates(
             dates , lambda d: self.data_loader(d , data_type) , overwrite = True)
 
-    def get(self , date: Base.alias.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def get(self , date: Base.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return the cached DataFrame for a single ``date``, loading from DB if missing."""
         collection = self.collections[data_type]
         if overwrite or int(date) not in collection:
             collection.ensure_dates(date , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets(self , dates: Base.alias.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets(self , dates : Base.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Return a multi-date DataFrame for ``data_type``, loading any missing dates from DB."""
         collection = self.collections[data_type]
         collection.ensure_dates(dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
-    def get_pl(self , date: Base.alias.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def get_pl(self , date: Base.intDate , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``get`` — returns a ``pl.DataFrame`` from ``PLDFCollection``."""
         collection = self.pl_collections[data_type]
         if overwrite or int(date) not in collection:
             collection.ensure_dates(date , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.get(date , field , rename_date_key = rename_date_key)
 
-    def gets_pl(self , dates: Base.alias.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
+    def gets_pl(self , dates : Base.intDates , data_type : str , field = None , overwrite = False , rename_date_key = None):
         """Polars equivalent of ``gets`` — returns a multi-date ``pl.DataFrame``."""
         collection = self.pl_collections[data_type]
         collection.ensure_dates(dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
     
     def get_specific_data(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        data_type : str , field : list | str | None , prev = True , mask = False , pivot = False , drop_old = True ,
+        self , start : Base.intDate , end : Base.intDate ,
+        data_type : str , field : Base.alias.NamesType = None , prev = True , mask = False , pivot = False , drop_old = True ,
         date_step = 1
     ) -> pd.DataFrame:
         """
@@ -149,10 +148,8 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
             Stride for the trading-day range (1 = every day).
         """
         dates = Dates(start , end).slice(step = date_step).offset(-1 if prev else 0 , type = 'td')
-        if field is not None:
-            remain_field = ['secid'] + ([field] if isinstance(field , str) else list(field))
-        else:
-            remain_field = None
+        field = Base.ensure_name_list(field)
+        remain_field = (['secid'] + field) if field else None
 
         df = self.gets(dates , data_type , remain_field , rename_date_key = 'date')
         if prev: 

@@ -2,7 +2,8 @@
 from __future__ import annotations
 import os
 import functools
-from typing import Any, Callable , Iterable , Literal
+from typing import Any  , Literal
+from collections.abc import Callable, Iterable
 
 __all__ = ['Once']
 
@@ -53,7 +54,10 @@ class Once:
         return cls._lock
 
     @classmethod
-    def run(cls, func: Callable, func_args : Iterable, func_kwargs : dict , mark: Any = 'default' , object: Any | None | Literal['os'] = None) -> Any:
+    def run(
+        cls, func: Callable, func_args : Iterable, func_kwargs : dict , 
+        mark: Any = 'default' , object: Any | Literal['os'] | None = None
+    ) -> Any:
         with cls.get_lock():
             if object is None:
                 object = cls

@@ -51,7 +51,7 @@ def create_input_benchmark(opt_input : OptimizedPortfolioInput) -> np.ndarray | 
     return wb
 
 def create_input_initial(opt_input : OptimizedPortfolioInput):
-    pf : Port | Any = opt_input.initial_port
+    pf = opt_input.initial_port
     w0 = pf.weight_align(opt_input.secid) if isinstance(pf , Port) and not pf.emtpy else np.zeros(len(opt_input.secid))
     if (w0 == 0).all(): 
         w0 = None
@@ -150,7 +150,7 @@ def append_bound_limit(opt_input : OptimizedPortfolioInput):
     _stock_bound_list.append(bound_limit)
 
 def append_bound_range(opt_input : OptimizedPortfolioInput):
-    secid : np.ndarray = opt_input.secid
+    secid = np.atleast_1d(np.asarray(opt_input.secid))
     model_date : int = opt_input.model_date
     valid_ranges : dict[str,ValidRange] = opt_input.cfg_range
     bound_range = StockBound()
@@ -259,12 +259,12 @@ def append_linear_component(opt_input : OptimizedPortfolioInput):
             value = 1 * (opt_input.wb > 0)
         elif comp_name == 'bsizedev1':
             if size is None: 
-                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
+                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , ['size']).to_numpy()
             value = np.abs(size - (size * wb / wb.sum()))
             value /= value.std()
         elif comp_name == 'bsizedev2':
             if size is None: 
-                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , 'size').to_numpy()
+                size = RISK_MODEL.get(opt_input.model_date).style(opt_input.secid , ['size']).to_numpy()
             value = np.square(size - (size * wb / wb.sum()))
             value /= value.std()
         else:

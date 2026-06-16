@@ -10,10 +10,11 @@ from functools import cached_property
 from io import TextIOWrapper
 from pathlib import Path
 from string import Template
-from typing import Any , Literal , Callable , TextIO,  TYPE_CHECKING
+from typing import Any , Literal  , TextIO,  TYPE_CHECKING
+from collections.abc import Callable
 
 from src.proj.env import PATH , Proj , MACHINE
-from src.proj.core import str_to_html , dataframe_to_html , figure_to_html , strPath
+from src.proj.core import str_to_html , dataframe_to_html , figure_to_html , strPath , lit
 from src.proj.log import Logger
 from src.proj.bases import BoundLogger
 
@@ -44,8 +45,8 @@ class OutputDeflector(BoundLogger):
         self, 
         type : Literal['stdout' , 'stderr'] ,
         catcher : OutputDeflector | OutputCatcher | None, 
-        keep_original : bool = True,
-        * , indent: int = 0 , vb_level: int = 1 , **kwargs
+        keep_original : bool = True, * , 
+        indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.type = type
@@ -206,7 +207,7 @@ class OutputCatcher(BoundLogger , ABC):
         """Get the export file list, usually the default path and the user provided path"""
         return []
 
-    def set_export_files(self , export_file_list : list[strPath] | strPath | None = None):
+    def set_export_files(self , export_file_list : list[strPath] | strPath | None) -> None:
         """Replace export targets with normalized ``Path`` list."""
         self.export_file_list.clear()
         if export_file_list is None:
@@ -216,7 +217,7 @@ class OutputCatcher(BoundLogger , ABC):
         else:
             self.export_file_list.append(Path(export_file_list))
 
-    def add_export_file(self , export_path : strPath | None = None):
+    def add_export_file(self , export_path : strPath | None) -> None:
         """Add an path to the export file list"""
         if export_path is None:
             return
@@ -227,8 +228,8 @@ class OutputCatcher(BoundLogger , ABC):
 @dataclass
 class TimedOutput:
     """time ordered output item"""
-    type: Literal['stdout' , 'stderr' , 'data_frame' , 'figure'] | str
-    content: str | pd.DataFrame | pd.Series | Figure | None | Any
+    type: Literal['stdout', 'stderr', 'data_frame', 'figure'] | str
+    content: str | pd.DataFrame | pd.Series | Figure | Any | None
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
     
@@ -241,7 +242,7 @@ class TimedOutput:
     def __bool__(self):
         return self.valid
     
-    def get_type_fmt(self) -> Literal['stdout' , 'stderr' , 'dataframe' , 'image'] | str:
+    def get_type_fmt(self) -> Literal['stdout', 'stderr', 'dataframe', 'image'] | str:
         match self.type:
             case 'stdout':
                 return 'stdout'
@@ -254,7 +255,7 @@ class TimedOutput:
             case _:
                 return 'other'
     
-    def get_type_str(self) -> Literal['STDERR' , 'STDOUT' , 'TABLE' , 'IMAGE'] | str:
+    def get_type_str(self) -> Literal['STDERR', 'STDOUT', 'TABLE', 'IMAGE'] | str:
         match self.type:
             case 'stderr':
                 return 'STDERR'
@@ -294,7 +295,7 @@ class TimedOutput:
         return f'{self.time_str}|{self.type_str}|vb{self.vb_level_str}|{content_str}'
     
     @classmethod
-    def create(cls, content: str | pd.DataFrame | pd.Series | Figure | None | Any , output_type: str | None = None):
+    def create(cls, content: str | pd.DataFrame | pd.Series | Figure | Any | None , output_type: str | None = None):
         """Create a timed output item"""
         infos = {}
         valid = True
@@ -402,7 +403,7 @@ class TimedOutput:
 class MarkdownWriter:
     """Append timestamped HTML-safe lines to a markdown stream with optional section headers."""
 
-    def __init__(self, md_file: TextIOWrapper, seperating_by: str| None = 'min'):
+    def __init__(self, md_file: TextIOWrapper, seperating_by: str | None = 'min'):
         self.md_file = md_file
         self.seperating_by = seperating_by
         if seperating_by is None:

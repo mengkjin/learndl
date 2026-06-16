@@ -104,7 +104,7 @@ config.keys = {
   -- Delete a WORD backwards (Maps Alt + Backspace to send Escape + Backspace)
   { key = 'w', mods = 'ALT', action = act.SendString '\x1b\x7f' },
   -- Clear screen and discard the scrollback buffer 
-  { key = 'k', mods = 'CTRL|ALT', action = act.ClearScrollback 'ScrollbackAndViewport' },
+  { key = 'k', mods = 'CTRL', action = act.ClearScrollback 'ScrollbackAndViewport' },
   
   -- MacOS
   -- Move cursor word-by-word (Left / Right)

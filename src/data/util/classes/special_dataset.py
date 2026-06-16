@@ -8,7 +8,6 @@ in ``SpecialDataSet.candidates``.
 """
 from __future__ import annotations
 import torch
-import numpy as np
 from typing import Any
 
 from src.proj import Base , Dates
@@ -29,7 +28,7 @@ class SpecialDataSet:
     @classmethod
     def load(
         cls , key : str , * , 
-        dates : Base.alias.intDates | None = None , secid : np.ndarray | None = None , 
+        dates : Base.alias.DateType = None , secid : Base.alias.SecidType = None , 
         start : int | None = None , end : int | None = None ,
         dtype : torch.dtype = torch.float , vb_level : Any = 2
     ) -> DataBlock:
@@ -43,7 +42,7 @@ class SpecialDataSet:
         dates : array-like, optional
             Explicit list of trading dates (yyyyMMdd ints) to load.
             Mutually exclusive with ``start``/``end``.
-        secid : np.ndarray, optional
+        secid : Base.alias.SecidType, optional
             If provided, align the result to this security universe.
         start, end : int, optional
             Date range (yyyyMMdd) used when ``dates`` is not provided.
@@ -59,7 +58,7 @@ class SpecialDataSet:
 
     @classmethod
     def load_dfl2(
-        cls , dates : Base.alias.intDates | None = None , secid : np.ndarray | None = None , 
+        cls , dates : Base.alias.DateType = None , secid : Base.alias.SecidType = None , 
         start : int | None = None , end : int | None = None , 
         dtype : torch.dtype = torch.float , vb_level : Any = 2
     ) -> DataBlock:

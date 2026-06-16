@@ -8,14 +8,14 @@ Exported as the ``MKLINE`` singleton.
 from __future__ import annotations
 import polars as pl
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import DB
 from src.data.util import INFO
 
 from .access import DateDataAccess
 
-MinKCorrVal = Literal['ret' , 'volume' , 'mkt' , 'vwap']
+MinKCorrVal : TypeAlias = Literal['ret', 'volume', 'mkt', 'vwap'] | str
 
 __all__ = ['MKLINE']
 
@@ -87,11 +87,12 @@ class MinKLineAccess(DateDataAccess):
             df = self.get_5min(date , with_ret)
         return df
 
-    def get_inday_corr(self , date : int ,
-                       val1 : MinKCorrVal | str ,
-                       val2 : MinKCorrVal | str ,
-                       lag1 : int = 0 , lag2 : int = 0 ,
-                       rename : str = 'value' , beta = False):
+    def get_inday_corr(
+        self , date : int ,
+        val1 : MinKCorrVal , val2 : MinKCorrVal ,
+        lag1 : int = 0 , lag2 : int = 0 ,
+        rename : str = 'value' , beta = False
+    ):
         """
         Compute per-stock intraday correlation (or beta) between two bar-level signals.
 

@@ -7,7 +7,8 @@ import itertools
 import numpy as np
 
 from functools import wraps
-from typing import Any , Literal , Sized , Callable , cast
+from typing import Any , Literal   , cast
+from collections.abc import Sized, Callable
 
 from src.proj import Const , Base
 
@@ -467,7 +468,7 @@ class BaseTrainer(BasePipeline):
             self.metrics.new_model(self.model , self.model.complete_model_param)
         self.on_new_attempt()
         
-    def recall_ckpt(self , epoch : int , phase : int = 0 , message : str = '' , details : dict[str,Any] | None = None):
+    def recall_ckpt(self , epoch : int , phase : int = 0 , message : str = '' , details : dict[str, Any] | None = None):
         assert epoch >= 0 and epoch <= self.status.epoch , f'epoch {epoch} is out of range(0,{self.status.epoch})'
         self.status.add_epoch_event(FittingEventType.NEW_PHASE_RECALL , f'Recall {epoch_key(epoch , phase)}' , epoch , message , details)
         self.status.set_milestone_epoch(epoch + 1)

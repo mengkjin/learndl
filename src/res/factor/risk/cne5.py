@@ -84,7 +84,7 @@ class DateSeriesDict:
         self.D[date][name] = v
 
     def get(self , date : int , name : str) -> pd.Series | None:
-        """get a series from cache"""
+        """get a series from cache"""   
         if date in self.D and name in self.D[date]: 
             return self.D[date][name]
         else: 
@@ -527,7 +527,7 @@ class TuShareCNE5_Calculator(Base.BasicUpdater):
         return {'exposure_dates' : dates}
 
     @classmethod
-    def proceed_update(cls , exposure_dates : Base.alias.intDates , **kwargs) -> Base.UpdateFlag:
+    def proceed_update(cls , exposure_dates : Base.intDates , **kwargs) -> Base.UpdateFlag:
         """proceed the update"""
         updater = cls()
         flags = Base.UpdateFlagList()

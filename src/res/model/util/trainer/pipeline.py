@@ -197,7 +197,7 @@ class _PipelineMeta(ABCMeta):
             Logger.warning(f'{new_cls.__name__} defines extra hooks: {extra}')
 
         # check if the class defines placeholdernames for hooks
-        placeholder_names = set([hook for hook in dir(new_cls) if hook.startswith(('_raw_'))])
+        placeholder_names = set([hook for hook in dir(new_cls) if hook.startswith('_raw_')])
         if placeholder_names:
             Logger.warning(f'{new_cls.__name__} defines placeholder names for hooks: {placeholder_names}')
         return new_cls

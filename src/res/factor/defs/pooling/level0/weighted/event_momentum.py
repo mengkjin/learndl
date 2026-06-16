@@ -115,7 +115,7 @@ class SignedFactor:
 
         self.loaded = False
 
-    def eval(self , dates : Base.alias.intDates , indent : int = 3 , vb_level : Any = 2):
+    def eval(self , dates : Base.intDates , indent : int = 3 , vb_level : Any = 2):
         self.factor = StockFactorHierarchy.get_factor(self.factor_name).Factor(dates , indent = indent , vb_level = vb_level)
         self.loaded = True
         return self
@@ -126,7 +126,7 @@ class SignedFactor:
             raise ValueError('factor not loaded')
         return self.factor.date
 
-    def eval_grp_perf(self , dates : Base.alias.intDates , event_signal : EventSignal , excess : bool = True):
+    def eval_grp_perf(self , dates : Base.intDates , event_signal : EventSignal , excess : bool = True):
         # get sub fac df and append miscel ret from rebound_start to event_date
         dates = Dates(dates)
         if not self.loaded or not np.isin(dates.dates , self.date).all():
@@ -175,7 +175,7 @@ class EventFactorWeight:
     momentum_time_decay : bool = True
     ignore_negative_weight : bool = True
 
-    def __init__(self , event_perf : pd.DataFrame , full_dates : Base.alias.intDates , factor_names : list[str]):
+    def __init__(self , event_perf : pd.DataFrame , full_dates : Base.intDates , factor_names : list[str]):
         self.event_perf = event_perf
         self.full_dates = Dates(full_dates)
         self.factor_names = factor_names
@@ -292,7 +292,7 @@ class MarketEventMomentumFactorWeight:
         self.event_factor_weight = EventFactorWeight(self.event_perf , full_dates , self.factor_names).eval()
         return self
 
-    def weighted_factor(self , dates : Base.alias.intDates , name : str = 'weighted_factor') -> StockFactor:
+    def weighted_factor(self , dates : Base.intDates , name : str = 'weighted_factor') -> StockFactor:
         dates = Dates(dates)
         if dates.empty:
             return StockFactor(factor_names = [name])
@@ -326,7 +326,7 @@ class event_factor_momentum_test(WeightedPoolingCalculator):
         factor_df = StockFactor.normalize_df(factor_df).drop(columns = ['date'])
         return factor_df
 
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : Base.alias.intDates | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : Base.alias.DateType = None , overwrite = False , indent : int = 1 , vb_level : Any = 1) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         dates = Dates(dates , self.init_date , CALENDAR.updated()).slice(start , end)
         factor_weight = MarketEventMomentumFactorWeight(self.sub_factors)
@@ -370,7 +370,7 @@ class event_factor_momentum(WeightedPoolingCalculator):
 
     def calc_pooling_weight(
         self , start : int | None = None , end : int | None = None , 
-        dates : Base.alias.intDates | None = None , overwrite = False , 
+        dates : Base.alias.DateType = None , overwrite = False , 
         indent : int = 1 , vb_level : Any = 1
     ) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""

@@ -9,7 +9,8 @@ import torch
 
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence , Literal , Any
+from typing import Literal , Any
+from collections.abc import Sequence
 
 from src.proj import PATH , Base , Load
 from src.res.gp.param import gpDefaults
@@ -137,8 +138,10 @@ class gpRecorder(Base.BoundLogger):
             with open(output_path, 'w', encoding='utf-8') as file1:
                 file1.write(f'{syntax}\n start_time {start_time_sku}')
 
-    def state_data_path(self , key : gpStateType , 
-                        i_iter : int | None = None , **kwargs) -> Path:
+    def state_data_path(
+        self , key : gpStateType , 
+        i_iter : int | None = None , **kwargs
+    ) -> Path:
         match key:
             case 'res' | 'neu' | 'elt':
                 assert i_iter is not None and i_iter >= 0 , f'i_iter must be greater than 0, but got {i_iter}'
@@ -157,8 +160,12 @@ class gpRecorder(Base.BoundLogger):
             case _:
                 raise Exception(key)
     
-    def load_state(self , key : gpStateType , 
-                   i_iter : int | None = None , device : torch.device | None = None) -> Any:
+    def load_state(
+        self , key : gpStateType , 
+        i_iter : int | None = None , device : torch.device | str | None = None
+    ) -> Any:
+        if isinstance(device , str):
+            device = torch.device(device)
         path = self.state_data_path(key , i_iter = i_iter)
         match key:
             case 'res' | 'neu' | 'elt':
@@ -178,8 +185,12 @@ class gpRecorder(Base.BoundLogger):
             case _:
                 raise Exception(key)
 
-    def save_state(self , key : gpStateType , 
-                   data : Any , i_iter : int | None = None, **kwargs):
+    def save_state(
+        self , key : gpStateType , 
+        data : Any , i_iter : int | None = None, **kwargs
+    ):
+        if isinstance(data , torch.Tensor):
+            data = data.cpu()
         if not self.status.train:
             return
         path = self.state_data_path(key , i_iter = i_iter)

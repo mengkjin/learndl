@@ -3,6 +3,8 @@ from __future__ import annotations
 import warnings
 
 from typing import Any
+
+from src.proj.core import lit
 from src.proj.bases import BoundLogger
 
 __all__ = ['WarningCatcher']
@@ -19,7 +21,7 @@ class WarningCatcher(BoundLogger):
         raise_warnings : list[str] | None = None , 
         ignore_warnings : list[str] | None = None , * ,
         highlight_varibles : dict[str, Any] | None = None ,
-        indent: int = 0 , vb_level: int = 1 , **kwargs
+        indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.original_showwarning = warnings.showwarning

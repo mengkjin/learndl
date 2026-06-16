@@ -1,5 +1,4 @@
 #! /usr/bin/env python3
-# coding: utf-8
 # author: jinmeng
 # date: 2026-04-22
 # description: Run Api Interaction

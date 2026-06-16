@@ -9,14 +9,16 @@ Key objects:
   every callback.
 """
 from __future__ import annotations
+import time
 import streamlit as st
 
 from dataclasses import dataclass , field
-from functools import wraps , cached_property
-from typing import Any , ClassVar , Callable , Literal
-from pathlib import Path
 from datetime import datetime
-import time
+from functools import wraps , cached_property
+from pathlib import Path
+from typing import Any , ClassVar  , Literal
+from collections.abc import Callable
+
 from src.proj import PATH , Const , Logger
 from src.api.util.backend import TaskQueue , TaskItem , TaskDatabase , ScriptRunner , PathItem
 from src.api.util.st_frontend import YAMLFileEditorState , action_confirmation , ParamCache
@@ -263,7 +265,7 @@ class SessionControl:
         from src.api.interactive.util.control_panel import ControlPanel
         return ControlPanel()
 
-    def refresh_control_panel(self , runner : ScriptRunner):
+    def refresh_control_panel(self , runner : ScriptRunner) -> None:
         """refresh control panel buttons"""
         self.control_panel.refresh_buttons(runner)
     
@@ -290,7 +292,7 @@ class SessionControl:
             st.session_state['task_report_placeholder'] = placeholder
         return placeholder
     
-    def get_filtered_queue(self):
+    def get_filtered_queue(self) -> dict[str, TaskItem]:
         """filter task queue"""
         status_filter = st.session_state.get('task-filter-status')
         source_filter = st.session_state.get('task-filter-source')
@@ -324,8 +326,10 @@ class SessionControl:
             params['mode'] = 'os'
         return params
 
-    def get_script_runner_cmd(self , runner : ScriptRunner | None , params : dict[str, Any] | None , 
-                              operation_txt = True):
+    def get_script_runner_cmd(
+        self , runner : ScriptRunner | None , params : dict[str, Any] | None , 
+        operation_txt = True
+    ) -> str | None:
         """preview runner cmd"""
         if runner is None: 
             return None

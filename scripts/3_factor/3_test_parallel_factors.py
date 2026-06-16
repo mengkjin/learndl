@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-# coding: utf-8
 # author: jinmeng
 # date: 2026-05-21
 # description: Smoke test parallel stock factor update

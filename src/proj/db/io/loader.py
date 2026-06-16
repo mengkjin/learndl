@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any , Iterable , Callable , Union , TYPE_CHECKING
+from typing import Any , TYPE_CHECKING
 
-from src.proj.core import strPath , strPaths
+from src.proj.core import strPath , strPaths , lit
 from src.proj.db.basic import TAR_SUFFIXES
 
 __all__ = ['Load']
@@ -12,10 +12,7 @@ __all__ = ['Load']
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
-    from src.proj.db.io.dataframe import PandasAccelerator , PolarsAccelerator
-    PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
-    PL_MAPPER_TYPE = Union[Iterable[Callable[[pl.DataFrame], pl.DataFrame]] , Callable[[pl.DataFrame], pl.DataFrame] , None]
-
+    from src.proj.db.io.dataframe import PandasAccelerator , PolarsAccelerator , PL_MAPPER_TYPE , PD_MAPPER_TYPE
 class Load:
     """Loader for database"""
     @classmethod
@@ -26,7 +23,7 @@ class Load:
         load dataframe from path or paths
         Parameters
         ----------
-        path : strPath | Iterable[strPath] | dict[int, strPath]
+        path : strPath | strPaths
             path or paths to load , key is date
         missing_ok : bool
             if True, return empty dataframe for missing path(s)
@@ -74,13 +71,13 @@ class Load:
         load polars dataframe from path or paths
         Parameters
         ----------
-        path : strPath | Iterable[strPath] | dict[int, strPath]
+        path : strPath | strPaths
             path or paths to load , key is date
         missing_ok : bool
             if True, return empty dataframe for missing path(s)
         accelerator : 'thread' | 'lazy' | None
             accelerating mode
-        mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
+        mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pd.DataFrame] | None
             mapper function to execute on each dataframe
         """
         from src.proj.db.io.dataframe import load_df_pl
@@ -123,7 +120,10 @@ class Load:
         return load_tar_meta(path)
 
     @classmethod
-    def unpack(cls , path : strPath , target : strPath , * , overwrite = False , indent = 1 , vb_level : Any = 1):
+    def unpack(
+        cls , path : strPath , target : strPath , * , 
+        overwrite = False , indent = 1 , vb_level : lit.VerbosityLevel = 1
+    ):
         """unpack tar file to target directory
         Parameters
         ----------

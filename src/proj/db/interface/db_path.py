@@ -4,11 +4,12 @@ from __future__ import annotations
 import numpy as np
 
 from pathlib import Path
-from typing import Any , Generator 
+from collections.abc import Generator
 
+from src.proj.core import intDatesNone , lit
 from src.proj.env import PATH
 from src.proj.log import Logger
-from src.proj.cal import Dates , intDates
+from src.proj.cal import Dates
 
 from src.proj.db.basic import (
     DF_SUFFIX , SRC_ALTERNATIVES , DB_BY_NAME , DB_BY_DATE , EXPORT_BY_NAME , EXPORT_BY_DATE ,
@@ -100,7 +101,7 @@ class DBPath:
         """whether the database is by date"""
         return self.ByDate(self.src)
 
-    def syntax(self , date : intDates | None = None) -> str:
+    def syntax(self , date : intDatesNone = None) -> str:
         """get syntax of database"""
         if self.by_name:
             return f'{self.src}.{self.key}'
@@ -169,7 +170,7 @@ class DBPath:
                 return max(dates)
         return None
 
-    def get_paths(self , dates : intDates | None = None , start : int | None = None , end : int | None = None , year = None , 
+    def get_paths(self , dates : intDatesNone = None , start : int | None = None , end : int | None = None , year = None , 
                   use_alt = False , closest = False) -> dict[int, Path]:
         """get paths from database"""
         if dates is None:
@@ -205,7 +206,10 @@ class DBPath:
             path = self.path_exact(date)
         return path
 
-    def path(self , date : int | None = None , use_alt = False , closest = False , indent = 1 , vb_level : Any = 'max') -> Path:
+    def path(
+        self , date : int | None = None , use_alt = False , closest = False , 
+        indent = 1 , vb_level : lit.VerbosityLevel = 'max'
+    ) -> Path:
         """
         Get path of database
         Parameters
@@ -281,7 +285,7 @@ def dates(db_src : str , db_key : str , start : int | None = None , end : int | 
     dates = DBPath(db_src , db_key).dates(start , end , year , use_alt = use_alt)
     return dates
 
-def paths(db_src : str , db_key : str , * , dates : intDates | None = None , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> list[Path]:
+def paths(db_src : str , db_key : str , * , dates : intDatesNone = None , start : int | None = None , end : int | None = None , year = None , use_alt = False) -> list[Path]:
     """get paths from any database data"""
     db_path = DBPath(db_src , db_key)
     if db_path.by_name:

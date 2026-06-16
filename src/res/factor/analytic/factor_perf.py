@@ -5,7 +5,7 @@ Factor performance calculator for StockFactor
 from __future__ import annotations
 import pandas as pd
 
-from typing import Any ,Literal , Type
+from typing import Any , Literal , TypeAlias
 
 from src.proj import Const , Base
 from src.proj.bases import TestType
@@ -26,9 +26,11 @@ __all__ = [
     'FactorPerfTest'
 ]
 
+BenchAny : TypeAlias = Benchmark | Any
+
 class FactorPerfCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
-    DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
+    DEFAULT_BENCHMARKS : list[BenchAny] | BenchAny = [None]
     COMPULSORY_BENCHMARKS : Any = None
         
     def calc(self , factor : StockFactor, benchmarks : Base.alias.MultipleBenchmark = None):
@@ -47,8 +49,10 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     
 class FrontFace(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
-    def __init__(self , nday : int = 10 , lag : int = 2 , ic_type : Base.lit.ICType = 'spearman' ,
-                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
+    def __init__(
+        self , nday : int = 10 , lag : int = 2 , ic_type : Base.lit.ICType = 'spearman' ,
+        ret_type : Base.lit.ReturnType = 'close' , **kwargs
+    ) -> None:
         super().__init__(params = {'nday' : nday , 'lag' : lag , 'ic_type' : ic_type , 'ret_type' : ret_type} , **kwargs)
     def calculator(self): return Stat.calc_frontface
     def plotter(self): return plotter.plot_frontface
@@ -62,12 +66,13 @@ class Coverage(FactorPerfCalc):
 
 class IC_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
-    def __init__(self , nday : int = 10 , lag : int = 2 , ma_windows : int | list[int] = [10,20] ,
-                 ic_type  : Base.lit.ICType = 'spearman' ,
-                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
+    def __init__(
+        self , nday : int = 10 , lag : int = 2 , ma_windows : Base.intNums = [10,20] ,
+        ic_type  : Base.lit.ICType = 'spearman' , ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
         params = {
             'nday' : nday , 'lag' : lag , 'ma_windows' : ma_windows , 
-            'ic_type' : ic_type , 'ret_type' : ret_type}
+            'ic_type' : ic_type , 'ret_type' : ret_type
+        }
         super().__init__(params = params , **kwargs)
     def calculator(self): return Stat.calc_ic_curve
     def plotter(self): return plotter.plot_ic_curve
@@ -212,7 +217,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     """
     Factor Performance Calculator Manager
     Parameters:
-        which : str | list[str] | Literal['all']
+        which : str | Base.ArrayLike[str] | Literal['all']
             Which tasks to run. Can be any of the following:
             'frontface' : Factor Front Face
             'coverage' : Factor Coverage
@@ -233,7 +238,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
             'distr_qtile' : Distribution Quantile
     """
     TEST_TYPE = test_type
-    TASK_LIST : list[Type[FactorPerfCalc]] = [
+    TASK_LIST : list[type[FactorPerfCalc]] = [
         FrontFace ,
         # Coverage ,
         IC_Curve , 
@@ -254,7 +259,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         # Distrib_Qtile ,
     ]
 
-    def calc(self , factor : StockFactor , benchmarks: list[Benchmark|Any] | Any = None , **kwargs):
+    def calc(self , factor : StockFactor , benchmarks: list[BenchAny] | BenchAny = None , **kwargs):
         factor = factor.filter_dates_between(self.start , self.end)
         if Const.Model.resume_factor_perf:
             factor.cache_factor_stats.load(self.factor_stats_resume_path)

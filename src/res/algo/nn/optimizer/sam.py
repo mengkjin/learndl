@@ -80,7 +80,7 @@ class SAM(optim.Optimizer):
 
         assert 0 <= rho, f"rho should be non-negative:{rho}"
         self.rho = rho
-        super(SAM, self).__init__(params, dict(rho=rho))
+        super().__init__(params, dict(rho=rho))
 
         self.param_groups = self.base_optimizer.param_groups
         for group in self.param_groups:
@@ -210,7 +210,7 @@ class SSAMF(SAM):
         self.sparsity = sparsity
         self.num_samples = num_samples
         self.update_freq = update_freq
-        super(SSAMF, self).__init__(params, base_optimizer, rho)
+        super().__init__(params, base_optimizer, rho)
 
         self.param_groups = self.base_optimizer.param_groups
         for group in self.param_groups:
@@ -374,7 +374,7 @@ class ASAM(optim.Optimizer):
         assert 0 <= eta, f"eta should be non-negative:{eta}"
         self.rho = rho
         self.eta = eta
-        super(ASAM, self).__init__(params, dict(rho=rho, eta=eta))
+        super().__init__(params, dict(rho=rho, eta=eta))
 
         self.param_groups = self.optimizer.param_groups
         for group in self.param_groups:
@@ -464,7 +464,7 @@ class GSAM(optim.Optimizer):
         **kwargs
     ):
         defaults = dict(adaptive=adaptive, **kwargs)
-        super(GSAM, self).__init__(params, defaults)
+        super().__init__(params, defaults)
         self.model = model
         self.base_optimizer = base_optimizer
         self.param_groups = self.base_optimizer.param_groups
@@ -684,7 +684,7 @@ class GAM(optim.Optimizer):
         **kwargs
     ):
         defaults = dict(adaptive=adaptive, **kwargs)
-        super(GAM, self).__init__(params, defaults)
+        super().__init__(params, defaults)
         self.perturb_eps = perturb_eps
         self.model = model
         self.base_optimizer = base_optimizer
@@ -962,7 +962,7 @@ class FriendlySAM(torch.optim.Optimizer):
         assert rho >= 0.0, f"Invalid rho, should be non-negative: {rho}"
 
         defaults = dict(rho=rho, adaptive=adaptive, **kwargs)
-        super(FriendlySAM, self).__init__(params, defaults)
+        super().__init__(params, defaults)
 
         self.base_optimizer = base_optimizer
         self.param_groups = self.base_optimizer.param_groups

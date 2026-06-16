@@ -1,6 +1,5 @@
 """Basic utilities for shell opener"""
 from __future__ import annotations
-
 from abc import ABC , abstractmethod
 
 __all__ = ['BasicOpener']

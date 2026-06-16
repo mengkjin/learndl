@@ -6,7 +6,7 @@ import portalocker
 
 from datetime import datetime
 from functools import wraps
-from typing import Callable
+from collections.abc import Callable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
@@ -214,7 +214,7 @@ class ScriptLockMultiple:
         available = 0
         for lock_file in lock_dir.glob(f"{lock_name}_*.lock"):
             try:
-                with open(lock_file, 'r') as f:
+                with open(lock_file) as f:
                     portalocker.lock(f, portalocker.LOCK_EX | portalocker.LOCK_NB)
                     available += 1
                     portalocker.unlock(f)

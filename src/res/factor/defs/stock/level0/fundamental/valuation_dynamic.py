@@ -17,8 +17,11 @@ __all__ = [
     'stop_stability'
 ]
 
-def calc_stability(numerator : pd.DataFrame | pd.Series | float | int , denominator : pd.DataFrame | pd.Series | float | int , 
-                   reindex_like : Literal['numerator' , 'denominator'] = 'denominator'):
+def calc_stability(
+    numerator : pd.DataFrame | pd.Series | float | int , 
+    denominator : pd.DataFrame | pd.Series | float | int , 
+    reindex_like : Literal['numerator' , 'denominator'] = 'denominator'
+):
     if isinstance(numerator , pd.DataFrame) and isinstance(denominator , pd.DataFrame):
         union_index = numerator.index.union(denominator.index).sort_values()
         if reindex_like == 'numerator':
@@ -50,7 +53,7 @@ def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
     ev = mv + added
     return ev
 
-def get_denominator_hist(denominator : Literal['mv' , 'ev'] | str , date : int , n_year = 3 , date_step = 21):
+def get_denominator_hist(denominator : Literal['mv', 'ev'] | str , date : int , n_year = 3 , date_step = 21):
     if denominator == 'mv':
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
         v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 

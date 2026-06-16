@@ -238,7 +238,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
     
     def download(
         self , option : Literal['since' , 'dates'] , overwrite : bool = False ,
-        dates : Base.alias.intDates | None = None , trace = 1 , 
+        dates : Base.alias.DateType = None , trace = 1 , 
     ) -> Base.UpdateFlag:
         assert overwrite is False , 'overwrite is not supported for sellside sql download'
         stored_dates = DB.dates(self.DB_SRC , self.db_key)
@@ -419,15 +419,11 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         return status
 
     @classmethod
-    def default_factors(cls , keys : list[str] | str | None = None) -> dict[str,SellsideSQLDownloader]:
-        if keys is None:
-            keys = cls.available_factors()
-        elif isinstance(keys , str):
-            keys = [keys]
+    def default_factors(cls , keys : Base.alias.NamesType = None) -> dict[str,SellsideSQLDownloader]:
         downloaders : dict[str,SellsideSQLDownloader] = {}
-        for key in keys:
-            args , kwargs = factor_settings[key]
-            downloaders[key] = cls(*args , **kwargs)
+        for k in Base.ensure_name_list(keys , cls.available_factors()):
+            args , kwargs = factor_settings[k]
+            downloaders[k] = cls(*args , **kwargs)
         return downloaders
 
     @classmethod

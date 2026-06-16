@@ -15,12 +15,14 @@ __all__ = ['ModelTrainer']
 class ModelTrainer(BaseTrainer):
     """run through the whole process of training"""
     @classmethod
-    def initialize(cls , base_path = None , * ,
-                   module = None , schedule_name = None , override : dict | None = None , 
-                   short_test = None , start = None , end = None ,
-                   use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
-                   stage = -1 , resume = -1 , selection = -1 , 
-                   **kwargs):
+    def initialize(
+        cls , base_path = None , * ,
+        module = None , schedule_name = None , override : dict | None = None , 
+        short_test = None , start = None , end = None ,
+        use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
+        stage = -1 , resume = -1 , selection = -1 , 
+        **kwargs
+    ):
         """
         state:     [-1,choose if optional] , [0,fit+test] , [1,fit] , [2,test]
         resume:    [-1,choose if optional] , [0,no]       , [1,yes]
@@ -35,8 +37,8 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def GO(cls , * , base_path : ModelPath | Base.strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
-           check_operation : Literal['update_models' , 'resume_testing'] | None = None , 
-           log_operation : Literal['update_models' , 'resume_testing'] | None = None , 
+           check_operation : Literal['update_models', 'resume_testing'] | None = None , 
+           log_operation : Literal['update_models', 'resume_testing'] | None = None , 
            use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):
@@ -124,8 +126,10 @@ class ModelTrainer(BaseTrainer):
                       selection = selection , start = start , end = end , **kwargs)
     
     @classmethod
-    def test(cls , model_name : str | None = None , stage = 2 , resume = 0 , selection = 0 , 
-             start : int | None = None , end : int | None = None , **kwargs):
+    def test(
+        cls , model_name : str | None = None , stage = 2 , resume = 0 , selection = 0 , 
+        start : int | None = None , end : int | None = None , **kwargs
+    ):
         assert model_name, 'model_name is required'
         base_path = ModelPath(model_name)
         assert base_path.base.exists() , f'model_name {model_name} not found'
@@ -134,17 +138,20 @@ class ModelTrainer(BaseTrainer):
                       selection = selection, start = start , end = end , **kwargs)
     
     @classmethod
-    def schedule(cls , schedule_name : str | None = None , short_test : bool | None = None , 
-                 stage = 0 , resume = 0 , selection = 0 , start : int | None = None , end : int | None = None , **kwargs):
+    def schedule(
+        cls , schedule_name : str | None = None , short_test : bool | None = None , 
+        stage = 0 , resume = 0 , selection = 0 , start : int | None = None , end : int | None = None , **kwargs
+    ):
         assert schedule_name, 'schedule_name is required'
         return cls.GO(title = f'Schedule Model of Schedule {schedule_name}' , 
                       schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , 
                       selection = selection , start = start , end = end , **kwargs)
 
     @classmethod
-    def test_factor(cls , factor_name : str | None = None , 
-                    stage = 2 , resume = 0 , selection = 0 , 
-                    start : int | None = None , end : int | None = None , **kwargs):
+    def test_factor(
+        cls , factor_name : str | None = None , stage = 2 , resume = 0 , selection = 0 , 
+        start : int | None = None , end : int | None = None , **kwargs
+    ):
         assert factor_name, 'factor_name is required'
         base_path = ModelPath(f'factor@{factor_name}')
         assert base_path in cls.resumable_factors(start, end), f'factor_name {factor_name} is not available within {start} and {end}'

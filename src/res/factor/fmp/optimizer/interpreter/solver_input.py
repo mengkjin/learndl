@@ -24,7 +24,7 @@ class SolverInput:
     lin_con : LinearConstraint
     bnd_con : BoundConstraint
     turn_con : TurnConstraint | Any = None
-    cov_con  : CovConstraint  | Any = None
+    cov_con  : CovConstraint | Any = None
     short_con : ShortConstraint | Any = None
     w0 : np.ndarray | Any = None
     wb : np.ndarray | Any = None

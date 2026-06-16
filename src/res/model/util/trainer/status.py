@@ -197,7 +197,10 @@ class FittingEpochs:
         record = self.current.new_epoch() if self.epochs else EpochRecord()
         assert record is not None , 'record is None'
         self.epochs.append(record)
-    def add_epoch_event(self , type : Base.FittingEventType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+    def add_epoch_event(
+        self , type : Base.FittingEventType , reason : str , epoch : int | None = None , 
+        message : str = '' , details : dict[str, Any] | None = None
+    ):
         effective_epoch = -1 if epoch is None else epoch
         current_epoch = self.current
         event = EpochEvent(type , reason , current_epoch.epoch , current_epoch.phase , effective_epoch , message , details or {})
@@ -308,7 +311,10 @@ class TrainerStatus(BasePipeline):
         self.fitting_epochs.check_loop_end(max_epoch)   
     def set_milestone_epoch(self , epoch : int):
         self.milestone_epochs.append(epoch)
-    def add_epoch_event(self , type : Base.FittingEventType , reason : str , epoch : int | None = None , message : str = '' , details : dict[str,Any] | None = None):
+    def add_epoch_event(
+        self , type : Base.FittingEventType , reason : str , epoch : int | None = None , 
+        message : str = '' , details : dict[str, Any] | None = None
+    ):
         self.fitting_epochs.add_epoch_event(type , reason , epoch , message , details)
 
     def on_data_start_before(self):  

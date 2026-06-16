@@ -17,7 +17,7 @@ import pandas as pd
 import polars as pl
 
 from functools import cached_property
-from typing import Any , Literal
+from typing import Literal
 
 from src.proj import CALENDAR , Proj , DB , Const , Base , Dates
 from src.data.util import DataBlock , INFO
@@ -164,11 +164,10 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
     @classmethod
     def real_factor(
-        cls , factor_type : Base.lit.FactorType , names : str | list[str] | np.ndarray ,
+        cls , factor_type : Base.lit.FactorType , names : Base.alias.NamesType ,
         start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named factor or model prediction DataBlocks from the DB and merge them."""
-        if isinstance(names , str): 
-            names = [names]
+        names = Base.ensure_name_list(names , [])
         dates = DATAVENDOR.td_within(start , end , step)
         values = [DB.loads_pl(factor_type , name , dates , key_column = 'date') for name in names]
         values = [v for v in values if len(v) > 0]
@@ -183,14 +182,14 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
     @classmethod
     def stock_factor(
-        cls , factor_names : str | list[str] | np.ndarray , 
+        cls , factor_names : Base.alias.NamesType , 
         start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named stock factors from the ``factor`` DB into a DataBlock."""
         return cls.real_factor('factor' , factor_names , start , end , step)
 
     @classmethod
     def model_preds(
-        cls , model_names : str | list[str] | np.ndarray , 
+        cls , model_names : Base.alias.NamesType , 
         start : int = 20240101 , end : int = 20240531 , step : int = 5) -> DataBlock:
         """Load named model predictions from the ``pred`` DB into a DataBlock."""
         return cls.real_factor('pred' , model_names , start , end , step)
@@ -208,7 +207,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         data_key: Literal["daily_quotes", "risk_exp"],
         db_src: str,
         db_key: str,
-        dates: Base.alias.intDates | None = None,
+        dates : Base.alias.DateType = None,
         extend=0,
     ) -> None:
         """
@@ -257,13 +256,13 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         with self._lock:
             self.blocks_cache['daily_ret'] = blk
 
-    def get_quotes_block(self , dates : Base.alias.intDates | None = None , * , extend = 0) -> DataBlock:
+    def get_quotes_block(self , dates : Base.alias.DateType = None , * , extend = 0) -> DataBlock:
         """Return a price-adjusted OHLCV DataBlock covering ``dates`` (lazy-loaded and cached)."""
         with Proj.silence:
             self.update_named_data_block('daily_quotes' , 'trade_ts' , 'day' , dates , extend = extend)
         return self.blocks_cache.get('daily_quotes' , DataBlock())
 
-    def get_risk_exp(self , dates : Base.alias.intDates | None = None , * , extend = 0) -> DataBlock:
+    def get_risk_exp(self , dates : Base.alias.DateType = None , * , extend = 0) -> DataBlock:
         """Return the CNE5 risk model exposure DataBlock covering ``dates``."""
         with Proj.silence:
             self.update_named_data_block('risk_exp' , 'models' , 'tushare_cne5_exp' , dates , extend = extend)
@@ -275,7 +274,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             self.update_return_block(start , end)
         return self.blocks_cache.get('daily_ret' , DataBlock())
     
-    def day_quote(self , date : int | Any , price : Base.lit.TradePrice = 'close') -> pd.DataFrame:
+    def day_quote(self , date : Base.intDate , price : Base.lit.TradePrice = 'close') -> pd.DataFrame:
         """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied."""
         df = self.TRADE.get_trd(int(date) , ['secid' , 'adjfactor' , price])
         if not df.empty:
@@ -285,9 +284,9 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             return pd.DataFrame(columns = ['secid' , 'price'])
     
     def get_quote_ret(
-        self , date0 : int | Any , date1 : int | Any , 
+        self , date0 : Base.intDate , date1 : Base.intDate , 
         price0 : Base.lit.TradePrice = 'close' , price1 : Base.lit.TradePrice = 'close' ,
-        secid : np.ndarray | pd.Series | Any | None = None) -> pd.DataFrame:
+        secid : Base.alias.SecidType = None) -> pd.DataFrame:
         """
         get ret of single date0 and date1
         using DataFrame method is much faster than DataBlock method
@@ -300,15 +299,16 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         q = q0[q0['price'] != 0].merge(q1 , on = 'secid')
         q['ret'] = q['price_y'] / q['price_x'] - 1
         q = q[['secid' , 'ret']].set_index('secid')
+        secid = Base.ensure_secid(secid)
         if secid is not None:
             q = q.reindex(secid).fillna(0)
         return q
 
     def get_quote_ret_new(
-        self , date0 : int | Any , date1 : int | Any , 
+        self , date0 : Base.intDate , date1 : Base.intDate , 
         price0 : Base.lit.TradePrice = 'close' ,
         price1 : Base.lit.TradePrice = 'close' ,
-        secid : np.ndarray | pd.Series | Any | None = None
+        secid : Base.alias.SecidType = None
     ) -> pd.DataFrame:
         blk = self.get_quotes_block([date0 , date1])
         p0 = blk.loc(date = date0 , feature = price0).flatten()
@@ -316,6 +316,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         if len(p0) == 0 or len(p1) == 0:
             return pd.DataFrame(columns = ['secid' , 'ret']).set_index('secid')
         q = pd.DataFrame({'secid' : blk.secid , 'ret' : p1 / np.where(p0 == 0 , np.nan , p0) - 1}).set_index('secid')
+        secid = Base.ensure_secid(secid)
         if secid is not None:
             q = q.reindex(secid).fillna(0)
         return q
@@ -344,7 +345,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return df
 
     def nday_fut_ret(
-        self , secid : np.ndarray , date : Base.alias.intDates , nday : int = 10 , lag : int = 2 ,
+        self , secid : np.ndarray , date : Base.intDates , nday : int = 10 , lag : int = 2 ,
         ret_type : Base.lit.ReturnType = 'close'
     ) -> DataBlock:
         """
@@ -364,7 +365,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         blk.update(values = values , date = full_date[:values.shape[1]] , feature = ['ret']).align_date(dates.dates , inplace = True)
         return blk
     
-    def ffmv(self , secid : np.ndarray , date : Base.alias.intDates , prev = True) -> DataBlock:
+    def ffmv(self , secid : np.ndarray , date : Base.intDates , prev = True) -> DataBlock:
         """
         Return float market cap (``weight`` feature) aligned to (secid, date).
 

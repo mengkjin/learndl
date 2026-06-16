@@ -21,13 +21,19 @@ __all__ = [
     'calc_group_decay' , 'calc_group_year' , 'calc_distrib_curve' , 'calc_distrib_qtile'
 ]
 
-def calc_frontface(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
-                   nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
-                   ret_type : Base.lit.ReturnType = 'close') -> pd.DataFrame:
+def calc_frontface(
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
+    ret_type : Base.lit.ReturnType = 'close'
+) -> pd.DataFrame:
     factor = factor.within(benchmark)
     ic_table = factor.eval_ic(nday , lag , ic_type , ret_type)
     ic_stats = eval_ic_stats(ic_table , nday = nday)
-    df = ic_stats.drop(columns=['sum']).rename(columns={'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR','abs_avg' :'|IC|_avg' , 'cum_mdd': 'IC_mdd'}, errors='raise')
+    df = ic_stats.drop(columns=['sum']).rename(
+        columns={
+            'avg': 'IC_avg', 'std': 'IC_std','year_ret':'IC(ann)','ir': 'ICIR',
+            'abs_avg' :'|IC|_avg' , 'cum_mdd': 'IC_mdd'
+        }, errors='raise')
     return df
 
 def calc_coverage(factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None) -> pd.DataFrame:
@@ -35,7 +41,7 @@ def calc_coverage(factor : StockFactor , benchmark : Base.alias.SingleBenchmark 
 
 def calc_ic_curve(
     factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
-    nday : int = 10 , lag : int = 2 ,  ma_windows : int | list[int] = [10,20] ,
+    nday : int = 10 , lag : int = 2 ,  ma_windows : Base.intNums = [10,20] ,
     ic_type  : Base.lit.ICType = 'spearman' ,
     ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
@@ -44,8 +50,7 @@ def calc_ic_curve(
         melt(id_vars=['date'],var_name='factor_name',value_name='ic').set_index(['date','factor_name'])
     ic_curve = ic_table.join(ic_table.groupby('factor_name',observed=False).cumsum().rename(columns={'ic':'cum_ic'}))
 
-    if isinstance(ma_windows , int): 
-        ma_windows = [ma_windows]
+    ma_windows = Base.ensure_int_list(ma_windows , [])
     grouped = ic_table.reset_index('factor_name').groupby('factor_name',observed=False)
     for ma in ma_windows:
         rolling_mean : pd.DataFrame | Any = grouped.rolling(ma).mean()

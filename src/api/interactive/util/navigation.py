@@ -138,7 +138,7 @@ def script_links() -> None:
                     st.page_link(page['page'] , label = '> '.join([*parts[1:]]) , icon = page['icon'] , help = f":blue[**{parts[0].upper()}**] - {page['help']}" , width = 'stretch')
             group = page['group']
 
-def page_setup(navigation_position : Literal['top', 'sidebar' , 'both'] | None = None):
+def page_setup(navigation_position : Literal['top', 'sidebar', 'both'] | None = None):
     """Apply page config and build navigation according to ``navigation_position``.
 
     - ``'top'``    — top bar only (hidden sidebar nav)

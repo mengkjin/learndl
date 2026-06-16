@@ -9,19 +9,19 @@ import psutil
 import time
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Optional, Union
+from typing import TypeAlias
 
 __all__ = [
     'Cmd' , 'popen_detached' , 
     'spawn_native' , 'check_status' , 'kill'
 ]
 
-Cmd = Union[str, Sequence[str]]
+Cmd : TypeAlias = str | Sequence[str]
 
 def popen_detached(
     args: Cmd,
     *,
-    env: Optional[dict[str, str]] = None,
+    env: dict[str, str] | None = None,
     windows_detached_process: bool = True,
     windows_create_no_window: bool = True,
 ) -> subprocess.Popen:
@@ -61,7 +61,7 @@ def popen_detached(
     return subprocess.Popen(**kwargs)
 
 
-def _popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]] = None) -> subprocess.Popen:
+def _popen_detached_shell_windows(cmd_line: str, *, env: dict[str, str] | None = None) -> subprocess.Popen:
     """
     Windows: ``Popen(cmd_line, shell=True, …)`` like example.py — used for
     ``start cmd /c "…"`` so ``start`` opens a real console (not a bare ``CREATE_NEW_CONSOLE`` child).
@@ -88,8 +88,8 @@ def _popen_detached_shell_windows(cmd_line: str, *, env: Optional[dict[str, str]
 def spawn_native(
     cmd: Cmd,
     *,
-    cwd: Optional[Union[str, Path]] = None,
-    env: Optional[Mapping[str, str]] = None,
+    cwd: str | Path | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.Popen:
     """
     Run ``cmd`` in the background without opening a terminal window.

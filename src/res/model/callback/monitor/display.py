@@ -133,4 +133,4 @@ class StatusDisplay(BaseCallBack):
 
     def on_test_batch_end(self):         
         if self.dataloader_info: 
-            self.dataloader.display('Test {} {}'.format(self.status.model_submodel , self.trainer.batch_dates[self.batch_idx]))
+            self.dataloader.display(f'Test {self.status.model_submodel} {self.trainer.batch_dates[self.batch_idx]}')

@@ -1,6 +1,7 @@
 """basic types for the project's data purposes"""
 from __future__ import annotations
-from typing import Any , Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from src.proj.core import StrEnum
 from src.proj.cal import Dates

@@ -195,7 +195,7 @@ class ScriptHeader:
         """
         yaml_lines: list[str] = []
         try:
-            with open(path, 'r', encoding='utf-8') as file:
+            with open(path, encoding='utf-8') as file:
                 for line in file:
                     stripped_line = line.strip()
                     if any(re.match(pattern, stripped_line) for pattern in cls.ignore_patterns):
@@ -275,7 +275,7 @@ class ScriptParamInput:
         Enumeration values for ``list``/``tuple``/``enum`` types.
     """
     name: str
-    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple' , 'enum'] | list[str] | tuple[str]
+    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
     desc: str
     required: bool = False
     default: Any = None

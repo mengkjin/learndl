@@ -43,7 +43,7 @@ def get_prefix(category : str):
 def get_factor_name(alpha : AlphaModel | str):
     return alpha.name if isinstance(alpha , AlphaModel) else alpha
 
-def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dict[str,Any] | None = None):
+def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dict[str, Any] | None = None):
     kwargs = kwargs or {}   
     if not strategy or strategy == 'default':
         if category == 'top':
@@ -59,16 +59,16 @@ def get_strategy_name(category : str , strategy : str = 'default' , kwargs : dic
     assert '.' not in strategy , f'To avoid conflict with factor name, strategy name cannot contain dot: {strategy}'
     return strategy
 
-def get_suffix(lag : int , suffixes : list[str] | str | None = None): 
-    suffixes = suffixes or []
-    if isinstance(suffixes , str): 
-        suffixes = [suffixes]
+def get_suffix(lag : int , suffixes : Base.alias.NamesType = None): 
+    suffixes = Base.ensure_name_list(suffixes , [])
     return '.'.join([f'lag{lag}' , *suffixes])
 
-def get_full_name(category : str , alpha : AlphaModel | str , 
-                  benchmark : Base.alias.SingleBenchmark = None , 
-                  strategy : str = 'default' , suffixes : list[str] | str | None = None , lag : int = 0 , **kwargs):
-    suffixes = suffixes or []
+def get_full_name(
+    category : str , alpha : AlphaModel | str , 
+    benchmark : Base.alias.SingleBenchmark = None , 
+    strategy : str = 'default' , suffixes : Base.alias.NamesType = None , 
+    lag : int = 0 , **kwargs
+):
     return '.'.join([
         get_prefix(category) , 
         get_factor_name(alpha) , 

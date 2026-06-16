@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Mapping
+from collections.abc import Mapping
 
 from src.proj.core import strPath , strPaths
 from src.proj.cal import Dates

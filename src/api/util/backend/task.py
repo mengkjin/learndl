@@ -23,7 +23,8 @@ runs_page_url(script_key)
 from __future__ import annotations
 import os , sys , re , time
 import pandas as pd
-from typing import Any , Literal , Sequence
+from typing import Any , Literal
+from collections.abc import Sequence
 from dataclasses import dataclass , field , asdict
 from datetime import datetime
 from pathlib import Path
@@ -550,7 +551,7 @@ class TaskQueue:
         if self.max_queue_size and len(self.queue) > self.max_queue_size:
             self.queue.pop(list(self.queue.keys())[0])
 
-    def create_item(self , script : Base.strPath | None , source : str | None = None) -> TaskItem:
+    def create_item(self , script : Base.strPath | None = None , source : str | None = None) -> TaskItem:
         """Create a new :class:`TaskItem`, persist it, and add it to this queue."""
         item = TaskItem.create(script , self.task_db , source = source)
         self.add(item)
@@ -704,7 +705,10 @@ class TaskQueue:
             return None
     
     @classmethod
-    def sort(cls , task_items : dict[str, TaskItem] | list[TaskItem] | Sequence[TaskItem], key : str = 'create_time' , reverse : bool = True) -> list[TaskItem]:
+    def sort(
+        cls , task_items : dict[str, TaskItem] | list[TaskItem] | Sequence[TaskItem], 
+        key : str = 'create_time' , reverse : bool = True
+    ) -> list[TaskItem]:
         """Sort *task_items* by the given attribute *key*, newest first by default."""
         if isinstance(task_items, dict):
             task_items = list(task_items.values())
@@ -885,7 +889,7 @@ class TaskItem:
         return runs_page_url(self.script_key)
     
     @classmethod
-    def create(cls, script : Base.strPath | None , task_db : TaskDatabase | None = None , source : RunSource | None = None ,
+    def create(cls, script : Base.strPath | None = None , task_db : TaskDatabase | None = None , source : RunSource | None = None ,
                queue : TaskQueue | bool | None = None) -> TaskItem:
         """Factory: create and persist a new :class:`TaskItem`.
 
@@ -928,7 +932,7 @@ class TaskItem:
         return item
     
     @classmethod
-    def preview_cmd(cls , script : Base.strPath | None ,
+    def preview_cmd(cls , script : Base.strPath | None = None ,
                     source : RunSource | None = None ,
                     mode: Base.lit.RunScriptMode = 'shell' ,
                     **kwargs) -> str:

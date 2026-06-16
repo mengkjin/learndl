@@ -8,7 +8,7 @@ import pandas as pd
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any
+from typing import Any , cast
 
 from src.proj import CALENDAR , Base , Save , Load , Dates
 from src.data import DataBlock
@@ -36,17 +36,17 @@ class Portfolio:
     .closest_avail_date(date : int = 99991231) : return the closest available date of the portfolio before the given date
     .has(date : int) : return True if the portfolio has the given date
     .get(date : int , closest = False) : return the port for the given date
-    .from_dataframe(df : pd.DataFrame , name : str | Any = None) : create a portfolio from a dataframe
+    .from_dataframe(df : pd.DataFrame , name : str = 'default') : create a portfolio from a dataframe
     .to_dataframe() : convert the portfolio to a dataframe
     .load(path : Base.strPath) : load a portfolio from a path (dataframe)
     .save(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
-    .filter_secid(secid : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid
-    .filter_dates(dates : np.ndarray | Any | None = None , exclude = False , inplace = False) : filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates
-    .replace(port : 'Port|Portfolio' , inplace = False) : replace the portfolio with the given port or portfolio
+    .filter_secid(secid : Base.alias.SecidType , exclude = False , inplace = False) : filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid
+    .filter_dates(dates : Base.alias.DateType , exclude = False , inplace = False) : filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates
+    .replace(port : Port | Portfolio , inplace = False) : replace the portfolio with the given port or portfolio
     .rename(new_name : str) : rename the portfolio
     .from_ports(*ports : Port , name : str | None = None) : create a portfolio from a list of ports
     .activate_accountant() : activate the accountant for the portfolio
-    .accounting(benchmark : Base.alias.SingleBenchmark = None , start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * , start_port : Port | None = None , trade_engine : Base.lit.TradeEngine = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
+    .accounting(benchmark : Base.alias.SingleBenchmark = None , start : Base.intDate = -1 , end : Base.intDate = 99991231 , analytic = True , attribution = True , * , start_port : Portfolio | None = None , trade_engine : Base.lit.TradeEngine = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
     .save_account(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
     .load_account(path : Base.strPath) : load the account from a path (a dir containing multiple dataframes)
     .account : return the account of the portfolio
@@ -56,7 +56,7 @@ class Portfolio:
     .conditioned_pf_ret(name : str , plot = False) : return the conditioned portfolio return
     """
 
-    def __init__(self , name : str | Any = None) -> None:
+    def __init__(self , name : str | None = None) -> None:
         self._name = self.get_object_name(name)
         self.ports : dict[int,Port] = {}
         self.is_default = name is None
@@ -158,7 +158,7 @@ class Portfolio:
         assert len(self.ports) == 1 , f'expect 1 port , but got {len(self.ports)}'
         return list(self.ports.values())[0]
     @classmethod
-    def get_object_name(cls , obj : str | Any | None) -> str:
+    def get_object_name(cls , obj : Any | None = None) -> str:
         """class method to get the name of the object (str , Portfolio , None)"""
         if obj is None: 
             return 'none'
@@ -170,7 +170,7 @@ class Portfolio:
             raise TypeError(obj)
 
     @classmethod
-    def from_dataframe(cls , df : pd.DataFrame , name : str | Any = None):
+    def from_dataframe(cls , df : pd.DataFrame , name : str | None = None):
         """
         class method to create a portfolio from a dataframe
         df should have columns: name , date , secid , weight , can have value column
@@ -194,13 +194,13 @@ class Portfolio:
 
         if name is None:
             assert df['name'].nunique() == 1 , f'all ports must have the same name , got multiple names: {df["name"].unique()}'
-            name = df['name'].iloc[0]
+            name = cast(str , df['name'].iloc[0])
         else:
             df = df.query('name == @name.lower()')
         
         portfolio = cls(name)
         for date , subdf in df.groupby('date'):
-            portfolio.append(Port(subdf , date , name , subdf['value'].iloc[0]))
+            portfolio.append(Port(subdf , cast(int , date) , name , subdf['value'].iloc[0]))
         return portfolio
     
     def to_dataframe(self) -> pd.DataFrame:
@@ -239,8 +239,9 @@ class Portfolio:
             port = self.to_dataframe()
         Save.df(port , path , overwrite = True , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
     
-    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False , inplace = False):
+    def filter_secid(self , secid : Base.alias.SecidType , exclude = False , inplace = False):
         """filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid"""
+        secid = Base.ensure_secid(secid)
         if secid is None or self.empty: 
             return self
         if not inplace:
@@ -249,8 +250,9 @@ class Portfolio:
             port.filter_secid(secid , exclude)
         return self
 
-    def filter_dates(self , dates : np.ndarray | Any | None = None , exclude = False , inplace = False):
+    def filter_dates(self , dates : Base.alias.DateType , exclude = False , inplace = False):
         """filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates"""
+        dates = Base.ensure_date(dates)
         if dates is None or self.empty: 
             return self
         if not inplace:
@@ -261,7 +263,7 @@ class Portfolio:
             self.ports = {date:port for date,port in self.ports.items() if date in dates}
         return self
     
-    def replace(self , port : Port|Portfolio , inplace = False):
+    def replace(self , port : Port | Portfolio , inplace = False):
         """replace the portfolio with the given port or portfolio"""
         if not inplace:
             self = self.copy()
@@ -294,15 +296,16 @@ class Portfolio:
         return self
     
     def accounting(
-            self , 
-            benchmark : Base.alias.SingleBenchmark = None ,
-            start : int = -1 , end : int = 99991231 , 
-            analytic = True , attribution = True , * ,
-            trade_engine : Base.lit.TradeEngine = 'default' , 
-            daily = False , cache = False , with_index = None ,
-            resume_path : Base.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
-            indent : int = 0 , vb_level : Any = 1
-        ):
+        self , 
+        benchmark : Base.alias.SingleBenchmark = None ,
+        start : int = -1 , end : int = 99991231 , 
+        analytic = True , attribution = True , * ,
+        trade_engine : Base.lit.TradeEngine = 'default' , 
+        daily = False , cache = False , with_index = None ,
+        resume_path : Base.strPath | None = None , 
+        resume_end : Base.intDate | None = None , resume_drop_last = True , save_after = True ,
+        indent : int = 0 , vb_level : Any = 1
+    ):
         """account the portfolio"""
         if not hasattr(self , 'accountant'): 
             self.activate_accountant()
@@ -310,7 +313,9 @@ class Portfolio:
         self.accountant.accounting(
             benchmark , start , end , analytic , attribution ,
             trade_engine = trade_engine , daily = daily , cache = cache , with_index = with_index ,
-            resume_path = resume_path , resume_end = resume_end , resume_drop_last = resume_drop_last , save_after = save_after)
+            resume_path = resume_path , resume_end = resume_end , 
+            resume_drop_last = resume_drop_last , save_after = save_after
+        )
         return self
     
     @property

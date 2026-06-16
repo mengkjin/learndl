@@ -14,7 +14,7 @@ import xarray as xr
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any , Literal
+from typing import Any
 
 from src.proj import Logger , Base
 from src.func.basic import index_merge , match_slice , intersect_meshgrid
@@ -48,28 +48,28 @@ class BoostDataset:
         return self
     
     def boost_inputs(
-        self , boost_type : Literal['lgbm' , 'xgboost' , 'catboost'] , rank = False
+        self , boost_type : Base.BoostModuleType , rank = False
     ) -> dict[str,Any]:
         label = self.y.detach().cpu().numpy() if self.y is not None else None
         data : dict[str,Any] = {'data' : self.x.detach().cpu().numpy()}
         if rank:
-            if boost_type == 'lgbm':
+            if boost_type == Base.BoostModuleType.LGMB:
                 # One query per trade date; required for lambdarank/NDCG and correct cross-section semantics.
                 data['group'] = self.group_arr()
                 if label is not None:
                     data['label'] = label.astype(np.int32)
-            elif boost_type == 'xgboost':
+            elif boost_type == Base.BoostModuleType.XGBOOST:
                 data['group'] = self.group_arr()
                 data['weight'] = self.group_weight()
                 if label is not None:
                     data['label'] = (label / 5).astype(np.int32)
-            elif boost_type == 'catboost':
+            elif boost_type == Base.BoostModuleType.CATBOOST:
                 if label is not None:
                     data['label'] = label.astype(np.int32)
                 data['group_id'] = self.group_id()
                 data['group_weight'] = self.broadcasted_group_weights()
             else:
-                raise ValueError(f'Boost type {boost_type} not supported')
+                raise NotImplementedError(f'Boost type {boost_type} doesnot support rank')
         else:
             data['label'] = label
             data['weight'] = self.w.detach().cpu().numpy()
@@ -77,17 +77,17 @@ class BoostDataset:
 
     def to_lgbm_dataset(self , rank=False , reference=None):
         import lightgbm
-        data = self.boost_inputs('lgbm', rank=rank)
+        data = self.boost_inputs(Base.BoostModuleType.LGMB, rank=rank)
         return lightgbm.Dataset(**data , reference=reference)
 
     def to_xgboost_dataset(self , rank=False):
         import xgboost
-        data = self.boost_inputs('xgboost' , rank=rank)
+        data = self.boost_inputs(Base.BoostModuleType.XGBOOST, rank=rank)
         return xgboost.DMatrix(**data)
 
     def to_catboost_dataset(self , rank=False):
         import catboost
-        data = self.boost_inputs('catboost' , rank=rank)
+        data = self.boost_inputs(Base.BoostModuleType.CATBOOST, rank=rank)
         return catboost.Pool(**data)
     
     def group_arr(self):
@@ -143,7 +143,7 @@ class BoostOutput:
     secid   : np.ndarray
     date    : np.ndarray
     finite  : torch.Tensor
-    label   : torch.Tensor | Any = None
+    label   : torch.Tensor | None = None
     input   : BoostInput | None = None
 
     def __post_init__(self):
@@ -193,9 +193,9 @@ class BoostInput:
         feature:      Feature name array of shape ``(n_feature,)``.
         weight_param: Keyword arguments forwarded to :class:`BoostWeightMethod`.
                       Supported keys:
-                        * ``ts_type``           : ``'lin'`` | ``'exp'`` | ``None``
-                        * ``cs_type``           : ``'top'`` | ``'positive'`` | ``'ones'`` | ``None``
-                        * ``bm_type``           : ``'in'`` | ``None``
+                        * ``ts_type``           : ``'lin'`` , ``'exp'`` , ``None``
+                        * ``cs_type``           : ``'top'`` , ``'positive'`` , ``'ones'`` , ``None``
+                        * ``bm_type``           : ``'in'`` , ``None``
                         * ``ts_lin_rate``       : float (default 0.5)
                         * ``ts_half_life_rate`` : float (default 0.5)
                         * ``cs_top_tau``        : float
@@ -208,8 +208,8 @@ class BoostInput:
    
     def __init__(
         self , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
-        secid : np.ndarray | None = None , date : np.ndarray | None = None , feature : np.ndarray | list[str] | None = None ,
-        weight_param : dict[str,Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | list[str] | None = None):
+        secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , feature : np.ndarray | None = None ,
+        weight_param : dict[str, Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | None = None):
         self._x = x
         self._y = y
         self._w = w
@@ -244,22 +244,13 @@ class BoostInput:
             return self._w
     @property
     def secid(self) -> np.ndarray:
-        if self._secid is None:
-            return np.arange(self.x.shape[0])
-        else:
-            return self._secid
+        return Base.ensure_secid(self._secid , np.arange(self.x.shape[0]))
     @property
     def date(self) -> np.ndarray:
-        if self._date is None:
-            return np.arange(self.x.shape[1])
-        else:
-            return self._date
+        return Base.ensure_date(self._date , np.arange(self.x.shape[1]))
     @property
     def feature(self) -> np.ndarray:
-        if self._feature is None:
-            return np.array([f'F.{i}' for i in range(self.x.shape[-1])])
-        else:
-            return np.array(self._feature)
+        return Base.ensure_feature(self._feature , np.array([f'F.{i}' for i in range(self.x.shape[-1])]))
 
     @property
     def weight_param(self) -> dict[str,Any]:
@@ -304,7 +295,8 @@ class BoostInput:
     def copy(self) -> BoostInput:
         return deepcopy(self)
 
-    def set_data_param(self , use_feature : np.ndarray | list[str] | None = None , n_bins : int | None = None , weight_param : dict[str,Any] | None = None): 
+    def set_data_param(self , use_feature : Base.alias.NamesType = None , n_bins : int | None = None , weight_param : dict[str, Any] | None = None): 
+        use_feature = Base.ensure_name_list(use_feature)
         if use_feature is not None and (self._use_feature is None or not np.array_equal(use_feature , self._use_feature)):
             self._use_feature = np.array(use_feature)
             self.__dict__.pop('X' , None)
@@ -332,7 +324,7 @@ class BoostInput:
         idx1 = torch.arange(self.x.shape[1])[:,None].where(tr_finite , torch.nan)[tr_finite].to(torch.int)
         return idx0 , idx1
 
-    def _flatten_by_date(self , obj : torch.Tensor | None) -> torch.Tensor | Any:
+    def _flatten_by_date(self , obj : torch.Tensor | None) -> torch.Tensor | None:
         """Flatten x/y/w by the finite mask.
 
         Args:
@@ -364,7 +356,9 @@ class BoostInput:
         ! important: rank_pct is applied to every date every feature
         """
         rank_x = rank_pct(self.x[...,self.feat_idx] , dim = 0).clip(0 , 0.9999) * 100
-        return self._flatten_by_date(rank_x)
+        x = self._flatten_by_date(rank_x)
+        assert x is not None , 'x is None'
+        return x
 
     @cached_property
     def Y(self) -> torch.Tensor | None:
@@ -389,7 +383,9 @@ class BoostInput:
         If ``self.w`` is ``None`` the weights are computed on-the-fly from
         ``weight_method.calculate_weight()``.
         """
-        return self._flatten_by_date(self.w)
+        w = self._flatten_by_date(self.w)
+        assert w is not None , 'w is None'
+        return w
     
     def Dataset(self): 
         return BoostDataset(self.X , self.Y , self.W , self.DATE)
@@ -436,7 +432,7 @@ class BoostInput:
         return df
 
     @classmethod
-    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str,Any] | None = None , label_col : str | None = None):
+    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str, Any] | None = None , label_col : str | None = None):
         """Construct from a tidy ``DataFrame`` with a secid/date multi-index.
 
         The label column is treated as the label (``y``); all other columns
@@ -474,7 +470,7 @@ class BoostInput:
     def from_numpy(
         cls , x : np.ndarray , y : np.ndarray | None = None,  w : np.ndarray | None = None ,
         secid : Any = None , date : Any = None , feature : Any = None ,
-        weight_param : dict[str,Any] | None = None):
+        weight_param : dict[str, Any] | None = None):
         """Construct from NumPy arrays, delegating to :meth:`from_tensor`."""
         return cls.from_tensor(
             x = torch.Tensor(x) , 
@@ -486,7 +482,7 @@ class BoostInput:
     def from_tensor(
         cls , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
         secid : Any = None , date : Any = None , feature : Any = None ,
-        weight_param : dict[str,Any] | None = None):
+        weight_param : dict[str, Any] | None = None):
         """Construct from tensors, normalising shapes and generating default indices.
 
         ``x`` may be 2-D ``(n_sample, n_feature)`` (treated as single date) or

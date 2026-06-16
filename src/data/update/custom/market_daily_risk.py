@@ -11,8 +11,8 @@ than stored per date, using ``append_result`` to merge and deduplicate.
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-
 from typing import Any
+
 from src.proj import CALENDAR , DB , Load , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -77,7 +77,7 @@ def _get_inputs(date : int) -> dict[str , pd.DataFrame]:
             inputs[name] = df.set_index('secid')
     return inputs
 
-def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
+def _fillinf(series : pd.Series , fill_value : float | Any = 0) -> pd.Series:
     return series.where(np.isfinite(series) , fill_value)
 
 def calc_market_daily_risk(date : int):

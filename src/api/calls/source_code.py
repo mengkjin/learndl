@@ -9,7 +9,8 @@ from __future__ import annotations
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Callable , cast
+from typing import cast
+from collections.abc import Callable
 
 from src.proj import MACHINE , PATH , Logger , Base
 from src.proj.util.functional.ask import AskFor
@@ -130,7 +131,8 @@ class CheckCodeIssues(DirectCall):
         """Check __all__ existence."""
         exempt_paths = [
             PATH.main.joinpath('src' , 'func') ,
-            PATH.main.joinpath('src' , 'proj' , 'core' , 'types') ,
+            PATH.main.joinpath('src' , 'proj' , 'core' , 'literals.py') ,
+            PATH.main.joinpath('src' , 'proj' , 'core' , 'alias.py') ,
         ]
         if cls._skip_path(path , exempt_paths , ['__init__.py' , '__version__.py']):
             return True

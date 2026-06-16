@@ -11,7 +11,8 @@ import inspect
 import pkgutil
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Callable , Iterator
+from typing import Any
+from collections.abc import Callable, Iterator
 
 import yaml
 

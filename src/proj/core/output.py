@@ -139,7 +139,7 @@ def stdout(*args , indent : int = 0 , color : str | None = None , bg_color : str
     return fstr
 
 def stderr(*args , indent : int = 0 , color : str | None = None , bg_color : str | None = None , bold : bool = False , italic : bool = False , 
-           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None = None, write = True):
+           sep = ' ' , end = '\n' , file = None , flush = False , level_prefix : dict[str, Any] | None | None = None, write = True):
     """Like ``stdout`` but writes to stderr; skipped when ``Silence.silent`` or ``write`` is false."""
     fstr = FormatStr(*args , sep = sep , indent = indent , color = color , bg_color = bg_color , bold = bold , italic = italic)
     if level_prefix:

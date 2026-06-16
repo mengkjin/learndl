@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from functools import cached_property
-from typing import Any, Callable, TypeVar, overload
+from typing import Any, TypeVar, overload
+from collections.abc import Callable
 
 T = TypeVar('T')
 _MISSING = object()

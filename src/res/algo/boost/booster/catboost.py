@@ -93,7 +93,7 @@ class CatBoost(BasicBoostModel):
 
         return self
         
-    def predict(self , x : BoostInput | str = 'test'):
+    def predict(self , x : BoostInput | Any = 'test'):
         data = self.boost_input(x)
         return data.output(self.model.predict(data.X.cpu().numpy()))
     
@@ -112,7 +112,7 @@ class CatBoost(BasicBoostModel):
         with tempfile.TemporaryDirectory() as tempdir:
             model_path = Path(tempdir).joinpath('model.json') 
             model.save_model(model_path , format='json')
-            with open(model_path, 'r' , encoding='utf-8') as file: 
+            with open(model_path , encoding='utf-8') as file: 
                 model_dict = json.load(file)  
         return model_dict
     

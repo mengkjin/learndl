@@ -5,7 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import polars as pl
 
-from typing import Literal , Callable
+from typing import Literal 
+from collections.abc import Callable
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HfLiquidityFactor

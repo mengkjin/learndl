@@ -10,7 +10,8 @@ from importlib import import_module
 from abc import abstractmethod
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Callable , Literal, Type , Generator
+from typing import Any  , Literal
+from collections.abc import Callable, Generator
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.proj.util.functional.parallel import parallel
@@ -179,7 +180,7 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
 class _FactorCalculatorMeta(Base.SingletonABC):
     """meta class of StockFactorCalculator"""
 
-    registry : dict[str,Type[FactorCalculator] | Any] = {}
+    registry : dict[str,type[FactorCalculator] | Any] = {}
     definition_imported : bool = False
 
     def __new__(cls, name, bases, dct):
@@ -242,7 +243,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
     init_date   : int = -1
     final_date  : int = 99991231
     update_step : int = Const.Factor.UPDATE.step
-    category1 : Base.lit.FactorCategory1 | Any = None
+    category1   : Base.lit.FactorCategory1 | Any = None
     description : str = ''
     updatable = True
     preprocess = True
@@ -347,7 +348,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         return done
 
     def update_periodic_stats(
-        self , stats_type : Base.lit.FactorStatsPeriod , dates : Base.alias.intDates | None , 
+        self , stats_type : Base.lit.FactorStatsPeriod , dates : Base.alias.DateType , 
         overwrite = False
     ) -> None:
         """update factor daily or weekly stats"""
@@ -380,16 +381,16 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         for stats_type , dates in target_dates.items():
             self.update_periodic_stats(stats_type , dates , overwrite = overwrite)
 
-    def update_daily_stats(self , dates : Base.alias.intDates | None , overwrite = False) -> None:
+    def update_daily_stats(self , dates : Base.alias.DateType , overwrite = False) -> None:
         """update factor daily stats"""
         self.update_periodic_stats('daily' , dates , overwrite)
 
-    def update_weekly_stats(self , dates : Base.alias.intDates | None , overwrite = False) -> None:
+    def update_weekly_stats(self , dates : Base.alias.DateType , overwrite = False) -> None:
         """update factor weekly stats"""
         self.update_periodic_stats('weekly' , dates , overwrite)
 
     def stock_factor(
-        self , dates : Base.alias.intDates , normalize = True , 
+        self , dates : Base.intDates , normalize = True , 
         fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         multi_thread = True , ignore_error = True
     ) -> StockFactor:
@@ -463,7 +464,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         return cls().load_factor(date , closest = closest)
 
     @classmethod
-    def Loads(cls , dates : Base.alias.intDates , normalize = False , closest = False,
+    def Loads(cls , dates : Base.intDates , normalize = False , closest = False,
               fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
@@ -495,7 +496,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         return dates
 
     @classmethod
-    def Factor(cls , dates : Base.alias.intDates , normalize = True , 
+    def Factor(cls , dates : Base.intDates , normalize = True , 
                fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
                multi_thread = True , ignore_error = True , indent : int = 1 , vb_level : Any = 'max') -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
@@ -570,7 +571,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         return target_dates
 
     @classmethod
-    def iter(cls , all = True , selected_factors : list[str] | None = None , **kwargs) -> Generator[FactorCalculator , None , None]:
+    def iter(cls , all = True , selected_factors : Base.alias.NamesType = None , **kwargs) -> Generator[FactorCalculator , None , None]:
         """
         iterate over calculators
         return a list of factor instances with given attributes
@@ -585,6 +586,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         updatable : bool | None = None
         """
         cls.import_definitions()
+        selected_factors = Base.ensure_name_list(selected_factors)
         for name , calculator in cls.registry.items():
             if ((name in selected_factors) if selected_factors else all) and \
                 calculator.match_attrs(**kwargs):
@@ -702,7 +704,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def loads_from_db(
-        cls , src : str , key : str , dates : Base.alias.intDates , 
+        cls , src : str , key : str , dates : Base.intDates , 
         col : str | None = None , closest = False
     ) -> pd.DataFrame:
         dates = Dates(dates)
@@ -738,7 +740,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         return self.load_factor(date)
 
     def stock_factor(
-        self , dates : Base.alias.intDates , normalize = True , 
+        self , dates : Base.intDates , normalize = True , 
         fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         *args , **kwargs
     ) -> StockFactor:
@@ -754,7 +756,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def Loads(
-        cls , dates : Base.alias.intDates , normalize = False , closest = False,
+        cls , dates : Base.intDates , normalize = False , closest = False,
         fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
     ) -> pd.DataFrame:
         """load factor values of a given date range"""
@@ -875,11 +877,11 @@ class MarketFactorCalculator(FactorCalculator):
             raise ValueError(f'factor_value must not have not finite values , but got {np.isfinite(values).sum()} not finite values')
         return df
 
-    def update_daily_stats(self , dates : Base.alias.intDates | None , overwrite = False) -> None:
+    def update_daily_stats(self , dates : Base.alias.DateType , overwrite = False) -> None:
         """update factor daily stats is not implemented for market factor"""
         return None
 
-    def update_weekly_stats(self , dates : Base.alias.intDates | None , overwrite = False) -> None:
+    def update_weekly_stats(self , dates : Base.alias.DateType , overwrite = False) -> None:
         """update factor weekly stats is not implemented for market factor"""
         return None
 
@@ -1086,7 +1088,7 @@ class WeightedPoolingCalculator(PoolingCalculator):
     category1 = 'weighted'
 
     @abstractmethod
-    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : Base.alias.intDates | None = None , 
+    def calc_pooling_weight(self , start : int | None = None , end : int | None = None , dates : Base.alias.DateType = None , 
                             overwrite = False) -> pd.DataFrame:
         """calculate pooling weight of a given date range"""
         raise NotImplementedError(f'{self.factor_name} : calc_pooling_weight should not be implemented for weighted pooling')

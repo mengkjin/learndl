@@ -5,7 +5,6 @@ Forecasting with Transformers."
 """
 from __future__ import annotations
 import torch
-
 from torch import nn , Tensor
 
 from src.proj import Logger
@@ -50,7 +49,7 @@ class PatchTST(nn.Module):
         seq_len: int ,
         d_model: int ,
         patch_len:int = 5 ,
-        stride:int|None = None,
+        stride:int | None = None,
         shared_embedding=True, shared_head = False,
         revin:bool=True,n_layers:int=3, n_heads=8, d_ff:int=64,
         norm:str='BatchNorm', attn_dropout:float=0., dropout:float=0., act_type:str='gelu',
@@ -109,7 +108,7 @@ class PatchTST(nn.Module):
             x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
             x = x.permute(0,3,1,2)                  # [bs x nvars x d_model x num_patch]
 
-        x = self.head(x)                            # [bs x seq_len x nvars] | [bs x predict_steps]
+        x = self.head(x)                            # [bs x seq_len x nvars] or [bs x predict_steps]
         return x
 
 class ModelPretrain(PatchTST):

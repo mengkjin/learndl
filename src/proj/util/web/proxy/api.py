@@ -1,12 +1,11 @@
 """Facade: cached working proxies and shared ``AdaptiveProxyPool`` instances per target URL set."""
 
 from __future__ import annotations
-from typing import Iterable
 from src.proj import Base
 from .finder import FreeProxyFinder as ProxyFinder
 from .verifier import ProxyVerifier
 from .cache import ProxyCache
-from .ppool import AdaptiveProxyPool , WorkingProxies
+from .ppool import AdaptiveProxyPool , WorkingProxies , UrlsType
 
 __all__ = ['ProxyAPI' , 'ProxyFinder' , 'ProxyVerifier' , 'ProxyCache' , 'AdaptiveProxyPool']
 
@@ -25,22 +24,21 @@ class ProxyAPI(Base.BoundLogger):
         return WorkingProxies.get(target_url, min_count=min_count, max_round=max_round, timeout=timeout,  workers=workers)
 
     @classmethod
-    def get_proxy_pool(cls , target_urls: Iterable[str] | str , go_with_cached_proxies: bool = False, * , refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2) -> AdaptiveProxyPool:
+    def get_proxy_pool(cls , target_urls: UrlsType , go_with_cached_proxies: bool = False, * , refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2) -> AdaptiveProxyPool:
         """Return or create an ``AdaptiveProxyPool`` for the given URL(s)."""
         if isinstance(target_urls, str):
-            target_urls = [target_urls]
+            pool_key = (target_urls,)
         else:
-            target_urls = sorted(set(target_urls))
-        target_urls = tuple(target_urls)
-        if target_urls not in cls.proxy_pools:
-            cls.proxy_pools[target_urls] = AdaptiveProxyPool(
-                list(target_urls), 
+            pool_key = tuple(sorted(set(target_urls)))
+        if pool_key not in cls.proxy_pools:
+            cls.proxy_pools[pool_key] = AdaptiveProxyPool(
+                target_urls, 
                 go_with_cached_proxies=go_with_cached_proxies, 
                 refresh_interval=refresh_interval, 
-                refresh_max_attempts=refresh_max_attempts, 
+                refresh_max_attempts=refresh_max_attempts,
                 refresh_threshold=refresh_threshold
             )
-        return cls.proxy_pools[target_urls]
+        return cls.proxy_pools[pool_key]
 
     @classmethod
     def verification_stats(cls):

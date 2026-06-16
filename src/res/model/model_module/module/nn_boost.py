@@ -23,13 +23,15 @@ class NNBoost(PredictorModel):
         assert self.config.boost_head , f'{self.config.boost_head} is not a valid boost head'
         return self.config.boost_head_param
     
-    def init_model(self , 
-                   model_nn_module : str | None = None , 
-                   model_nn_param : dict | None = None , 
-                   model_boost_module : str | None = None, 
-                   model_boost_param : dict | None = None , 
-                   testor_mode : bool = False ,
-                   *args , **kwargs):
+    def init_model(
+        self , 
+        model_nn_module : str | None = None , 
+        model_nn_param : dict | None = None , 
+        model_boost_module : str | None = None, 
+        model_boost_param : dict | None = None , 
+        testor_mode : bool = False ,
+        *args , **kwargs
+    ):
         if testor_mode: 
             self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         nn_module    = model_nn_module    if model_nn_module    else self.config.model_module

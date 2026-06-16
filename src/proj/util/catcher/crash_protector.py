@@ -25,7 +25,7 @@ class CrashProtectorCatcher(OutputCatcher):
     export_suffix : str = '.md'
 
     def __init__(self, task_id : str | None = None, init_time: datetime | None = None, 
-                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min', **kwargs):
+                 seperating_by: Literal['min', 'hour', 'day'] | None = 'min', **kwargs):
         self.task_id = task_id
         self.init_time = init_time if init_time else datetime.now()
         

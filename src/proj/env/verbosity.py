@@ -4,22 +4,20 @@ from __future__ import annotations
 import numpy as np
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any , Literal
+from typing import Any
 
 from src.proj.core import stderr , SingletonMeta
-
+from src.proj.core.literals import VerbosityLevel
 from .debug_mode import DebugMode
 from .machine import MACHINE
 
 __all__ = ['Verbosity']
 
-VerbosityLevel = Literal['max','min','never','always'] | int
-
 class Verbosity(metaclass=SingletonMeta):
     """
     Verbosity level: numeric ``vb``, optional per-call ``vb_level``, and context managers.
     can be used to convert between symbolic and numeric levels.
-    inputs can be int | 'max' | 'min' | 'never' | 'always' | None.
+    inputs can be int or 'max' or 'min' or 'never' or 'always' or None.
     
     - ``vb``: global verbosity level
     - ``vb_level``: per-call verbosity level
@@ -42,7 +40,7 @@ class Verbosity(metaclass=SingletonMeta):
     def __repr__(self):
         return f'{self.vb}'
 
-    def __call__(self , value : VerbosityLevel | Any | None , add_value : int = 0) -> int:
+    def __call__(self , value : VerbosityLevel | None = None , add_value : int = 0) -> int:
         """Resolve a symbolic or numeric level to an int, optionally shifted by ``add_value``."""
         if isinstance(value , int):
             if self.always < value < self.never:
@@ -108,7 +106,7 @@ class Verbosity(metaclass=SingletonMeta):
             stderr(f'Project Verbosity Unchanged at {value}' , color = 'lightred' , bold = True)
         self._vb = value
 
-    def ignore(self , vb_level : VerbosityLevel | Any = 1):
+    def ignore(self , vb_level : VerbosityLevel | None = 1):
         """Return True if output at ``vb_level`` should be suppressed given current ``vb``."""
         level = self(vb_level)
         if level is None:
@@ -130,7 +128,7 @@ class Verbosity(metaclass=SingletonMeta):
         return value
 
     @contextmanager
-    def record_vb_level(self , vb_level : VerbosityLevel | Any):
+    def record_vb_level(self , vb_level : VerbosityLevel | None = 1):
         """Context manager: Record the vb_level"""
         _ = self.vb_level
         old_vb_level = self._vb_level
@@ -141,7 +139,7 @@ class Verbosity(metaclass=SingletonMeta):
             self._vb_level = old_vb_level
 
     @contextmanager
-    def temporary_vb(self, vb: VerbosityLevel | Any | None):
+    def temporary_vb(self, vb: VerbosityLevel | None = None):
         """Context manager: Temporarily set the vb"""
         _ = self.vb
         old_vb = self._vb

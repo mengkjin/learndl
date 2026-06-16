@@ -4,7 +4,7 @@ import inspect
 import importlib.util
 
 from pathlib import Path
-from typing import Callable , Type
+from collections.abc import Callable
 
 from src.proj.core import strPath
 
@@ -22,11 +22,12 @@ def dynamic_modules(path : strPath):
         spec.loader.exec_module(module)
         yield module
 
-def dynamic_members(path : strPath , 
-                    predicate : Callable | None = lambda x: inspect.isclass(x) or inspect.isfunction(x) ,
-                    subclass_of : Type | None = None ,
-                    ignore_imported_members = True
-                    ):
+def dynamic_members(
+    path : strPath , 
+    predicate : Callable | None = lambda x: inspect.isclass(x) or inspect.isfunction(x) ,
+    subclass_of : type | None = None ,
+    ignore_imported_members = True
+):
     """Yield ``(name, obj)`` from modules under ``path`` filtered by predicate and origin.
 
     Args:

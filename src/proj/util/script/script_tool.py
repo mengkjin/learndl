@@ -4,7 +4,8 @@ import inspect , os
 from pathlib import Path
 
 from functools import wraps , cached_property
-from typing import Any , Callable , Literal
+from typing import Any  , Literal
+from collections.abc import Callable
 
 from src.proj.env import PATH
 from src.proj.log import Logger

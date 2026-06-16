@@ -27,7 +27,7 @@ class Proj(metaclass=ProjMeta):
     version = __version__
 
     @classmethod
-    def verbose(cls , vb_level : VerbosityLevel | Any = 1):
+    def verbose(cls , vb_level : VerbosityLevel | None = 1):
         return cls.debug['complete_verbosity'] or not cls.vb.ignore(vb_level)
 
     @classmethod
@@ -36,7 +36,7 @@ class Proj(metaclass=ProjMeta):
         return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
-    def print_info(cls , once_type : Literal['os' , 'script'] | None = None , identifier = 'project_initialized'):
+    def print_info(cls , once_type : Literal['os', 'script'] | None = None , identifier = 'project_initialized'):
         """
         Print project info once per process (script: ``Proj.instances`` flag; OS: env var).
 

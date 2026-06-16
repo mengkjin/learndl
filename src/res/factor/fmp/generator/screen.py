@@ -4,7 +4,7 @@ Screening portfolio creator for Factor Model Portfolio
 from __future__ import annotations
 from typing import Any , Literal
 
-from src.proj import Const
+from src.proj import Const , Base
 from src.res.factor.analytic.test_basics import TestType
 from src.res.factor.fmp.generator.basic import BasicCreatorConfig , BasicPortfolioCreator
 
@@ -20,12 +20,12 @@ class ScreeningPortfolioCreatorConfig(BasicCreatorConfig):
     Then, the stocks are sorted by a sorting alpha (e.g. choose top 50 of gru_day_V1)
 
     kwargs:
-        sorter : str | list[str] = Const.Factor.FMP.creator[test_type.value]['sorter'] , source and key of alpha to be used for sorting
+        sorter : Base.alias.FeatureType = Const.Factor.FMP.creator[test_type.value]['sorter'] , source and key of alpha to be used for sorting
     """
 
     def __init__(
         self , 
-        sorter : str | list[str] = Const.Factor.FMP.creator[test_type.value]['sorter'] , 
+        sorter : Base.alias.NamesType = Const.Factor.FMP.creator[test_type.value]['sorter'] , 
         screener : Literal['self'] = 'self' ,
         **kwargs
     ):

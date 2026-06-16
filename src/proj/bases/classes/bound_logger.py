@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any, Callable,Literal, Sequence, TypeVar, Type
+from typing import Any,Literal, TypeVar
+from collections.abc import Callable, Sequence
 
+from src.proj.core.literals import VerbosityLevel
 from src.proj.env import Proj
 from src.proj.log import Logger , StderrType
 
@@ -59,7 +61,10 @@ class ModuleLogger:
         self.idts.pop()
         self.vbs.pop()
 
-    def grep_kwargs(self , vb : int | None = None , idt : int | None = None , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
+    def grep_kwargs(
+        self , vb : int | None = None , idt : int | None = None , 
+        enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs
+    ):
         if vb is not None and 'vb_level' not in kwargs:
             kwargs['vb_level'] = self.vb_level + vb
         if idt is not None and 'indent' not in kwargs:
@@ -70,20 +75,25 @@ class ModuleLogger:
             kwargs['prefixes'] = [f'{self.name} >>' , *kwargs.get('prefixes' , [])]
         return kwargs
 
-    def stdout(self , *args , idt : int | None = 0 , vb : int | None = 0 , add_prefix : bool | None = None , **kwargs):
+    def stdout(
+        self , *args , idt : int | None = 0 , vb : int | None = 0 , 
+        add_prefix : bool | None = None , **kwargs
+    ):
         kwargs = self.grep_kwargs(vb, idt, add_prefix = add_prefix, **kwargs)
         Logger.stdout(*args , **kwargs)
 
-    def stdout_pairs(self , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] ,
-                     title : str | None = None , indent : int = 0 , vb_level : int | None = None , min_key_len : int = -1 , **kwargs):
+    def stdout_pairs(
+        self , pair_list : Sequence[tuple[int, str, Any] | tuple[str, Any]] | dict[str, Any] ,
+        title : str | None = None , indent : int = 0 , min_key_len : int = -1 , **kwargs
+    ):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
-            indent: add prefix '  --> ' before the message
+            indent : add prefix '  --> ' before the message
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
-        Logger.stdout_pairs(pair_list , title = title , indent = indent , vb_level = vb_level , min_key_len = min_key_len , **kwargs)
+        Logger.stdout_pairs(pair_list , title = title , indent = indent , min_key_len = min_key_len , **self.grep_kwargs(**kwargs))
 
     def caption(self , *args , idt : int | None = 0 , vb : int | None = 0 , **kwargs):
         """custom gray stdout message for caption (e.g. table / figure title)"""
@@ -117,35 +127,35 @@ class ModuleLogger:
         """custom lightblue stdout message for remark"""
         Logger.note(*args , **self.grep_kwargs(vb, idt, **kwargs))
 
-    def remark(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def remark(self , *args , vb : int | None = None , **kwargs):
         """custom lightblue stderr"""
         Logger.remark(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def debug(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def debug(self , *args , vb : int | None = None , **kwargs):
         """Debug level stderr"""
         Logger.debug(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def info(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def info(self , *args , vb : int | None = None , **kwargs):
         """Info level stderr"""
         Logger.info(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def highlight(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def highlight(self , *args , vb : int | None = None , **kwargs):
         """custom lightcyan colored Highlight level message"""
         Logger.highlight(*args , **self.grep_kwargs(vb = 0 , **kwargs))
 
-    def warning(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def warning(self , *args , vb : int | None = None , vb_level : VerbosityLevel = 0 , **kwargs):
         """Warning level stderr"""
-        Logger.warning(*args , **self.grep_kwargs(vb = 0 , **kwargs))
+        Logger.warning(*args , **self.grep_kwargs(vb = 0 , vb_level = vb_level, **kwargs))
 
-    def error(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def error(self , *args , vb : int | None = None , vb_level : VerbosityLevel = 0 , **kwargs):
         """Error level stderr"""
-        Logger.error(*args , **self.grep_kwargs(vb = 0 , **kwargs))
+        Logger.error(*args , **self.grep_kwargs(vb = 0 , vb_level = vb_level, **kwargs))
 
-    def critical(self , *args , vb : int | None = None , vb_level : Any = 0 , **kwargs):
+    def critical(self , *args , vb : int | None = None , vb_level : VerbosityLevel = 0 , **kwargs):
         """Critical level stderr"""
-        Logger.critical(*args , **self.grep_kwargs(vb = 0 , **kwargs))
+        Logger.critical(*args , **self.grep_kwargs(vb = 0 , vb_level = vb_level, **kwargs))
 
-    def only_once(self , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
+    def only_once(self , *args , object : Any | Literal['os', 'logger'] | None = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
         Logger.only_once(*args , printer = printer , object = object , mark = mark , **kwargs)
 
@@ -184,7 +194,10 @@ class ModuleLogger:
         kwargs = self.grep_kwargs(vb, add_prefix = False, **kwargs)
         Logger.display(obj , title = title , **kwargs)
 
-    def timer(self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , add_prefix : bool | None = None , **kwargs):
+    def timer(
+        self , key : str , vb : int = 0 , idt : int = 0 , enter_vb : int | None = None , 
+        add_prefix : bool | None = None , **kwargs
+    ):
         kwargs = self.grep_kwargs(vb, idt, enter_vb, add_prefix = add_prefix, **kwargs)
         kwargs['timer_prefix'] = False
         return Logger.Timer(key , **kwargs)
@@ -195,7 +208,7 @@ class ModuleLogger:
         return Logger.Paragraph(*args , **kwargs)
 
 class ModuleLoggerGetter:
-    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> ModuleLogger:
+    def __get__(self, instance : BoundLogger | None, owner : type[BoundLogger]) -> ModuleLogger:
         if instance is None:
             if not hasattr(owner, '_cls_logger'):
                 logger = ModuleLogger(owner)
@@ -205,10 +218,10 @@ class ModuleLoggerGetter:
             return instance._self_logger
 
 class VBLevelGetter:
-    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> int:
+    def __get__(self, instance : BoundLogger | None, owner : type[BoundLogger]) -> int:
         return instance.logger.vb_level if instance is not None else owner.logger.vb_level
 class IndentGetter:
-    def __get__(self, instance : BoundLogger | None, owner : Type[BoundLogger]) -> int:
+    def __get__(self, instance : BoundLogger | None, owner : type[BoundLogger]) -> int:
         return instance.logger.indent if instance is not None else owner.logger.indent
 
 class BoundLogger:
@@ -230,7 +243,7 @@ class BoundLogger:
     vb_level = VBLevelGetter()
     indent = IndentGetter()
 
-    def __init__(self , * , indent: int = 0 , vb_level: Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : VerbosityLevel = 1 , **kwargs):
         self.set_vb(vb_level , indent)
 
     @property
@@ -241,12 +254,12 @@ class BoundLogger:
             return None
 
     @classmethod
-    def SetClassVB(cls , vb_level : Any | None = None , indent : int | None = None):
+    def SetClassVB(cls , vb_level : VerbosityLevel | None = None , indent : int | None = None):
         if vb_level is not None:
             cls._class_vb_level = Proj.vb(vb_level)
         if indent is not None:
             cls._class_indent = indent
-    def set_vb(self , vb_level : Any | None = None , indent : int | None = None):
+    def set_vb(self , vb_level : VerbosityLevel | None = None , indent : int | None = None):
         if vb_level is not None:
             self._instance_vb_level = Proj.vb(vb_level)
         if indent is not None:

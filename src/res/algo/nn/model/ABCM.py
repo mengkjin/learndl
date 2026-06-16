@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-
 from src.proj import Logger
 from src.res.algo.nn import layer as Layer
 
@@ -75,7 +74,7 @@ class Astgnn(nn.Module):
         self.alpha_map_out = Layer.MeanPool()
         self.loss_corr_lamb = loss_corr_lamb
 
-    def forward(self, input : Tensor | tuple[Tensor,...] | list[Tensor]):
+    def forward(self, input : Tensor | tuple[Tensor, ...] | list[Tensor]):
         """
         in: [bs x seq_len x input_dim]
         out:[bs x hidden_dim]

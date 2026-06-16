@@ -26,18 +26,22 @@ def get_random_factor(start = 20240101 , end = 20240331 , step = 5 , default_ran
     """
     return StockFactor(DATAVENDOR.random_factor(start , end , step , default_random_n).to_dataframe())
 
-def get_real_factor(names : str | list[str] | None = None ,
-                    factor_type : Base.lit.FactorType = 'factor' , 
-                    start = 20240101 , end = 20240331 , step = 5):
+def get_real_factor(
+    names : Base.alias.NamesType = None ,
+    factor_type : Base.lit.FactorType = 'factor' , 
+    start = 20240101 , end = 20240331 , step = 5
+):
     """
     Load named real factors/preds from ``DATAVENDOR`` into a ``StockFactor``.
     """
     assert names and names != 'random' , 'Names are required and not random for real factor!'
     return StockFactor(DATAVENDOR.real_factor(factor_type , names , start , end , step).to_dataframe())
 
-def get_factor(names : str | list[str] | None = None , 
-               factor_type : Base.lit.FactorType = 'factor' , 
-               start = 20240101 , end = 20240331 , step = 5):
+def get_factor(
+    names : Base.alias.NamesType = None , 
+    factor_type : Base.lit.FactorType = 'factor' , 
+    start = 20240101 , end = 20240331 , step = 5
+):
     """
     Dispatch to ``get_random_factor`` or ``get_real_factor`` depending on *names*.
     """

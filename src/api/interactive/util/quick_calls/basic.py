@@ -2,7 +2,6 @@
 Quick call buttons for the interactive app, can be directly used in any page.
 """
 from __future__ import annotations
-import streamlit as st
 
 from abc import abstractmethod , ABCMeta
 from typing import Literal , Any , get_args
@@ -88,22 +87,15 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
 
     def show(self) -> None:
         """Render the button + label into the persistent panel placeholder slot."""
+        import streamlit as st
         with st.container():
             st.button(self.icon, key=f'{self.button_key}-button' , help = self.help , disabled = self.disabled , on_click = self.call_shell_run)
             self.render_title(font_size = 11 , uppercase = False)
 
     @classmethod
-    def get_non_research_buttons(cls) -> list[QuickCallButton]:
+    def get_buttons(cls) -> list[QuickCallButton]:
         """Get the buttons dictionary."""
         from importlib import import_module
         import_module('src.api.interactive.util.quick_calls.buttons')
-        buttons = [qcb() for qcb in cls.registry.values() if not qcb.research]
-        return buttons
-
-    @classmethod
-    def get_research_buttons(cls) -> list[QuickCallButton]:
-        """Get the research buttons dictionary."""
-        from importlib import import_module
-        import_module('src.api.interactive.util.quick_calls.buttons')
-        buttons = [qcb() for qcb in cls.registry.values() if qcb.research]
+        buttons = [qcb() for qcb in cls.registry.values()]
         return buttons

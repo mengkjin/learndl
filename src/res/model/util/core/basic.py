@@ -3,9 +3,10 @@ Basic functions for the project
 """
 from __future__ import annotations
 import re
-
+import torch
 from pathlib import Path
-from typing import Any
+from typing import Any , TypeAlias
+from collections.abc import Mapping
 
 from src.proj import PATH , Base
 from src.proj.bases import ModuleType
@@ -13,12 +14,14 @@ from src.res.factor.calculator.factor_calc import FactorCalculator
 from src.res.algo import AlgoModule
 
 __all__ = [
-    'ModuleType' , 'epoch_key' , 'attempt_key' ,
+    'ModuleType' , 'TensorReturnType' , 'epoch_key' , 'attempt_key' ,
     'parse_model_input' , 'combine_full_name' , 'split_full_name' , 
     'split_digits_suffix' , 'split_st_prefix' , 'split_module_type_prefix' ,
     'model_module_type' , 'check_null_module_type' , 'is_null_module_type' , 
     'search_existing_models'
 ]
+
+TensorReturnType : TypeAlias = torch.Tensor | Mapping[str, torch.Tensor]
 
 def epoch_key(epoch : int , phase : int = 0) -> str:
     return f'Ph{phase} Ep{epoch}'
@@ -59,7 +62,10 @@ def parse_model_input(model_input : Base.strPath | None) -> dict[str,Any]:
     else:
         raise ValueError(f'Invalid model input [{model_input}]')
 
-def combine_full_name(st : str , module_type : str , module_name : str , model_clean_name : str , model_name_index : str | int) -> str:
+def combine_full_name(
+    st : str , module_type : str , module_name : str , model_clean_name : str , 
+    model_name_index : str | int
+) -> str:
     """
     combine a full model name into (st , module_type , module_name , model_clean_name , model_name_index)
     """

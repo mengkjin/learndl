@@ -5,7 +5,8 @@ High frequency volatility factors for stock level0
 from __future__ import annotations
 import polars as pl
 
-from typing import Callable , Literal
+from typing import Literal
+from collections.abc import Callable
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HfVolatilityFactor

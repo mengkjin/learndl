@@ -4,6 +4,7 @@ CVXPY solver for Factor Model Portfolio
 from __future__ import annotations
 import numpy as np
 import cvxpy as cp
+from typing import cast
 
 from src.proj import Base
 from ..interpreter import SolverInput , SolveCond , SolveVars
@@ -16,9 +17,11 @@ _SOLVER_PARAM = {
 }
 
 class Solver:
-    def __init__(self , input : SolverInput , 
-                 prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
-                 cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK , **kwargs):
+    def __init__(
+        self , input : SolverInput , 
+        prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.SOCP ,
+        cvxpy_solver : Base.PortOptimCvxpySolver | str = Base.PortOptimCvxpySolver.MOSEK , **kwargs
+    ):
         self.input = input
         self.prob_type = Base.PortOptimProblem(prob_type)
         self.cvxpy_solver = Base.PortOptimCvxpySolver(cvxpy_solver)
@@ -51,7 +54,7 @@ class Solver:
         if (not self.conds.qobj and not self.conds.qcon) or not self.cov_con or self.cov_con.cov_type != 'model':
             num_L = 0
         else: 
-            num_L = len(self.cov_con.F)
+            num_L = len(cast(np.ndarray, self.cov_con.F))
 
         self.num_vars = SolveVars(num_N , num_T , num_S , num_L)
         return self
@@ -72,7 +75,7 @@ class Solver:
                 L = cp.Variable(self.num_vars.L)
                 constraints.append(self.cov_con.F @ (x - self.wb) == L)
                 if self.cov_con.lmbd:
-                    S_sq = np.sqrt(self.cov_con.S)
+                    S_sq = np.sqrt(cast(np.ndarray, self.cov_con.S))
                     objective = objective + self.cov_con.lmbd / 2.0 * \
                         (cp.sum_squares(cp.multiply(x - self.wb , S_sq)) + cp.quad_form(L , self.cov_con.C) )
                 if self.cov_con.te:
@@ -82,7 +85,7 @@ class Solver:
                 if self.cov_con.lmbd:
                     objective = objective + self.cov_con.lmbd / 2.0 * cp.quad_form(x , self.cov_con.cov)
                 if input.cov_con.te:
-                    constraints.append(cp.quad_form(x , self.cov_con.cov) <= self.cov_con.te ** 2)
+                    constraints.append(cp.quad_form(x , self.cov_con.cov) <= cast(float, self.cov_con.te) ** 2)
         
         eq_pos = self.input.lin_con.type == 'fx'
         if np.any(eq_pos):

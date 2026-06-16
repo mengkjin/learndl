@@ -6,16 +6,18 @@ import numpy as np
 import pandas as pd
 
 from functools import cached_property
-from typing import Any, TypeAlias, Union, Iterable
+from typing import Any , TypeAlias , cast
 from zoneinfo import ZoneInfo
 
-from src.proj.core import SingletonMeta , lit , as_int_array
+from src.proj.core import SingletonMeta , lit , as_int_array , intDate , intDateNone , intDates , TradeDate
 from src.proj.env import MACHINE , PATH
 
-__all__ = ['BJ_TZ', 'LOCAL_TZ', 'BasicCalendar', 'intDate', 'intDateNone', 'intDates']
+__all__ = ['BJ_TZ', 'LOCAL_TZ', 'BasicCalendar']
 
 BJ_TZ = ZoneInfo("Asia/Shanghai")
 LOCAL_TZ = MACHINE.timezone
+
+intArray : TypeAlias = int | np.ndarray[Any, np.dtype[np.int_]]
 
 def get_cd(date: intDate) -> int:
     """Natural calendar day ``YYYYMMDD`` as int; for ``TradeDate``, returns ``.cd``."""
@@ -155,19 +157,19 @@ class BasicCalendar(metaclass=SingletonMeta):
         """Whether the natural date 'cd' is a trading day."""
         return self._trade[self.pos_cd(cd)]
 
-    def trade_date_by_td_index(self, td_index: int | np.ndarray) -> int | np.ndarray:
+    def trade_date_by_td_index(self, td_index: intArray) -> intArray:
         """Take the 'td' column by the trading date index"""
         if isinstance(td_index, np.ndarray):
             return self._trade_td[td_index]
         return int(self._trade_td[int(td_index)])
 
-    def trade_calendar_by_td_index(self, td_index: int | np.ndarray) -> int | np.ndarray:
+    def trade_calendar_by_td_index(self, td_index: intArray) -> intArray:
         """Take the natural date 'YYYYMMDD' by the trading date index"""
         if isinstance(td_index, np.ndarray):
             return self._trade_calendar[td_index]
         return int(self._trade_calendar[int(td_index)])
 
-    def calendar_by_cd_index(self, cd_index: int | np.ndarray) -> int | np.ndarray:
+    def calendar_by_cd_index(self, cd_index: intArray) -> intArray:
         """Take the natural date 'YYYYMMDD' by the natural date index"""
         if isinstance(cd_index, np.ndarray):
             cd_index = np.clip(cd_index, 0, self.n_cal - 1)
@@ -186,7 +188,7 @@ class BasicCalendar(metaclass=SingletonMeta):
         start = max(0, last - n + 1)
         return cal[start : last + 1].astype(np.int64, copy=False)
 
-    def offset_np(self, dates: intDates, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray:
+    def offset_np(self, dates : intDates, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray:
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
         dates = as_int_array(dates)
         if len(dates) == 0:
@@ -211,7 +213,7 @@ class BasicCalendar(metaclass=SingletonMeta):
                 cd_arr = np.asarray(BC.calendar_by_cd_index(d_index))
             return cd_arr.astype(np.int64, copy=False)
 
-    def diff_days(self, date1 : intDate, date2 : intDate , type : lit.intDateType = 'td') -> int | Any:
+    def diff_days(self, date1 : intDate, date2 : intDate , type : lit.intDateType = 'td') -> int:
         """The difference in days between two dates."""
         try:
             i1 = self.pos_cd(get_cd(date1))
@@ -226,14 +228,14 @@ class BasicCalendar(metaclass=SingletonMeta):
             raise ValueError(f"{date1} and {date2} are not in {type} calendar {e!s}")
         return diff
 
-    def diff_days_array(self, date1_arr : intDates, date2_arr : intDates , type : lit.intDateType = 'td') -> int | Any:
+    def diff_days_array(self, date1_arr : intDates, date2_arr : intDates , type : lit.intDateType = 'td') -> int:
         """The difference of two arrays of dates."""
         p1 = self.pos_cd_array(as_int_array(date1_arr))
         p2 = self.pos_cd_array(as_int_array(date2_arr))
         if type == 'td':
-            return self._td_index[p1] - self._td_index[p2]
+            return cast(int, self._td_index[p1] - self._td_index[p2])
         elif type == 'cd':
-            return self._cd_index[p1] - self._cd_index[p2]
+            return cast(int, self._cd_index[p1] - self._cd_index[p2])
         else:
             raise ValueError(f"Invalid date type: {type}")
 
@@ -247,80 +249,4 @@ class BasicCalendar(metaclass=SingletonMeta):
         dates = dates[::step]
         return dates
 
-class TradeDate:
-    """'TradeDate' represents a date in the trading date perspective. input date is in 'YYYYMMDD' format."""
-    def __init__(self, date: int | TradeDate | Any, force_trade_date=False):
-        """
-        Args:
-            date: natural date or already a 'TradeDate' (the latter will not be re-initialized).
-            force_trade_date: if True, skip the calendar mapping, 'td = cd'.
-        """
-        if isinstance(date, TradeDate):
-            self.cd = date.cd
-            self.td = date.td
-        else:
-            self.cd = int(date)
-            if force_trade_date or self.cd < BC.min_date or self.cd > BC.max_date:
-                self.td: int = self.cd
-            else:
-                self.td = BC.td_for_cd(self.cd)
-
-    def __repr__(self):
-        return str(self.td)
-
-    def __int__(self):
-        """return the trading date 'td'."""
-        return int(self.td)
-
-    def __str__(self):
-        return str(self.td)
-
-    def __add__(self, n: int):
-        """move forward 'n' trading days (can be negative)."""
-        return self.offset(n)
-
-    def __sub__(self, n: int):
-        """move backward 'n' trading days."""
-        return self.offset(-n)
-
-    def __lt__(self, other):
-        return int(self) < int(other)
-
-    def __le__(self, other):
-        return int(self) <= int(other)
-
-    def __gt__(self, other):
-        return int(self) > int(other)
-
-    def __ge__(self, other):
-        return int(self) >= int(other)
-
-    def __eq__(self, other):
-        return int(self) == int(other)
-
-    def as_int(self):
-        """return the trading date 'td' as an integer."""
-        return int(self)
-
-    def offset(self, n: int):
-        """move 'n' trading days (can be negative), clip the index to the valid range if out of bounds."""
-        return self._cls_offset(self, n)
-
-    @classmethod
-    def _cls_offset(cls, td0, n: int):
-        td0 = cls(td0)
-        if n == 0:
-            return td0
-        elif td0 < BC.min_date or td0 > BC.max_date:
-            return td0
-        assert isinstance(n, (int, np.integer)), f"n must be a integer, got {type(n)}"
-        d_index = BC.td_index_for_cd(td0.td) + n
-        d_index = np.maximum(np.minimum(d_index, BC.max_td_index), 0)
-        new_date = BC.trade_date_by_td_index(d_index)
-        return cls(new_date)
-
-
 BC = BasicCalendar()
-intDate : TypeAlias = Union[int , TradeDate]
-intDateNone : TypeAlias = Union[int, TradeDate, None]
-intDates : TypeAlias = Union[intDate , Iterable[intDate] , np.ndarray , pd.Series]

@@ -8,7 +8,8 @@ import pandas as pd
 import gc , torch
 
 from functools import cached_property
-from typing import Any , Callable
+from typing import Any
+from collections.abc import Callable
 
 from src.proj import CALENDAR , Const, MACHINE , Base , Proj , Dates
 from src.data import ModuleData
@@ -33,7 +34,8 @@ class DataModule(Base.BoundLogger):
     def __init__(
         self , config : ModelConfig | None = None , 
         use_data : Base.lit.DataBlockTimeFrames = 'fit' , * , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        indent : int = 0 , vb_level : Any = 1 , **kwargs
+    ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
         self._use_data : Base.lit.DataBlockTimeFrames = use_data
@@ -260,7 +262,11 @@ class DataModule(Base.BoundLogger):
             gc.collect() 
             torch.cuda.empty_cache()
 
-    def display_loader_static_stats(self , x_full : dict[str,torch.Tensor] , eff_mask : torch.Tensor | None , stat_types : tuple[str,...] = ('min', 'mean' , 'max')) -> None:
+    def display_loader_static_stats(
+        self , x_full : dict[str,torch.Tensor] , 
+        eff_mask : torch.Tensor | None , 
+        stat_types : tuple[str,...] = ('min', 'mean' , 'max')
+    ) -> None:
         if not self.stage == 'fit' or not Proj.verbose(self.vb_level + 1) or getattr(self , f'_display_loader_static_stats_{self.stage}_done', False):
             return
         self.logger.stdout(f'Loader Parameters: stage={self.stage} , model_date={self.model_date} , seqlens={self.seq_lens}')
@@ -330,7 +336,7 @@ class DataModule(Base.BoundLogger):
         late_dates = self.model_date_list[self.model_date_list > model_date]
         return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
 
-    def y_label(self , dates : Base.alias.intDates | None) -> pd.DataFrame:
+    def y_label(self , dates : Base.alias.DateType) -> pd.DataFrame:
         dates = Dates(dates)
         if dates.empty:
             return pd.DataFrame()
@@ -355,7 +361,10 @@ class DataModule(Base.BoundLogger):
         assert self.stage in ['predict' , 'test' , 'retrospective'] , f'stage should be predict , test or retrospective, but got {self.stage}'
         return self.loader_dict[self.stage][self.loader_dates[self.stage].index(date)]
        
-    def static_dataloader(self , x : dict[str,torch.Tensor] , y : torch.Tensor , w : torch.Tensor | None , effective : torch.Tensor | None) -> None:
+    def static_dataloader(
+        self , x : dict[str,torch.Tensor] , y : torch.Tensor , 
+        w : torch.Tensor | None , effective : torch.Tensor | None
+    ) -> None:
         """update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them"""   
         if effective is None: 
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
@@ -394,7 +403,11 @@ class DataModule(Base.BoundLogger):
                 
             self.loader_dict[set_key] = StoredTorchFileLoader(self.storage , batch_keys , shuf_opt)
 
-    def batch_data_x(self , x : dict[str,torch.Tensor] , index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> list[torch.Tensor]:
+    def batch_data_x(
+        self , x : dict[str,torch.Tensor] , 
+        index0 : torch.Tensor | np.ndarray , 
+        index1 : torch.Tensor | np.ndarray
+    ) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
             if data[index0,index1].isnan().all():
@@ -408,7 +421,11 @@ class DataModule(Base.BoundLogger):
             datas.append(data)
         return datas
 
-    def batch_data_y(self , y : torch.Tensor | None, index0 : torch.Tensor | np.ndarray , index1 : torch.Tensor | np.ndarray) -> torch.Tensor | Any:
+    def batch_data_y(
+        self , y : torch.Tensor | None , 
+        index0 : torch.Tensor | np.ndarray , 
+        index1 : torch.Tensor | np.ndarray
+    ) -> torch.Tensor | Any:
         if y is None:
             return None
         return y[index0 , index1]

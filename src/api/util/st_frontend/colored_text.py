@@ -5,7 +5,6 @@ ColoredText
     String subclass that auto-applies Streamlit badge colours based on log level.
 """
 from __future__ import annotations
-
 __all__ = ['ColoredText']
 
 class ColoredText(str):

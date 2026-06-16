@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.proj.log import Logger
-from src.proj.core import strPath
+from src.proj.core import strPath , lit
 
 __all__ = ['torch_load' , 'torch_save']
 
@@ -28,7 +28,10 @@ def _atomic_torch_save(obj : Any , path : strPath) -> None:
         tmp_path.unlink(missing_ok=True)
         raise
 
-def torch_save(obj : Any , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3) -> bool:
+def torch_save(
+    obj : Any , path : strPath , prefix : str | None = None , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3
+) -> bool:
     """
     save torch object to path with footnote
     """

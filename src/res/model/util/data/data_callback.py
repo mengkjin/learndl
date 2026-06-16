@@ -4,7 +4,7 @@ Data callbacks for the data module
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 from src.res.model.util.core import BatchInput
 

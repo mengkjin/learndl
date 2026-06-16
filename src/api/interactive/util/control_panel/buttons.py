@@ -4,7 +4,7 @@ import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
 
 from abc import abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING 
 from src.proj import Proj , MACHINE , Options
 from src.api.interactive.util.session_control import SC
 from src.api.interactive.util.components.operations import ButtonOperation

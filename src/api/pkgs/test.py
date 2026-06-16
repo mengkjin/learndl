@@ -3,8 +3,9 @@ API for test operations of this project.
 """
 
 from __future__ import annotations
-from src.proj import Logger , Base
 from typing import Any
+from src.proj import Logger , Base
+
 
 __all__ = ['TestAPI']
 

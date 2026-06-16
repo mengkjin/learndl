@@ -3,7 +3,10 @@ from __future__ import annotations
 import re
 import random
 from functools import cached_property
-from typing import Iterable , Literal , Any
+from typing import Literal , TypeAlias
+from collections.abc import Iterable
+
+from src.proj.core import lit
 from src.proj.log import Logger
 
 INVALID_THRESHOLD = 3
@@ -11,9 +14,11 @@ PROXY_MAX_CONCURRENT = 2
 
 __all__ = ['Proxy' , 'ProxySet' , 'ProxyStats' , 'ProxyStatsSet' , 'INVALID_THRESHOLD' , 'PROXY_MAX_CONCURRENT']
 
+strProxy : TypeAlias = 'str | Proxy'
+
 class Proxy:
     """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
-    def __new__(cls, url: str | Proxy, source: str = 'unknown'):
+    def __new__(cls, url: strProxy, source: str = 'unknown'):
         proxy = super().__new__(cls)
         proxy.set_url(url)
         proxy.set_source(source)
@@ -39,7 +44,7 @@ class Proxy:
     def __bool__(self) -> bool:
         return bool(self.url)
 
-    def set_url(self, url: str | Proxy) -> Proxy:
+    def set_url(self, url: strProxy) -> Proxy:
         """Parse and store the proxy URL, copying source from another Proxy when given."""
         if isinstance(url, Proxy):
             self.set_source(url.source)
@@ -73,7 +78,7 @@ class Proxy:
 class ProxySet:
     """Unordered, deduplicated collection of :class:`Proxy` objects."""
 
-    def __init__(self , proxies: Iterable[Proxy | str] | None = None , source: str = 'unknown'):
+    def __init__(self , proxies: Iterable[strProxy] | None = None , source: str = 'unknown'):
         if proxies is None:
             proxies = []
         proxies = [proxy.set_source(source) if isinstance(proxy, Proxy) else Proxy(proxy , source) for proxy in proxies]
@@ -97,7 +102,7 @@ class ProxySet:
     def __bool__(self) -> bool:
         return bool(self.proxies)
 
-    def extend(self , proxies: Iterable[Proxy | str]):
+    def extend(self , proxies: Iterable[strProxy]):
         """Append proxies and deduplicate in place."""
         self.proxies = Proxy.unique(self.proxies + [Proxy(proxy) for proxy in proxies])
         return self
@@ -121,7 +126,7 @@ class ProxyStats(Proxy):
     """A stated proxy, can be used to track the state of a proxy"""
     _instances : dict[str, ProxyStats] = {}
 
-    def __new__(cls, url: str | Proxy, source: str = 'unknown'):
+    def __new__(cls, url: strProxy, source: str = 'unknown'):
         if str(url) not in cls._instances:
             cls._instances[str(url)] = super().__new__(cls, url, source = source)
         return cls._instances[str(url)]
@@ -173,7 +178,7 @@ class ProxyStats(Proxy):
         self.stats['running'] += 1
         return self
 
-    def release(self, success: bool, *, counted: bool = True , vb_level: Any = 4):
+    def release(self, success: bool, *, counted: bool = True , vb_level : lit.VerbosityLevel = 4):
         """Released, decrement running; optionally update success/error counters."""
         self.stats['running'] -= 1
         if not counted:
@@ -193,7 +198,7 @@ class ProxyStats(Proxy):
 class ProxyStatsSet(ProxySet):
     """A :class:`ProxySet` whose members are :class:`ProxyStats` singletons with live usage tracking."""
 
-    def __init__(self , proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , **kwargs):
+    def __init__(self , proxies: Iterable[ProxyStats | strProxy] | None = None , source: str = 'unknown' , **kwargs):
         if proxies is None:
             proxies = []
         self.proxies : list[ProxyStats] = list(set([ProxyStats(proxy , source) for proxy in proxies]))
@@ -204,7 +209,7 @@ class ProxyStatsSet(ProxySet):
     def __bool__(self) -> bool:
         return self.valid_count > 0
 
-    def extend(self , proxies: Iterable[ProxyStats | Proxy | str]):
+    def extend(self , proxies: Iterable[ProxyStats | strProxy]):
         """Append proxies (auto-converting to ProxyStats singletons) and deduplicate in place."""
         self.proxies = ProxyStats.unique(self.proxies + [ProxyStats(proxy) for proxy in proxies])
         return self

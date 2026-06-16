@@ -22,16 +22,18 @@ class gpGenerator(Base.BoundLogger):
     output:
         GP:      gp_generator
     """
-    def __init__(self , job_id : int | None = None , 
-                 process_key : str = 'inf_winsor_norm' ,  
-                 weight_scheme : Literal['ic' , 'ir' , 'ew'] = 'ic', 
-                 window_type  : Literal['insample' , 'rolling'] = 'rolling', 
-                 weight_decay : Literal['constant' , 'linear' , 'exp'] = 'exp' , 
-                 ir_window : int = 40 , 
-                 roll_window : int = 40 , 
-                 halflife : int = 20 , 
-                 min_coverage :float = 0.1 , 
-                 **kwargs) -> None:
+    def __init__(
+        self , job_id : int | None = None , 
+        process_key : str = 'inf_winsor_norm' ,  
+        weight_scheme : Literal['ic' , 'ir' , 'ew'] = 'ic', 
+        window_type  : Literal['insample' , 'rolling'] = 'rolling', 
+        weight_decay : Literal['constant' , 'linear' , 'exp'] = 'exp' , 
+        ir_window : int = 40 , 
+        roll_window : int = 40 , 
+        halflife : int = 20 , 
+        min_coverage :float = 0.1 , 
+        **kwargs
+    ) -> None:
         super().__init__(**kwargs)
         with Proj.silence:
             self.gp  = GeneticProgramming(job_id = job_id , train = False , **kwargs).load_data().preparation()
@@ -52,7 +54,10 @@ class gpGenerator(Base.BoundLogger):
             min_coverage  = min_coverage ,
             **kwargs)
 
-    def __call__(self, syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> FF.FactorValue:
+    def __call__(
+        self, syntax : str | FF.FactorValue , 
+        process_key : str | None = None , print_info = True
+    ) -> FF.FactorValue:
         """
         Calcuate FactorValue of a syntax
         """
@@ -61,7 +66,10 @@ class gpGenerator(Base.BoundLogger):
         factor = self.gp.evaluator.to_value(syntax , process_key = process_key) if isinstance(syntax , str) else syntax
         return factor
 
-    def to_dataframe(self , syntax : str | FF.FactorValue , process_key : str | None = None , print_info = True) -> pd.DataFrame | None:
+    def to_dataframe(
+        self , syntax : str | FF.FactorValue , 
+        process_key : str | None = None , print_info = True
+    ) -> pd.DataFrame | None:
         """
         Convert FactorValue to DataFrame
         """
@@ -131,16 +139,18 @@ class gpGenerator(Base.BoundLogger):
         return multi # multi对象拥有multi,weight,inputs三个自变量
     
     def multi_elite_factor(
-            self , elites : EliteGroup | None = None , 
-            process_key : str | None = None ,  
-            weight_scheme : Literal['ic' , 'ir' , 'ew'] | None = None, 
-            window_type  : Literal['insample' , 'rolling'] | None = None, 
-            weight_decay : Literal['constant' , 'linear' , 'exp'] | None = None , 
-            ir_window : int | None = None , 
-            roll_window : int | None = None , 
-            halflife : int | None = None , 
-            min_coverage :float | None = None , 
-            **kwargs):
+        self , 
+        elites : EliteGroup | None = None , 
+        process_key : str | None = None ,  
+        weight_scheme : Literal['ic', 'ir', 'ew'] | None = None, 
+        window_type  : Literal['insample', 'rolling'] | None = None, 
+        weight_decay : Literal['constant', 'linear', 'exp'] | None = None , 
+        ir_window : int | None = None , 
+        roll_window : int | None = None , 
+        halflife : int | None = None , 
+        min_coverage : float | None = None , 
+        **kwargs
+    ):
         """
         Load all elite factors and calculate MultiFactorValue.
         None kwargs will use default values

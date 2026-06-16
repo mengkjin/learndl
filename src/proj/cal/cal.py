@@ -11,13 +11,14 @@ import pandas as pd
 
 from datetime import datetime, timedelta, time
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
-from src.proj.core import NoInstanceMeta , lit , as_int_array
+from src.proj.core import (
+    NoInstanceMeta , lit , as_int_array , TradeDate , intDate , intDateNone , intDates , intDatesNone)
 from src.proj.env import PATH , Const
 
-from .basic import (
-    BJ_TZ , BC , TradeDate , intDate , intDateNone , intDates , get_cd , get_td)
+from .basic import BJ_TZ , BC , get_cd , get_td
 
 __all__ = ['CALENDAR']
 
@@ -112,7 +113,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
             mtime = min([PATH.file_modified_time(path) for path in file_or_modified_time])
         elif isinstance(file_or_modified_time, Path):
             mtime = PATH.file_modified_time(file_or_modified_time)
-        elif isinstance(file_or_modified_time, int | float):
+        elif isinstance(file_or_modified_time, (int , float)):
             mtime = int(file_or_modified_time)
         else:
             mtime = 19970101000000
@@ -124,7 +125,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def is_updated_today(
-        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None, 
+        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , 
         hour=20, minute=0 , * , bj_tz: bool = True
     ) -> bool:
         """
@@ -140,7 +141,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def is_updated_recently(
-        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None, 
+        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , 
         hours : float = 1. , * , bj_tz: bool = True
     ) -> bool:
         """
@@ -196,7 +197,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return updated_date
 
     @classmethod
-    def offset(cls, dates: intDates | None, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray[Any, np.dtype[np.int_]]:
+    def offset(cls, dates : intDatesNone = None, offset: int = 0, type: lit.intDateType = 'td' , backward=True) -> np.ndarray[Any, np.dtype[np.int_]]:
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
         if dates is None:
             return np.array([], dtype=np.int64)
@@ -211,7 +212,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
             return TradeDate(cls.tds(date, backward=False)[0])
 
     @classmethod
-    def tds(cls, dates: intDates, backward=True) -> np.ndarray:
+    def tds(cls, dates : intDates, backward=True) -> np.ndarray:
         """Convert multiple natural dates to trading dates (or 'td_forward'); optionally offset by 'offset' steps."""
         return BC.offset_np(dates, 0, 'td', backward)
 
@@ -225,7 +226,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
         return int(d.strftime("%Y%m%d"))
 
     @classmethod
-    def cds(cls, dates: intDates) -> np.ndarray:
+    def cds(cls, dates : intDates) -> np.ndarray:
         """Convert multiple trading dates to natural dates; optionally offset by 'offset' steps."""
         return as_int_array(dates)
 

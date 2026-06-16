@@ -7,7 +7,6 @@ Named entry points all inherit from rnn_univariate or rnn_multivariate.
 """
 from __future__ import annotations
 import torch
-
 from torch import nn , Tensor
 
 from .. import layer as Layer
@@ -398,7 +397,7 @@ class multi_rnn_encoder(nn.Module):
         super().__init__()
         self.enc_list = nn.ModuleList([uni_rnn_encoder(input_dim=indim,hidden_dim=hidden_dim,**kwargs) for indim in input_dim])
 
-    def forward(self, x : Tensor) -> list | tuple:
+    def forward(self, x : Tensor) -> list[Tensor] | tuple[Tensor, ...]:
         """
         in: tuple of [bs x seq_len x input_dim[i]] , seq can be different 
         out:tuple of [bs x hidden_dim]
@@ -430,7 +429,7 @@ class multi_rnn_decoder(nn.Module):
         else:
             self.fc_hid_out = nn.Linear(num_rnn*hidden_dim , hidden_dim)
 
-    def forward(self, x : list[Tensor] | tuple[Tensor]) -> Tensor:
+    def forward(self, x : list[Tensor] | tuple[Tensor, ...]) -> Tensor:
         """
         in: tuple of [bs x hidden_dim] , len is num_rnn
         out:[bs x hidden_dim]
@@ -541,6 +540,7 @@ class gru_dsize(gru):
     def forward(self, x: Tensor , size : Tensor | None) -> tuple[Tensor, dict]:
         x , o = super().forward(x)
         if self.training:
+            assert size is not None , 'size is required during training'
             x = self.residual(x , size)
             x = self.residual_bn(x)
         return x , o

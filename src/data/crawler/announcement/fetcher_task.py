@@ -22,6 +22,9 @@ from .util import Announcement , range_dates , AnnouncementExporter , CrawlerLog
 
 __all__ = ['FetcherTask']
 
+AnnouncementsResult = list[Announcement] | Exception
+SuccessResult = bool | Exception
+
 class FetcherTask(Base.BoundLogger):
     def __init__(self, exchange: ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)
@@ -53,11 +56,11 @@ class FetcherTask(Base.BoundLogger):
     def proxy_pool(self):
         return ProxyAPI.get_proxy_pool(ExchangeType.all_urls())
 
-    def fetch_date(self, proxy: str | None) -> list[Announcement] | Exception:
+    def fetch_date(self, proxy: str | None) -> AnnouncementsResult:
         fetcher = AnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
         return fetcher.fetch_date(self.start, self.end , title=f'[fetch date] {self.title} proxy={proxy}')
 
-    async def fetch_date_async(self, proxy: str | None) -> list[Announcement] | Exception:
+    async def fetch_date_async(self, proxy: str | None) -> AnnouncementsResult:
         fetcher = AsyncAnnoucementFetcher.exchange_fetcher(self.exchange, proxy)
         return await fetcher.fetch_date(self.start, self.end, title=f'[fetch date async] {self.title} proxy={proxy}')
 
@@ -67,11 +70,11 @@ class FetcherTask(Base.BoundLogger):
             label=f"{self.title}" + (f"[{proxy}]" if proxy else ""))
         return fetch_date(proxy)
 
-    def fetch_payload(self, proxy: str | None) -> list[Announcement] | Exception:
+    def fetch_payload(self, proxy: str | None) -> AnnouncementsResult:
         result = self.fetch_date_with_error_handler(proxy)
         return result.unwrap(error='return')
 
-    async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> list[Announcement] | Exception:
+    async def fetch_payload_async(self, proxy: str | None, *, attempt_id: str | None = None) -> AnnouncementsResult:
         try:
             CrawlerLogger.stdout(f"[async-fetch] start {self.title} proxy={proxy} attempt={attempt_id}")
             payload = await self.fetch_date_async(proxy)
@@ -85,7 +88,7 @@ class FetcherTask(Base.BoundLogger):
         self.exporter.save_data(payload, self.start, self.end)
         return True
 
-    def crawl_and_persist(self, proxy: str | None) -> bool | Exception:
+    def crawl_and_persist(self, proxy: str | None) -> SuccessResult:
         if self.should_be_skipped:
             return True
         self.logger.stdout(f"Crawling {self.title} with proxy {proxy}")
@@ -97,10 +100,10 @@ class FetcherTask(Base.BoundLogger):
             return True
         return False
 
-    def crawl(self , proxy: str | None) -> bool | Exception:
+    def crawl(self , proxy: str | None) -> SuccessResult:
         return self.crawl_and_persist(proxy)
 
-    async def crawl_async(self, proxy: str | None) -> bool | Exception:
+    async def crawl_async(self, proxy: str | None) -> SuccessResult:
         if self.should_be_skipped:
             return True
         self.logger.stdout(f"Crawling {self.title} with proxy {proxy}")

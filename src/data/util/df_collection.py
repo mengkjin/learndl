@@ -67,7 +67,7 @@ class _df_collection(ABC):
         """get a DataFrame with given (1) date , fields and set_index"""
 
     @abstractmethod
-    def get_multiple_days(self , dates : Base.alias.intDates , field = None ,
+    def get_multiple_days(self , dates : Base.intDates , field = None ,
                           rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | pl.DataFrame:
         """get a DataFrame with given (many) dates , fields and set_index"""
 
@@ -83,7 +83,7 @@ class _df_collection(ABC):
         """Number of dates currently cached."""
         return len(self.dates)
 
-    def __contains__(self , date : Base.alias.intDate):
+    def __contains__(self , date : Base.intDate):
         """Support ``date in collection`` membership test (reads ``dates`` under lock)."""
         with self._lock:
             return int(date) in self.dates
@@ -96,7 +96,7 @@ class _df_collection(ABC):
             df = self.get_one_day(self.last_added_date)
             return self.reform_df(df , rename_date_key = 'date')
 
-    def date_diffs(self , dates : Base.alias.intDates | None , overwrite = False):
+    def date_diffs(self , dates : Base.alias.DateType , overwrite = False):
         """
         Return dates that are not yet cached.
 
@@ -114,7 +114,7 @@ class _df_collection(ABC):
 
     def ensure_dates(
         self ,
-        dates : Base.alias.intDates | None ,
+        dates : Base.alias.DateType ,
         loader : Callable[[int], pd.DataFrame | None] ,
         overwrite : bool = False ,
     ) -> None:
@@ -139,7 +139,7 @@ class _df_collection(ABC):
                         self.last_added_date = date
                     self.add_one_day(date , df)
 
-    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date'):
+    def get(self , date : Base.intDate , field = None , rename_date_key : str | None = 'date'):
         """get a DataFrame with given (1) date , fields and set_index"""
         with self._lock:
             date = int(date)
@@ -147,7 +147,7 @@ class _df_collection(ABC):
             df = self.reform_df(df , field , rename_date_key = rename_date_key)
             return df
 
-    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False):
+    def gets(self , dates : Base.alias.DateType , field = None , rename_date_key : str | None = 'date' , copy = False):
         """get a DataFrame with given (many) dates , fields and set_index"""
         dates = Dates(dates)
         if dates.empty:
@@ -160,7 +160,7 @@ class _df_collection(ABC):
                 df = deepcopy(df)
         return df
 
-    def add(self , date : Base.alias.intDate , df : pd.DataFrame | None):
+    def add(self , date : Base.intDate , df : pd.DataFrame | None):
         with self._lock:
             if df is not None and date not in self.dates:
                 date = int(date)
@@ -259,10 +259,10 @@ class DFCollection(_df_collection):
         self.data_frames : dict[int , pd.DataFrame] = {}
         self.long_frame : pd.DataFrame = pd.DataFrame()
 
-    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
+    def get(self , date : Base.intDate , field = None , rename_date_key : str | None = 'date') -> pd.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
-    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | Any:
+    def gets(self , dates : Base.alias.DateType , field = None , rename_date_key : str | None = 'date' , copy = False) -> pd.DataFrame | Any:
         dates = Dates(dates)
         if dates.empty:
             return pd.DataFrame()
@@ -274,7 +274,7 @@ class DFCollection(_df_collection):
             assign(**{self.date_key:date}).set_index(self.date_key).dropna(how = 'all')
         self.data_frames[date] = df
 
-    def get_one_day(self , date : Base.alias.intDate) -> pd.DataFrame:
+    def get_one_day(self , date : Base.intDate) -> pd.DataFrame:
         """get a DataFrame with given (1) date , fields and set_index"""
         if date not in self.dates:
             return pd.DataFrame()
@@ -284,7 +284,7 @@ class DFCollection(_df_collection):
             df = self.long_frame.loc[date:date]
         return df
 
-    def get_multiple_days(self , dates : Base.alias.intDates):
+    def get_multiple_days(self , dates : Base.intDates):
         """get a DataFrame with given (many) dates , fields and set_index"""
         dates = Dates(dates)
         if dates.empty:
@@ -330,10 +330,16 @@ class PLDFCollection(_df_collection):
         super().__init__(max_len , date_key)
         self.data_frames : dict[int , pl.DataFrame] = {}
 
-    def get(self , date : Base.alias.intDate , field = None , rename_date_key : str | None = 'date') -> pl.DataFrame | Any:
+    def get(
+        self , date : Base.intDate , field = None , 
+        rename_date_key : str | None = 'date'
+    ) -> pl.DataFrame | Any:
         return super().get(date , field , rename_date_key)
 
-    def gets(self , dates : Base.alias.intDates | None , field = None , rename_date_key : str | None = 'date' , copy = False) -> pl.DataFrame | Any:
+    def gets(
+        self , dates : Base.alias.DateType , field = None , 
+        rename_date_key : str | None = 'date' , copy = False
+    ) -> pl.DataFrame | Any:
         dates = Dates(dates)
         if dates.empty:
             return pl.DataFrame()
@@ -346,7 +352,7 @@ class PLDFCollection(_df_collection):
         pldf = self.data_frames[date]
         return pldf
 
-    def get_multiple_days(self , dates : Base.alias.intDates):
+    def get_multiple_days(self , dates : Base.intDates):
         """get a DataFrame with given (many) dates , fields and set_index"""
         dates = Dates(dates)
         if dates.empty:

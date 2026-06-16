@@ -7,12 +7,15 @@ from __future__ import annotations
 import numpy as np
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal , Any , cast , TypeAlias
 
 __all__ = [
     'LinearConstraint' , 'BoundConstraint' , 'TurnConstraint' , 
     'ShortConstraint' , 'CovConstraint' 
 ]
+
+FloatAny : TypeAlias = float | Any
+ArrayAny : TypeAlias = np.ndarray | Any
 
 @dataclass
 class LinearConstraint:
@@ -129,10 +132,11 @@ class TurnConstraint:
     bdl : float, double side constraint
     rho: float, penalty factor in objective function
     """
-    dbl : float | Any = None
-    rho : float | Any = None
+    dbl : FloatAny = None
+    rho : FloatAny = None
 
-    def __post_init__(self): self.check()
+    def __post_init__(self): 
+        self.check()
 
     def __bool__(self) -> bool: return self.dbl is not None and self.dbl > 0.0
 
@@ -158,8 +162,8 @@ class ShortConstraint:
     pos: float, total abs short upper bound
     cost: float, penalty factor in objective function
     """
-    pos  : float | Any = None
-    cost : float | Any = None
+    pos  : FloatAny = None
+    cost : FloatAny = None
 
     def __post_init__(self): self.check()
 
@@ -195,18 +199,28 @@ class CovConstraint:
     input type 2
     cov: (N , N) array, instrument covariance
     """
-    lmbd : float | Any = None
-    te   : float | Any = None
-    F    : np.ndarray | Any = None
-    C    : np.ndarray | Any = None
-    S    : np.ndarray | Any = None
-    cov  : np.ndarray | Any = None
+    lmbd : FloatAny = None
+    te   : FloatAny = None
+    F    : ArrayAny = None
+    C    : ArrayAny = None
+    S    : ArrayAny = None
+    cov  : ArrayAny = None
     cov_type : Literal['normal' , 'model'] = 'model'
     
     def __post_init__(self):
         self.check()
 
-    def __bool__(self): return self.lmbd is not None or self.te is not None
+    def __bool__(self): 
+        return self.lmbd is not None or self.te is not None
+
+    @property
+    def height(self):
+        if self.F is not None:
+            return self.F.shape[1]
+        elif self.cov is not None:
+            return self.cov.shape[0]
+        else:
+            raise ValueError('F and cov are not set')
 
     def check(self , N : int | None = None):
         if self.lmbd == 0: 
@@ -239,24 +253,30 @@ class CovConstraint:
             self.lmbd = self.lmbd / scaler
         return self
 
-    def variance(self , w : np.ndarray | Any):
+    def variance(self , w : np.ndarray | None):
         if not self: 
-            np.array([0.])
+            return np.array([0.])
+        
+        w = cast(np.ndarray, np.ones(self.height)) if w is None else w
         if self.cov_type == 'model':
+            assert self.F is not None and self.C is not None , (self.F , self.C)
             quad_term = w.T.dot(self.F.T).dot(self.C).dot(self.F).dot(w) 
             if self.S is not None: 
                 quad_term += (w * self.S).dot(w)
         else:
+            assert self.cov is not None , self.cov
             quad_term = w.T.dot(self.cov).dot(w)
         return quad_term
     
     def model_to_normal(self):
         assert self.cov_type == 'model' , f'{self.cov_type} is must be model'
-        self.cov = self.F.T.dot(self.C).dot(self.F)
+        assert self.F is not None and self.C is not None , (self.F , self.C)
+        cov = self.F.T.dot(self.C).dot(self.F)
         if self.S is not None: 
             ijs = np.arange(len(self.S))
-            diag = self.cov[ijs,ijs] + self.S
-            self.cov[ijs,ijs] = diag
+            diag = cov[ijs,ijs] + self.S
+            cov[ijs,ijs] = diag
+        self.cov = cov
         self.cov_type = 'normal'
 
     @classmethod

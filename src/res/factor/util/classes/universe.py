@@ -98,7 +98,7 @@ class Universe:
         return df
     
     def get(
-        self , dates : Literal['all'] | Base.alias.intDates | None = None , 
+        self , dates : Literal['all'] | Base.alias.DateType = None , 
         exclusions : str = 'st_lowprice_bse_loser_warnst'
     ) -> Portfolio:
         if isinstance(dates , str) and dates == 'all':

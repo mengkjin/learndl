@@ -8,9 +8,11 @@ To register a new updater, create a file anywhere under ``update/custom/`` that
 defines a subclass — ``import_updaters()`` will discover and import it automatically.
 """
 from __future__ import annotations
-from typing import Any , Type , Iterator
+
 from importlib import import_module
 from pathlib import Path
+from typing import Any
+from collections.abc import Iterator
 
 from src.proj import PATH , Base
 
@@ -23,7 +25,7 @@ class BasicCustomUpdaterMeta(type):
     Each concrete subclass must implement ``update_all``; the metaclass enforces
     this at class creation time and raises ``AssertionError`` if it is missing.
     """
-    registry : dict[str , Type[BasicCustomUpdater] | Any] = {}
+    registry : dict[str , type[BasicCustomUpdater] | Any] = {}
     def __new__(cls , name , bases , dct):
         """Create the class and register it (excluding the abstract base itself)."""
         new_cls = super().__new__(cls , name , bases , dct)
@@ -44,7 +46,7 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
     START_DATE : int = 20170101
 
     @classmethod
-    def iter_updaters(cls) -> Iterator[Type[BasicCustomUpdater]]:
+    def iter_updaters(cls) -> Iterator[type[BasicCustomUpdater]]:
         cls.import_updaters()
         for name , updater in cls.registry.items():
             yield updater

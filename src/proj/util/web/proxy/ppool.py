@@ -6,10 +6,12 @@ import threading
 import time
 
 from datetime import datetime , timedelta
-from typing import Iterable , Literal , Any
+from typing import Literal , TypeAlias
+from collections.abc import Iterable
 
+from src.proj.core import lit
 from src.proj.env import Proj
-from src.proj.bases import BoundLogger
+from src.proj.bases import BoundLogger , ArrayLike , ensure_name_list
 from .core import Proxy , ProxySet , ProxyStats , ProxyStatsSet
 from .verifier import ProxyVerifier
 from .finder import FreeProxyFinder as ProxyFinder
@@ -22,13 +24,17 @@ __all__ = [
     'AsyncProxyPool' , 'AsyncAdaptiveProxyPool'
 ]
 
+strProxy : TypeAlias = 'str | Proxy'
+UrlsType : TypeAlias = ArrayLike[str] | str
+
 class WorkingProxies(BoundLogger):
     TEST_PROXIES = ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
     @classmethod
     def get(
-        cls, target_url: str , start_with: Iterable[Proxy | str] = () , * , 
+        cls, target_url: str , start_with: Iterable[strProxy] = () , * , 
         min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
-        dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all') -> ProxySet:
+        dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all'
+    ) -> ProxySet:
         """
         return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
         if force_refresh is True, ignore the expired cache.
@@ -97,10 +103,10 @@ class ProxyStatsSetURL(ProxyStatsSet , BoundLogger):
 
     def __init__(
         self , 
-        proxies: Iterable[ProxyStats | Proxy | str] | None = None , source: str = 'unknown' , * , 
+        proxies: Iterable[ProxyStats | strProxy] | None = None , source: str = 'unknown' , * , 
         url: str , adaptive: bool = False,
         refresh_interval: int = 5 , refresh_max_attempts: int = 10 , refresh_threshold: float = 0.2,
-        go_with_cached_proxies: bool = False, indent: int = 0, vb_level: Any = 1,
+        go_with_cached_proxies: bool = False, indent : int = 0, vb_level : lit.VerbosityLevel = 1,
         **kwargs
     ):
         if getattr(self, '_inited', False):
@@ -199,7 +205,7 @@ class ProxyStatsSetURL(ProxyStatsSet , BoundLogger):
             self.logger.alert1(f"{prefix}refresh failed with no new proxies, will not refresh anymore")
 
     @classmethod
-    def from_urls(cls, urls: list[str] | str , **kwargs):
+    def from_urls(cls, urls: UrlsType , **kwargs):
         """
         Create a ProxyStatsSetURL for each URL in the list.
         do not use thread pool to create the proxy sets, because some of the proxy finders website will block the ip if too many requests are made.
@@ -212,20 +218,20 @@ class ProxyPool(BoundLogger):
     """Thread-safe proxy pool: acquire/release proxies with blocking wait when all are occupied."""
 
     def __init__(
-        self, target_urls: list[str] | str , * , 
+        self, target_urls: UrlsType , * , 
         go_with_cached_proxies: bool = False ,
         adaptive: bool = False,
-        indent: int = 0, vb_level: Any = 1, **kwargs):
+        indent : int = 0, vb_level : lit.VerbosityLevel = 1, **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(target_urls, go_with_cached_proxies = go_with_cached_proxies , adaptive=adaptive , **kwargs)
 
-    def initiate(self , target_urls: list[str] | str , **kwargs):
+    def initiate(self , target_urls: UrlsType , **kwargs):
         """Initialise the pool's lock, condition, and per-URL proxy sets."""
         if target_urls == 'test':
             self.logger.alert1("Using test mode and pseudo proxies")
         self.lock = threading.Lock()
         self.condition = threading.Condition(self.lock)
-        self.target_urls = target_urls if isinstance(target_urls , list) else [target_urls]
+        self.target_urls = ensure_name_list(target_urls , [])
         self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, indent=self.indent + 1, vb_level=self.vb_level + 1, **kwargs)
         
     def __len__(self) -> int:
@@ -275,7 +281,10 @@ class ProxyPool(BoundLogger):
             # notify all waiting threads that the proxy state has changed
             self.condition.notify_all()
 
-    def execute(self , caller_inputs : Iterable[ProxyCallerInput] , * , max_workers : int = 3 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+    def execute(
+        self , caller_inputs : Iterable[ProxyCallerInput] , * , 
+        max_workers : int = 3 , grouping_num : int = 100 , **kwargs
+    ) -> list[bool | Exception]:
         """Execute caller_inputs through this pool, partitioned into groups; return all results."""
         callers = ProxyCallerList.from_inputs(caller_inputs , self)
         groups = callers.partition(grouping_num)
@@ -319,12 +328,12 @@ class AdaptiveProxyPool(ProxyPool):
         refresh_threshold: the ratio of initial proxies that are remained enabled to trigger a refresh
     """
     def __init__(
-        self, target_urls: list[str] | str , * , 
+        self, target_urls: UrlsType , * , 
         go_with_cached_proxies: bool = False,
         refresh_interval: int = 5 ,
         refresh_max_attempts: int = 10 ,
         refresh_threshold: float = 0.2 ,
-        indent: int = 0, vb_level: Any = 1, **kwargs
+        indent : int = 0, vb_level : lit.VerbosityLevel = 1, **kwargs
     ):
         super().__init__(
             target_urls=target_urls, 
@@ -339,9 +348,11 @@ class AdaptiveProxyPool(ProxyPool):
         for proxy_set in self.proxies.values():
             proxy_set.adaptive_refresh()
                 
-    def execute(self , caller_inputs : Iterable[ProxyCallerInput] , * ,
-                fallback_to_raw_ip: bool = False,
-                max_workers : int = 3 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+    def execute(
+        self , caller_inputs : Iterable[ProxyCallerInput] , * ,
+        fallback_to_raw_ip: bool = False,
+        max_workers : int = 3 , grouping_num : int = 100 , **kwargs
+    ) -> list[bool | Exception]:
         """
         Execute callers with adaptive refresh: retry each group up to 10× and refresh after each attempt.
 
@@ -372,20 +383,20 @@ class AsyncProxyPool(BoundLogger):
     """Asyncio-native proxy pool corresponding to ``ProxyPool``."""
 
     def __init__(
-        self, target_urls: list[str] | str, *, 
+        self, target_urls: UrlsType, *, 
         go_with_cached_proxies: bool = False,
         adaptive: bool = False,
-        indent: int = 0, vb_level: Any = 1, **kwargs
+        indent : int = 0, vb_level : lit.VerbosityLevel = 1, **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(target_urls, go_with_cached_proxies=go_with_cached_proxies, adaptive=adaptive, **kwargs)
 
-    def initiate(self, target_urls: list[str] | str, **kwargs):
+    def initiate(self, target_urls: UrlsType, **kwargs):
         if target_urls == 'test':
             self.logger.alert1("Using test mode and pseudo proxies")
         self.lock = asyncio.Lock()
         self.condition = asyncio.Condition(self.lock)
-        self.target_urls = target_urls if isinstance(target_urls, list) else [target_urls]
+        self.target_urls = ensure_name_list(target_urls , [])
         self.proxies = ProxyStatsSetURL.from_urls(self.target_urls, indent=self.indent + 1, vb_level=self.vb_level + 1, **kwargs)
 
     def __len__(self) -> int:
@@ -414,19 +425,18 @@ class AsyncProxyPool(BoundLogger):
             proxy.release(success, counted=counted, vb_level=self.vb_level + 3)
             self.condition.notify_all()
 
-
 class AsyncAdaptiveProxyPool(AsyncProxyPool):
     """Asyncio-native proxy pool corresponding to ``AdaptiveProxyPool``."""
 
     def __init__(
         self,
-        target_urls: list[str] | str,
+        target_urls: UrlsType,
         *,
         go_with_cached_proxies: bool = False,
         refresh_interval: int = 5,
         refresh_max_attempts: int = 10,
         refresh_threshold: float = 0.2,
-        indent: int = 0, vb_level: Any = 1, **kwargs
+        indent : int = 0, vb_level : lit.VerbosityLevel = 1, **kwargs
     ):
         super().__init__(
             target_urls=target_urls,

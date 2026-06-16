@@ -1,5 +1,4 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
-# coding: utf-8
 # author: codex
 # date: 2026-04-30
 # description: Download Announcement Async By Date Range

@@ -3,11 +3,12 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from datetime import datetime , timedelta
-from typing import Literal , Any , Iterable
+from typing import Literal , Any
+from collections.abc import Iterable
 
 from src.proj.env import PATH
 from src.proj.cal import BJ_TZ
-from .core import Proxy , ProxySet
+from .core import ProxySet , strProxy
 
 _default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ_TZ)
 __all__ = ['CachedProxies' , 'ProxyCache']
@@ -72,7 +73,7 @@ class ProxyCache:
         return cls._cached_proxies
 
     @classmethod
-    def update(cls , target_url: str, verified_proxies: Iterable[Proxy | str]) -> None:
+    def update(cls , target_url: str, verified_proxies: Iterable[strProxy]) -> None:
         """Save proxies cache to cache file"""
         with cls._locks['cache']:
             if cls._cached_proxies is None:

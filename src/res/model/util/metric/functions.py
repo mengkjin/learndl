@@ -44,8 +44,8 @@ class MetricFunction:
 
     def __call__(
         self , data : BatchData , 
-        which_output : Base.alias.intNums | None = None , 
-        which_label : Base.alias.intNums | None = None , 
+        which_output : Base.intNums | None = None , 
+        which_label : Base.intNums | None = None , 
         require_grad : bool = True
     ) -> dict[str,Tensor]:
         with _Grads(require_grad):
@@ -54,11 +54,10 @@ class MetricFunction:
             for criterion , component in self.components.items():
                 Logger.only_once(f'{criterion} calculated!' , object = self , mark = criterion , printer = 'success' , vb_level = 'max')
                 value = component(which_output = which_output , which_label = which_label , **inputs)
-                if isinstance(value , dict):
-                    results.update({k:v.sum() for k,v in value.items()})
-                else:
+                if isinstance(value , torch.Tensor):
                     results[criterion] = value.sum()
-            
+                else:
+                    results.update({k:v.sum() for k,v in value.items()})
         return results
 
 class LossFunction(MetricFunction):
@@ -69,7 +68,7 @@ class LossFunction(MetricFunction):
         criterions : dict[str,dict[str,Any]] , 
         net : nn.Module | None = None , 
         ignores : list[str] | None = None ,
-        multilosses_kwargs : dict[str,Any] | None = None ,
+        multilosses_kwargs : dict[str, Any] | None = None ,
     ) -> None:
         super().__init__(criterions , net , ignores)
         self.multilosses_kwargs = multilosses_kwargs or {}
@@ -95,8 +94,13 @@ class LossFunction(MetricFunction):
                 multilosses = None
             self.components[criterion] = LossComponent(calculator , lamb = lamb , multilosses = multilosses , **kwargs)
 
-    def losses(self , data : BatchData , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None ,
-               prefix : str | tuple[str,...] | None = ('penalty_' , 'loss_') , dataset : Base.lit.DatasetAll = 'train') -> dict[str,Tensor]:
+    def losses(
+        self , data : BatchData , 
+        which_output : Base.intNums | None = None , 
+        which_label : Base.intNums | None = None ,
+        prefix : str | tuple[str, ...] | None = ('penalty_' , 'loss_') , 
+        dataset : Base.lit.DatasetAll = 'train'
+    ) -> dict[str,Tensor]:
         if dataset not in ['train','valid']:
             return {}
         losses = self(data, which_output = which_output , which_label = which_label , require_grad = dataset == 'train')
@@ -131,8 +135,12 @@ class AccuracyFunction(MetricFunction):
             calculator = Accuracy.get(criterion , **kwargs)
             self.components[criterion] = AccuracyComponent(calculator , lamb = lamb , **kwargs)
 
-    def accuracies(self , data : BatchData , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None , 
-                   dataset : Base.lit.DatasetAll = 'train') -> dict[str,float]:
+    def accuracies(
+        self , data : BatchData , 
+        which_output : Base.intNums | None = None , 
+        which_label : Base.intNums | None = None , 
+        dataset : Base.lit.DatasetAll = 'train'
+    ) -> dict[str,float]:
         if dataset not in ['train','valid']:
             return {}
         accuracies = self(data, which_output = which_output , which_label = which_label , require_grad = False)
@@ -153,8 +161,8 @@ class RankICFunction:
 
     def __call__(
         self , data : BatchData , 
-        which_output : Base.alias.intNums | None = None , 
-        which_label : Base.alias.intNums | None = None , 
+        which_output : Base.intNums | None = None , 
+        which_label : Base.intNums | None = None , 
         **kwargs
     ) -> Tensor:
         with _Grads(False):

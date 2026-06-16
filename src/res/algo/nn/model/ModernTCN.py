@@ -44,7 +44,7 @@ class ModernTCN(nn.Module):
         seq_len: int , 
         d_model:int, 
         patch_len:int = 5, 
-        stride:int|None = None, 
+        stride: int | None = None, 
         kernel_size:int=3,expansion_factor:int=1,
         shared_embedding=True, shared_head = False, channel_mixer=True,
         revin:bool=True,n_layers:int=3, dropout:float=0., act:str='gelu', 
@@ -93,7 +93,7 @@ class ModernTCN(nn.Module):
             x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
             x = x.permute(0,3,1,2)                  # [bs x nvars x d_model x num_patch]
             
-        x = self.head(x)                            # [bs x seq_len x nvars] | [bs x predict_steps]
+        x = self.head(x)                            # [bs x seq_len x nvars] or [bs x predict_steps]
         return x
 
 class MtcnTSMixer(nn.Module):

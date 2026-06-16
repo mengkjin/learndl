@@ -6,3 +6,4 @@ showSidebarNavigation = false
 
 [server]
 runOnSave = true
+fileWatcherType = "poll"

@@ -31,7 +31,7 @@ class ArrayMeta:
     @classmethod
     def from_json(cls, json_path: strPath) -> ArrayMeta:
         """Load metadata written by ``to_json``."""
-        with open(json_path, 'r' , encoding='utf-8') as f:
+        with open(json_path , encoding='utf-8') as f:
             meta = json.load(f)
         return cls(array_type=meta['array_type'], dtype=meta['dtype'], shape=meta['shape'])
 

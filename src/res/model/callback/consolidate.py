@@ -3,7 +3,8 @@ Consolidate all callbacks into one
 """
 from __future__ import annotations
 import inspect , itertools
-from typing import Any , Type , Callable
+from typing import Any
+from collections.abc import Callable
 
 from src.proj import Proj
 from src.res.model.util import BaseCallBack , BaseTrainer , ModelConfig
@@ -88,7 +89,7 @@ class ConsolidateCallBack(BaseCallBack):
         return callbacks
 
     @classmethod
-    def _get_callback_classes(cls) -> dict[str,Type[BaseCallBack]]:
+    def _get_callback_classes(cls) -> dict[str,type[BaseCallBack]]:
         if not hasattr(cls , '_callback_classes'):
             cbs = {}
             for cb_mod in CallbackModules:
@@ -101,5 +102,5 @@ class ConsolidateCallBack(BaseCallBack):
         return cls._callback_classes
     
     @classmethod
-    def get_callback_class(cls , cb_name : str) -> Type[BaseCallBack]:
+    def get_callback_class(cls , cb_name : str) -> type[BaseCallBack]:
         return cls._get_callback_classes()[cb_name]

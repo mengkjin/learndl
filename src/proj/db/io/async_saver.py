@@ -5,7 +5,8 @@ import pandas as pd
 import threading
 from datetime import datetime
 from copy import deepcopy
-from typing import Any , Callable , Mapping , TypeVar , cast , TYPE_CHECKING
+from typing import Any   , TypeVar , cast , TYPE_CHECKING
+from collections.abc import Callable, Mapping
 
 from src.proj.core import strPath , strPaths
 from src.proj.log import Logger

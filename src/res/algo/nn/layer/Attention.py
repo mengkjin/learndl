@@ -114,7 +114,7 @@ class MultiheadAttention(nn.Module):
             return output, attn_weights
 
 class ScaledDotProductAttention(nn.Module):
-    r"""Scaled Dot-Product Attention module (Attention is all you need by Vaswani et al., 2017) with optional residual attention from previous layer
+    """Scaled Dot-Product Attention module (Attention is all you need by Vaswani et al., 2017) with optional residual attention from previous layer
     (Realformer: Transformer likes residual attention by He et al, 2020) and locality self sttention (Vision Transformer for Small-Size Datasets
     by Lee et al, 2021)"""
 
@@ -126,10 +126,12 @@ class ScaledDotProductAttention(nn.Module):
         self.scale = nn.Parameter(torch.Tensor(head_dim ** -0.5), requires_grad=lsa)
         self.lsa = lsa
 
-    def forward(self, q:Tensor, k:Tensor, v:Tensor, 
-                prev:Tensor | None = None, 
-                key_padding_mask:Tensor | None = None, 
-                attn_mask:Tensor | None = None):
+    def forward(
+        self, q:Tensor, k:Tensor, v:Tensor, 
+        prev:Tensor | None = None, 
+        key_padding_mask:Tensor | None = None, 
+        attn_mask:Tensor | None = None
+    ):
         """
         Input shape:
             q               : [bs x n_heads x max_q_len x d_k]

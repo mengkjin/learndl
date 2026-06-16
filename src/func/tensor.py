@@ -9,17 +9,19 @@ statistics are taken, depending on the function.
 from __future__ import annotations
 import torch
 import torch.nn.functional as F
-from functools import wraps
-from torch import Tensor , nan
 import numpy as np
+from functools import wraps
 from sklearn.linear_model import LinearRegression
-from typing import Literal , Callable
+from torch import Tensor , nan
+from typing import Literal , TypeAlias
+from collections.abc import Callable
 
 from .basic import alert_message , DIV_TOL , allna
 
-lit1 = Literal[1]
+lit1 : TypeAlias = Literal[1]
+OptTensor : TypeAlias = Tensor | None
     
-def process_factor(value : Tensor | None , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
+def process_factor(value : OptTensor , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
     """Apply a chained underscore-separated pipeline to factor values (trim, winsor, norm, etc.).
 
     Supported tokens include ``mean``, ``inf``, ``trim``, ``winsor``, ``norm``, ``nan``. ``trim``/``winsor``
@@ -70,7 +72,7 @@ class TsRoller:
     pad_first = True # whether to pad before unfold / otherwise after fold
 
     @classmethod
-    def unfold(cls , x : Tensor , d : int , * , dim :int | lit1 = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
+    def unfold(cls , x : Tensor , d : int , * , dim : int | lit1 = 1, nan = nan , pinf = torch.inf , ninf = -torch.inf, **kwargs):
         """Build sliding windows of length ``d`` along ``dim``.
 
         Args:
@@ -355,7 +357,7 @@ def rank_pct(x : Tensor , * , dim : int | None = 0) -> Tensor:
 
     return x_rank
 
-def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : Tensor | None = None , min_coverage = 0.5):
+def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : OptTensor = None , min_coverage = 0.5):
     """Rank correlation on 2-D tensors with coverage gating (uses ``corrwith`` on rank_pct).
 
     Args:
@@ -439,7 +441,7 @@ def concat_factors_2d(*factors : Tensor , dim : int = -1 , device = None) -> Ten
         ts = ts.to(device = device)
     return ts
 
-def neutralize_xdata_2d(x : Tensor | None , groups : None | list | tuple | Tensor = None):
+def neutralize_xdata_2d(x : OptTensor , groups : list | tuple | Tensor | None = None):
     """Build design matrix: optional numeric ``x`` plus group dummies and intercept column.
 
     Args:
@@ -557,7 +559,7 @@ def beta_calculator(method = 'np'):
             return betas_torch(x , y)
     return wrapper
 
-def neutralize_2d(y : Tensor | None , x : Tensor | None , * ,
+def neutralize_2d(y : OptTensor , x : OptTensor , * ,
                   dim : int = 0 , method = 'np' , zscore = True , device = None , inplace = False , 
                   min_coverage = 3):
     """Regress ``y`` on ``x`` slice-wise (cross-section or time via ``dim``) and subtract fit.
@@ -631,7 +633,7 @@ def neutralize_2d(y : Tensor | None , x : Tensor | None , * ,
         y = zscore_inplace(y , dim = dim)
     return y
 
-def neutralize_1d(y : Tensor | None , x : Tensor | None , insample : Tensor | None , * , 
+def neutralize_1d(y : OptTensor , x : OptTensor , insample : OptTensor , * , 
                   method = 'torch' , zscore = True , device = None , inplace = False , 
                   min_coverage = 3):
     """Single cross-section neutralization: OLS of ``y`` on ``x`` over ``insample`` mask.
@@ -1444,7 +1446,7 @@ def conditional_x(
         ValueError: If neither branch produces a group.
     """
     assert method in ['btm' , 'top' , 'diff'] , method
-    groups : list[Tensor | None] = [None , None]
+    groups : list[OptTensor] = [None , None]
     if method in ['btm' , 'diff']:
         condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
         if force_directional_sign: 
@@ -1493,7 +1495,7 @@ def conditional_y_on_x(
         ValueError: If group list is empty.
     """
     assert method in ['btm' , 'top' , 'diff'] , method
-    groups : list[Tensor | None] = [None , None]
+    groups : list[OptTensor] = [None , None]
     if method in ['btm' , 'diff']:
         condition = kthvalue_by_topk(x, n, dim=-1, keepdim=True, largest=False)
         if force_directional_sign: 

@@ -4,7 +4,8 @@ Evaluator for genetic programming
 from __future__ import annotations
 import torch
 import numpy as np
-from typing import Callable , Literal , Any
+from typing import Literal , Any
+from collections.abc import Callable
 from deap import gp
 from torch.multiprocessing import Pool
 from tqdm import tqdm
@@ -13,7 +14,7 @@ from src.proj import Base
 from src.func.tensor import neutralize_1d , neutralize_2d , rankic_2d , nanmean , nanstd
 from src.res.gp.func import factor_func as FF
 from src.res.gp.param import gpParameters
-from .syntax import BaseIndividual , SyntaxRecord , Population
+from .syntax import BaseIndividual , SyntaxRecord , Population , CompilerInputType
 from .input import gpInput
 from .status import gpStatus
 from .timer import gpTimer
@@ -34,7 +35,7 @@ def _except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
         return value
     return wrapper
 
-def _compiler(syntax : BaseIndividual | str | SyntaxRecord) -> Callable[..., torch.Tensor]:
+def _compiler(syntax : CompilerInputType) -> Callable[..., torch.Tensor]:
     if isinstance(syntax , str):
         ind = BaseIndividual.get_class().from_syntax(syntax)
     elif isinstance(syntax , SyntaxRecord):
@@ -71,8 +72,10 @@ class gpEvaluator(Base.BoundLogger):
         self.recorder = recorder
         self.fitness = gpFitness(param.fitness_wgt)
 
-    def to_value(self , individual : BaseIndividual | str | SyntaxRecord , * , neutral_type : Literal[0,1,2] = 0 , process_key='inf_winsor_norm',
-                **kwargs) -> FF.FactorValue:
+    def to_value(
+        self , individual : CompilerInputType , * , 
+        neutral_type : Literal[0,1,2] = 0 , process_key='inf_winsor_norm', **kwargs
+    ) -> FF.FactorValue:
         """
         根据迭代出的因子表达式,计算因子值
         计算因子时容易出现OutOfMemoryError,如果出现了异常处理一下,所以代码比较冗杂
@@ -100,7 +103,9 @@ class gpEvaluator(Base.BoundLogger):
 
         return FF.FactorValue(factor_value , ind_name , process_key)
 
-    def assess(self , factor : FF.FactorValue , * , const_annual = 24 , min_coverage = 0.5 , **kwargs) -> tuple[np.ndarray, tuple | None]:
+    def assess(
+        self , factor : FF.FactorValue , * , const_annual = 24 , min_coverage = 0.5 , **kwargs
+    ) -> tuple[np.ndarray, tuple | None]:
         """
         计算因子值的指标和适应度
         input:

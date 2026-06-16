@@ -7,7 +7,8 @@ import gc , torch
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal , TypeVar , Sequence
+from typing import Any , Literal , TypeVar
+from collections.abc import Sequence
 
 from src.proj import PATH , Load
 from src.proj.util.functional.device import Device

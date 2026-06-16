@@ -9,7 +9,8 @@ import numpy as np
 from dataclasses import dataclass , asdict
 from functools import cached_property
 from pathlib import Path
-from typing import Literal , Any
+from typing import Literal , Any , TypeAlias 
+from collections.abc import Mapping
 
 from src.proj import CALENDAR , DB , Const , Base , Save , Load , Dates , Logger
 from src.proj.util.functional.parallel import parallel
@@ -19,7 +20,10 @@ from src.res.factor.util import Portfolio , Benchmark , RISK_MODEL , Port
 from src.res.factor.util.stats import eval_drawdown
 from src.res.factor.util.stats.aggregate import eval_period_ret
 
-__all__ = ['PortfolioAccountant' , 'PortfolioAccountManager']
+__all__ = ['PortfolioAccountant' , 'PortfolioAccountManager' , 'AccountInputDataType' , 'AccountInputType']
+
+AccountInputDataType : TypeAlias = pd.DataFrame | pd.Series | np.ndarray | list[float]
+AccountInputType : TypeAlias = Portfolio | AccountInputDataType
 
 @dataclass(frozen=True)
 class AccountConfig:              
@@ -78,8 +82,8 @@ class PortfolioAccount:
         return instance
 
     def __init__(
-        self , input : Portfolio|pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None , 
-        config : AccountConfig | None = None , index : dict[Any,Any] | None = None
+        self , input : AccountInputType | None = None , 
+        config : AccountConfig | None = None , index : dict[Any, Any] | None = None
     ):
         if isinstance(input , Portfolio):
             config = input.account.config
@@ -101,7 +105,7 @@ class PortfolioAccount:
         return self._input
     
     @input.setter
-    def input(self , value : pd.DataFrame|pd.Series|np.ndarray|list[float]|None = None):
+    def input(self , value : AccountInputDataType | None = None):
         if value is None or isinstance(value , pd.DataFrame):
             df = value
         else:
@@ -135,7 +139,7 @@ class PortfolioAccount:
         self.index = {}
         return self
 
-    def with_index(self , index : dict[str,Any] | None = None):
+    def with_index(self , index : dict[str, Any] | None = None):
         """return portfolio account with given index"""
         if index is not None:
             self.index = index
@@ -351,7 +355,7 @@ class PortfolioAccount:
         return eval_period_ret(self.df.reset_index().loc[:,['end' , 'pf']].rename(columns = {'end' : 'date'}))
 
     @classmethod
-    def EvalPeriodRet(cls , paths : dict[str , str] | dict[str , Path]) -> pd.DataFrame:
+    def EvalPeriodRet(cls , paths : Mapping[str , Base.strPath]) -> pd.DataFrame:
         accounts = {name : cls.load(path) for name , path in paths.items() if Path(path).exists()}
         if not accounts:
             return pd.DataFrame()
@@ -403,8 +407,9 @@ class PortfolioAccountant(Base.BoundLogger):
         config_or_benchmark : AccountConfig | Portfolio | Benchmark | str | None = None ,
         start : int = -1 , end : int = 99991231 , analytic = True , attribution = True , * ,
         trade_engine : Base.lit.TradeEngine = 'default' , 
-        daily = False , cache = False , with_index : dict[str,Any] | None = None ,
-        resume_path : Base.strPath | None = None , resume_end : int | None = None , resume_drop_last = True , save_after = True ,
+        daily = False , cache = False , with_index : dict[str, Any] | None = None ,
+        resume_path : Base.strPath | None = None , resume_end : Base.intDate | None = None , 
+        resume_drop_last = True , save_after = True ,
     ):
         """Accounting portfolio through date, if cache is True, will cache the account"""
         if isinstance(config_or_benchmark , AccountConfig):
@@ -425,7 +430,7 @@ class PortfolioAccountant(Base.BoundLogger):
                 self.resumed_account.filter_dates(end = last_model_date - 1)
 
             if resume_end is not None:
-                self.resumed_account.filter_dates(end = resume_end)
+                self.resumed_account.filter_dates(end = int(resume_end))
 
             if not self.resumed_account.empty:
                 self.logger.success(
@@ -604,9 +609,8 @@ class PortfolioAccountManager(Base.BoundLogger):
         self.accounts.clear()
         return self
     
-    def deploy(self , fmp_names : list[str] | None = None , overwrite = False , indent : int = 0 , vb_level : Any = 1 , async_save = True):
-        if fmp_names is None: 
-            fmp_names = list(self.accounts.keys())
+    def deploy(self , fmp_names : Base.alias.NamesType = None , overwrite = False , indent : int = 0 , vb_level : Any = 1 , async_save = True):
+        fmp_names = Base.ensure_name_list(fmp_names , list(self.accounts.keys()))
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}
         if not overwrite:
             existed = [path for path in fmp_paths.values() if path.exists()]
@@ -633,7 +637,7 @@ class PortfolioAccountManager(Base.BoundLogger):
         task_name : Literal[
             'FrontFace', 'Perf_Curve', 'Perf_Drawdown', 'Perf_Year', 'Perf_Month',
             'Perf_Excess','Perf_Lag','Exp_Style','Exp_Style','Exp_Indus',
-            'Attrib_Source','Attrib_Style'] | str , 
+            'Attrib_Source','Attrib_Style'] , 
         plot = True , display = True , **kwargs
     ):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}

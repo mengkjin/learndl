@@ -156,7 +156,7 @@ class RebuildPreprocessedData(QuickCallButton):
 class ArchiveCurrentModel(QuickCallButton):
     """Button that archives the model."""
     key = "archive-current-model"
-    button_title = "📥 Current Model"
+    button_title = "⬇️ Current Model"
     icon = ":material/archive:"
     default_help = 'Archive models from model directory to model archive directory, you can choose which model to archive.'
     color = 'pink'
@@ -171,7 +171,7 @@ class ArchiveCurrentModel(QuickCallButton):
 class ResumeArchivedModel(QuickCallButton):
     """Button that resumes the model."""
     key = "resume-archived-model"
-    button_title = "📤 Archived Model"
+    button_title = "⬆️ Archived Model"
     icon = ":material/unarchive:"
     default_help = 'Resume models from model archive directory, you can choose which model to resume.'
     color = 'green'

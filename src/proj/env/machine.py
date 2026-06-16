@@ -32,7 +32,7 @@ def _load_config_file(path: Path) -> dict:
     else:
         raise FileNotFoundError(f'{path} does not exist')
     
-    with open(path , 'r' , encoding='utf-8') as f:
+    with open(path  , encoding='utf-8') as f:
         if path.suffix == '.yaml':
             content = yaml.safe_load(f)
         elif path.suffix == '.json':
@@ -74,7 +74,7 @@ class _MachineSettings:
 
 
 def _get_system_name():
-    """Normalize OS name to ``linux`` | ``windows`` | ``macos``.
+    """Normalize OS name to ``linux`` or ``windows`` or ``macos``.
 
     Returns:
         Short platform tag used for ``MACHINE.system_name``.

@@ -64,7 +64,7 @@ class AlgoModule:
             return ''
     
     @classmethod
-    def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : dict[str,torch.Tensor] | None = None , **kwargs):
+    def get_nn(cls , model_module : str , model_param : dict | None = None , device : Any = None , state_dict : dict[str, torch.Tensor] | None = None , **kwargs):
         model_param = model_param or {}
         net : torch.nn.Module | Any = get_nn_module(model_module)(**model_param)
         assert isinstance(net , torch.nn.Module) , net.__class__
@@ -86,7 +86,8 @@ class AlgoModule:
     def get_boost(
         cls , model_module : str , model_param : dict | None = None , 
         cuda = None , seed = None , model_dict : dict | None = None , 
-        given_name : str | None = None , sub_name : str | None = None , override_criterion : dict | None = None , 
+        given_name : str | None = None , sub_name : str | None = None , 
+        override_criterion : dict | None = None , 
         optuna : bool = False , **kwargs
     ):
         boost_class = OptunaBoostModel if optuna else GeneralBoostModel

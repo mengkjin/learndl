@@ -36,7 +36,7 @@ class ModelPath:
         index: optional, model index
     
     """
-    def __init__(self , model_input : Base.strPath | ModelPath | None | Any , **kwargs) -> None:
+    def __init__(self , model_input : str | Base.strPath | ModelPath | None , **kwargs) -> None:
         super().__init__(**kwargs)
 
         self.parse_input(model_input.base if isinstance(model_input , ModelPath) else model_input)
@@ -48,7 +48,7 @@ class ModelPath:
     def __eq__(self , other : ModelPath):
         return self.full_name == other.full_name
 
-    def parse_input(self , model_input : Base.strPath  | None):
+    def parse_input(self , model_input : Base.strPath | None):
         parsed_model_input = parse_model_input(model_input)
         self.full_name : str = parsed_model_input.pop('full_name')
         self.full_name_kwargs : dict[str,Any] = parsed_model_input
@@ -320,7 +320,7 @@ class ModelPath:
             return
         self.log_file.write(operation)
 
-    def check_last_operation(self , operation : str | None = None , interval_hours : int = 24) -> tuple[datetime | None , timedelta , bool]:
+    def check_last_operation(self , operation : str | None = None , interval_hours : int = 24) -> tuple[datetime | None, timedelta, bool]:
         """check if the last operation is within the interval
         Args:
             category (str | None): the category of the operation
@@ -387,8 +387,8 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     MODEL_DICT : dict[str,dict[str,Any]] = Const.Model.strategies['prediction']
 
     def __init__(
-        self, model_input : Base.strPath | None | Any , 
-        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
+        self, model_input : str | Base.strPath | ModelPath | None , 
+        model_num : Base.intNums | Literal['all'] | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs
     ) -> None:
@@ -466,7 +466,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         """model factor portfolio target dates"""
         return self.pred_target_dates[::self.FMP_STEP]
     
-    def save_pred(self , df : pd.DataFrame , date : int | Any , overwrite = False , reason : str = '') -> None:
+    def save_pred(self , df : pd.DataFrame , date : int , overwrite = False , reason : str = '') -> None:
         """save model pred"""
         df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
         DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1 , reason = reason)
@@ -481,7 +481,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
             self.save_pred(df , date , overwrite = True , reason = f'column rename from {self.model_clean_name} to {self.pred_name}')
         return df
 
-    def save_fmp(self , df : pd.DataFrame , date : int | Any , overwrite = False) -> None:
+    def save_fmp(self , df : pd.DataFrame , date : int , overwrite = False) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp_port.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
         Save.df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
@@ -499,12 +499,9 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         return PATH.fmp_acc.joinpath(self.pred_name)
 
     @classmethod
-    def SelectModels(cls , pred_names : list[str] | str | None = None) -> list[PredictorPath]:
+    def SelectModels(cls , pred_names : Base.alias.NamesType = None) -> list[PredictorPath]:
         """select prediction models"""
-        if pred_names is None: 
-            pred_names = list(cls.MODEL_DICT.keys())
-        if isinstance(pred_names , str): 
-            pred_names = [pred_names]
+        pred_names = Base.ensure_name_list(pred_names,list(cls.MODEL_DICT.keys()))
         paths = []
         for key in pred_names:
             if key in cls.MODEL_DICT:
@@ -516,21 +513,27 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         return paths
 
     @classmethod
-    def CollectModelArchives(cls , pred_names : list[str] | str | None = None , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path | Any]:
+    def CollectModelArchives(
+        cls , pred_names : Base.alias.NamesType = None ,
+        start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
         paths : list[Path] = []
         for model in cls.SelectModels(pred_names):
             paths.extend(model.collect_model_archives(start_model_date , end_model_date))
         return paths
 
     @classmethod
-    def PackModelArchives(cls , start_model_date : int = -1 , end_model_date : int = 99991231) -> Path:
+    def PackModelArchives(
+        cls , start_model_date : int = -1 , end_model_date : int = 99991231
+    ) -> Path:
         files = cls.CollectModelArchives(start_model_date = start_model_date , end_model_date = end_model_date)
         path = PATH.updater.joinpath('model_archives').joinpath(f'model_archives_{start_model_date}_{end_model_date}.tar')
         Save.pack(files , path , overwrite = True , indent = 0 , vb_level = 1)
         return path
 
     @classmethod
-    def UnpackModelArchives(cls , path : Base.strPath | None = None , delete_tar = True , overwrite = False) -> None:
+    def UnpackModelArchives(
+        cls , path : Base.strPath | None = None , delete_tar = True , overwrite = False
+    ) -> None:
         if path is None:
             paths = [p for p in PATH.main.glob('*.tar') if p.name.startswith('model_archives_')]
             paths += [p for p in PATH.updater.joinpath('model_archives').glob('*.tar')]

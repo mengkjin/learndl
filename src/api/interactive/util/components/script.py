@@ -13,17 +13,16 @@ from __future__ import annotations
 import streamlit as st
 import os , subprocess
 
-from typing import Any , Literal, Callable
 from pathlib import Path
+from typing import Any , Literal
+from collections.abc import Callable
 
+from src.proj import PATH , MACHINE , Base
 from src.api.util.backend import ScriptRunner , TaskItem
-
 from src.api.util.st_frontend import (
     FilePreviewer , YAMLFileEditor , ColoredText , subheader_expander , ParamInputsForm ,
 )
 
-
-from src.proj import PATH , MACHINE
 from src.api.interactive.util.session_control import SC
 from .param_control_buttons import param_control_buttons
 
@@ -173,8 +172,11 @@ def show_task_history(runner : ScriptRunner | str | None):
         if SC.current_task_item:
             st.success(f"Task Item {SC.current_task_item} chosen" , icon = ":material/check_circle:")
 
-def show_queue_item_list(runner : ScriptRunner , queue : dict[str, TaskItem] , options : list[str] , default_index : int | None = None ,
-                         type : Literal['multiselect' , 'buttons'] = 'buttons'):
+def show_queue_item_list(
+    runner : ScriptRunner , queue : dict[str, TaskItem] , 
+    options : list[str] , default_index : int | None = None ,
+    type : Literal['multiselect' , 'buttons'] = 'buttons'
+) -> None:
     """show queue item list"""
     if type == 'multiselect':
         format_dict = {item.id : item.button_str_long(i + 1, plain_text = True).strip() 
@@ -393,7 +395,7 @@ def show_report_main(runner : ScriptRunner | str | None):
     else:
         SC.running_report_init = False
 
-def directly_open_file(path : Path | None = None) -> None:
+def directly_open_file(path : Base.strPath | None = None) -> None:
     """Open *path* in the host OS default file viewer.
 
     Uses ``os.startfile`` on Windows and ``subprocess.run(['open', ...])`` on
@@ -409,7 +411,7 @@ def directly_open_file(path : Path | None = None) -> None:
     """
     if path is None:
         return
-    path = path.absolute()
+    path = Path(path).absolute()
     pdf_path = str(path)
     try:
         # Check if the file exists

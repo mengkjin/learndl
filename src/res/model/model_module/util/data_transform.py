@@ -6,8 +6,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from typing import Iterable
+from collections.abc import Iterable
 
+from src.proj import Base
 from src.res.algo.boost import BoostInput
 from src.res.model.util import BatchInput , BatchOutput
 
@@ -33,10 +34,12 @@ def batch_data_flatten_x(batch_input : BatchInput):
         x = torch.concat([x.flatten(1) for x in batch_input.x] , -1)
     return x
 
-def batch_data_to_boost_input(batch_input : BatchInput , 
-                              secid : np.ndarray | None = None ,
-                              date : np.ndarray | None = None , 
-                              nn_to_calculate_hidden : nn.Module | None = None):
+def batch_data_to_boost_input(
+    batch_input : BatchInput , 
+    secid : Base.alias.SecidType = None ,
+    date : Base.alias.DateType = None , 
+    nn_to_calculate_hidden : nn.Module | None = None
+):
     if nn_to_calculate_hidden is not None:
         hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
         assert hidden is not None , f'hidden must not be none when using BoostModel'
@@ -53,8 +56,8 @@ def batch_data_to_boost_input(batch_input : BatchInput ,
     ww_values = tensor_refiller(batch_input.w , secid_j , date_j , (len(secid_i) , len(date_i)))
 
     assert xx_values is not None , f'xx_values must not be none'
-    secid = secid[secid_i] if secid is not None else None
-    date  = date[date_i]   if date  is not None else None
+    secid = Base.ensure_secid(secid,[])[secid_i] if secid is not None else None
+    date  = Base.ensure_date(date,[])[date_i]   if date  is not None else None
 
     return BoostInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
 
@@ -75,9 +78,11 @@ def batch_loader_concat(batch_loader : Iterable[BatchInput] , nn_to_calculate_hi
         new_batchs.append(new_batch_data.cpu())
     return BatchInput.concat(*new_batchs)
 
-def batch_loader_to_boost_input(batch_loader : Iterable[BatchInput] , 
-                                secid : np.ndarray | None = None ,
-                                date : np.ndarray | None = None , 
-                                nn_to_calculate_hidden : nn.Module | None = None):
+def batch_loader_to_boost_input(
+    batch_loader : Iterable[BatchInput] , 
+    secid : Base.alias.SecidType = None ,
+    date : Base.alias.DateType = None , 
+    nn_to_calculate_hidden : nn.Module | None = None
+):
     large_batch = batch_loader_concat(batch_loader , nn_to_calculate_hidden)
     return batch_data_to_boost_input(large_batch , secid , date)

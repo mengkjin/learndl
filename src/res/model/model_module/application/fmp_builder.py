@@ -6,7 +6,8 @@ import itertools
 import pandas as pd
 
 from functools import cached_property
-from typing import Any , Generator , Self
+from typing import Any  , Self
+from collections.abc import Generator
 
 from src.proj import CALENDAR , Base , Dates
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager , AlphaModel
@@ -39,7 +40,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
     def updated_account_dates(self) -> list[Any]:
         return []
     
-    def pred_factor(self , dates : Base.alias.intDates) -> StockFactor:
+    def pred_factor(self , dates : Base.intDates) -> StockFactor:
         dates = Dates(dates)
         df = pd.concat([self.pred_path.load_pred(d).assign(date = d) for d in dates])
         assert not df.empty , f'empty df returned for {dates}'
@@ -47,7 +48,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
         assert len(factor.factor_names) == 1 , f'expect 1 factor name , got {factor.factor_names}'
         return factor
     
-    def alpha_model(self , dates : Base.alias.intDates) -> AlphaModel:
+    def alpha_model(self , dates : Base.intDates) -> AlphaModel:
         return self.pred_factor(dates).alpha_model()
 
     def last_fmp_table(self , date : int) -> pd.DataFrame:
@@ -84,7 +85,8 @@ class ModelPortfolioBuilder(Base.BoundLogger):
             
             yield kwargs
     
-    def iter_fmp_names(self , fmp_names : list[str] | None = None) -> Generator[str , None, None]:
+    def iter_fmp_names(self , fmp_names : Base.alias.NamesType = None) -> Generator[str , None, None]:
+        fmp_names = Base.ensure_name_list(fmp_names)
         if fmp_names is None:
             for kwargs in self.iter_builder_kwargs():
                 yield PortfolioBuilder.get_full_name(**kwargs)
@@ -110,7 +112,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
             self.logger.skipping(f'Model portfolios for {self.pred_path.pred_name} is up to date')
             return Base.UpdateFlag.SKIPPED
     
-    def build_fmps(self , dates : Base.alias.intDates , deploy = True) -> None:
+    def build_fmps(self , dates : Base.intDates , deploy = True) -> None:
         for date in Dates(dates):
             self.fmp_tables[date] = self.build_day(date) 
             self.logger.stdout(f'Finished build fmps for {self.pred_path} at {date}' , idt = 1 , vb = 1)
@@ -131,12 +133,12 @@ class ModelPortfolioBuilder(Base.BoundLogger):
             self.logger.stdout(f'accounts include names: {self.account_manager.account_names}' , idt = 1 , vb = 2)
         return self
     
-    def account_last_model_dates(self , fmp_names : list[str] | None = None) -> dict[str , int]:
+    def account_last_model_dates(self , fmp_names : Base.alias.NamesType = None) -> dict[str , int]:
         last_dates = self.account_manager.account_last_model_dates()
         default_date = CALENDAR.td(self.pred_path.start , -1).as_int()
         return {name:last_dates.get(name , default_date) for name in self.iter_fmp_names(fmp_names)}
     
-    def account_last_end_dates(self , fmp_names : list[str] | None = None) -> dict[str , int]:
+    def account_last_end_dates(self , fmp_names : Base.alias.NamesType = None) -> dict[str , int]:
         last_dates = self.account_manager.account_last_end_dates()
         default_date = self.pred_path.start
         return {name:last_dates.get(name , default_date) for name in self.iter_fmp_names(fmp_names)}

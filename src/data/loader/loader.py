@@ -34,14 +34,14 @@ class BlockLoader(Base.BoundLogger):
         self , 
         db_src : str , 
         db_key : str | list | None = None , 
-        feature : list | None = None , 
+        feature : Base.alias.NamesType = None , 
         use_alt : bool = True , * , 
         indent : int = 1 , vb_level : Any = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
         self.db_key = db_key
-        self.feature = feature
+        self.feature = Base.ensure_name_list(feature)
         self.use_alt = use_alt
         assert self.src_path.exists() , f'{self.src_path} not exists'
         for key in self.iter_keys():
@@ -85,12 +85,13 @@ class FrameLoader(Base.BoundLogger):
         df = loader.load(start = 20250101 , end = 20250331)
     """
     def __init__(
-        self , db_src : str , db_key : str , reserved_src : list[str] | None = None , 
-        use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1 , **kwargs):
+        self , db_src : str , db_key : str , reserved_src : Base.alias.NamesType = None , 
+        use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1 , **kwargs
+    ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
         self.db_key = db_key
-        self.reserved_src = reserved_src
+        self.reserved_src = Base.ensure_name_list(reserved_src)
         self.use_alt = use_alt
 
         assert PATH.db.joinpath(f'DB_{self.db_src}' , self.db_key).exists() , \
@@ -113,14 +114,14 @@ class FactorLoader(BlockLoader):
     """
     def __init__(
         self , 
-        names : str | list[str] , 
+        names : Base.alias.NamesType , 
         normalize = False , 
         fill_method : Base.lit.FactorFillNanMethod = 'drop' , * ,
         indent : int = 1 , vb_level : Any = 1 ,
         **kwargs
     ):
         super().__init__('factor' , indent = indent , vb_level = vb_level)
-        self.names = names if isinstance(names , list) else [names]
+        self.names = Base.ensure_name_list(names , [])
         self.normalize = normalize
         self.fill_method : Base.lit.FactorFillNanMethod = fill_method
         self.kwargs = kwargs

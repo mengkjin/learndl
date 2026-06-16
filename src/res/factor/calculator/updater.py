@@ -9,7 +9,8 @@ import polars as pl
 
 from datetime import datetime , timedelta
 from functools import cached_property
-from typing import Any , Generator
+from typing import Any
+from collections.abc import Generator
 
 from src.proj import CALENDAR , Const , Base
 from src.proj.util.functional.parallel import parallel
@@ -53,8 +54,10 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
         return updater.process_jobs(start = start , end = end , all = all , overwrite = overwrite , timeout = timeout , **kwargs)
      
     @classmethod
-    def fix(cls , factors : list[str] , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> Base.UpdateFlag:
-        assert factors , 'factors are required for fix'
+    def fix(cls , factors : Base.alias.NamesType , start : int | None = None , end : int | None = None , timeout : int = -1 , **kwargs) -> Base.UpdateFlag:
+        factors = Base.ensure_name_list(factors , [])
+        if not factors:
+            cls.logger.alert2('No factors to fix!')
         factors = [factor for factor in cls.factors() if factor in factors]
         if factors:
             updater = cls()
@@ -76,7 +79,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
         return self.__class__.__name__
 
     @classmethod
-    def calculators(cls , all = True , selected_factors : list[str] | None = None , updatable = True , **kwargs) -> list[FactorCalculator]:
+    def calculators(cls , all = True , selected_factors : Base.alias.NamesType = None , updatable = True , **kwargs) -> list[FactorCalculator]:
         """get all calculators"""
         if cls.update_type == 'stats':
             kwargs = kwargs | {'is_market' : False}
@@ -89,9 +92,11 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
         """get all factors"""
         return [calc.factor_name for calc in cls.calculators()]
 
-    def collect_jobs(self , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
-                     overwrite = False , **kwargs) -> None:
+    def collect_jobs(
+        self , start : int | None = None , end : int | None = None , 
+        all = True , selected_factors : Base.alias.NamesType = None ,
+        overwrite = False , **kwargs
+    ) -> None:
         """
         collect FactorCalculator jobs for all factors between start and end date
         """
@@ -131,7 +136,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
             record_entry.put(True , ttl_hours = 8)
         
     def before_process_jobs(self , start : int | None = None , end : int | None = None , 
-                            all = True , selected_factors : list[str] | None = None ,
+                            all = True , selected_factors : Base.alias.NamesType = None ,
                             overwrite = False , **kwargs) -> None:
         """before process jobs"""
         for calc in self.calculators(all , selected_factors , **kwargs):
@@ -139,7 +144,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
                 calc.drop_pooling_weight(after = start , overwrite = overwrite)
 
     def preview_jobs(self , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
+                     all = True , selected_factors : Base.alias.NamesType = None ,
                      overwrite = False , **kwargs) -> None:
         """preview update jobs for all factors between start and end date"""
         self.collect_jobs(start , end , all , selected_factors , overwrite = overwrite , vb_level = 'never')
@@ -162,7 +167,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
         return flag
 
     def process_jobs(self , start : int | None = None , end : int | None = None , 
-                     all = True , selected_factors : list[str] | None = None ,
+                     all = True , selected_factors : Base.alias.NamesType = None ,
                      overwrite = False , timeout : float = -1 , **kwargs) -> Base.UpdateFlag:
         """
         update update jobs for all factors between start and end date
@@ -232,7 +237,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
                 if timeout_time and datetime.now() >= timeout_time:
                     break
     
-    def eval_coverage(self , selected_factors : list[str] | None = None , **kwargs) -> pd.DataFrame:
+    def eval_coverage(self , selected_factors : Base.alias.NamesType = None , **kwargs) -> pd.DataFrame:
         """
         update update jobs for all factors between start and end date
         **kwargs:

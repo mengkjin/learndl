@@ -5,7 +5,7 @@ Aggregate statistical functions for Factor Model Portfolio
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-
+from typing import TypeAlias
 from src.proj import CALENDAR
 
 __all__ = [
@@ -14,7 +14,9 @@ __all__ = [
     'eval_period_ret_multi' , 'eval_period_ic_multi'
 ]
 
-def _get_ret_df(*input : pd.DataFrame | pd.Series | np.ndarray):
+InputDataType : TypeAlias = pd.DataFrame | pd.Series | np.ndarray
+
+def _get_ret_df(*input : InputDataType):
     """
     input: from input transform to return df with date and ret
     input can be:
@@ -47,7 +49,7 @@ def _period_ret(r : pd.Series):
     r = r + 1
     return np.prod(r) - 1
 
-def eval_ret_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
+def eval_ret_stats(*input : InputDataType) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
@@ -64,7 +66,7 @@ def eval_ret_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     ]
     return pd.DataFrame(datas , columns = ['period' , 'ret']).set_index('period')['ret']
 
-def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
+def eval_year_ret(*input : InputDataType) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
@@ -73,7 +75,7 @@ def eval_year_ret(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ret']
 
-def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
+def eval_recent_ret(*input : InputDataType , end : int = -1) -> pd.Series:
     ret = _get_ret_df(*input)
     if ret.empty:
         return pd.Series()
@@ -93,13 +95,13 @@ def eval_recent_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int =
     df['ret'] = df['ret'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ret']
 
-def eval_period_ret(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
+def eval_period_ret(*input : InputDataType , end : int = -1) -> pd.Series:
     basic_stats = eval_ret_stats(*input)
     year_ret = eval_year_ret(*input)
     recent_ret = eval_recent_ret(*input , end = end)
     return pd.concat([basic_stats , year_ret , recent_ret])
 
-def _get_ic_df(*input : pd.DataFrame | pd.Series | np.ndarray):
+def _get_ic_df(*input : InputDataType):
     """
     input: from input transform to return df with date and ret
     input can be:
@@ -127,7 +129,7 @@ def _get_ic_df(*input : pd.DataFrame | pd.Series | np.ndarray):
     else:
         raise ValueError('input must be a pd.DataFrame or a tuple of (date , ic)')
 
-def eval_ic_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
+def eval_ic_stats(*input : InputDataType) -> pd.Series:
     ic = _get_ic_df(*input)
     if ic.empty:
         return pd.Series()
@@ -144,7 +146,7 @@ def eval_ic_stats(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     ]
     return pd.DataFrame(datas , columns = ['period' , 'ic']).set_index('period')['ic']
 
-def eval_year_ic(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
+def eval_year_ic(*input : InputDataType) -> pd.Series:
     ic = _get_ic_df(*input)
     if ic.empty:
         return pd.Series()
@@ -153,7 +155,7 @@ def eval_year_ic(*input : pd.DataFrame | pd.Series | np.ndarray) -> pd.Series:
     df['ic'] = df['ic'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ic']
 
-def eval_recent_ic(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
+def eval_recent_ic(*input : InputDataType , end : int = -1) -> pd.Series:
     ic = _get_ic_df(*input)
     if ic.empty:
         return pd.Series()
@@ -173,7 +175,7 @@ def eval_recent_ic(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = 
     df['ic'] = df['ic'].apply(lambda x : f'{x * 100:.2f}%')
     return df.set_index('period')['ic']
 
-def eval_period_ic(*input : pd.DataFrame | pd.Series | np.ndarray , end : int = -1) -> pd.Series:
+def eval_period_ic(*input : InputDataType , end : int = -1) -> pd.Series:
     basic_stats = eval_ic_stats(*input)
     year_ic = eval_year_ic(*input)
     recent_ic = eval_recent_ic(*input , end = end)

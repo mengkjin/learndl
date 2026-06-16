@@ -12,6 +12,8 @@ from .basic import alert_message , DIV_TOL
 
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
+DataArrayLike = np.ndarray | pd.DataFrame | pd.Series
+
 def fill_na_as_const(x: np.ndarray, fill : float | None = None , inplace = True):
     """Replace NaNs with a constant (copy).
 
@@ -259,7 +261,7 @@ def weighted_mean(v , weight = None):
     else:
         return np.nanmean(v , axis = None)
 
-def standard_normal(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -> Any:
+def standard_normal(v : DataArrayLike , weight = None) -> Any:
     """Subtract weighted mean and divide by global nan std (with ``DIV_TOL`` for non-array path).
 
     Args:
@@ -273,14 +275,16 @@ def standard_normal(v : pd.DataFrame | pd.Series | np.ndarray , weight = None) -
     mean = weighted_mean(v , weight)
     return (v - mean) / stdev
 
-def winsorize(v , 
-              center : Literal['median' , 'mean'] = 'median', 
-              scale : Literal['mad' , 'sd'] = 'mad', 
-              const : float | np.floating | None = None , 
-              trim_val : tuple[float | None,float | None] = (None , None) , 
-              winsor_val : tuple[float | None,float | None] = (None , None) , 
-              winsor_pct : tuple[float,float] = (0. , 1.) ,
-              radius_for_invalid_winsor : float = 1e4):
+def winsorize(
+    v , 
+    center : Literal['median' , 'mean'] = 'median', 
+    scale : Literal['mad' , 'sd'] = 'mad', 
+    const : float | np.floating | None = None , 
+    trim_val : tuple[float | None, float | None] = (None , None) , 
+    winsor_val : tuple[float | None, float | None] = (None , None) , 
+    winsor_pct : tuple[float,float] = (0. , 1.) ,
+    radius_for_invalid_winsor : float = 1e4
+):
     """Multi-step trim, clip, and robust winsorization pipeline.
 
     Args:
@@ -341,7 +345,7 @@ def time_weight(length : int , halflife : int = 0):
     wgt /= np.mean(wgt)
     return wgt
 
-def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min','max','median'] | float , group = None) -> pd.Series:
+def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min', 'max', 'median'] | float , group = None) -> pd.Series:
     """Winsorize, whiten, then fill remaining NaNs.
 
     Args:
@@ -379,8 +383,9 @@ def _lstsq_rst(x : np.ndarray , y : np.ndarray):
         return np.zeros((x.shape[-1],1))
     return lstsq_result[0]
     
-def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.DataFrame | pd.Series , 
-              time_weight = None , intercept = True , respective = False):
+def apply_ols(
+    x : DataArrayLike , y : DataArrayLike , 
+    time_weight = None , intercept = True , respective = False):
     """Weighted OLS coefficients (multi-target).
 
     Args:
@@ -396,9 +401,9 @@ def apply_ols(x : np.ndarray | pd.DataFrame | pd.Series , y : np.ndarray | pd.Da
     Raises:
         AssertionError: On shape mismatch.
     """
-    if isinstance(x , (pd.Series | pd.DataFrame)): 
+    if isinstance(x , (pd.Series , pd.DataFrame)): 
         x = x.to_numpy()
-    if isinstance(y , (pd.Series | pd.DataFrame)): 
+    if isinstance(y , (pd.Series , pd.DataFrame)): 
         y = y.to_numpy()
     if x.ndim == 1: 
         x = x[:,None]

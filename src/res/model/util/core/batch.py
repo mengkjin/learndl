@@ -27,7 +27,7 @@ def _object_shape(obj : Any) -> Any:
 @dataclass
 class BatchInput:
     """custom data component of a batch(x,y,w,i,effective)"""
-    x       : torch.Tensor | tuple[torch.Tensor,...] | list[torch.Tensor]
+    x       : torch.Tensor | tuple[torch.Tensor, ...] | list[torch.Tensor]
     y       : torch.Tensor 
     w       : torch.Tensor | None
     i       : torch.Tensor 
@@ -287,25 +287,25 @@ class BatchOutput:
             self.outputs = pred
         return self
     
-    def pred_df(self , secid : np.ndarray | Any , date : np.ndarray | Any , * , 
-                narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' ,
-                **kwargs):
+    def pred_df(
+        self , secid : Base.alias.SecidType , date : Base.alias.DateType , * , 
+        narrow_df = False , colnames : Base.alias.NamesType = None , colname_prefix : str = '' ,
+        **kwargs
+    ):
         pred = self.pred.cpu().numpy()
         if pred.ndim == 1: 
             pred = pred[:,None]
         assert pred.ndim == 2 , pred.shape
 
-        if colnames is None: 
-            columns = [f'pred.{i}' for i in range(pred.shape[-1])]
-        elif isinstance(colnames , str): 
-            columns = [colnames]
-        else: 
-            columns = colnames
+        columns = Base.ensure_name_list(colnames,[f'pred.{i}' for i in range(pred.shape[-1])])
         if colname_prefix:
             columns = [f'{colname_prefix}.{col}' for col in columns]
         assert pred.shape[-1] == len(columns) , (pred.shape , columns)
 
-        df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:pred[:,i] for i,col in enumerate(columns)}})
+        df = pd.DataFrame(
+            {'secid' : Base.ensure_secid(secid,[]) , 'date' : Base.ensure_date(date,[]) , 
+            **{col:pred[:,i] for i,col in enumerate(columns)}}
+        )
         if isinstance(colnames , str):
             assert pred.shape[-1] == 1 , (pred.shape , colnames)
             df = df.rename(columns={'pred.0':colnames})
@@ -313,32 +313,32 @@ class BatchOutput:
             df = df.melt(['secid','date'] , var_name='feature')
         return df.assign(**kwargs)
         
-    def hidden_df(self , secid : np.ndarray , date : np.ndarray , * , 
-                  narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' ,
-                  **kwargs):
+    def hidden_df(
+        self , secid : Base.alias.SecidType , date : Base.alias.DateType , * , 
+        narrow_df = False , colnames : Base.alias.NamesType | None = None , colname_prefix : str = '' ,
+        **kwargs
+    ):
         """kwargs will be used in df.assign(**kwargs)"""
         full_hidden : torch.Tensor | Any = self.other['hidden']
         full_hidden = full_hidden.cpu().numpy()
 
         assert full_hidden.ndim == 2 , full_hidden.shape
 
-        if colnames is None: 
-            columns = [f'hidden.{i}' for i in range(full_hidden.shape[-1])]
-        elif isinstance(colnames , str): 
-            columns = [colnames]
-        else: 
-            columns = colnames
+        columns = Base.ensure_name_list(colnames,[f'hidden.{i}' for i in range(full_hidden.shape[-1])])
         if colname_prefix:
             columns = [f'{colname_prefix}.{col}' for col in columns]
         assert full_hidden.shape[-1] == len(columns) , (full_hidden.shape , columns)
 
-        df = pd.DataFrame({'secid' : secid , 'date' : date , **{col:full_hidden[:,i] for i,col in enumerate(columns)}})
+        df = pd.DataFrame(
+            {'secid' : Base.ensure_secid(secid,[]) , 'date' : Base.ensure_date(date,[]) , 
+            **{col:full_hidden[:,i] for i,col in enumerate(columns)}}
+        )
         if narrow_df: 
             df = df.melt(['secid','date'] , var_name='feature')
         return df.assign(**kwargs)
     
     @classmethod
-    def from_module(cls , module : nn.Module | Any , inputs : Any | BatchInput | BatchData , **kwargs):
+    def from_module(cls , module : nn.Module | Any , inputs : BatchInput | BatchData | Any , **kwargs):
         """module can be a nn.Module or any other object (e.g.PredictorModel) that can be called with inputs and kwargs"""
         if isinstance(inputs , BatchInput) or isinstance(inputs , BatchData): 
             inputs = inputs['x']
@@ -381,20 +381,20 @@ class BatchData:
     def device(self): 
         return self.input.device
 
-    def pred_df(self , * , narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' , label : bool = True , **kwargs):
+    def pred_df(self , * , narrow_df = False , colnames : Base.alias.NamesType = None , colname_prefix : str = '' , label : bool = True , **kwargs):
         df = self.output.pred_df(
-            self.input.secid , self.input.date , 
-            narrow_df = narrow_df , colnames = colnames , colname_prefix = colname_prefix , 
-            **kwargs)
+            self.input.secid , self.input.date , narrow_df = narrow_df , 
+            colnames = colnames , colname_prefix = colname_prefix , **kwargs
+        )
         if label:
             df['label'] = self.input.label0
         return df
 
-    def hidden_df(self , * , narrow_df = False , colnames : str | list | None = None , colname_prefix : str = '' , **kwargs):
+    def hidden_df(self , * , narrow_df = False , colnames : Base.alias.NamesType = None , colname_prefix : str = '' , **kwargs):
         df = self.output.hidden_df(
-            self.input.secid , self.input.date , 
-            narrow_df = narrow_df , colnames = colnames , colname_prefix = colname_prefix , 
-            **kwargs)
+            self.input.secid , self.input.date , narrow_df = narrow_df , 
+            colnames = colnames , colname_prefix = colname_prefix , **kwargs
+        )
         return df
 
     def hidden_df_pl(self , colname_prefix : str = ''):

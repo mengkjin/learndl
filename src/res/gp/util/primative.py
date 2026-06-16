@@ -10,7 +10,7 @@ import numpy as np
 from dataclasses import dataclass
 from deap import gp
 
-from typing import Callable , Sequence
+from collections.abc import Callable, Sequence
 
 from src.res.gp.func import primas
 
@@ -54,7 +54,7 @@ class float1(float):
 @dataclass
 class Primative:
     func : Callable
-    in_types : list[type|tuple[type,...]]
+    in_types : list[type | tuple[type, ...]]
     out_type : type
     name : str | None = None
 

@@ -7,13 +7,14 @@ which renders a complete parameter form for a given script and manages the
 option ↔ value transformation pipeline.
 """
 from __future__ import annotations
-from typing import Literal , Any , Callable
+from typing import Literal , Any
+from collections.abc import Callable
 import streamlit as st
 import ast
 import re
 
 from dataclasses import dataclass
-from src.proj import Logger , Options  # noqa
+from src.proj import Logger , Base , Options  # noqa
 from src.api.util.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 __all__ = ['WidgetParamInput' , 'ParamInputsForm' , 'ParamCache']
@@ -89,7 +90,7 @@ class WidgetParamInput:
     """Streamlit-aware extension of :class:`ScriptParamInput`."""
     runner_key: str
     name: str
-    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple' , 'enum'] | list[str] | tuple[str]
+    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
     desc: str
     required: bool = False
     default: Any = None

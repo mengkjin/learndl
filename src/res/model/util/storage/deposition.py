@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import shutil
 
-from typing import TypeVar, Any
+from typing import Any , TypeVar
 
 from src.res.model.util.core import ModelDict, ModelPath
 

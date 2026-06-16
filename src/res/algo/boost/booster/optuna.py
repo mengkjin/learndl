@@ -12,7 +12,8 @@ import optuna
 from pathlib import Path
 from typing import Any , Literal
 
-from src.proj import PATH , MACHINE , Proj
+from src.proj import PATH , MACHINE , Proj 
+from src.proj.bases import BoostModuleType
 from .general import GeneralBoostModel
 
 __all__ = ['OptunaBoostModel']
@@ -53,13 +54,13 @@ class OptunaBoostModel(GeneralBoostModel):
     def force_objective(self) -> str | None:
         return self.override_criterion.get('objective' , None)
     
-    def update_param(self , params : dict[str,Any] | None = None , **kwargs):
+    def update_param(self , params : dict[str, Any] | None = None , **kwargs):
         super().update_param(params , **kwargs)
         self.n_trials = kwargs.get('n_trials' , self.DEFAULT_N_TRIALS)
         return self
 
     def trial_suggest_params(self, trial : optuna.Trial):
-        if self.boost_type == 'lgbm':
+        if self.boost_type == BoostModuleType.LGMB:
             params = {
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
@@ -72,7 +73,7 @@ class OptunaBoostModel(GeneralBoostModel):
             }
             if not self.force_objective:
                 params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
-        elif self.boost_type == 'xgboost':
+        elif self.boost_type == BoostModuleType.XGBOOST:
             params = {
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
@@ -83,7 +84,7 @@ class OptunaBoostModel(GeneralBoostModel):
             }
             if not self.force_objective:
                 params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
-        elif self.boost_type == 'catboost':
+        elif self.boost_type == BoostModuleType.CATBOOST:
             params = {
                 'learning_rate':            trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':                trial.suggest_int('max_depth', 3, 12),
@@ -95,7 +96,7 @@ class OptunaBoostModel(GeneralBoostModel):
             }
             if not self.force_objective:
                 params['objective'] = trial.suggest_categorical('objective', ['mse', 'mae', 'rank'])
-        elif self.boost_type == 'ada':
+        elif self.boost_type == BoostModuleType.ADA:
             params = {
                 'n_learner' :       trial.suggest_int('n_learner', 10 , 50 , step = 5), 
                 'n_bins' :          trial.suggest_int('n_bins', 10, 30, step = 5) , 
@@ -142,9 +143,9 @@ class OptunaBoostModel(GeneralBoostModel):
         return result.nanmean().item()
 
     def study_optimize(self , n_trials : int = DEFAULT_N_TRIALS):
-        if self.boost_type in ['lgbm' , 'xgboost' , 'catboost']:
+        if self.boost_type in [BoostModuleType.LGMB , BoostModuleType.XGBOOST , BoostModuleType.CATBOOST]:
             max_trials = 100
-        elif self.boost_type == 'ada':
+        elif self.boost_type == BoostModuleType.ADA:
             max_trials = 20
         else: 
             raise ValueError(f'Invalid boost type: {self.boost_type}')
@@ -155,8 +156,9 @@ class OptunaBoostModel(GeneralBoostModel):
             
         return self
 
-    def study_plot(self , plot_type : Literal['slice' , 'optimization_history' , 'param_importances' , 'contour'] , 
-                   params : list[str] | None = None , **kwargs):
+    def study_plot(
+        self , plot_type : Literal['slice' , 'optimization_history' , 'param_importances' , 'contour'] , 
+        params : list[str] | None = None , **kwargs):
         if plot_type == 'slice':
             return optuna.visualization.plot_slice(self.study , params = params , **kwargs)
         elif plot_type == 'optimization_history':

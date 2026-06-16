@@ -8,7 +8,8 @@ Usage (from project root)::
 """
 from __future__ import annotations
 
-from typing import Any , Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from src.proj import Base , Dates
 from .processors import PrePros
@@ -43,7 +44,8 @@ class PreProcessorTask(Base.BasicUpdater):
     def proceed_update(
         cls , * , reconstruct : bool = False , rollback_date : int | None = None , 
         frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , data_types : Iterable[str] | None = None , 
-        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False , **kwargs) -> Base.UpdateFlag:
+        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False , **kwargs
+    ) -> Base.UpdateFlag:
         """
         Run the preprocessing update for all (or selected) registered processors.
 
@@ -106,7 +108,10 @@ class PreProcessorTask(Base.BasicUpdater):
             Base.UpdateFlag
                 The update flag.
         """
-        return super().update(frame = frame , confirm = confirm , data_types = data_types , indent = indent , vb_level = vb_level , force_update = force_update , **kwargs)
+        return super().update(
+            frame = frame , confirm = confirm , data_types = data_types , 
+            indent = indent , vb_level = vb_level , force_update = force_update , **kwargs
+        )
 
     @classmethod
     def reconstruct(

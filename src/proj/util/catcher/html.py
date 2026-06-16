@@ -5,8 +5,8 @@ import pandas as pd
 
 from datetime import datetime
 from functools import cached_property
-
 from typing import Any , TYPE_CHECKING
+
 from src.proj.env import PATH , MACHINE , Proj
 from src.proj.core import Elapsed , Since
 from src.proj.log import Logger
@@ -33,8 +33,11 @@ class HtmlCatcher(OutputCatcher):
     PrimaryInstance : HtmlCatcher | None = None
     Capturing : bool = True
 
-    def __init__(self, title: str | None = None , category : str = 'miscelaneous', init_time: datetime | None = None , 
-                 add_time_to_title: bool = True, **kwargs):
+    def __init__(
+        self, title: str | None = None , category : str = 'miscelaneous', 
+        init_time: datetime | None = None , 
+        add_time_to_title: bool = True, **kwargs
+    ):
         self.category = category
         self.init_time = init_time if init_time else datetime.now()
         self.title = title
@@ -166,7 +169,7 @@ class HtmlCatcher(OutputCatcher):
 
         return ''.join([self.html_head() , *rows , self.html_tail()])
  
-    def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any , output_type: str | None = None):
+    def add_output(self, content: str | pd.DataFrame | pd.Series | Figure | Any | None , output_type: str | None = None):
         """add output to time ordered list"""
         if not self.Capturing: 
             return

@@ -300,7 +300,9 @@ class PrePro_dfl2(MicellaneousPreProcessor):
     CALCULATION_WINDOW = 250
     MIN_SAMPLES = 90
     FEATURE_CHUNK_SIZE = 20
-    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+    def pre_process(
+        self , start : int | None = None , end : int | None = None , * , 
+        secid : Base.alias.SecidType = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
         """
         Load Dongfang L2 chars and apply per-secid rolling z-score normalisation.
 
@@ -318,6 +320,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
         df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
         if len(df) == 0:
             return DataBlock()
+        secid = Base.ensure_secid(secid)
         if secid is not None:
             df = df.filter(pl.col('secid').is_in(secid))
         # 2. Identify the columns as features (exclude index columns)
@@ -348,7 +351,10 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
     """
     FEATURE_CHUNK_SIZE = 20
 
-    def pre_process(self , start : int | None = None , end : int | None = None , * , secid : np.ndarray | None = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+    def pre_process(
+        self , start : int | None = None , end : int | None = None , * , 
+        secid : Base.alias.SecidType = None , indent = 0 , vb_level : Any = 'max' , **kwargs
+    ) -> DataBlock:
         """
         Load Dongfang L2 chars and apply cross-sectional z-score normalisation.
 
@@ -359,6 +365,7 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
         df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
         if len(df) == 0:
             return DataBlock()
+        secid = Base.ensure_secid(secid)
         if secid is not None:
             df = df.filter(pl.col('secid').is_in(secid))
         # 2. Identify the columns as features (exclude index columns)

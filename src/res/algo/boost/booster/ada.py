@@ -12,7 +12,6 @@ from __future__ import annotations
 import torch
 import numpy as np
 import pandas as pd
-
 from typing import Any
 
 from src.proj import Logger
@@ -74,7 +73,7 @@ class AdaBoost(BasicBoostModel):
         self.model.fit(dset.x[idx] , dset.y[idx] , dset.w[idx] , silent = silent , feature = train_data.feature)
         return self
     
-    def predict(self , x : BoostInput | str = 'test'):
+    def predict(self , x : BoostInput | Any = 'test'):
         data = self.boost_input(x)
         X = self.input_transform(data.X)
         return data.output(self.model.predict(X))

@@ -31,7 +31,7 @@ class PortfolioBuilder(Base.BoundLogger):
     benchmark : Base.alias.SingleBenchmark
     lag : int , lag periods (not days)
     strategy : str
-    suffixes : list[str] | str
+    suffixes : Base.alias.NamesType
     build_on : Portfolio | None
 
     optim accepted kwargs:
@@ -53,7 +53,7 @@ class PortfolioBuilder(Base.BoundLogger):
 
     revscreen accepted kwargs:
         screen_ratio : float = 0.5
-        screener : str | list[str] = "gru_day_V1"
+        screener : Base.alias.NamesType = "gru_day_V1"
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
@@ -62,7 +62,7 @@ class PortfolioBuilder(Base.BoundLogger):
         
     screen accepted kwargs:
         screen_ratio : float = 0.5
-        sorter : str | list[str] = "gru_day_V1"
+        sorter : Base.alias.NamesType = "gru_day_V1"
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
@@ -71,17 +71,19 @@ class PortfolioBuilder(Base.BoundLogger):
     
     reinforce accepted kwargs:
         screen_ratio : float = 0.5
-        screener : str | list[str] = "gru_day_V1"
+        screener : Base.alias.NamesType = "gru_day_V1"
         n_best : int = 50
         turn_control : float = 0.2
         buffer_zone : float = 0.8
         no_zone : float = 0.5
         indus_control : float = 0.1
     """
-    def __init__(self , category : str | Any , 
-                 alpha : AlphaModel , benchmark : Base.alias.SingleBenchmark = None, lag : int = 0 ,
-                 strategy : str = 'default' , suffixes : list[str] | str = [] , build_on : Portfolio | None = None , 
-                 resume_path : Base.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(
+        self , category : str | Any , 
+        alpha : AlphaModel , benchmark : Base.alias.SingleBenchmark = None, lag : int = 0 ,
+        strategy : str = 'default' , suffixes : Base.alias.NamesType = None , build_on : Portfolio | None = None , 
+        resume_path : Base.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs
+    ):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
         
@@ -189,12 +191,14 @@ class PortfolioBuilder(Base.BoundLogger):
                    trade_engine : Base.lit.TradeEngine = 'default' ,
                    daily = False):
         """Accounting portfolio through date, require at least portfolio"""
-        self.portfolio.accounting(self.benchmark , start , end , 
-                                  analytic and self.lag == 0 , attribution and self.lag == 0 ,
-                                  trade_engine = trade_engine , daily = daily , with_index = self.port_index ,
-                                  resume_path = self.resume_path_account , resume_end = self.resumed_portfolio_end_date , 
-                                  resume_drop_last = False , save_after = True ,
-                                  indent = self.indent + 1 , vb_level = self.vb_level)
+        self.portfolio.accounting(
+            self.benchmark , start , end , 
+            analytic and self.lag == 0 , attribution and self.lag == 0 ,
+            trade_engine = trade_engine , daily = daily , with_index = self.port_index ,
+            resume_path = self.resume_path_account , resume_end = self.resumed_portfolio_end_date , 
+            resume_drop_last = False , save_after = True ,
+            indent = self.indent + 1 , vb_level = self.vb_level
+        )
         return self
 
     @classmethod
@@ -204,9 +208,11 @@ class PortfolioBuilder(Base.BoundLogger):
         return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
     
     @staticmethod
-    def get_full_name(category : str , alpha : AlphaModel | str , 
-                      benchmark : Base.alias.SingleBenchmark = None , 
-                      strategy : str = 'default' , suffixes : list[str] | str = [] , lag : int = 0 , **kwargs):
+    def get_full_name(
+        category : str , alpha : AlphaModel | str , 
+        benchmark : Base.alias.SingleBenchmark = None , 
+        strategy : str = 'default' , suffixes : Base.alias.NamesType = None , lag : int = 0 , **kwargs
+    ):
         return get_full_name(category , alpha , benchmark , strategy , suffixes , lag , **kwargs)
 
 class PortfolioGroupBuilder(Base.BoundLogger):

@@ -125,7 +125,7 @@ class BasicTestResult(BaseCallBack):
             df_date = df_date.sort_values(by=['model_num' , 'submodel' , 'model_date' , 'stat' , 'date']).reset_index(drop=True)
             df_model = df_model.sort_values(by=['model_num' , 'submodel' , 'entry' , 'stat']).reset_index(drop=True)
 
-            dfs : dict[str,pd.DataFrame|pd.Series|Any] = {}
+            dfs : dict[str,pd.DataFrame | pd.Series | Any] = {}
             dfs['Avg'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].mean()
             dfs['Sum'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].sum()
             dfs['Std'] = df_date.groupby(['model_num','submodel','stat'],observed=True)[['value']].std()

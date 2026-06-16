@@ -40,8 +40,8 @@ class BoostWeightMethod:
         bm_rate:           Multiplier applied to benchmark members (default 2.0).
         bm_secid:          Security IDs that constitute the benchmark universe.
     """
-    ts_type : Literal['lin' , 'exp'] | None = None
-    cs_type : Literal['top' , 'positive' , 'ones'] | None = None
+    ts_type : Literal['lin', 'exp'] | None = None
+    cs_type : Literal['top', 'positive', 'ones'] | None = None
     bm_type : Literal['in'] | None = None
     ts_lin_rate : float = 0.5
     ts_half_life_rate : float = 0.5

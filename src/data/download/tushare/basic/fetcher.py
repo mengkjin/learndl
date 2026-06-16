@@ -28,7 +28,8 @@ import pandas as pd
 from abc import abstractmethod , ABCMeta
 from importlib import import_module
 from pathlib import Path
-from typing import Any , Literal , Type , Callable , TypeVar
+from typing import Any , Literal , TypeVar
+from collections.abc import Callable
 
 from src.proj import MACHINE , PATH , CALENDAR , Dates , DB , Base , Save , Load 
 from src.proj.util.functional.handler import retry_call
@@ -43,7 +44,7 @@ T = TypeVar('T')
 
 class TushareFetcherMeta(ABCMeta):
     """meta class of TushareFetcher , check if the subclass is valid and register all subclasses without abstract methods"""
-    registry : dict[str , Type[TushareFetcher] | Any] = {}
+    registry : dict[str , type[TushareFetcher] | Any] = {}
     def __new__(cls , name , bases , dct):
         new_cls = super().__new__(cls , name , bases , dct)
         abstract_methods = getattr(new_cls , '__abstractmethods__' , None)
@@ -371,7 +372,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             return True
         return False
 
-    def update_dates(self , dates : Base.alias.intDates , **kwargs) -> Dates:
+    def update_dates(self , dates : Base.intDates , **kwargs) -> Dates:
         """update the fetcher given dates"""
         dates = Dates(dates)
         if self.check_server_down(): 

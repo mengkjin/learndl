@@ -10,18 +10,19 @@ import torch
 
 from datetime import datetime
 from functools import cached_property
-from typing import Any , Literal
+from typing import Any
 
+from src.proj.bases.enums import BoostModuleType
 from . import ada , catboost , lgbm , xgboost
 from ..util import BasicBoostModel , BoostInput
 
 __all__ = ['GeneralBoostModel' , 'AVAILABLE_BOOSTS']
 
 AVAILABLE_BOOSTS = {
-    'lgbm' : lgbm.Lgbm,
-    'ada' : ada.AdaBoost,
-    'xgboost' : xgboost.XgBoost,
-    'catboost' : catboost.CatBoost,
+    BoostModuleType.ADA : ada.AdaBoost,
+    BoostModuleType.LGMB : lgbm.Lgbm,
+    BoostModuleType.XGBOOST : xgboost.XgBoost,
+    BoostModuleType.CATBOOST : catboost.CatBoost,
 }
 
 class GeneralBoostModel:
@@ -37,8 +38,8 @@ class GeneralBoostModel:
     """
     def __init__(
         self , 
-        boost_type : Literal['ada' , 'lgbm' , 'xgboost' , 'catboost'] | str = 'lgbm' ,
-        params : dict[str,Any] | None = None , * ,
+        boost_type : BoostModuleType | str = BoostModuleType.LGMB ,
+        params : dict[str, Any] | None = None , * ,
         train : Any = None ,  valid : Any = None , test : Any = None , 
         cuda = True , seed = None , 
         given_name : str | None = None , 
@@ -47,7 +48,7 @@ class GeneralBoostModel:
         **kwargs
     ):
         assert boost_type in AVAILABLE_BOOSTS , f'{boost_type} is not a valid boost type'
-        self.boost_type = boost_type
+        self.boost_type = BoostModuleType(boost_type)
         self.given_name = given_name or self.boost.__class__.__name__
         self.sub_name = sub_name or datetime.now().strftime('%Y%m%d-%H%M%S')
         self.override_criterion = override_criterion or {}
@@ -59,7 +60,7 @@ class GeneralBoostModel:
     def __call__(self, x : torch.Tensor) -> torch.Tensor: 
         return self.forward(x)
 
-    def update_param(self , params : dict[str,Any] | None = None , **kwargs):
+    def update_param(self , params : dict[str, Any] | None = None , **kwargs):
         self.fit_verbosity = params.get('verbosity' , 10) if params else 10
         self.boost.set_params(params , overrides = self.override_criterion, cuda = self.cuda, seed = self.seed, **kwargs)
         return self
@@ -82,10 +83,10 @@ class GeneralBoostModel:
     def data(self):
         return self.boost.data
 
-    def boost_input(self , x : BoostInput | str | Any = 'test'):
+    def boost_input(self , x : BoostInput | Any = 'test'):
         return self.boost.boost_input(x)
     
-    def predict(self , x : BoostInput | str | Any = 'test'):
+    def predict(self , x : BoostInput | Any = 'test'):
         return self.boost.predict(x)
     
     def forward(self , x : torch.Tensor) -> torch.Tensor:

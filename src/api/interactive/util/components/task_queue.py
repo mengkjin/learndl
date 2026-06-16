@@ -1,7 +1,8 @@
 """Task queue page: full task list with filter controls, pagination, and inline reports."""
 from __future__ import annotations
 import streamlit as st
-from typing import Literal , Callable
+from typing import Literal 
+from collections.abc import Callable
 
 from src.proj import PATH
 

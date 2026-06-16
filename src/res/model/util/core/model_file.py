@@ -14,10 +14,12 @@ __all__ = ['ModelDict' , 'ModelFile']
 class ModelDict:
     """model dictionary for nn/boost models"""
     __slots__ = ['state_dict' , 'boost_head' , 'boost_dict']
-    def __init__(self ,
-                 state_dict  : dict[str,torch.Tensor] | None = None , 
-                 boost_head : dict[str,Any] | None = None ,
-                 boost_dict : dict[str,Any] | None = None) -> None:
+    def __init__(
+        self ,
+        state_dict  : dict[str, torch.Tensor] | None = None , 
+        boost_head : dict[str, Any] | None = None ,
+        boost_dict : dict[str, Any] | None = None
+    ) -> None:
         self.state_dict = state_dict
         self.boost_head = boost_head
         self.boost_dict = boost_dict
@@ -51,10 +53,10 @@ class ModelDict:
 
 class ModelFile:
     """model file for nn/boost models"""
-    def __init__(self , model_path : Path | None) -> None:
+    def __init__(self , model_path : Base.strPath | None) -> None:
         if model_path is None:
             model_path = Path('')
-        self.model_path = model_path
+        self.model_path = Path(model_path)
     def __getitem__(self , key): return self.load(key)
     def __repr__(self): return f'{self.__class__.__name__}(path={self.model_path})'
     def load(self , key : str) -> Any:

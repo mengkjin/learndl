@@ -3,7 +3,8 @@ Factor related API for the project
 """
 from __future__ import annotations
 
-from typing import Any , Literal , Iterable
+from typing import Any , Literal
+from collections.abc import Iterable
 
 from src.proj import Base
 from src.res.factor.util import StockFactor
@@ -69,7 +70,7 @@ class FactorUpdaterAPI:
         return flags
 
     @classmethod
-    def fix(cls , factors : list[str] , **kwargs) -> Base.UpdateFlagList:
+    def fix(cls , factors : Base.alias.NamesType , **kwargs) -> Base.UpdateFlagList:
         flags = Base.UpdateFlagList()
         for updater in cls.updaters():
             flags += updater.fix(factors , **kwargs)

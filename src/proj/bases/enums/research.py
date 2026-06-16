@@ -4,7 +4,7 @@ from __future__ import annotations
 from src.proj.core import StrEnum
 
 __all__ = [
-    'ModuleType' , 'TestType' , 'FmpType' , 
+    'ModuleType' , 'BoostModuleType' , 'TestType' , 'FmpType' , 
     'FittingEventType' , 'PortOptimProblem' , 'PortOptimEngine' , 
     'PortOptimCvxpySolver']
 
@@ -13,6 +13,12 @@ class ModuleType(StrEnum):
     BOOST = 'boost'
     FACTOR = 'factor'
     INVALID = ''
+
+class BoostModuleType(StrEnum):
+    LGMB = 'lgbm'
+    XGBOOST = 'xgboost'
+    CATBOOST = 'catboost'
+    ADA = 'ada'
 
 class TestType(StrEnum):
     FACTOR = 'factor'

@@ -72,14 +72,14 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         self._indus_data = None
         self.initiated = False
 
-    def get_desc(self , date : Base.alias.intDate | None = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
+    def get_desc(self , date : Base.intDateNone = None , set_index : bool = True , listed = True , exchange = ['SZSE', 'SSE', 'BSE']):
         """
         Return the listing description table, optionally filtered to securities
         that were listed on ``date``.
 
         Parameters
         ----------
-        date : Base.alias.intDate | None
+        date : Base.intDateNone
             If given, keep only rows where ``list_dt <= date < delist_dt``.
         set_index : bool
             If True (default) return with ``secid`` as the index.
@@ -107,7 +107,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         self.ensure_initiation()
         return np.unique(self.get_desc(date , set_index=False)['secid'].to_numpy(int))
     
-    def get_list_dt(self , date : Base.alias.intDate | None = None , offset = 0 , keep_columns : list[str] = ['list_dt']):
+    def get_list_dt(self , date : Base.intDateNone = None , offset = 0 , keep_columns : list[str] = ['list_dt']):
         """
         Return a secid-indexed DataFrame with a single ``list_dt`` column.
 
@@ -121,7 +121,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
             desc['list_dt'] = CALENDAR.offset(desc['list_dt'] , offset , 'td')
         return desc.loc[:,keep_columns].reset_index().drop_duplicates(subset='secid').set_index('secid')
 
-    def list_num_by_date(self , dates : Base.alias.intDates , reference_date : Base.alias.intDate | None = None):
+    def list_num_by_date(self , dates : Base.intDates , reference_date : Base.intDateNone = None):
         """
         Return the number of listed stocks on a date.
         """
@@ -132,7 +132,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         listed = np.all((y - x) * np.array([[[1,-1]]]) > 0 , axis = -1)
         return listed.sum(0)
 
-    def get_st(self , date : Base.alias.intDate):
+    def get_st(self , date : Base.intDate):
         """
         Return securities flagged with an abnormal status (ST, suspended, or delisted).
 
@@ -152,7 +152,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         marked = marked.query('entry_dt >= del_st_dt').reset_index(drop=False)
         return marked
 
-    def get_indus(self , date : Base.alias.intDate | None = None):
+    def get_indus(self , date : Base.intDateNone = None):
         """
         Return the most recent Tushare L2 industry classification for each secid.
 
@@ -167,7 +167,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         df = df.groupby('secid')[['indus']].last()
         return df
 
-    def add_indus(self , df : pd.DataFrame , date : Base.alias.intDate | None = None , na_industry_as : Any = None):
+    def add_indus(self , df : pd.DataFrame , date : Base.intDateNone = None , na_industry_as : Any = None):
         """
         Join the industry classification onto ``df`` via a left join on ``secid``.
 
@@ -175,7 +175,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         ----------
         df : pd.DataFrame
             Frame with a ``secid`` column or index.
-        date : Base.alias.intDate | None
+        date : Base.intDateNone
             Point-in-time date for ``get_indus``.
         na_industry_as : scalar, optional
             Fill value for secids without an industry assignment.
@@ -188,7 +188,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
             df['indus'] = df['indus'].fillna(na_industry_as)
         return df
 
-    def get_listed_mask(self , df : pd.DataFrame , list_dt_offset = 21 , reference_date : Base.alias.intDate | None = None):
+    def get_listed_mask(self , df : pd.DataFrame , list_dt_offset = 21 , reference_date : Base.intDateNone = None):
         """
         Build a NaN mask array (shape same as ``df``) that is NaN before listing.
 
@@ -242,9 +242,9 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
             list_dt_mask = np.where(date_values < list_dt , np.nan , 0)[:,None]
         return df + list_dt_mask
 
-    def secname(self , secid : np.ndarray | list[int]):
+    def secname(self , secid : Base.alias.SecidType):
         """Return a numpy array of security names (``sec_name``) for the given secids."""
-        secid = np.array(secid) if isinstance(secid , list) else secid
+        secid = Base.ensure_secid(secid)
         return self._desc.drop_duplicates('secid').set_index('secid').reindex(secid)['sec_name'].to_numpy()
     
 INFO = InfoDataAccess()

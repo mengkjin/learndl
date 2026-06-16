@@ -88,13 +88,13 @@ _INPUT_MAPPING = {
 }
 _INPUT_MAPPING.update({k.upper():v.fac_input() for k,v in _INPUT_MAPPING.items()})
 
-def _get_features_block(src : str , key : str , features : list[str] | None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
+def _get_features_block(src : str , key : str , features : Base.alias.NamesType = None , start : int = 20100101 , end : int = 20241231) -> DataBlock:
     """
     获取特征
     input:
         features:    features
         start:       start date
-        end:      end date
+        end:         end date
     output:
         block:       DataBlock        
     """
@@ -173,7 +173,10 @@ def _get_return_block(start : int = 20100101 , end : int = 20241231 , nday : int
     block = block.align_secid_date(secid , dates , inplace = True)
     return block
 
-def _init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device : torch.device | str | None = None) -> torch.Tensor:
+def _init_neutral_exp(
+    start : int = 20100101 , end : int = 20241231 , * ,
+    device : torch.device | str | None = None
+) -> torch.Tensor:
     """
     获取中性化使用的行业因子和市值因子
     input:
@@ -189,8 +192,11 @@ def _init_neutral_exp(start : int = 20100101 , end : int = 20241231 , * , device
     values = block.loc(feature = Const.Factor.RISK.indus + ['size']).squeeze().to(device)
     return values
 
-def _init_labels_raw(start : int = 20100101 , end : int = 20241231 , * , neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
-                    device : torch.device | str | None = None) -> torch.Tensor:
+def _init_labels_raw(
+    start : int = 20100101 , end : int = 20241231 , * , 
+    neutral_exp : torch.Tensor | None = None , nday = 10 , delay = 1 , 
+    device : torch.device | str | None = None
+) -> torch.Tensor:
     """
     生成原始预测标签,中性化后的10日收益
     input:

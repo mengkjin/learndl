@@ -8,12 +8,12 @@ Shenzhen stock exchange websites.  Only active on CUDA servers
 from __future__ import annotations
 import asyncio
 from collections import defaultdict
-from typing import Any , Iterable
+from typing import Any
 
 from src.proj import MACHINE , Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyVerifier
 from src.proj.util.web.proxy.caller import ProxyCallerList
-from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool
+from src.proj.util.web.proxy.ppool import AsyncAdaptiveProxyPool , UrlsType
 
 from .const import ExchangeType
 from .fetcher_task import FetcherTask
@@ -55,7 +55,7 @@ class AnnouncementAgent(Base.BasicUpdater):
         cls.logger.display(ProxyVerifier.stats() , vb = 1)
 
     @classmethod
-    def get_proxy_pool(cls , urls : Iterable[str] | str = ExchangeType.all_urls() , go_with_cached_proxies = False):
+    def get_proxy_pool(cls , urls : UrlsType = list(ExchangeType.all_urls()) , go_with_cached_proxies = False):
         """get the ProxyPool(AutoRefreshProxyPool)"""
         with cls.logger.timer(f"Warmup ProxyPool", idt = 1, vb = 1) as timer:
             proxy_pool = ProxyAPI.get_proxy_pool(urls , go_with_cached_proxies=go_with_cached_proxies)
@@ -64,15 +64,9 @@ class AnnouncementAgent(Base.BasicUpdater):
         return proxy_pool
 
     @classmethod
-    def get_async_proxy_pool(cls, urls: Iterable[str] | str = ExchangeType.all_urls(), go_with_cached_proxies: bool = False):
+    def get_async_proxy_pool(cls, urls: UrlsType = list(ExchangeType.all_urls()), go_with_cached_proxies: bool = False):
         with cls.logger.timer(f"Warmup AsyncProxyPool", idt = 1, vb = 1) as timer:
-            if isinstance(urls, str):
-                target_urls = [urls]
-            elif isinstance(urls, list):
-                target_urls = urls
-            else:
-                target_urls = list(urls)
-            proxy_pool = AsyncAdaptiveProxyPool(target_urls, go_with_cached_proxies=go_with_cached_proxies)
+            proxy_pool = AsyncAdaptiveProxyPool(urls, go_with_cached_proxies=go_with_cached_proxies)
             timer.add_key_suffix(f" found proxies {proxy_pool.num_proxies}")
             timer.set_printer('success')
         return proxy_pool

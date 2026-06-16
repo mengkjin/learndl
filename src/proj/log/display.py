@@ -1,7 +1,7 @@
 """IPython-friendly display routing (DataFrame, matplotlib Figure, or fallback)."""
 from __future__ import annotations
 import pandas as pd
-from typing import Callable
+from collections.abc import Callable
 
 __all__ = ['Display']
 

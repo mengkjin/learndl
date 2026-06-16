@@ -3,7 +3,6 @@ General model class for the project
 includes basic methods for alpha model and risk model
 """
 from __future__ import annotations
-import numpy as np
 
 from abc import ABC , abstractmethod
 from copy import deepcopy
@@ -52,9 +51,8 @@ class GeneralModel(ABC):
         if date in self.models: 
             return True
         return self.available_dates().min <= date if closest else False
-    def load_models(self , dates : np.ndarray | Any = None , start : int = -1 , end : int = -1) -> Self:
-        if dates is None:
-            dates = self.available_dates()
+    def load_models(self , dates : Base.alias.DateType = None , start : int = -1 , end : int = -1) -> Self:
+        dates = Base.ensure_date(dates , self.available_dates().dates)
         dates = dates[(dates >= start) & (dates <= end)]
         [self.append(self.load_day_model(date)) for date in dates if date not in self.models]
         return self
@@ -63,7 +61,7 @@ class GeneralModel(ABC):
     def item(self) -> Any:
         assert len(self.models) == 1 , f'expect 1 model , but got {len(self.models)}'
         return self.models[list(self.models.keys())[0]]
-    def subset(self , dates : Base.alias.intDates):
+    def subset(self , dates : Base.intDates):
         dates = Dates(dates)
         new = self.copy()
         new.models = {d : self.models.get(d) for d in dates if d in self.models}

@@ -6,10 +6,12 @@ import traceback
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any , Callable , Literal , Sequence
+from typing import Any  , Literal
+from collections.abc import Callable, Sequence
 
 from src.proj.env import PATH , Proj
 from src.proj.core import Elapsed , Since , stdout , stderr , FormatStr , Once , Silence , StrEnum
+from src.proj.core.literals import VerbosityLevel
 from .display import Display
 from .logfile import LogFile
 
@@ -79,14 +81,14 @@ def add_to_log_file(message : str):
     LOG_FILE.write(f'{ENTRY_POINT} >> {find_calling_module()} >> {message}')
 
 def new_stdout(
-    *args , indent : int = 0 , vb_level : Any = 1 , 
+    *args , indent : int = 0 , vb_level : VerbosityLevel = 1 , 
     arg_prefix : str | None = None , prefixes : list[str] | None = None , 
     to_log_file : bool = False , **kwargs
 ) -> FormatStr:
     """
     custom stdout message
     kwargs:
-        indent: add prefix '  --> ' before the message
+        indent : add prefix '  --> ' before the message
         color , bg_color , bold: color the message
         sep , end , file , flush: same as stdout
     """
@@ -108,7 +110,7 @@ def new_stdout(
     return fstr
 
 def new_stderr(
-    *args , indent : int = 0 , vb_level : Any = 0 , 
+    *args , indent : int = 0 , vb_level : VerbosityLevel = 0 , 
     arg_prefix : str | None = None , prefixes : list[str] | None = None , **kwargs
 ) -> FormatStr:
     """
@@ -175,7 +177,7 @@ class Logger:
             - Timer: Timer class for timing the code, show the time in the best way
             - Profiler: Profiler class for profiling the code, show the profile result in the best way
     """
-    _instance : Logger | Any = None
+    _instance : Logger | None = None
     _conclusions : dict[StderrType , list[str]] = {level : [] for level in StderrType}
     _displayer = Display()
 
@@ -185,30 +187,32 @@ class Logger:
         return cls._instance
 
     @classmethod
-    def stdout(cls , *args , indent = 0 , vb_level : Any = 1 , **kwargs):
+    def stdout(cls , *args , indent = 0 , vb_level : VerbosityLevel = 1 , **kwargs):
         """
         custom stdout message
         kwargs:
-            indent: add prefix '  --> ' before the message
+            indent : add prefix '  --> ' before the message
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
         return new_stdout(*args , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def stdout_msgs(cls , msg_list : Sequence[tuple[int , str] | str] , 
-                    title : str | None = None , title_kwargs : dict[str , Any] = {'bold' : True , 'color' : 'lightgreen'} , 
-                    color = 'auto' , indent = 0 , vb_level : Any = 1 , bold = True , italic = True , **kwargs):
+    def stdout_msgs(
+        cls , msg_list : Sequence[tuple[int, str] | str] , 
+        title : str | None = None , title_kwargs : dict[str, Any] | None = {'bold' : True , 'color' : 'lightgreen'} , 
+        color = 'auto' , indent = 0 , vb_level : VerbosityLevel = 1 , bold = True , italic = True , **kwargs
+    ):
         """
         custom stdout message of multiple messages, each message is a tuple of (indent , message) or a string
         kwargs:
-            indent: add prefix '  --> ' before the message
+            indent : add prefix '  --> ' before the message
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
         def color_selector(color : str | None , indent : int):
             return (None if indent <= 1 else 'gray') if color is None or color == 'auto' else color
-
+        title_kwargs = title_kwargs or {}
         if title:
             new_stdout(FormatStr(title , **title_kwargs).formatted() , vb_level = vb_level)
             add_indent = 1
@@ -221,14 +225,16 @@ class Logger:
         new_stdout('\n'.join(msgs) , vb_level = vb_level)
 
     @classmethod
-    def stdout_pairs(cls , pair_list : Sequence[tuple[int , str , Any] | tuple[str , Any]] | dict[str , Any] , color = None , 
-                     title : str | None = None , title_printer : Callable | None = None ,
-                     title_kwargs : dict[str , Any] | None = {'bold' : True , 'color' : 'lightgreen'} , 
-                     indent = 0 , vb_level : Any = 1 , italic = True , min_key_len : int = -1 , **kwargs):
+    def stdout_pairs(
+        cls , pair_list : Sequence[tuple[int, str, Any] | tuple[str, Any]] | dict[str, Any] , color = None , 
+        title : str | None = None , title_printer : Callable | None = None ,
+        title_kwargs : dict[str, Any] | None = {'bold' : True , 'color' : 'lightgreen'} , 
+        indent = 0 , vb_level : VerbosityLevel = 1 , italic = True , min_key_len : int = -1 , **kwargs
+    ):
         """
         custom stdout message of multiple pairs, each pair is a tuple of (indent , key , value) or a tuple of (key , value)
         kwargs:
-            indent: add prefix '  --> ' before the message
+            indent : add prefix '  --> ' before the message
             color , bg_color , bold: color the message
             sep , end , file , flush: same as stdout
         """
@@ -271,7 +277,7 @@ class Logger:
         new_stdout('\n'.join(pairs) , vb_level = vb_level)
 
     @classmethod
-    def stderr(cls , *args , indent = 0 , color = None , vb_level : Any = 1 , **kwargs):
+    def stderr(cls , *args , indent = 0 , color = None , vb_level : VerbosityLevel = 1 , **kwargs):
         """
         Verbosity-aware stderr; message is also written to the rotating log file.
 
@@ -366,7 +372,7 @@ class Logger:
         new_stderr(*args , **_combine_kwargs(StderrType.CRITICAL.palette , kwargs | {'vb_level' : 0}))
 
     @classmethod
-    def only_once(cls , *args , object : Any | None | Literal['os' , 'logger'] = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
+    def only_once(cls , *args , object : Any | Literal['os', 'logger'] | None = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
         func : Callable = getattr(cls , printer) if isinstance(printer , str) else printer
         if object == 'logger':
@@ -381,7 +387,7 @@ class Logger:
 
     @classmethod
     def divider(cls , width : int = 140 , char : Literal['-' , '=' , '*'] = '-' , msg : str | None = None , 
-                color : str | None = None , bold : bool = True , vb_level : Any = 0 , **kwargs):
+                color : str | None = None , bold : bool = True , vb_level : VerbosityLevel = 0 , **kwargs):
         """Divider mesge , use stdout"""
         if msg is None:
             msg = char * width
@@ -484,7 +490,7 @@ class Logger:
                 cls.conclude(f'test exception: {e}' , level = 'error')
 
     @classmethod
-    def display(cls , obj , title : str | None = None , vb_level : Any = 1 , indent : int = 0 , **kwargs):
+    def display(cls , obj , title : str | None = None , vb_level : VerbosityLevel = 1 , indent : int = 0 , **kwargs):
         """
         display the object
         """
@@ -516,8 +522,11 @@ class Logger:
 
     class Timer:
         """Timer class for timing the code, show the time in the best way"""
-        def __init__(self , *args , silent = False , indent = 0 , 
-                     vb_level : Any = 1 , enter_vb_level : Any = 'max' , timer_prefix : bool = True , **kwargs): 
+        def __init__(
+            self , *args , silent = False , indent = 0 , 
+            vb_level : VerbosityLevel = 1 , enter_vb_level : VerbosityLevel = 'max' , 
+            timer_prefix : bool = True , **kwargs
+        ): 
             self.key = '/'.join(args)
             self.key_suffix = ''
             self.silent = silent
@@ -577,8 +586,10 @@ class Logger:
                 Logger.info('This is the enclosed process...')
         """
         VB_LEVEL = 1
-        def __init__(self , title : str , level : Literal[1,2,3,4,5] , char : Literal['-' , '=' , '*'] = '*', 
-                     vb_level : Any = 0 , enter_vb_level : Any = 0 , **kwargs):
+        def __init__(
+            self , title : str , level : Literal[1,2,3,4,5] , char : Literal['-' , '=' , '*'] = '*', 
+            vb_level : VerbosityLevel = 0 , enter_vb_level : VerbosityLevel = 0 , **kwargs
+        ):
             self.key = title.title()
             self.key_suffix = ''
             self.level = level
@@ -607,15 +618,15 @@ class Logger:
         def add_key_suffix(self , *msgs):
             """Set the exit string"""
             self.key_suffix = ' '.join(msgs)
-        def write(self , message : str , vb_level : Any = 0):
+        def write(self , message : str , vb_level : VerbosityLevel = 0):
             Logger.divider(char = self.char , msg = message , color = self.color , bold = True , vb_level = vb_level)
     
     class Profiler(cProfile.Profile):
         """Profiler class for profiling the code, show the profile result in the best way"""
         def __init__(self, title : str | None = None , builtins = False , display = True , n_head = 20 , 
                      columns = ['type' , 'name' , 'ncalls', 'cumtime' ,  'tottime' , 'percall' , 'where'] , 
-                     sort_on = 'cumtime' , highlight = None , vb_level : Any = 1 ,
-                     enter_vb_level : Any = 1 , indent : int = 0,
+                     sort_on = 'cumtime' , highlight = None , vb_level : VerbosityLevel = 1 ,
+                     enter_vb_level : VerbosityLevel = 1 , indent : int = 0,
                      **kwargs) -> None:
             self.profiling = title is not None
             self.key = title

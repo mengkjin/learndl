@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from typing import Any , Callable , Iterable , TypeVar , TYPE_CHECKING
+from typing import Any   , TypeVar , TYPE_CHECKING
+from collections.abc import Callable, Iterable
 
+from src.proj.core import lit
 from src.proj.log import Logger
 from .code_mapper import secid2secid
 
@@ -54,7 +56,7 @@ class dfHandler:
     @classmethod
     def load_process_pandas(
         cls , df : pd.DataFrame , date = None, * , reassign_date_col : str | None = None , check_na_cols = False , 
-        syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'
+        syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : lit.VerbosityLevel = 'max'
     ) -> pd.DataFrame:
         """process dataframe , check empty / all-NA and try reset index"""
         if reassign_date_col and date is not None: 
@@ -77,8 +79,10 @@ class dfHandler:
 
     @classmethod
     def load_process_polars(
-        cls , df : pl.DataFrame , date = None, * , reassign_date_col : str | None = None , check_na_cols = False , 
-        syntax : str = 'some df' , reset_index = True , ignored_fields = [] , indent = 1 , vb_level : Any = 'max'
+        cls , df : pl.DataFrame , date = None, * , 
+        reassign_date_col : str | None = None , check_na_cols = False , 
+        syntax : str = 'some df' , reset_index = True , ignored_fields = [] , 
+        indent = 1 , vb_level : lit.VerbosityLevel = 'max'
     ) -> pl.DataFrame:
         """process polars dataframe , check empty / all-NA and try reset index"""
         import polars as pl

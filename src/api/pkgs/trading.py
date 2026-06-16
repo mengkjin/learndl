@@ -3,6 +3,7 @@ API for trading operations of this project.
 """
 
 from __future__ import annotations
+
 from src.res.trading import TrackingPortfolioManager , BacktestPortfolioManager
 
 from src.proj import Logger , Const

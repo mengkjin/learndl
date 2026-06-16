@@ -202,7 +202,7 @@ class LogFile:
         read_files = reversed(self.candidates) if from_latest else self.candidates
         entries : list[LogEntry] = []
         for file in read_files:
-            with open(file , 'r' , encoding='utf-8') as f:
+            with open(file  , encoding='utf-8') as f:
                 lines = f.readlines()
             entries.extend(LogEntry.from_lines(lines , from_latest = from_latest , pattern = pattern))
             if max_entries > 0 and len(entries) > max_entries:

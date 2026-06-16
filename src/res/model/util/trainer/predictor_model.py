@@ -117,7 +117,7 @@ class PredictorModel(TrainerPipeline):
         param = self.cached_properties.query('complete_model_param' , lambda: None)
         return self.model_param if param is None else param
     @complete_model_param.setter
-    def complete_model_param(self , value : dict[str,Any] | None):
+    def complete_model_param(self , value : dict[str, Any] | None):
         self.cached_properties.set('complete_model_param' , value)    
     @cached_property
     def current_model_file(self):

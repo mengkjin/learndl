@@ -3,7 +3,6 @@ Reinforce calculator for Factor Model Portfolio
 """
 from __future__ import annotations
 import pandas as pd
-from typing import Type
 
 from src.proj import Base
 from src.proj.bases import TestType
@@ -80,7 +79,7 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
         'perf_year' : Performance Yearly Stats
     """
     TEST_TYPE = test_type
-    TASK_LIST : list[Type[ReinforceCalc]] = [
+    TASK_LIST : list[type[ReinforceCalc]] = [
         FrontFace , 
         Perf_Curve ,
         Perf_Excess ,

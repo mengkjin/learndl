@@ -6,7 +6,7 @@ import pandas as pd
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal , Type , ClassVar , Any
+from typing import Any , ClassVar , Literal
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.data import DATAVENDOR
@@ -16,7 +16,7 @@ from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess
 
 __all__ = ['TradingPort' , 'TrackingPort' , 'BacktestPort']
 
-TASK_LIST : list[Type[TopCalc]] = [
+TASK_LIST : list[type[TopCalc]] = [
     FrontFace , 
     Perf_Curve ,
     Perf_Excess ,
@@ -29,22 +29,22 @@ class TradingPort(Base.BoundLogger):
     """
     Trading port class for the project.
     """
-    name        : str 
-    alpha       : str | list[str]
-    universe    : str = 'top-500'
-    category    : Literal['top' , 'screen' , 'reinforce'] = 'top'
-    components  : list[str] | None = None
-    weights     : list[float] | Literal['equal'] | None = None
-    top_num     : int = 50
-    freq        : int | Base.lit.FreqUpdate = 1
-    init_value  : float = 1e6
-    backtest    : bool = False
-    test_start  : int = 20190101 # -1 for no backtest
-    test_end    : int = -1
-    benchmark   : str = 'csi500' # only used for accounting
-    exclusion   : str = 'st_bse_lowprice_loser_warnst'
-    sorter      : str | list[str] | None = None
-    screener    : str | list[str] | None = None
+    name          : str 
+    alpha         : str | list[str]
+    universe      : str = 'top-500'
+    category      : Literal['top' , 'screen' , 'reinforce'] = 'top'
+    components    : Base.alias.NamesType = None
+    weights       : list[float] | Literal['equal'] | None = None
+    top_num       : int = 50
+    freq          : int | Base.lit.FreqUpdate = 1
+    init_value    : float = 1e6
+    backtest      : bool = False
+    test_start    : int = 20190101 # -1 for no backtest
+    test_end      : int = -1
+    benchmark     : str = 'csi500' # only used for accounting
+    exclusion     : str = 'st_bse_lowprice_loser_warnst'
+    sorter        : Base.alias.NamesType = None
+    screener      : Base.alias.NamesType = None
     screen_ratio  : float = 0.5
     buffer_zone   : float = 0.8
     no_zone       : float = 0.5
@@ -380,11 +380,13 @@ class TrackingPort(TradingPort):
             last_port = self.get_last_port(date , reset)
 
         self.logger.stdout(f'Perform portfolio building for {self.name} at {Dates(date)}')
-        builder = PortfolioBuilder(self.category , alpha , universe , build_on = last_port , 
-                                   n_best = self.top_num , turn_control = self.turn_control , 
-                                   buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
-                                   indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
-                                   screen_ratio = self.screen_ratio , indent = self.indent + 1 , vb_level = self.vb_level + 1).setup()
+        builder = PortfolioBuilder(
+            self.category , alpha , universe , build_on = last_port , 
+            n_best = self.top_num , turn_control = self.turn_control , 
+            buffer_zone = self.buffer_zone , no_zone = self.no_zone , 
+            indus_control = self.indus_control , sorter = self.sorter , screener = self.screener ,
+            screen_ratio = self.screen_ratio , indent = self.indent + 1 , vb_level = self.vb_level + 1
+        ).setup()
 
         pf = builder.build(date).port.to_dataframe()
 
@@ -397,8 +399,8 @@ class TrackingPort(TradingPort):
         # add columns to include alpha and universe
         if True or alpha_details:
             alpha_model = alpha.item()
-            pf['alpha'] = alpha_model.alpha_of(pf['secid'])
-            pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'] , rank = True)
+            pf['alpha'] = alpha_model.alpha_of(pf['secid'].tolist())
+            pf['alpha_rank'] = alpha_model.alpha_of(pf['secid'].tolist() , rank = True)
             val_table = DATAVENDOR.TRADE.get_val(date).reset_index().set_index('secid')
             val_table['mv_rank'] = val_table['circ_mv'].rank()
             val_table = val_table[['circ_mv' , 'mv_rank']].loc[pf['secid']]

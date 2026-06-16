@@ -1,7 +1,6 @@
 """
 Direct calls related to application operations of this project.
 """
-
 from __future__ import annotations
 import os
 import psutil
@@ -16,7 +15,7 @@ class LaunchApp(DirectCall):
     category = 'App'
     def run(self) -> None:
         from src.proj.util.shell import Shell
-        cmd = 'uv run streamlit run src/api/interactive/launch.py --server.runOnSave=True'
+        cmd = 'uv run streamlit run src/api/interactive/launch.py'
         kwargs = {
             'done_action': 'pause',
             'title': 'Streamlit Server',

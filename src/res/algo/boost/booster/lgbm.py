@@ -15,7 +15,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-
 from src.proj import Base
 from src.func.basic import match_values
 from ..util import BasicBoostModel , BoostInput
@@ -78,7 +77,10 @@ class Lgbm(BasicBoostModel):
             self.train_param['lambdarank_truncation_target'] = None
         return self
 
-    def fit(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False):
+    def fit(
+        self , train : BoostInput | Any = None , valid : BoostInput | Any = None , 
+        silent = False
+    ):
         self.boost_fit_inputs(train , valid , silent)
 
         # group: cross-section queries by date (required for lambdarank / ranking metrics).
@@ -102,7 +104,7 @@ class Lgbm(BasicBoostModel):
         )
         return self
         
-    def predict(self , x : BoostInput | str = 'test'):
+    def predict(self , x : BoostInput | Any = 'test'):
         data = self.boost_input(x)
         X = data.X.cpu().numpy()
         return data.output(self.model.predict(X))

@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 
 from typing import Any , Literal , get_args
-
 from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
@@ -298,7 +297,7 @@ class FDataAccess(DateDataAccess):
                            qoq_method : QoQMethod | None = None , 
                            diff_method : DiffMethod | None = None):
         """
-        Compute quarter-on-quarter growth rate: ``(current - prev) / |prev|``.
+        Compute quarter-on-quarter growth rate: ``(current - prev) / abs(prev)``.
 
         The base series is determined by ``qoq_method`` (qtr, ttm, or acc).
         The previous quarter is obtained via a 1-quarter lag within each secid.
@@ -325,7 +324,7 @@ class FDataAccess(DateDataAccess):
                            yoy_method : YoyMethod | None = None ,
                            diff_method : DiffMethod | None = None):
         """
-        Compute year-on-year growth rate: ``(current - prev_year) / |prev_year|``.
+        Compute year-on-year growth rate: ``(current - prev_year) / abs(prev_year)``.
 
         The base series is determined by ``yoy_method`` (ttm, acc, or qtr).
         The same-quarter prior year is obtained via a 4-quarter lag within each secid.
@@ -645,9 +644,8 @@ class FinData:
         return result
     
     @classmethod
-    def _f_func(cls , fstatement : FSType | str ,
-                ftype : FsOper | str ,
-                category : FsCat):
+    def _f_func(
+        cls , fstatement : FSType | str , ftype : FsOper | str , category : FsCat):
         """
         Resolve the callable method from the correct singleton.
 

@@ -45,7 +45,7 @@ class TSMixer(nn.Module):
         seq_len: int , 
         d_model:int , 
         patch_len:int = 5 , 
-        stride:int|None = None, 
+        stride: int | None = None, 
         channel_mixer = True , expansion_factor = 2 , gated_attn = True ,
         shared_embedding=True, shared_head = False,
         revin:bool=True,
@@ -100,7 +100,7 @@ class TSMixer(nn.Module):
             x = self.revin(x , 'denorm')            # [bs x d_model x num_patch x nvars]
             x = x.permute(0,3,1,2)                  # [bs x nvars x d_model x num_patch]
 
-        x = self.head(x)                            # [bs x seq_len x nvars] | [bs x predict_steps]
+        x = self.head(x)                            # [bs x seq_len x nvars] or [bs x predict_steps]
         return x
     
 class TSMixerPredictionHead(nn.Module):

@@ -14,11 +14,13 @@ __all__ = ['NNPredictor']
 class NNPredictor(PredictorModel):
     AllowTorchCompile = True
 
-    def init_model(self , 
-                   model_module : str | None = None , 
-                   model_param : dict | None = None , 
-                   testor_mode : bool = False ,
-                   *args , **kwargs):
+    def init_model(
+        self , 
+        model_module : str | None = None , 
+        model_param : dict | None = None , 
+        testor_mode : bool = False ,
+        *args , **kwargs
+    ):
         if testor_mode: 
             self._model_num , self._model_date , self._model_submodel = 0 , 0 , '0'
         module = model_module if model_module else self.config.model_module

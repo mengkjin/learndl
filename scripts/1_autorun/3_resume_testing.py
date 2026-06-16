@@ -1,5 +1,4 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
-# coding: utf-8
 # author: jinmeng
 # date: 2025-12-31
 # description: Resume Testing all prediction models and sellside/pooling factors

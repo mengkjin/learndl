@@ -5,7 +5,6 @@ from __future__ import annotations
 import pandas as pd
 
 from plottable import ColumnDefinition
-from typing import Any
 
 from src.proj.util.functional.plot import (
     plot_table , get_twin_axes , set_xaxis , set_yaxis
@@ -33,9 +32,9 @@ class Plotter:
         self.plot_iter = PlotDfFigIterator(title_prefix)
 
     def plot_frontface(self , data : pd.DataFrame , show = False , title_prefix = None):
-        num_per_page : int | Any = max(32 // data.groupby('factor_name').size().max() , 1)
-        num_groups : int | Any = data.groupby('factor_name').ngroups
-        num_pages  : int | Any = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
+        num_per_page : int = max(32 // data.groupby('factor_name').size().max() , 1)
+        num_groups : int = data.groupby('factor_name').ngroups
+        num_pages  : int = num_groups // num_per_page + (1 if num_groups % num_per_page > 0 else 0)
         self.plot_iter.set_args(data , show , title_prefix , 'Front Face' , ['factor_name'] , drop_keys = False , drop_cols = [] , num_groups_per_iter = num_per_page , num_pages = num_pages)
         for df , fig in self.plot_iter.iter():
             df = df.reset_index([i for i in df.index.names if i])

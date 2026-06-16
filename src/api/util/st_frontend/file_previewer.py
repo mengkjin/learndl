@@ -59,7 +59,7 @@ class FilePreviewer:
     def preview_text_file(file_path : Path , language : str | None = None):
         """preview text file"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 text_content = f.read()
             if language == 'json':
                 st.json(text_content)
@@ -72,7 +72,7 @@ class FilePreviewer:
     def preview_html_file(file_path : Path):
         """preview HTML file"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 html_content = f.read()
             st.iframe(html_content , height = 600)   
         except Exception as e:

@@ -7,7 +7,8 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 from pathlib import Path
-from typing import Generator , Iterator , Type , Any
+from typing import Any
+from collections.abc import Generator, Iterator
 
 from src.proj import PATH , MACHINE , Base
 from src.proj.util.functional.parallel import parallel
@@ -38,7 +39,7 @@ class StockFactorHierarchy(Base.BoundLogger):
     def initialize(cls) -> None:
         """initialize the hierarchy of factor classes"""
         FactorCalculator.import_definitions()
-        cls.hier : dict[str , list[Type[FactorCalculator]]] = {}
+        cls.hier : dict[str , list[type[FactorCalculator]]] = {}
         for obj in cls.pool.values():
             if obj.level not in cls.hier: 
                 cls.hier[obj.level] = []
@@ -172,17 +173,17 @@ class StockFactorHierarchy(Base.BoundLogger):
         return iter(cls().hier)
     
     @classmethod
-    def iter_level_factors(cls , level : str) -> Generator[Type[FactorCalculator] , None , None]: 
+    def iter_level_factors(cls , level : str) -> Generator[type[FactorCalculator] , None , None]: 
         """return a list of factor classes in a given level"""
         return (factor for factor in cls().hier[level])
 
     @classmethod
-    def iter_factors(cls , **kwargs) -> Generator[Type[FactorCalculator] , None , None]:
+    def iter_factors(cls , **kwargs) -> Generator[type[FactorCalculator] , None , None]:
         """return a list of factor classes with given attributes"""
         return (factor for level in cls().iter_levels() for factor in cls().iter_level_factors(level))
     
     @classmethod
-    def get_factor(cls , factor_name : str) -> Type[FactorCalculator]:
+    def get_factor(cls , factor_name : str) -> type[FactorCalculator]:
         """
         return a factor class by factor_name
         e.g.

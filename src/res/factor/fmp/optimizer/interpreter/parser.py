@@ -16,7 +16,7 @@ __all__ = [
     'parse_config_short' , 'parse_config_style'
 ]
 
-def parse_config_equity(config : dict) -> dict[str,float|Any]:
+def parse_config_equity(config : dict) -> dict[str,float | Any]:
     """
     Total Position, take 4 in , 1 out:
     config:
@@ -34,7 +34,7 @@ def parse_config_benchmark(config : dict) -> dict[str,Any]:
     config = config['benchmark']
     return config
 
-def parse_config_utility(config : dict) -> dict[str,float|None]:
+def parse_config_utility(config : dict) -> dict[str,float | None]:
     """Utility, return raw config"""
     config = config['utility']
     return config
@@ -166,7 +166,7 @@ def parse_config_component(config : dict):
             rslt[name].append(bnd)
     return rslt
 
-def parse_config_turnover(config : dict) -> dict[str,float|None]:
+def parse_config_turnover(config : dict) -> dict[str,float | None]:
     """
     Turnover upper Bound, take 2 float | None in , 1 float | None out:
     config : 
@@ -183,7 +183,7 @@ def parse_config_turnover(config : dict) -> dict[str,float|None]:
         value = value2
     return {'double' : value}
 
-def parse_config_short(config : dict) -> dict[str,float|Any]:
+def parse_config_short(config : dict) -> dict[str,float | Any]:
     """
     shortsell constraint, take 2 miscellaneous in , 2 miscellaneous out:
     config : 

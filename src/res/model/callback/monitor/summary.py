@@ -6,12 +6,11 @@ from __future__ import annotations
 import torch
 import shutil
 
-
 from datetime import datetime
 from functools import cached_property
-from typing import Any
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
+from typing import Any
 
 from src.proj import Proj , PATH , Save , Base
 from src.res.model.util import BaseCallBack
@@ -73,7 +72,7 @@ class SummaryWriter(BaseCallBack):
         return LogFile.initialize('model' , 'summary' , log_name)
 
     @property
-    def last_lr(self) -> float |Any:
+    def last_lr(self) -> float | Any:
         if hasattr(self.model , 'optimizer'):
             return self.model.optimizer.last_lr
         return 0.

@@ -4,10 +4,11 @@ Metric components for the project
 from __future__ import annotations
 
 from torch import Tensor
-from typing import Callable
+from collections.abc import Callable
 
 from src.proj import Base
 from src.proj.core import as_int_array
+from src.res.model.util import TensorReturnType
 from src.res.algo.nn.loss import MultiHeadLosses
 
 __all__ = ['MetricComponent' , 'LossComponent' , 'AccuracyComponent']
@@ -56,10 +57,10 @@ def align_shape(pred : Tensor , label : Tensor , weight : Tensor | None = None ,
 class MetricComponent:
     def __init__(
         self , 
-        calculator : Callable[...,Tensor | dict[str,Tensor]] , 
+        calculator : Callable[...,TensorReturnType] , 
         lamb : float = 1. , 
-        which_output : Base.alias.intNums | None = None ,
-        which_label : Base.alias.intNums | None = None ,
+        which_output : Base.intNums | None = None ,
+        which_label : Base.intNums | None = None ,
         **kwargs
     ):
         self.calculator = calculator
@@ -68,7 +69,7 @@ class MetricComponent:
         self.which_label = which_label
         self.kwargs = kwargs
 
-    def __call__(self , **kwargs) -> Tensor | dict[str,Tensor]:
+    def __call__(self , **kwargs) -> TensorReturnType:
         kwargs = self.filter_inputs(**kwargs)
         output = self.calculator(**self.kwargs , **kwargs)
         return self.apply_lamb(output)
@@ -76,13 +77,13 @@ class MetricComponent:
     def __repr__(self):
         return f'{self.__class__.__name__}(calculator={self.calculator},lamb={self.lamb},which_output={self.which_output},which_label={self.which_label},kwargs={self.kwargs})'
 
-    def apply_lamb(self , output : Tensor | dict[str,Tensor]) -> Tensor | dict[str,Tensor]:
-        if isinstance(output , dict):
-            return {k:self.lamb * v for k,v in output.items()}
-        else:
+    def apply_lamb(self , output : TensorReturnType) -> TensorReturnType:
+        if isinstance(output , Tensor):
             return self.lamb * output
+        else:
+            return {k:self.lamb * v for k,v in output.items()}
 
-    def filter_inputs(self , which_output : Base.alias.intNums | None = None , which_label : Base.alias.intNums | None = None , **kwargs):
+    def filter_inputs(self , which_output : Base.intNums | None = None , which_label : Base.intNums | None = None , **kwargs):
         label , pred , weight = kwargs.get('label' , None) , kwargs.get('pred' , None) , kwargs.get('weight' , None)
         which_output = self.which_output if which_output is None else which_output
         which_label = self.which_label if which_label is None else which_label
@@ -108,17 +109,17 @@ class MetricComponent:
 class LossComponent(MetricComponent):
     def __init__(
         self , 
-        calculator : Callable[...,Tensor | dict[str,Tensor]] , 
+        calculator : Callable[...,TensorReturnType] , 
         lamb : float = 1. , 
-        which_output : Base.alias.intNums | None = None ,
-        which_label : Base.alias.intNums | None = None ,
+        which_output : Base.intNums | None = None ,
+        which_label : Base.intNums | None = None ,
         multilosses : MultiHeadLosses | None = None ,
         **kwargs
     ):
         super().__init__(calculator , lamb , which_output , which_label , **kwargs)
         self.multilosses = multilosses
 
-    def __call__(self , **kwargs) -> Tensor | dict[str,Tensor]:
+    def __call__(self , **kwargs) -> TensorReturnType:
         output = super().__call__(**kwargs)
         if self.multilosses:
             assert isinstance(output , Tensor) , f'loss output should be a Tensor when multilosses is applied, but got {output}'
@@ -126,6 +127,6 @@ class LossComponent(MetricComponent):
         return output
         
 class AccuracyComponent(MetricComponent):
-    def __call__(self , **kwargs) -> Tensor | dict[str,Tensor]:
+    def __call__(self , **kwargs) -> TensorReturnType:
         output = super().__call__(**kwargs)
         return output

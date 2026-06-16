@@ -10,7 +10,7 @@ import statsmodels.api as sm
 from dataclasses import dataclass
 from typing import Any , ClassVar , Literal
 
-from src.proj import DB , Const , Proj , Dates
+from src.proj import DB , Const , Proj , Dates , Base
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
 
 from .general_model import GeneralModel
@@ -36,7 +36,7 @@ class Rmodel:
         self.F.fillna(0 , inplace=True)
         self.C = self.C.loc[comfac , comfac]
         self.S.fillna(self.S.quantile(0.95) , inplace=True)
-        self.regressed : int | Any = None
+        self.regressed : int | None = None
         self.next_date = DATAVENDOR.td(self.date , 1)
 
     def assert_valid(self):
@@ -49,35 +49,29 @@ class Rmodel:
     @property
     def universe(self): 
         return self.F.query('estuniv == 1').index.values
-    def ffmv(self , secid : np.ndarray | Any = None): 
+    def ffmv(self , secid : Base.alias.SecidType = None): 
         return self.weight(secid) * 1e8
-    def weight(self , secid : np.ndarray | Any = None): 
+    def weight(self , secid : Base.alias.SecidType = None): 
         df = self.F.loc[: , 'weight'] * 1e8
-        if secid is not None: 
-            df = self.loc_secid(df , secid , 0.)
+        df = self.loc_secid(df , secid , 0.)
         return df.to_numpy(float).flatten()
     @property
     def common_factors(self): 
         return Const.Factor.RISK.common
-    def FCS_aligned(self , secid : np.ndarray | Any = None):
-        F = self.F.loc[: , Const.Factor.RISK.common]
+    def FCS_aligned(self , secid : Base.alias.SecidType = None):
         C = self.C
-        S = self.S
-        if secid is not None: 
-            F = self.loc_secid(F , secid , 0.)
-            S = self.loc_secid(S , secid , 'max')
+        F = self.loc_secid(self.F.loc[: , Const.Factor.RISK.common] , secid , 0.)
+        S = self.loc_secid(self.S , secid , 'max')
         return F.values.T , C.values , S.values.flatten()
-    def industry(self , secid : np.ndarray | Any = None):
+    def industry(self , secid : Base.alias.SecidType = None):
         df = self.F.loc[: , _indus].idxmax(axis=1)
-        if secid is not None: 
-            df = self.loc_secid(df , secid , 0.)
+        df = self.loc_secid(df , secid , 0.)
         return df.to_numpy()
-    def style(self , secid : np.ndarray | Any = None , style : np.ndarray | Any = None):
+    def style(self , secid : Base.alias.SecidType = None , style : Base.alias.NamesType = None):
         if style is None: 
             style = _style
         df = self.F.loc[: , style]
-        if secid is not None: 
-            df = self.loc_secid(df , secid , 0.)
+        df = self.loc_secid(df , secid , 0.)
         return df
     def is_pos_def(self):
         return np.all(np.linalg.eigvals(self.C.values) > 0)
@@ -87,13 +81,13 @@ class Rmodel:
     def _specific_risk(self , port : Port):
         rmodel_s = self.loc_secid(self.S , port.secid).values.flatten()
         return (port.weight * rmodel_s).dot(port.weight)
-    def _analysis(self , port : Port | Any = None):
+    def _analysis(self , port : Port | None = None):
         if not port: 
             return RiskProfile()
         common_exp = self._exposure(port)
         variance = common_exp.dot(self.C).dot(common_exp.T) + self._specific_risk(port)
         return RiskProfile(self.common_factors , common_exp , variance)
-    def analyze(self , port : Port , bench : Port | Any = None , init : Port | Any = None):
+    def analyze(self , port : Port , bench : Port | None = None , init : Port | None = None):
         """Analyze day end risk profile"""
         rslt = RiskAnalytic(self.date)
         rslt.append('portfolio' , self._analysis(port))
@@ -101,7 +95,7 @@ class Rmodel:
         rslt.append('benchmark' , self._analysis(bench))
         rslt.append('active'    , self._analysis(None if bench is None else port - bench))
         return rslt
-    def attribute(self , port : Port , bench : Port | Any = None , target_date : int | None = None , other_cost : float = 0.):
+    def attribute(self , port : Port , bench : Port | None = None , target_date : int | None = None , other_cost : float = 0.):
         """Attribute the portfolio of the next day (trading day)"""
         rslt = Attribution.create(self , port , bench , target_date=target_date , other_cost = other_cost)
         return rslt
@@ -111,8 +105,8 @@ class Rmodel:
             target_date = self.next_date
         futret = DATAVENDOR.get_quote_ret(self.date , target_date)
         if futret is None: 
-            self.params : pd.DataFrame | Any = None
-            self.futret : pd.DataFrame | Any = None
+            self.params : pd.DataFrame | None = None
+            self.futret : pd.DataFrame | None = None
             self.regressed = None
         else:
             futret = futret.rename(columns={'ret':'tot'})[['tot']].astype(float)
@@ -128,7 +122,10 @@ class Rmodel:
         return self
     def get_model(self , *args , **kwargs): return self
     @staticmethod
-    def loc_secid(df : pd.DataFrame | Any , secid : np.ndarray , fillna : Literal['max','min'] | float | None = None):    
+    def loc_secid(df : pd.DataFrame | Any , secid : Base.alias.SecidType , fillna : Literal['max', 'min'] | float | None = None):    
+        secid = Base.ensure_secid(secid)
+        if secid is None:
+            return df
         try:  
             new_df = df.loc[secid]
         except KeyError:  
@@ -192,11 +189,11 @@ class RiskModel(GeneralModel):
         return Rmodel(date , F , C , S)
 
     @staticmethod
-    def Analytics_to_dfs(analytics : dict[Any,RiskAnalytic|None]) -> dict[str,pd.DataFrame]:
+    def Analytics_to_dfs(analytics : dict[Any , RiskAnalytic | None]) -> dict[str,pd.DataFrame]:
         return RiskAnalytic.to_dfs_multi(analytics)
 
     @staticmethod
-    def Attributions_to_dfs(attributions : dict[Any,Attribution|None]) -> dict[str,pd.DataFrame]:
+    def Attributions_to_dfs(attributions : dict[Any , Attribution | None]) -> dict[str,pd.DataFrame]:
         return Attribution.to_dfs_multi(attributions)
 
     @staticmethod
@@ -212,18 +209,21 @@ class RiskProfile:
     """
     basic risk profile of a portfolio / benchmark / active , i.e. risk exposure / standard deviation / variance
     """
-    factors  : list | np.ndarray | None = None
+    factors  : Base.ArrayLike[str] | None = None
     exposure : np.ndarray | None = None
     variance : float | None = None
 
     variance_measure : ClassVar[list[str]] = ['variance','std_dev']
 
-    def __bool__(self): return self.factors is not None
+    def __bool__(self): 
+        return self.factors is not None
     @property
-    def standard_deviation(self): return np.sqrt(self.variance) if self.variance is not None else None
+    def standard_deviation(self): 
+        return np.sqrt(self.variance) if self.variance is not None else None
     def to_dataframe(self):
         if not self: 
             return None
+        assert self.factors is not None and self.exposure is not None and self.variance is not None
         df0 = pd.DataFrame({'factor_name':self.factors,'value':self.exposure})
         df1 = pd.DataFrame({'factor_name':self.variance_measure,'value':[self.variance,self.standard_deviation]})
         return pd.concat([df0,df1]).set_index('factor_name')
@@ -249,16 +249,16 @@ class RiskAnalytic:
     portfolio risk analysis result
     """
     date     : int = 0
-    industry : pd.DataFrame | Any = None
-    style    : pd.DataFrame | Any = None
-    risk     : pd.DataFrame | Any = None
+    industry : pd.DataFrame | None = None
+    style    : pd.DataFrame | None = None
+    risk     : pd.DataFrame | None = None
 
     def __post_init__(self):
-        if isinstance(self.industry , pd.DataFrame) and 'industry' in self.industry.columns:
+        if self.industry is not None and 'industry' in self.industry.columns:
             self.industry = self.industry.set_index('industry')
-        if isinstance(self.style , pd.DataFrame) and 'style' in self.style.columns:
+        if self.style is not None and 'style' in self.style.columns:
             self.style = self.style.set_index('style')
-        if isinstance(self.risk , pd.DataFrame) and 'measure' in self.risk.columns:
+        if self.risk is not None and 'measure' in self.risk.columns:
             self.risk = self.risk.set_index('measure')
 
     def __bool__(self): 
@@ -294,10 +294,13 @@ class RiskAnalytic:
 
     def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
         if which == 'industry':
+            assert self.industry is not None
             return self.industry.style.format(lambda x:f'{x:.2%}')
         elif which == 'style':
+            assert self.style is not None
             return self.style.style.format(lambda x:f'{x:.4f}')
         else:
+            assert self.risk is not None
             return self.risk.style.format(lambda x:f'{x:.4%}')
 
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
@@ -329,7 +332,7 @@ class RiskAnalytic:
         return cls(date , industry , style , risk)
 
     @classmethod
-    def to_dfs_multi(cls , analytics : dict[Any,RiskAnalytic|None]) -> dict[str,pd.DataFrame]:
+    def to_dfs_multi(cls , analytics : dict[Any , RiskAnalytic | None]) -> dict[str,pd.DataFrame]:
         dfs_multi : dict[str,list[pd.DataFrame]] = {}
         for key , value in analytics.items():
             if value is None:
@@ -364,11 +367,11 @@ class Attribution:
     """
     start    : int = 0
     end      : int = 0
-    source   : pd.DataFrame | Any = None
-    industry : pd.DataFrame | Any = None
-    style    : pd.DataFrame | Any = None
-    specific : pd.DataFrame | Any = None
-    aggregated : pd.DataFrame | Any = None
+    source   : pd.DataFrame | None = None
+    industry : pd.DataFrame | None = None
+    style    : pd.DataFrame | None = None
+    specific : pd.DataFrame | None = None
+    aggregated : pd.DataFrame | None = None
 
     order_list : ClassVar[list[str]] = ['tot','market','industry','style','excess','specific','cost']
 
@@ -391,11 +394,13 @@ class Attribution:
     @classmethod
     def create(cls , risk_model : Rmodel , port : Port , bench : Port | None = None , 
                target_date : int | None = None , other_cost : float = 0.):
+        
         if target_date is None: 
             target_date = risk_model.next_date
         if risk_model.regressed != target_date: 
             risk_model = risk_model.regress_fut_ret(target_date)
         if risk_model.futret is None: 
+            assert risk_model.regressed is not None
             return cls(risk_model.next_date , risk_model.regressed)
 
         benchport = Port.none_port(risk_model.date).port if bench is None else bench.port
@@ -415,7 +420,8 @@ class Attribution:
             exp_list.append(exp)
 
         specific *= weight['active'].to_numpy().reshape(-1,1)
-        specific.loc[:,coef.index.values] *= coef.to_numpy().reshape(1,-1)
+        if coef is not None:
+            specific.loc[:,coef.index.values] *= coef.to_numpy().reshape(1,-1)
         exp_list.append(specific.sum().rename('contribution').to_frame())
         aggregated = pd.concat(exp_list , axis = 1)
     
@@ -428,11 +434,11 @@ class Attribution:
         specific['industry'] = specific.loc[:,_indus].sum(axis=1)
         specific['style']    = specific.loc[:,_style].sum(axis=1)
         specific = specific.drop(columns = _indus + _style).loc[:,cls.order_list[:-1]]
-
+        assert risk_model.regressed is not None
         return cls(risk_model.next_date , risk_model.regressed , source , industry , style , specific , aggregated)
 
     @classmethod
-    def aggregated_to_others(cls , aggregated : pd.DataFrame | None):
+    def aggregated_to_others(cls , aggregated : pd.DataFrame | None = None):
         if aggregated is None or aggregated.empty:
             return None , None , None
         if 'source' in aggregated.columns:
@@ -465,8 +471,11 @@ class Attribution:
         return self
 
     def to_dfs(self , **kwargs) -> dict[str,pd.DataFrame]:
-        dfs = {'attribution_specific':self.specific.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False) , 
-               'attribution_aggregated':self.aggregated.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False)}
+        dfs : dict[str,pd.DataFrame] = {}
+        if self.specific is not None:
+            dfs['attribution_specific'] = self.specific.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False)
+        if self.aggregated is not None:
+            dfs['attribution_aggregated'] = self.aggregated.assign(start=self.start , end=self.end , **kwargs).reset_index(drop=False)
         assert all(isinstance(df.index , pd.RangeIndex) for df in dfs.values()), [df.index for df in dfs.values()]
         return dfs
 
@@ -486,7 +495,7 @@ class Attribution:
         return cls(start , end , source , industry , style , specific , aggregated)
 
     @classmethod
-    def to_dfs_multi(cls , attributions : dict[Any,Attribution|None]) -> dict[str,pd.DataFrame]:
+    def to_dfs_multi(cls , attributions : dict[Any , Attribution | None]) -> dict[str,pd.DataFrame]:
         dfs_multi : dict[str,list[pd.DataFrame]] = {}
         for key , value in attributions.items():
             if value is None:

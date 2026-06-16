@@ -39,10 +39,10 @@ class SingleDataPrenorm:
     def __bool__(self):
         return self.divlast or self.histnorm or self.channelnorm
 
-    def __call__(self , x : torch.Tensor , histnorm : DataBlockNorm | Any = None) -> torch.Tensor:
+    def __call__(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None) -> torch.Tensor:
         return self.prenorm(x , histnorm)
 
-    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | Any = None) -> torch.Tensor:
+    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None) -> torch.Tensor:
         """
         return panel-normalized x
         1.divlast: divide by the last value, get seq-mormalized x
@@ -63,7 +63,7 @@ class SingleDataPrenorm:
         return x
 
     @classmethod
-    def from_input(cls, name : str , prenorm_method: dict[str, Any] | None):
+    def from_input(cls, name : str , prenorm_method: dict[str, Any] | None = None):
         prenorm_method = prenorm_method or {}
         return cls(
             name = name ,
@@ -163,7 +163,11 @@ class DataOperator:
             raise ValueError(f'Invalid weight scheme: {weight_scheme}')
         return w
 
-    def rolling_rotation(self , key : str | None , x : torch.Tensor , index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , * , dim = 1 , squeeze_out = True) -> torch.Tensor:
+    def rolling_rotation(
+        self , key : str | None , x : torch.Tensor , 
+        index0 : torch.Tensor | Any , index1 : torch.Tensor | Any , * , 
+        dim = 1 , squeeze_out = True
+    ) -> torch.Tensor:
         """rotate [stock , date , inday , feature] to [sample , rolling sequence (by step) , inday , feature]"""
         
         seqlen , step = self.get_seqlen_step(key)

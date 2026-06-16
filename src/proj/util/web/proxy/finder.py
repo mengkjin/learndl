@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 import random
 from curl_cffi import requests
-from typing import Callable, Any , Literal , cast
+from typing import Any , Literal , cast , TypeAlias
+from collections.abc import Callable
 
 from abc import ABC, abstractmethod
 from threading import RLock
@@ -15,8 +16,8 @@ from .core import ProxySet
 
 __all__ = ['FreeProxyFinder']
 
-ProxyLevelType = Literal['any' , 'anonymous']
-ProtocolType = Literal["any" , "socks4" , "socks5" , "http", "https"] | str
+ProxyLevelType : TypeAlias = Literal['any' , 'anonymous']
+ProtocolType : TypeAlias = Literal["any" , "socks4" , "socks5" , "http", "https"] | str
 class ProxiesCache:
     """Proxy Cache"""
     @classmethod

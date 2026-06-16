@@ -3,12 +3,13 @@ Factor function for genetic programming
 """
 from __future__ import annotations
 from dataclasses import dataclass , field
-from typing import Any , Callable
+from typing import Any
+from collections.abc import Callable
 import torch
 import pandas as pd
 import numpy as np
 
-from src.proj import Logger
+from src.proj import Logger , Base
 from src.func.tensor import rankic_2d , corrwith , zscore_inplace , allna , ts_mean , ts_stddev , zscore
 
 __all__ = [
@@ -47,21 +48,14 @@ class FactorValue:
     def isnull(self):
         return self.value is None
 
-    def df_index(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+    def df_index(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None):
         if self.value is None:
             return pd.MultiIndex(names = ['secid' , 'date'])
-        if secid is None:
-            secid = self.secid
-        if secid is None:
-            secid = np.arange(self.value.shape[0])
-
-        if date is None:
-            date = self.date
-        if date is None:
-            date = np.arange(self.value.shape[1])
+        secid = Base.ensure_secid(secid , self.secid if self.secid is not None else np.arange(self.value.shape[0]))
+        date = Base.ensure_date(date , self.date if self.date is not None else np.arange(self.value.shape[1]))
         return pd.MultiIndex.from_product([secid.tolist() , date.tolist()] , names = ['secid' , 'date'])
     
-    def to_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+    def to_dataframe(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None):
         if self.value is None: 
             return pd.DataFrame()
         else:
@@ -253,28 +247,22 @@ class MultiFactorValue:
     def __repr__(self) -> str:
         return factor_repr(self)
 
-    def df_index(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
-        if secid is None:
-            secid = self.secid
-        if secid is None:
-            secid = np.arange(self.value.shape[0])
-
-        if date is None:
-            date = self.date
-        if date is None:
-            date = np.arange(self.value.shape[1])
+    def df_index(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None):
+        secid = Base.ensure_secid(secid , self.secid if self.secid is not None else np.arange(self.value.shape[0]))
+        date = Base.ensure_date(date , self.date if self.date is not None else np.arange(self.value.shape[1]))
         return pd.MultiIndex.from_product([secid.tolist() , date.tolist()] , names = ['secid' , 'date'])
 
-    def to_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
-        return pd.DataFrame(self.value.flatten().cpu().numpy() , index = self.df_index(secid , date) , columns = ['value']).dropna(how = 'all')
+    def to_dataframe(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None):
+        value = self.value.flatten().cpu().numpy()
+        return pd.DataFrame(value , index = self.df_index(secid , date) , columns = ['value']).dropna(how = 'all')
 
-    def inputs_dataframe(self , secid : np.ndarray | None = None , date : np.ndarray | None = None):
+    def inputs_dataframe(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None):
         if self.names is None:
             names = [f'factor_{i}' for i in range(self.inputs.shape[-1])]
         else:
             names = self.names
-        
-        return pd.DataFrame(self.inputs.flatten(0,-2).cpu().numpy(),index = self.df_index(secid , date) , columns = names).dropna(how = 'all')
+        value = self.inputs.flatten(0,-2).cpu().numpy()
+        return pd.DataFrame(value , index = self.df_index(secid , date) , columns = names).dropna(how = 'all')
     
 class MultiFactor:
     def __init__(self , weight_scheme = 'ic', window_type = 'rolling', weight_decay= 'exp' , 

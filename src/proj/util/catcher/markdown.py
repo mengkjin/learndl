@@ -29,7 +29,7 @@ class MarkdownCatcher(OutputCatcher):
                  init_time: datetime | None = None,
                  add_time_to_title: bool = False,
                  to_share_folder: bool = MACHINE.cuda_server ,
-                 seperating_by: Literal['min' , 'hour'  , 'day'] | None = 'min',
+                 seperating_by: Literal['min', 'hour', 'day'] | None = 'min',
                  **kwargs):
 
         self.category = category

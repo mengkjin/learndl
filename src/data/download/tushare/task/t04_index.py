@@ -2,10 +2,10 @@
 # do not use relative import in this file because it will be running in top-level directory
 from __future__ import annotations
 import pandas as pd
+from typing import Any
 
 from src.data.download.tushare.basic import InfoFetcher , DayFetcher ,MonthFetcher , RollingFetcher , TimeSeriesFetcher , TS
 from src.proj import DB , CALENDAR , PATH , Load , Dates , Base
-from typing import Any
 
 __all__ = [
     'IndexBasic' , 'IndexDaily' , 'ZXIndexDaily' , 'THSConcept' , 
@@ -84,7 +84,7 @@ class IndexDaily(TimeSeriesFetcher):
         update = self.updatable(self.last_update_date() , self.UPDATE_FREQ , update_to)
         return Dates(update_to) if update else Dates()
 
-    def update_dates(self , dates : Base.alias.intDates) -> Dates:
+    def update_dates(self , dates : Base.intDates) -> Dates:
         """override TushareFetcher.update_with_dates because rolling fetcher needs get data by ROLLING_SEP_DAYS intervals"""
         dates = Dates(dates)
         if dates.empty:
@@ -135,7 +135,7 @@ class ZXIndexDaily(DayFetcher):
             index_dfs[index] = df
         return date_dfs , index_dfs
 
-    def update_dates(self , dates : Base.alias.intDates , step = 25 , **kwargs) -> Dates:
+    def update_dates(self , dates : Base.intDates , step = 25 , **kwargs) -> Dates:
         """update the fetcher given dates"""
         dates = Dates(dates)
         if self.check_server_down(): 

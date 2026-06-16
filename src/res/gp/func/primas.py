@@ -4,7 +4,8 @@ Primitive functions for genetic programming
 from __future__ import annotations
 import torch
 from functools import wraps
-from typing import Literal , Callable
+from typing import Literal
+from collections.abc import Callable
 
 from src.func.basic import allna , exact
 import src.func.tensor as T

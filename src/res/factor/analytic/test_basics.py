@@ -11,7 +11,8 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from matplotlib.figure import Figure
 from pathlib import Path
-from typing import Any , Callable , Literal , Type
+from typing import Any  , Literal , TypeAlias
+from collections.abc import Callable
 
 from src.proj import PATH , DB , Base , Save
 
@@ -22,6 +23,8 @@ from src.res.factor.util import Benchmark , StockFactor
 __all__ = [
     'BaseFactorAnalyticCalculator' , 'BaseFactorAnalyticTest' , 'TestType' ,
 ]
+
+BenchAny : TypeAlias = Benchmark | Any
 
 def _camel_to_snake(name : str) -> str:
     """Convert CamelCase (or mixed) identifiers to lower_snake_case."""
@@ -46,9 +49,9 @@ class BaseFactorAnalyticCalculator(ABC, Base.BoundLogger):
     Base class for factor analytic calculators
     """
     TEST_TYPE : TestType
-    DEFAULT_BENCHMARKS : list[Benchmark|Any] | Benchmark | Any = [None]
+    DEFAULT_BENCHMARKS : list[BenchAny] | BenchAny = [None]
 
-    def __init__(self , params : dict[str,Any] | None = None , **kwargs) -> None:
+    def __init__(self , params : dict[str, Any] | None = None , **kwargs) -> None:
         super().__init__(**kwargs)
         self.params : dict[str,Any] = params or {} 
         self.kwargs = kwargs
@@ -99,12 +102,12 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
     Base class for factor analytic tests
     """
     TEST_TYPE : TestType
-    TASK_LIST : list[Type[BaseFactorAnalyticCalculator]] = []
+    TASK_LIST : list[type[BaseFactorAnalyticCalculator]] = []
 
     def __init__(
         self , test_path : Base.strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
-        which : str | list[str] | Literal['all'] = 'all' , **kwargs
+        which : Base.alias.NamesType | Literal['all'] = 'all' , **kwargs
     ):
         super().__init__(**kwargs)
         candidates = {task.task_name():task for task in self.TASK_LIST}
@@ -120,8 +123,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         if which == 'all':
             self.tasks = {k:v(**(self.kwargs | vb_kwgs)) for k,v in candidates.items()}
         else:
-            if isinstance(which , str): 
-                which = [which]
+            which = Base.ensure_name_list(which , [])
             illegal = np.setdiff1d(which , list(candidates.keys()))
             assert len(illegal) == 0 , f'Illegal task: {illegal}'
             self.tasks = {k:v(**(self.kwargs | vb_kwgs)) for k,v in candidates.items() if k in which}
@@ -170,7 +172,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return rslt_dir.joinpath(self.test_name)
 
     @test_path.setter
-    def test_path(self , path : Base.strPath | None):
+    def test_path(self , path : Base.strPath | None = None):
         self._test_path = path if path is None else Path(path)
 
     @property

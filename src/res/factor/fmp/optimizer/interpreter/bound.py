@@ -6,9 +6,9 @@ import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from typing import ClassVar , Literal
+from typing import ClassVar , Literal , TypeAlias
 
-from src.proj import Logger
+from src.proj import Logger , Base
 
 __all__ = [
     'StockBound' , 'StockPool' , 'IndustryPool' , 'GeneralBound' , 
@@ -16,22 +16,25 @@ __all__ = [
 
 STOCK_LB , STOCK_UB = -1. , +1.
 
+FloatOrArray : TypeAlias = np.ndarray | float
+ArrayOrNone : TypeAlias = Base.ArrayLike | None
+
 @dataclass
 class StockBound:
-    _lb : np.ndarray | float | None = None
-    _ub : np.ndarray | float | None = None
+    _lb : FloatOrArray | None = None
+    _ub : FloatOrArray | None = None
 
     def __bool__(self):
         return self.lb is not None or self.ub is not None
 
     @cached_property
-    def lb(self) -> np.ndarray | float:
+    def lb(self) -> FloatOrArray:
         if self._lb is None:
             return STOCK_LB
         return self._lb
 
     @cached_property
-    def ub(self) -> np.ndarray | float:
+    def ub(self) -> FloatOrArray:
         if self._ub is None:
             return STOCK_UB
         return self._ub
@@ -71,7 +74,7 @@ class StockBound:
         assert diff if isinstance(diff , bool) else diff.all() , diff
         return self
 
-    def update_ub(self , new_val : np.ndarray | float , idx : np.ndarray | None = None , type = 'intersect'):
+    def update_ub(self , new_val : FloatOrArray , idx : np.ndarray | None = None , type = 'intersect'):
         update_func = np.minimum if type == 'intersect' else np.maximum
         if idx is None: 
             self.ub = update_func(self.ub , new_val)
@@ -85,7 +88,7 @@ class StockBound:
         if self.lb is not None: 
             self.lb = np.minimum(self.ub , self.lb)
 
-    def update_lb(self , new_val : np.ndarray | float , idx : np.ndarray | None = None , type = 'intersect'):
+    def update_lb(self , new_val : FloatOrArray , idx : np.ndarray | None = None , type = 'intersect'):
         update_func = np.maximum if type == 'intersect' else np.minimum
         if idx is None: 
             self.lb = update_func(self.lb , new_val)
@@ -119,23 +122,23 @@ class StockBound:
 
 @dataclass
 class StockPool:
-    basic    : list | np.ndarray | None = None
-    allow    : list | np.ndarray | None = None # additional basic pool , and exempted from prohibit
-    ignore   : list | np.ndarray | None = None # deal for opposite trades , similar as halt
-    no_sell  : list | np.ndarray | None = None # not for sell
-    no_buy   : list | np.ndarray | None = None # not for buy
-    prohibit : list | np.ndarray | None = None # will sell if can , will not buy
-    warning  : list | np.ndarray | None = None # will buy up to 0.5%
-    no_ldev  : list | np.ndarray | None = None # not for under bought
-    no_udev  : list | np.ndarray | None = None # not for over bought
-    shortable: list | np.ndarray | None = None # shortable stocks
-    additional : dict[str,list | None] | None = None
+    basic    : ArrayOrNone = None
+    allow    : ArrayOrNone = None # additional basic pool , and exempted from prohibit
+    ignore   : ArrayOrNone = None # deal for opposite trades , similar as halt
+    no_sell  : ArrayOrNone = None # not for sell
+    no_buy   : ArrayOrNone = None # not for buy
+    prohibit : ArrayOrNone = None # will sell if can , will not buy
+    warning  : ArrayOrNone = None # will buy up to 0.5%
+    no_ldev  : ArrayOrNone = None # not for under bought
+    no_udev  : ArrayOrNone = None # not for over bought
+    shortable: ArrayOrNone = None # shortable stocks
+    additional : dict[str, ArrayOrNone] | None = None
 
     warning_ub : ClassVar[float] = 0.005
 
     def __bool__(self): return True
 
-    def set_additional(self , additional : dict[str,list | None] | None = None):
+    def set_additional(self , additional : dict[str, ArrayOrNone] | None = None):
         self.additional = additional
 
     def get_pool(self , name : str) -> list[int]:
@@ -146,13 +149,13 @@ class StockPool:
         return raw
 
     @classmethod
-    def bnd_ub(cls , secid : np.ndarray , pool : np.ndarray | list , 
-               valin : np.ndarray | float = STOCK_UB , valout : np.ndarray | float = STOCK_UB):
+    def bnd_ub(cls , secid : np.ndarray , pool : Base.ArrayLike , 
+               valin : FloatOrArray = STOCK_UB , valout : FloatOrArray = STOCK_UB):
         return StockBound(None , np.where(np.isin(secid , pool) , valin , valout))
     
     @classmethod
-    def bnd_lb(cls , secid : np.ndarray , pool : np.ndarray | list , 
-               valin : np.ndarray | float = STOCK_LB , valout : np.ndarray | float = STOCK_LB):
+    def bnd_lb(cls , secid : np.ndarray , pool : Base.ArrayLike , 
+               valin : FloatOrArray = STOCK_LB , valout : FloatOrArray = STOCK_LB):
         return StockBound(np.where(np.isin(secid , pool) , valin , valout) , None)
         
     def export(
@@ -201,10 +204,10 @@ class StockPool:
     
 @dataclass
 class IndustryPool:
-    no_sell  : list | np.ndarray | None = None # not for sell
-    no_buy   : list | np.ndarray | None = None # not for buy
-    no_net_sell : list | np.ndarray | None = None # not for net sell
-    no_net_buy  : list | np.ndarray | None = None # not for net bought
+    no_sell  : ArrayOrNone = None # not for sell
+    no_buy   : ArrayOrNone = None # not for buy
+    no_net_sell : ArrayOrNone = None # not for net sell
+    no_net_buy  : ArrayOrNone = None # not for net bought
 
     def __bool__(self): 
         return (
@@ -226,9 +229,9 @@ class IndustryPool:
 @dataclass
 class GeneralBound:
     """one of abs , rel , por bound"""
-    key : str | Literal[f'abs' , 'rel' , 'por']
-    lb : float | np.ndarray | None = None
-    ub : float | np.ndarray | None = None
+    key : str | Literal['abs', 'rel', 'por']
+    lb : FloatOrArray | None = None
+    ub : FloatOrArray | None = None
 
     def __post_init__(self): 
         assert self.key in ['abs' , 'rel' , 'por'] , self.key

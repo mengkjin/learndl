@@ -9,7 +9,8 @@ from __future__ import annotations
 import os  , traceback , ast
 
 from functools import wraps
-from typing import Any , Callable
+from typing import Any
+from collections.abc import Callable
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime

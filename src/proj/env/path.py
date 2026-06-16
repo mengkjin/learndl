@@ -127,7 +127,7 @@ class PATH:
         if not yaml_file.exists():
             sys.stderr.write(f'\u001b[31m\u001b[1m{yaml_file} does not exist!\u001b[0m\n')
             return {}
-        with open(yaml_file ,'r' , encoding='utf-8' , **kwargs) as f:
+        with open(yaml_file  , encoding='utf-8' , **kwargs) as f:
             d = yaml.safe_load(f)
         return d
 
@@ -157,7 +157,7 @@ class PATH:
         if not json_file.exists():
             sys.stderr.write(f'\u001b[31m\u001b[1m{json_file} does not exist!\u001b[0m\n')
             return {}
-        with open(json_file , 'r' , encoding = encoding , **kwargs) as f:
+        with open(json_file  , encoding = encoding , **kwargs) as f:
             d = json.load(f)
         return d
 

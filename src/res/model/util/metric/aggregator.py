@@ -17,23 +17,24 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import torch
-from typing import Callable , Any , Iterable
+from typing import Any  , TypeAlias
+from collections.abc import Callable, Iterable
 
 from src.proj import Base
 from .metric_result import EpochMetricResult
 
 __all__ = ['AggregatorType' , 'AccuracyAggregator' , 'LossAggregator' , 'MetricAggregator']
 
-AggregatorType = dict[str,float] | Callable[[dict[str,float]],float]
+AggregatorType : TypeAlias = dict[str, float] | Callable[[dict[str, float]], float] | None
 
 class AccuracyAggregator:
-    def __init__(self , aggregator :  AggregatorType | None = None):
+    def __init__(self , aggregator :  AggregatorType = None):
         self.aggregator = aggregator or {}
 
     def __repr__(self):
         return f'{self.__class__.__name__}(aggregator={self.aggregator})'
 
-    def accuracy(self , accuracies : dict[str | Any ,float]) -> float:
+    def accuracy(self , accuracies : dict[str | Any, float]) -> float:
         if not accuracies:
             return -np.inf
         if isinstance(self.aggregator , dict):
@@ -44,7 +45,7 @@ class AccuracyAggregator:
             raise ValueError(f'Invalid aggregator type: {type(self.aggregator)}')
 
 class LossAggregator:
-    def __init__(self , aggregator : AggregatorType | None = None):
+    def __init__(self , aggregator : AggregatorType = None):
         aggregator = aggregator or {}
         assert isinstance(aggregator , dict) , f'loss aggregator should be a dict, but got {type(aggregator)}'
         assert all(weight >= 0 for weight in aggregator.values()) , f'loss aggregator should be non-negative, but got {aggregator}'
@@ -53,7 +54,7 @@ class LossAggregator:
     def __repr__(self):
         return f'{self.__class__.__name__}(aggregator={self.aggregator})'
 
-    def loss_weights(self , losses : dict[str | Any,Any] | Iterable[str | Any]) -> dict[str,float]:
+    def loss_weights(self , losses : dict[str | Any, Any] | Iterable[str | Any]) -> dict[str,float]:
         return {key:self.aggregator.get(key , 1.) for key in losses}
 
     def loss(self , losses : dict[str | Any,torch.Tensor]) -> torch.Tensor:
@@ -75,12 +76,12 @@ class MetricAggregator:
     def __repr__(self):
         return f'{self.__class__.__name__}(accuracy={self.accuracy_aggregator},loss={self.loss_aggregator})'
 
-    def accuracy_aggregator(self , aggregator :  AggregatorType | None = None) -> AccuracyAggregator:
+    def accuracy_aggregator(self , aggregator :  AggregatorType = None) -> AccuracyAggregator:
         if aggregator is None:
             return self.accuracy_aggregators[-1]
         return AccuracyAggregator(aggregator)
 
-    def loss_aggregator(self , aggregator : AggregatorType | None = None) -> LossAggregator:
+    def loss_aggregator(self , aggregator : AggregatorType = None) -> LossAggregator:
         if aggregator is None:
             return self.loss_aggregators[-1]
         return LossAggregator(aggregator)
@@ -88,7 +89,7 @@ class MetricAggregator:
     def loss_weights(self , losses : dict[str , Any]) -> dict[str,float]:
         return self.loss_aggregators[-1].loss_weights(losses)
 
-    def inject(self , metric_type : Base.lit.MetricType , aggregator :  AggregatorType | None = None):
+    def inject(self , metric_type : Base.lit.MetricType , aggregator :  AggregatorType = None):
         if aggregator is None:
             aggregator = {}
         if metric_type == 'accuracy':
@@ -104,24 +105,24 @@ class MetricAggregator:
         self.accuracy_aggregators.append(AccuracyAggregator())
         self.loss_aggregators.append(LossAggregator())
 
-    def total_accuracy(self , accuracies : dict[str,float], aggregator : AggregatorType | None = None) -> float:
+    def total_accuracy(self , accuracies : dict[str,float], aggregator : AggregatorType = None) -> float:
         agg = self.accuracy_aggregator(aggregator)
         return agg.accuracy(accuracies)
 
-    def total_accuracies(self , accuracy_table : pd.DataFrame , aggregator : AggregatorType | None = None) -> np.ndarray:
+    def total_accuracies(self , accuracy_table : pd.DataFrame , aggregator : AggregatorType = None) -> np.ndarray:
         agg = self.accuracy_aggregator(aggregator)
         accuracies = accuracy_table.to_dict(orient = 'records')
         return np.array([agg.accuracy(accuracy) for accuracy in accuracies])
 
-    def total_loss(self , losses : dict[str,torch.Tensor] , aggregator : dict[str,float] | None = None) -> torch.Tensor:
+    def total_loss(self , losses : dict[str,torch.Tensor] , aggregator : dict[str, float] | None = None) -> torch.Tensor:
         agg = self.loss_aggregator(aggregator)
         return agg.loss(losses)
 
-    def total_loss_item(self , losses : dict[str,float] , aggregator : dict[str,float] | None = None) -> float:
+    def total_loss_item(self , losses : dict[str,float] , aggregator : dict[str, float] | None = None) -> float:
         agg = self.loss_aggregator(aggregator)
         return agg.loss_item(losses)
 
-    def total_losses(self , loss_table : pd.DataFrame , aggregator : AggregatorType | None = None) -> np.ndarray:
+    def total_losses(self , loss_table : pd.DataFrame , aggregator : AggregatorType = None) -> np.ndarray:
         agg = self.loss_aggregator(aggregator)
         losses = loss_table.to_dict(orient = 'records')
         return np.array([agg.loss_item(loss) for loss in losses])
@@ -130,7 +131,7 @@ class MetricAggregator:
         self , 
         metrics : pd.DataFrame | Iterable[EpochMetricResult | None] , 
         metric_type : Base.lit.MetricType = 'accuracy' , 
-        aggregator : AggregatorType | None = None
+        aggregator : AggregatorType = None
     ) -> int:
         """compare accuracies, return the index of the best one"""
         if isinstance(metrics , pd.DataFrame):
@@ -150,9 +151,10 @@ class MetricAggregator:
             raise ValueError(f'Invalid metric: {metric_type}')
 
     def larger(
-            self , metric0 : dict[str|Any,float] | float | EpochMetricResult , metric1 : dict[str|Any,float] | float | EpochMetricResult , 
-            metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType | None = None
-        ) -> bool:
+        self , metric0 : dict[str | Any, float] | float | EpochMetricResult , 
+        metric1 : dict[str | Any, float] | float | EpochMetricResult , 
+        metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType = None
+    ) -> bool:
         if isinstance(metric0 , float):
             assert isinstance(metric1 , float) , f'metric1 should be a float, but got {type(metric1)}'
             return metric0 > metric1 if metric_type == 'accuracy' else metric0 < metric1
@@ -171,6 +173,6 @@ class MetricAggregator:
         else:
             raise ValueError(f'Invalid metric: {metric_type}')
 
-    def compile_results(self , metrics : Iterable[EpochMetricResult] , metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType | None = None) -> np.ndarray:
+    def compile_results(self , metrics : Iterable[EpochMetricResult] , metric_type : Base.lit.MetricType = 'accuracy' , aggregator : AggregatorType = None) -> np.ndarray:
         return np.array([self.total_accuracy(metric.metrics('valid' , metric_type) , aggregator) for metric in metrics])
 

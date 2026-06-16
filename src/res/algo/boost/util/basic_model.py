@@ -59,7 +59,8 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         return frozenset(self.DEFAULT_TRAIN_PARAM.keys())
 
     def set_params(
-        self , params : dict[str,Any] | None = None , cuda = True , seed = None , * , overrides : dict[str,Any] | None = None , **kwargs
+        self , params : dict[str, Any] | None = None , cuda = True , seed = None , * , 
+        overrides : dict[str, Any] | None = None , **kwargs
     ):
         params = params or {}
         overrides = overrides or {}
@@ -117,7 +118,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         obj = self.train_param.get('objective' , None)
         return obj is not None and 'rank' in obj
 
-    def boost_input(self , x : BoostInput | str | Any = 'test'):
+    def boost_input(self , x : BoostInput | Any = 'test'):
         return self.data[x] if isinstance(x , str) else x
 
     def boost_fit_inputs(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
@@ -149,7 +150,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         return self
     
     @abstractmethod
-    def predict(self , x : BoostInput | str | Any = 'test') -> BoostOutput:
+    def predict(self , x : BoostInput | Any = 'test') -> BoostOutput:
         ...
 
     @abstractmethod

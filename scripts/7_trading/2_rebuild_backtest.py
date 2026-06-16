@@ -1,5 +1,4 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
-# coding: utf-8
 # author: jinmeng
 # date: 2024-12-22
 # description: Reset Trading Portfolios

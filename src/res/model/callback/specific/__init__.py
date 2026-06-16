@@ -3,14 +3,14 @@ from typing import Type
 from src.proj import Logger
 from src.res.model.util import ModelConfig, BaseCallBack
 
-def get_specific_cbs(config : ModelConfig) -> list[Type[BaseCallBack]]:
+def get_specific_cbs(config : ModelConfig) -> list[type[BaseCallBack]]:
     
     special = config.special
     nn_category = config.module_type
     module_name = config.model_module
     model_name = config.model_clean_name
 
-    cbs : list[Type[BaseCallBack]] = []
+    cbs : list[type[BaseCallBack]] = []
     if special.get('dsize') or module_name == 'gru_dsize':
         from src.res.model.callback.specific.dsize import SpecificCB_DSize
         cbs.append(SpecificCB_DSize)

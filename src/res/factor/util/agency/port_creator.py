@@ -19,9 +19,11 @@ class PortCreator(ABC , Base.BoundLogger):
         self.name = name
         self.setup(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs)
     
-    def create(self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
-               benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , 
-               detail_infos = False) -> PortCreateResult: 
+    def create(
+        self , model_date : int , alpha_model : AlphaModel | Amodel | None = None , 
+        benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , 
+        detail_infos = False
+    ) -> PortCreateResult: 
         self.model_date = model_date
         self.alpha_model = alpha_model if alpha_model is not None else Amodel.create_random(model_date)
         self.init_port = Port.none_port(model_date , self.name) if init_port is None else init_port

@@ -5,10 +5,11 @@ import sys
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any , Callable , Type
+from typing import Any
+from collections.abc import Callable
 
 from src.proj.env import MACHINE , Proj
-from src.proj.core import strPath
+from src.proj.core import strPath , lit
 from src.proj.cal import CALENDAR
 from src.proj.bases import BoundLogger
 from src.proj.db import Save
@@ -19,7 +20,7 @@ class TaskName:
     def __init__(self):
         self._name = None
 
-    def __get__(self , instance : AutoRunTask | None, owner : Type[AutoRunTask]):
+    def __get__(self , instance : AutoRunTask | None, owner : type[AutoRunTask]):
         if instance is None and owner._instances:
             return owner._instances[-1].task_name
         assert self._name is not None , 'TaskName is not set'
@@ -35,7 +36,7 @@ class TaskKey:
     def __bool__(self):
         return self._key is not None
 
-    def __get__(self , instance : AutoRunTask | None, owner : Type[AutoRunTask]):
+    def __get__(self , instance : AutoRunTask | None, owner : type[AutoRunTask]):
         if self._key is None:
             return None
         elif isinstance(self._key , str) and self._key.startswith('@'):
@@ -118,8 +119,8 @@ class AutoRunTask(BoundLogger):
         forfeit_if_done = False,
         verbosity : int | None = None , 
         task_id : str | None = None ,
-        markdown_catcher : bool = False ,
-        * , indent : int = 0 , vb_level : Any = 1,
+        markdown_catcher : bool = False , * , 
+        indent : int = 0 , vb_level : lit.VerbosityLevel = 1,
         **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)

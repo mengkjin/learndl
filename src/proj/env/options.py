@@ -77,7 +77,7 @@ class OptionsCache:
         """update the cache stored in cache_path locally"""
         cls.clear()
         for method in dir(OptionsDefinition):
-            if not method.startswith(('_')):
+            if not method.startswith('_'):
                 cls.cache[method] = getattr(OptionsDefinition , method)()
         PATH.dump_json(cls.cache, cls.cache_path , overwrite = True)
 

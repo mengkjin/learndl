@@ -15,7 +15,11 @@ __all__ = [
     'lpnp' , 'ocfa' , 'rroc'
 ]
 
-def ts_last_resid_polars(y_var : str | pd.Series , x_vars : list[str | pd.Series] , date : int , n_last : int = 12):
+def ts_last_resid_polars(
+    y_var : str | pd.Series , 
+    x_vars : list[str | pd.Series] , 
+    date : int , n_last : int = 12
+):
     def _last_resid(args) -> float:
         y = args[0].to_numpy()
         if len(args) > 2:

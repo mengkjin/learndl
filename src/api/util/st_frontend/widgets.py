@@ -13,15 +13,18 @@ expander_subheader
 from __future__ import annotations
 import html
 import streamlit as st
-from typing import Any , Callable , Literal
+from typing import Any  , Literal
+from collections.abc import Callable
 
 from .basic import unique_st_key
 
 __all__ = ['action_confirmation']
       
 @st.dialog("Please Confirm Your Action")
-def action_confirmation(on_confirm : Callable[[], None] , on_abort : Callable[[], None] | None = None ,
-                        title : str = "Are You Sure about This?") -> None:
+def action_confirmation(
+    on_confirm : Callable[[], None] , on_abort : Callable[[], None] | None = None ,
+    title : str = "Are You Sure about This?"
+) -> None:
     """``st.dialog``-based confirmation dialogue with Confirm / Abort buttons.
 
     Parameters
@@ -69,7 +72,7 @@ def colored_container(
 
 def subheader_expander(
     label : str , icon : str | None = None , expanded : bool = False ,
-    height : int | Literal['content' , 'stretch'] = 'content' , 
+    height : int | Literal['content', 'stretch'] = 'content' , 
     help : str | None = None , status : bool = False , 
     color : str = 'blue' , key : str | None = None
 ) -> Any:

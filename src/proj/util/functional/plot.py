@@ -12,6 +12,7 @@ from matplotlib.typing import LegendLocType
 from plottable import Table , ColumnDefinition
 from typing import Any , Literal
 
+from src.proj import Base
 from src.proj.log import Logger
 
 __all__ = ['PlotMultipleData' , 'SubPlotData' , 'PlotFactorData' , 'plot_table' , 'get_twin_axes' , 'set_xaxis' , 'set_yaxis' , 'sns_lineplot' , 'sns_barplot']
@@ -39,16 +40,9 @@ def set_seaborn_theme():
 class PlotMultipleData:
     """Iterate grouped slices of a DataFrame, each slice tied to a named figure in ``fig_dict``."""
 
-    def __init__(self , data : pd.DataFrame , 
-                 group_key : str | list[str] | None ,  num_groups_per_iter = 1 , **kwargs):
+    def __init__(self , data : pd.DataFrame , group_key : Base.alias.NamesType ,  num_groups_per_iter = 1 , **kwargs):
         self.data = data
-        if group_key is None:
-            group_key = []
-        elif isinstance(group_key , list): 
-            group_key = group_key
-        else:
-            group_key = [group_key]
-        self.group_key = [i for i in group_key if i in data.columns or i in data.index.names]
+        self.group_key = [i for i in Base.ensure_name_list(group_key , []) if i in data.columns or i in data.index.names]
         self.fig_dict : dict[str , Figure] = {}
         self.num_groups_per_iter   = num_groups_per_iter
     
@@ -75,7 +69,7 @@ class PlotMultipleData:
 
     def group_name(self , g):
         """String key for a groupby key (scalar or tuple)."""
-        return '.'.join([str(s) for s in (g if isinstance(g , (list | tuple)) else [g])])
+        return '.'.join([str(s) for s in Base.ensure_name_list(g , [])])
 
 @dataclass  
 class SubPlotData:
@@ -97,33 +91,24 @@ class SubPlotData:
 class PlotFactorData:
     """Panel plots for factor/benchmark time series from tidy or multi-index frames."""
 
-    def __init__(self , data : pd.DataFrame | SubPlotData , fig : Figure | None = None , 
-                 name_key : list[str] | str | None = ['factor_name' , 'benchmark'] ,
-                 drop : list[str] | str | None = ['prefix' , 'strategy' , 'factor_name' , 'benchmark' , 'suffix'] , 
-                 title : str = '' , full_title : str = '' , show = False , 
-                 sort_keys : list[str] = ['prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix' , 
-                                          'trade_date' , 'model_date' , 'end' , 'start'] ,
-                 dropna : bool | Literal['all' , 'any'] = True , rounding = 6 , suptitle = False):
+    def __init__(
+        self , data : pd.DataFrame | SubPlotData , fig : Figure | None = None , 
+        name_key : Base.alias.NamesType = ('factor_name' , 'benchmark') ,
+        drop : Base.alias.NamesType = ('prefix' , 'strategy' , 'factor_name' , 'benchmark' , 'suffix') , 
+        title : str = '' , full_title : str = '' , show = False , 
+        sort_keys : Base.alias.NamesType = (
+            'prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix' , 
+            'trade_date' , 'model_date' , 'end' , 'start') ,
+        dropna : bool | Literal['all', 'any'] = True , rounding = 6 , suptitle = False
+    ):
         if isinstance(data , SubPlotData):
             data , name_key , fig  = data.sub_data , data.group_by , data.get_fig()
-        
-        if name_key is None:
-            name_key = []
-        elif isinstance(name_key , list):
-            name_key = name_key
-        else:
-            name_key = [name_key]
 
-        if drop is None:
-            self.drop_keys = []
-        elif isinstance(drop , list):
-            self.drop_keys = drop
-        else:
-            self.drop_keys = [drop]
-
+        name_key = Base.ensure_name_list(name_key , [])
+        self.drop_keys = Base.ensure_name_list(drop , [])
         self.raw_index = [i for i in data.index.names if i]
         self.raw_data  = data.reset_index(self.raw_index)
-        self.sort_keys = [s for s in sort_keys if s in self.raw_data.columns]
+        self.sort_keys = [s for s in Base.ensure_name_list(sort_keys , []) if s in self.raw_data.columns]
         self.fig = fig if fig else new_figure()
 
         self.title = title
@@ -161,14 +146,21 @@ class PlotFactorData:
         else:
             return ''
 
-def plot_table(df : pd.DataFrame , int_cols = None , pct_cols = None , flt_cols = None , capitalize = True , 
-               index_width = 1. , fontsize = 8 , pct_ndigit = 2 , flt_ndigit = 3 , emph_last_row = False , 
-               column_definitions : list[ColumnDefinition] | None = [] , 
-               stripe_by : str | list[str] | Literal[1] | None = None , 
-               ignore_cols : list[str] | None = None , stripe_colors = ['#ffffff' , '#a2cffe']):
-    int_cols = int_cols or []
-    pct_cols = pct_cols or []
-    flt_cols = flt_cols or []
+def plot_table(
+    df : pd.DataFrame , 
+    int_cols : Base.alias.NamesType = None , 
+    pct_cols : Base.alias.NamesType = None , 
+    flt_cols : Base.alias.NamesType = None , 
+    capitalize = True , index_width = 1. , fontsize = 8 , pct_ndigit = 2 , 
+    flt_ndigit = 3 , emph_last_row = False , 
+    column_definitions : list[ColumnDefinition] | None = [] , 
+    stripe_by : Base.alias.NamesType | Literal[1] = None , 
+    ignore_cols : Base.alias.NamesType = None , stripe_colors = ['#ffffff' , '#a2cffe']
+):
+    int_cols = Base.ensure_name_list(int_cols , [])
+    pct_cols = Base.ensure_name_list(pct_cols , [])
+    flt_cols = Base.ensure_name_list(flt_cols , [])
+    ignore_cols = Base.ensure_name_list(ignore_cols , [])
     column_definitions = column_definitions or []
     
     if stripe_by and stripe_by != 1:
@@ -233,7 +225,8 @@ def get_twin_axes(fig : Figure , pos = 111) -> tuple[Axes , Axes]:
     return ax1 , ax2
 
 def set_xaxis(
-    ax : Axes , index : Any = None , labels = None , rotation : float | None = 45 , 
+    ax : Axes , 
+    index : Any | None = None , labels : Any | None = None , rotation : float | None = 45 , 
     format : AxisFormatType = 'default' , digits = 1 , 
     title = '' , title_color = None , 
     tick_pos : Literal['top', 'bottom', 'both', 'default', 'none'] = 'default', 

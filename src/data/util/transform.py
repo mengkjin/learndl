@@ -14,17 +14,17 @@ import pandas as pd
 import numpy as np
 
 from pypinyin import lazy_pinyin
-from typing import Any
-from src.proj import DB
+from src.proj import DB , Base
 
 __all__ = [
     'secid_adjust' , 'col_reform' , 'row_filter' , 'adjust_precision' , 
     'trade_min_fillna' , 'trade_min_reform' , 'chinese_to_pinyin'
 ]
 
-def secid_adjust(df : pd.DataFrame ,
-                 code_cols : str | list[str] = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol' , 'instrument' , 'ts_code' , 'stockid'] ,
-                 drop_old = True , decode_first = False , raise_if_no_secid = True):
+def secid_adjust(
+    df : pd.DataFrame ,
+    code_cols : Base.alias.NamesType = ['wind_id' , 'stockcode' , 'ticker' , 's_info_windcode' , 'code' , 'symbol' , 'instrument' , 'ts_code' , 'stockid'] ,
+    drop_old = True , decode_first = False , raise_if_no_secid = True):
     """
     Normalise a variety of stock code columns into a single integer ``secid`` column.
 
@@ -36,7 +36,7 @@ def secid_adjust(df : pd.DataFrame ,
     ----------
     df : pd.DataFrame
         Input frame with at least one code column.
-    code_cols : str | list[str]
+    code_cols : Base.alias.FeatureType
         Candidate column names to search for.  First match wins.
     drop_old : bool
         Rename the matched column to ``secid`` (True) or keep both (False).
@@ -47,8 +47,7 @@ def secid_adjust(df : pd.DataFrame ,
         If False the DataFrame is returned unchanged.
     """
 
-    if isinstance(code_cols , str): 
-        code_cols = [code_cols]
+    code_cols = Base.ensure_name_list(code_cols , [])
     code_cols = [col for col in df.columns if col.lower() in code_cols]
     if not code_cols: 
         code_col = 'secid'
@@ -105,7 +104,7 @@ def col_reform(df : pd.DataFrame , col : str , rename = None , fillna = None , a
         df = df.rename(columns={col:rename})
     return df
 
-def row_filter(df : pd.DataFrame | Any , col : str | list | tuple , cond_func = lambda x:x) -> pd.DataFrame | Any:
+def row_filter(df : pd.DataFrame , col : Base.alias.NamesType , cond_func = lambda x:x) -> pd.DataFrame:
     """
     Filter DataFrame rows by applying ``cond_func`` to one or more columns.
 
@@ -113,22 +112,20 @@ def row_filter(df : pd.DataFrame | Any , col : str | list | tuple , cond_func = 
     ----------
     df : pd.DataFrame
         Input frame.
-    col : str | list | tuple
+    col : Base.alias.FeatureType
         Column name(s) to evaluate.  When multiple columns are given they are
         passed as positional arguments to ``cond_func(*cols)``.
     cond_func : callable
         Returns a boolean Series/array used to select rows (default: identity).
     """
-    if isinstance(col , str):
-        return df[cond_func(df[col])]
-    else:
-        return df[cond_func(*[df[_c] for _c in col])]
+    col = Base.ensure_name_list(col , [])
+    return df[cond_func(*[df[_c] for _c in col])]
 
 def adjust_precision(df : pd.DataFrame , tol = 1e-8 , dtype_float = np.float32 , dtype_int = np.int64):
     """
     Downcast float columns to float32 and integer columns to int64.
 
-    Near-zero float values (``|x| < tol``) are zeroed out to avoid
+    Near-zero float values (``abs(x) < tol``) are zeroed out to avoid
     precision noise propagating into downstream calculations.
 
     Parameters

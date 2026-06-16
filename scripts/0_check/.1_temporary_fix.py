@@ -1,5 +1,4 @@
 #! /usr/bin/env User/mengkjin/workspace/learndl/.venv/bin/python
-# coding: utf-8
 # author: jinmeng
 # date: 2026-05-26
 # description: Clean corrupted factor stats files
@@ -24,7 +23,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
+from collections.abc import Iterable
 
 import pandas as pd
 

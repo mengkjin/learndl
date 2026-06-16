@@ -2,10 +2,8 @@
 from __future__ import annotations
 import os
 
-from typing import Any
-
 from src.proj.log import Logger
-from src.proj.core import strPath
+from src.proj.core import strPath , lit
 
 __all__ = ['figs_to_pdf']
 
@@ -27,7 +25,10 @@ def _sanitize_figure_text(fig) -> None:
         if isinstance(s, str) and any(ch in s for ch in ("\ufeff", "\ufffe", "\uffff")):
             obj.set_text(s.translate(_NONCHAR_STRIP))
 
-def figs_to_pdf(figs , path : strPath , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3) -> bool:
+def figs_to_pdf(
+    figs , path : strPath , prefix : str | None = None , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3
+) -> bool:
     """Save figures to one PDF and close each figure.
 
     Returns:

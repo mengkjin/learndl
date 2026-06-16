@@ -6,6 +6,7 @@ from copy import deepcopy
 from functools import cached_property
 from typing import Any
 
+from src.proj.core import lit
 from src.proj.bases import BoundLogger
 
 __all__ = ['Device']
@@ -41,7 +42,7 @@ def _get_device(obj : torch.Module | torch.Tensor | list | tuple | dict | Any) -
     
 class Device(BoundLogger):
     """Preferred accelerator (MPS > CUDA > CPU) with helpers to move data."""
-    def __init__(self , try_cuda = True , * , indent: int = 0 , vb_level: int = 1 , **kwargs):
+    def __init__(self , try_cuda = True , * , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs):
         """Pick device via ``use_device`` (MPS checked before CUDA when available)."""
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.set_mps_memory_fraction()

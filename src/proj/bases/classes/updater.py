@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Any
 
-from src.proj.core.types import lit
+from src.proj.core import lit
 from src.proj.cal import CALENDAR
 from src.proj.bases.enums import UpdateType , UpdateFlag
 
@@ -48,24 +48,27 @@ class BasicUpdater(BoundLogger):
         return {'start' : start, 'end' : end, 'overwrite' : overwrite}
 
     @classmethod
-    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , ref_date : Any | None = None , **kwargs) -> UpdateFlag:
+    def proceed_update(
+        cls , start : int | None = None , end : int | None = None , 
+        overwrite : bool = False , ref_date : Any | None = None , **kwargs
+    ) -> UpdateFlag:
         """proceed the update"""
         raise NotImplementedError(f'proceed_update is not implemented for {cls.__name__}')
 
     @classmethod
-    def update(cls , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> UpdateFlag:
+    def update(cls , * , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs) -> UpdateFlag:
         return cls._private_update_method(UpdateType.UPDATE , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> UpdateFlag:
+    def rollback(cls , rollback_date : int , * , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs) -> UpdateFlag:
         return cls._private_update_method(UpdateType.ROLLBACK , rollback_date = rollback_date , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def recalculate(cls , start : int , end : int , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> UpdateFlag:
+    def recalculate(cls , start : int , end : int , * , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs) -> UpdateFlag:
         return cls._private_update_method(UpdateType.RECALC , start = start , end = end , indent = indent , vb_level = vb_level , **kwargs)
 
     @classmethod
-    def _private_update_method(cls , update_type : UpdateType , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> UpdateFlag:
+    def _private_update_method(cls , update_type : UpdateType , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs) -> UpdateFlag:
         """parse the update parameters"""
         if not cls._private_handle_update_setup(update_type , indent = indent , vb_level = vb_level , **kwargs):
             return UpdateFlag.SKIPPED
@@ -75,7 +78,7 @@ class BasicUpdater(BoundLogger):
         return flag
 
     @classmethod
-    def _private_handle_update_setup(cls , update_type : UpdateType , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> bool:
+    def _private_handle_update_setup(cls , update_type : UpdateType , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs) -> bool:
         cls.SetClassVB(vb_level , indent)
         if update_type not in cls.ACCEPTABLE_UPDATE_TYPES:
             cls.logger.alert1(f'{update_type.title()} is not supported for {cls.__name__}')
@@ -84,7 +87,8 @@ class BasicUpdater(BoundLogger):
 
     @classmethod
     def _private_handle_update_input(
-        cls , update_type : UpdateType , rollback_date : int | None = None , start : int | None = None , end : int | None = None , **kwargs
+        cls , update_type : UpdateType , rollback_date : int | None = None , 
+        start : int | None = None , end : int | None = None , **kwargs
     ) -> dict[str , Any]:
         
         kwargs = kwargs | {'update_type' : update_type , 'rollback_date' : rollback_date , 'start' : start , 'end' : end}
@@ -111,7 +115,8 @@ class BasicUpdater(BoundLogger):
     @classmethod
     def _private_handle_update_output(
         cls , flag : UpdateFlag , * , update_type : UpdateType , 
-        start : int | None = None , end : int | None = None , rollback_date : int | None = None , ref_date : Any | None = None , **kwargs
+        start : int | None = None , end : int | None = None , 
+        rollback_date : int | None = None , ref_date : Any | None = None , **kwargs
     ):
         prefix = f'{cls.__name__} {update_type.value.title()}'
         if ref_date:

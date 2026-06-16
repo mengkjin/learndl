@@ -10,13 +10,17 @@ import numpy as np
 
 from copy import deepcopy
 from functools import cached_property
-from typing import Any, Self , overload , Sequence , Iterator , Iterable
+from typing import Any, Self , overload, TypeAlias
+from collections.abc import Sequence, Iterator, Iterable
 
-from src.proj.core import lit , as_int_array
+from src.proj.core import lit , as_int_array , intDateNone , intDates
 
-from .basic import intDate , intDateNone , intDates , BC
+from .basic import BC
 
-__all__ = ['Dates' , 'intDate' , 'intDateNone' , 'intDates']
+__all__ = ['Dates']
+
+DateTypeNone : TypeAlias = lit.intDateType | None
+InputDates : TypeAlias = 'intDates | Dates | None'
     
 class Dates(Sequence[int]):
     """
@@ -36,23 +40,23 @@ class Dates(Sequence[int]):
     @overload
     def __init__(
         self , start : intDateNone , end : intDateNone , / , * , 
-        type : lit.intDateType | None = None , updated = False , **kwargs):
+        type : DateTypeNone = None , updated = False , **kwargs):
         """input with a start and end date"""
     @overload
     def __init__(
-        self , dates : intDates | Dates | None , / , * ,
-        type : lit.intDateType | None = None , updated = False , **kwargs):
+        self , dates : InputDates , / , * ,
+        type : DateTypeNone = None , updated = False , **kwargs):
         """input with a single date or a sequence of dates"""
     @overload
     def __init__(
-        self , dates : intDates | Dates | None , 
+        self , dates : InputDates , 
         start : intDateNone , end : intDateNone , / , * ,
-        type : lit.intDateType | None = None , updated = False , **kwargs):
+        type : DateTypeNone = None , updated = False , **kwargs):
         """input with a sequence of dates, start and end date"""
     @overload
-    def __init__(self , / , * , type : lit.intDateType | None = None , updated = False , **kwargs):
+    def __init__(self , / , * , type : DateTypeNone = None , updated = False , **kwargs):
         """input with no arguments"""
-    def __init__(self , *args , type : lit.intDateType | None = None , updated = False , **kwargs):
+    def __init__(self , *args , type : DateTypeNone = None , updated = False , **kwargs):
         """input with a single date or a sequence of dates"""
         self._updated = updated
         self._raw_dates = None
@@ -70,7 +74,7 @@ class Dates(Sequence[int]):
             raise ValueError(f"Invalid input: {args}")
         self._type : lit.intDateType = type or getattr(self , '_type' , None) or 'td'
 
-    def _feed_raw_dates(self , raw_dates : intDates | Dates | None) -> Self:
+    def _feed_raw_dates(self , raw_dates : InputDates) -> Self:
         if raw_dates is None:
             self._raw_dates = None
         elif isinstance(raw_dates , Dates):
@@ -143,10 +147,10 @@ class Dates(Sequence[int]):
     def __contains__(self , item : int) -> bool:
         return item in self.dates
 
-    def __add__(self , other : intDates | Dates | None) -> Self:
+    def __add__(self , other : InputDates) -> Self:
         return self.union(other , inplace = False)
 
-    def __sub__(self , other : intDates | Dates | None) -> Self:
+    def __sub__(self , other : InputDates) -> Self:
         return self.diff(other , inplace = False)
 
     @property
@@ -193,7 +197,7 @@ class Dates(Sequence[int]):
         """
         return deepcopy(self)
 
-    def diff(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
+    def diff(self , other : InputDates , inplace : bool = False) -> Self:
         """
         Calculate the difference between two arrays of dates.
         """
@@ -203,7 +207,7 @@ class Dates(Sequence[int]):
             self.dates = np.setdiff1d(self.dates , Dates(other).dates)
         return self
 
-    def union(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
+    def union(self , other : InputDates , inplace : bool = False) -> Self:
         """
         Calculate the union of two arrays of dates.
         """
@@ -213,7 +217,7 @@ class Dates(Sequence[int]):
             self.dates = np.union1d(self.dates , Dates(other).dates)
         return self
 
-    def intersect(self , other : intDates | Dates | None , inplace : bool = False) -> Self:
+    def intersect(self , other : InputDates , inplace : bool = False) -> Self:
         """
         Calculate the intersection of two arrays of dates.
         """
@@ -259,7 +263,7 @@ class Dates(Sequence[int]):
         return self.offset(offset = 0, type = 'td', backward = backward, inplace = inplace)
 
     def segments(
-        self, max_segment_len : int = 60 , require_consecutive : lit.intDateType | None = None , 
+        self, max_segment_len : int = 60 , require_consecutive : DateTypeNone = None , 
     ) -> list[Dates]:
         """
         return the segments of dates within the max_segment_len 

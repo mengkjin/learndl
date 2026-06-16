@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import sys
 from IPython.core.getipython import get_ipython
-from typing import Any , Literal , Generator , Generic , TypeVar , Self
+from typing import Any , Literal  , Generic , TypeVar , Self
+from collections.abc import Generator
 
 from src.proj.log import Logger
 

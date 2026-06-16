@@ -61,9 +61,10 @@ class OptimizedPortfolioInput:
                 given = {next(iter(self.config[key])):given}
             self.config[key].update(given)
 
-    def to_solver_input(self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
-                        benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , * ,
-                        pool_additional : dict | None = None , **kwargs):
+    def to_solver_input(
+        self , model_date : int , alpha_model : AlphaModel | Amodel | Any = None , 
+        benchmark : Base.alias.SingleBenchmark = None , init_port : Port | Any = None , * ,
+        pool_additional : dict | None = None , **kwargs):
 
         self.model_date = model_date
         self.risk_model : Rmodel | Any = RISK_MODEL.get_model(model_date)

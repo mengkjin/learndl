@@ -2,7 +2,8 @@
 from __future__ import annotations
 import pandas as pd
 from pathlib import Path
-from typing import Any , Literal , Mapping , TYPE_CHECKING
+from typing import Any , Literal  , TYPE_CHECKING
+from collections.abc import Mapping
 
 from src.proj.core import strPath , strPaths
 from .dataframe import save_df , save_dfs_router

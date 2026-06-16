@@ -7,7 +7,7 @@ YAMLFileEditorState / YAMLFileEditor
 """
 from __future__ import annotations
 from pathlib import Path
-from typing import Sequence
+from collections.abc import Sequence
 import streamlit as st
 import yaml
 
@@ -180,7 +180,7 @@ class YAMLFileEditor:
             return ''
         file_path = self.get_file_path(file_path)
         try:
-            with open(file_path, "r", encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 self.state.load_content = f.read() or ''
             self.state.load_status = 'success'
         except Exception as e:

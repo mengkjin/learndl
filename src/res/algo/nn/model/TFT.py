@@ -213,7 +213,7 @@ class TemporalFusionTransformer(nn.Module):
     
     def __init__(
         self,
-        input_dim : tuple[int,int] | tuple[int,int,int] = \
+        input_dim : tuple[int, int] | tuple[int, int, int] = \
             (6 , len(Const.Factor.RISK.style),len(Const.Factor.RISK.indus)), # aka , known dynamic dim , static dim
         hidden_dim: int = 16,
         label_dim: int = 0, # aka , unknown dynamic dim, should be 0 if not used

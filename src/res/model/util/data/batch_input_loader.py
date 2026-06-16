@@ -5,7 +5,8 @@ from __future__ import annotations
 import numpy as np
 from dataclasses import dataclass
 from tqdm import tqdm
-from typing import Any , Sequence
+from typing import Any
+from collections.abc import Sequence
 
 from src.proj import Proj , Base , Dates
 from src.res.model.util.core import BatchInput
@@ -46,7 +47,11 @@ class DataloaderParam:
         return all([getattr(self , attr) == getattr(other , attr) for attr in match_attrs])
 class BatchInputLoader:
     """wrap loader to impletement DataModule Callbacks"""
-    def __init__(self , raw_loader : Sequence[BatchInput] , data_module , exclude_dates = None , include_dates = None , tqdm = True , desc : str | None = None) -> None:
+    def __init__(
+        self , raw_loader : Sequence[BatchInput] , data_module , 
+        exclude_dates = None , include_dates = None , tqdm = True , 
+        desc : str | None = None
+    ) -> None:
         from src.res.model.util.data import DataModule
         assert isinstance(data_module , DataModule) , f'data_module must be an instance of BaseDataModule, but got {type(data_module)}'
         self.loader      = raw_loader

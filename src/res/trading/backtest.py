@@ -43,7 +43,7 @@ class BacktestPortfolioManager(Base.BoundLogger):
         return tp
 
     @classmethod
-    def update(cls , reset_ports : list[str] | None = None , indent : int = 0 , vb_level : Any = 1):
+    def update(cls , reset_ports : Base.alias.NamesType = None , indent : int = 0 , vb_level : Any = 1):
         """
         Update all or specific backtest ports.
         """
@@ -51,6 +51,8 @@ class BacktestPortfolioManager(Base.BoundLogger):
         cls.logger.note(f'{cls.__name__} : Update since last update!')
         reset_ports = reset_ports or []
         date = CALENDAR.updated()
+
+        reset_ports = Base.ensure_name_list(reset_ports , [])
         assert not reset_ports or all([port in BacktestPort.candidate_ports for port in reset_ports]) , \
             f'expect all reset ports in port_list , got {reset_ports}'
         updated_ports = {name:BacktestPort.load(name , indent = indent + 1 , vb_level = 'max').build(date) 

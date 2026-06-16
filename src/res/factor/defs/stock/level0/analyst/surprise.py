@@ -4,7 +4,7 @@ Surprise factors for the project
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from typing import Any , Literal
+from typing import Literal
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import SurpriseFactor
@@ -30,10 +30,11 @@ def get_title_outperform(date : int , type : Literal['num' , 'pct']):
             rename_axis(index = {'date':'report_date'}).reindex(df.index)
         df = df[ann_cal['anndt'] > 0]
 
-    title : pd.Series | Any = df['report_title']
-    df['title_outperform'] = (title.str.contains('预期') & 
-                              (title.str.contains('超') | 
-                               title.str.contains('好于')))
+    title : pd.Series = df['report_title']
+    df['title_outperform'] = (
+        title.str.contains('预期') & 
+        (title.str.contains('超') | title.str.contains('好于'))
+    )
     if type == 'num':
         df = df.groupby(['secid' , 'org_name']).last().groupby(['secid'])['title_outperform'].sum()
     elif type == 'pct':

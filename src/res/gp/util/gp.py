@@ -12,7 +12,8 @@ from __future__ import annotations
 import numpy as np
 
 from deap import tools
-from typing import Any , Sequence , Callable
+from typing import Any
+from collections.abc import Sequence, Callable
 
 from src.proj import Proj , Base
 from src.res.gp.param import gpParameters
@@ -103,10 +104,10 @@ class GeneticProgramming(Base.BoundLogger):
         return self
 
     def population(
-            self , last_gen : Sequence | None = None , 
-            forbidden : Sequence[str] | None = None , 
-            * , max_round = 100 , **kwargs
-        ) -> Population:
+        self , last_gen : Sequence | None = None , 
+        forbidden : Sequence[str] | None = None , 
+        * , max_round = 100 , **kwargs
+    ) -> Population:
         """
         基于上一轮的种群,生成新的种群
         input:

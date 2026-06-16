@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 from src.proj.core import strPath
 
@@ -50,8 +49,8 @@ class ProcessDiscovery:
     def find_running_instances(
         cls,
         *,
-        script: Optional[strPath] = None,
-        task_id: Optional[str] = None,
+        script: strPath | None = None,
+        task_id: str | None = None,
     ) -> list[int]:
         """
         Return PIDs of Python interpreter processes whose cmdline or environment matches.
@@ -66,7 +65,7 @@ class ProcessDiscovery:
         if script is None and task_id is None:
             raise ValueError("Provide script and/or task_id")
 
-        script_resolved: Optional[str] = None
+        script_resolved: str | None = None
         if script is not None:
             script_resolved = str(Path(script).resolve())
 
@@ -152,8 +151,8 @@ class ProcessDiscovery:
     def wait_for_running_instances(
         cls,
         *,
-        script: Optional[strPath] = None,
-        task_id: Optional[str] = None,
+        script: strPath | None = None,
+        task_id: str | None = None,
     ) -> list[int]:
         """
         Poll :meth:`find_running_instances` until at least one PID is found or class timeout elapses.

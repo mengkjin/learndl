@@ -7,9 +7,11 @@ import sys
 import time
 import asyncio
 from contextlib import contextmanager
-from typing import Union , Iterable , Generator , TypeVar , Literal
+from typing import TypeVar , Literal , TypeAlias
+from collections.abc import Iterable, Generator
 from curl_cffi import requests , CurlOpt
 
+from src.proj.core import lit
 from src.proj.log import Logger
 
 __all__ = [
@@ -21,7 +23,7 @@ __all__ = [
     'SSLVerify' , 'RequestMethodType' , 'CHROME_UA'
 ]
 
-SSLVerify = Union[str, ssl.SSLContext]
+SSLVerify : TypeAlias = str | ssl.SSLContext
 T = TypeVar("T")
 RequestMethodType = Literal['get', 'post']
 
@@ -133,7 +135,7 @@ def timeout_expanding_sessions(session: requests.Session | requests.AsyncSession
 def request_with_timeouterror(
     session: requests.Session, request_method: RequestMethodType, *args, 
     expansion : float = 2. , max_retry_count: int = 2, title : str = '' , 
-    indent : int = 0, vb_level: int = 1, **kwargs) -> requests.Response:
+    indent : int = 0, vb_level : lit.VerbosityLevel = 1, **kwargs) -> requests.Response:
     """GET/POST with exponentially growing timeouts until success or retries exhausted."""
     if expansion < 1:
         Logger.alert1(f"expansion {expansion} is less than 1, setting to 1" , indent = indent, vb_level = vb_level)
@@ -166,8 +168,8 @@ async def request_with_timeouterror_async(
     expansion: float = 2.,
     max_retry_count: int = 2,
     title: str = '',
-    vb_level: int = 1,
-    indent: int = 0,
+    vb_level : lit.VerbosityLevel = 1,
+    indent : int = 0,
     **kwargs
 ) -> requests.Response:
     """Async GET/POST with exponentially growing timeout retry."""

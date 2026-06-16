@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+
 from .verify import GnomeTerminalVerifier
 from ...util.basic import BasicOpener
 from ...preference import LINUX_GNOME_NEW

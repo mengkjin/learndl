@@ -8,27 +8,26 @@ import os
 from uuid import uuid4
 
 from pathlib import Path
-from typing import Any , Literal , Mapping , Iterable , Callable , Union , TYPE_CHECKING
+from typing import Any , Literal , TYPE_CHECKING
+from collections.abc import Mapping, Iterable, Callable
 
 from src.proj.env import MACHINE
 from src.proj.log import Logger
-from src.proj.core import strPath , strPaths
+from src.proj.core import strPath , strPaths , lit
+from src.proj.core.literals import PandasAccelerator , PolarsAccelerator
 
 from src.proj.db.basic import DF_SUFFIX , path_date , dfHandler
 
 if TYPE_CHECKING:
     import polars as pl
-    PL_MAPPER_TYPE = Union[Iterable[Callable[[pl.DataFrame], pl.DataFrame]] , Callable[[pl.DataFrame], pl.DataFrame] , None]
-    PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
-
+    PL_MAPPER_TYPE = Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
+    PD_MAPPER_TYPE = Iterable[Callable[[pd.DataFrame], pd.DataFrame]] | Callable[[pd.DataFrame], pd.DataFrame] | None
+    
 __all__ = [
     'save_df' , 'append_df' , 
     'load_df' , 'load_dfs' , 'load_df_pl' , 'load_dfs_pl' , 
     'load_df_max_date' , 'load_df_min_date' , 'dfs_to_excel'
 ]
-
-PandasAccelerator = Literal['thread' , 'dask' , 'polars' , 'polars_thread']
-PolarsAccelerator = Literal['thread' , 'lazy']
 
 class dfIOHandler:
     """File IO operations handler"""
@@ -186,7 +185,7 @@ class dfIOHandler:
 def save_df(
     df : pd.DataFrame | pl.DataFrame | None , path : strPath , *, 
     overwrite = True , prefix : str | None = None , empty_ok = False , 
-    indent = 1 , vb_level : Any = 1 , footnote = False):
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 1 , footnote = False):
     """save dataframe to path"""
     if df is None or (not empty_ok and len(df) == 0): 
         return False
@@ -209,7 +208,7 @@ def save_df(
 def append_df(
     df : pd.DataFrame | None , path : strPath , * , 
     drop_duplicate_cols : list[str] | None = None , prefix : str | None = None , 
-    indent = 1 , vb_level : Any = 1 , footnote = False):
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 1 , footnote = False):
     """append dataframe to path , can pass drop_duplicate_cols to drop duplicate columns"""
     if df is None or df.empty: 
         return False
@@ -238,7 +237,7 @@ def load_df(
     load dataframe from path or paths
     Parameters
     ----------
-    path : strPath | Iterable[strPath] | dict[int, strPath]
+    path : strPath | strPaths
         path or paths to load , key is date
     missing_ok : bool
         if True, return empty dataframe for missing path(s)
@@ -284,7 +283,7 @@ def load_dfs(
     load dataframe from multiple paths , return dict of date and dataframe
     Parameters
     ----------
-    paths : dict[int, strPath] | Iterable[strPath]
+    paths : strPaths | strPath
         paths to load , key is date
     accelerator : 'thread' | 'dask' | 'polars' | 'polars_thread' | None
         accelerating mode
@@ -305,13 +304,13 @@ def load_df_pl(
     load polars dataframe from path or paths
     Parameters
     ----------
-    path : strPath | Iterable[strPath] | dict[int, strPath]
+    path : strPath | strPaths
         path or paths to load , key is date
     missing_ok : bool
         if True, return empty dataframe for missing path(s)
     accelerator : 'thread' | 'lazy' | None
         accelerating mode
-    mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
+    mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pd.DataFrame] | None
         mapper function to execute on each dataframe
     """
     import polars as pl
@@ -353,7 +352,7 @@ def load_dfs_pl(
         key column name , if None, use date column
     accelerator : 'thread' | 'lazy' | None
         accelerating mode
-    mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
+    mapper : Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pd.DataFrame] | None
         mapper function to execute on each dataframe
     """
     return dfIOHandler.load_polars_multiple(paths , accelerator = accelerator , mapper = dfHandler.wrapped_mapper(mapper))
@@ -374,8 +373,11 @@ def load_df_min_date(path : strPath , key_column : str = 'date') -> int:
     else:
         return int(min(df[key_column]))
 
-def dfs_to_excel(dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , mode : Literal['a','w'] = 'w' , 
-                 sheet_prefix = '' , prefix : str | None = None , indent : int = 1 , vb_level : Any = 3):
+def dfs_to_excel(
+    dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , 
+    mode : Literal['a','w'] = 'w' , sheet_prefix = '' , prefix : str | None = None , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3
+):
     """Write each DataFrame to a sheet; optionally log via ``Logger.footnote``.
 
     Returns:

@@ -8,7 +8,8 @@ import torch
 
 from collections import defaultdict
 from torch import Tensor
-from typing import Any , Callable , Literal
+from typing import Any  , Literal
+from collections.abc import Callable
 from pathlib import Path
 
 from src.proj import Save , Base
@@ -46,14 +47,13 @@ class BatchMetrics:
     def has_metrics(self , key : Literal['accuracies' , 'losses' , 'rankic' , 'total_loss' , 'total_accuracy' , 'total_loss_item' , 'loss_weights']) -> bool:
         return key in self.metrics
 
-    def reset_metrics(self , key : str | list[str] | Literal['all']):
+    def reset_metrics(self , key : Base.alias.NamesType | Literal['all']):
         if not key:
             return
         if key == 'all':
             self.metrics.clear()
             return
-        key = [key] if isinstance(key , str) else key
-        for k in key:
+        for k in Base.ensure_name_list(key , []):
             self.metrics.pop(k , None)
 
     def new(self , batch_key : Any = None , **kwargs):
@@ -140,7 +140,7 @@ class BatchMetrics:
 class AggregatedMetrics:
     def __init__(self , aggregator : MetricAggregator) -> None:
         self.aggregator = aggregator
-        self.indices : dict[str,list[str|Any]] = defaultdict(list)
+        self.indices : dict[str,list[str | Any]] = defaultdict(list)
         self.tables : dict[str,list[pd.DataFrame]] = defaultdict(list)
         self.collected_tables : dict[str,pd.DataFrame] = {}
         self.initiated = False
@@ -205,7 +205,7 @@ class EpochMetrics(AggregatedMetrics):
             self.collected_tables[f'epoch_{name}'] = self.get_epoch_table(name)
         self.collected = True
 
-    def get_epoch_table(self , name : Literal['accuracies' , 'losses' , 'weights' , 'totals'] | str) -> pd.DataFrame:
+    def get_epoch_table(self , name : Literal['accuracies', 'losses', 'weights', 'totals'] | str) -> pd.DataFrame:
         if f'epoch_{name}' in self.collected_tables:
             return self.collected_tables[f'epoch_{name}']
         batch_table = self.get_table(name)
@@ -299,14 +299,14 @@ class AttemptMetrics(AggregatedMetrics):
         metrics = self.total_metrics(dataset , metric)
         return metrics[-1] if metrics else 0.
 
-    def latest_epoch(self) -> None | EpochMetricResult:
+    def latest_epoch(self) -> EpochMetricResult | None:
         if len(self.indices['valid_epoch']) != len(self.indices['train_epoch']):
             raise ValueError('valid_epoch and train_epoch have different lengths, must call after valid epoch is collected')
         if not self.epoch_metric_results:
             return None
         return self.epoch_metric_results[-1]
 
-    def best_epoch(self , aggregator : AggregatorType | None = None) -> None | EpochMetricResult:
+    def best_epoch(self , aggregator : AggregatorType | None = None) -> EpochMetricResult | None:
         """return the index of the best epoch, the IC and the accuracies of the best epoch (determined by the accuracy)"""
         metrics = self.get_table(f'valid_epoch_accuracies')
         if metrics.empty:
@@ -339,7 +339,7 @@ class ModelMetrics(AggregatedMetrics):
         assert stage in ['fit' , 'test'] , f'[{stage}] stage is not allowed to be used for model metrics'
         super().new(stage = stage , model_num = model_num , model_date = model_date , submodel = submodel)
         self.attempt_metric_results : list[EpochMetricResult | None] = []
-        self.accuracy_verdict : dict[str,float] | Callable[[dict[str,float]],float] | None = None
+        self.accuracy_verdict : dict[str, float] | Callable[[dict[str, float]], float] | None = None
 
     def append(self , attempt : AttemptMetrics):
         super().append(attempt)
@@ -352,7 +352,7 @@ class ModelMetrics(AggregatedMetrics):
         self.collect()
         super().close()
 
-    def set_accuracy_verdict(self , verdict : dict[str,float] | Callable[[dict[str,float]],float] | None):
+    def set_accuracy_verdict(self , verdict : dict[str, float] | Callable[[dict[str, float]], float] | None):
         self.accuracy_verdict = {} if verdict is None else verdict
 
     @property

@@ -6,18 +6,19 @@ import json
 import io
 
 from pathlib import Path
-from typing import Any , Iterable , Callable , Union , Mapping , TYPE_CHECKING
+from typing import Any , TYPE_CHECKING
+from collections.abc import Mapping
 
 from src.proj.env import PATH , Proj
 from src.proj.log import Logger
-from src.proj.core import strPath , strPaths
+from src.proj.core import strPath , strPaths , lit
 
 from src.proj.db.basic import dfHandler , TAR_SUFFIXES
 from .dataframe import dfIOHandler
 
 if TYPE_CHECKING:
     import polars as pl
-    PD_MAPPER_TYPE = Union[Iterable[Callable[[pd.DataFrame], pd.DataFrame]] , Callable[[pd.DataFrame], pd.DataFrame] , None]
+    from src.proj.db.io.dataframe import PD_MAPPER_TYPE
 
 __all__ = ['load_tar_meta' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 'pack_files_to_tar' , 'unpack_files_from_tar']
 
@@ -107,7 +108,9 @@ def save_tar(dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath ,
 
 def save_dfs_to_tar(
     dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , 
-    meta : dict[str, Any] | None = None , *, overwrite = True , prefix : str | None = None , indent = 1 , vb_level : Any = 1):
+    meta : dict[str, Any] | None = None , *, overwrite = True , prefix : str | None = None , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 1
+):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -135,7 +138,10 @@ def load_dfs_from_tar(path : strPath , * , missing_ok = True , mapper : PD_MAPPE
     dfs = load_tar(path , mapper = dfHandler.wrapped_mapper(mapper))
     return dfs
 
-def pack_files_to_tar(files : strPaths , path : strPath , *, overwrite = True , prefix : str | None = None , indent = 1 , vb_level : Any = 1 , **kwargs):
+def pack_files_to_tar(
+    files : strPaths , path : strPath , *, overwrite = True , prefix : str | None = None , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 1 , **kwargs
+):
     """save multiple dataframes to tar file"""
     prefix = prefix or ''
     path = Path(path)
@@ -159,7 +165,9 @@ def pack_files_to_tar(files : strPaths , path : strPath , *, overwrite = True , 
 
 def pack_dir_to_tar(
     source_path : strPath , path : strPath , * ,
-    prefix : str | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    prefix : str | None = None , overwrite = False , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3 , **kwargs
+):
     source_path = Path(source_path)
     path = Path(path)
     assert source_path.exists() and source_path.is_dir() and any(source_path.iterdir()) , f'{source_path} does not exist or is empty'
@@ -178,8 +186,10 @@ def pack_dir_to_tar(
         Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def unpack_files_from_tar(path : strPath , target : strPath , * , 
-                          overwrite = False , indent = 1 , vb_level : Any = 1 , **kwargs) -> None:
+def unpack_files_from_tar(
+    path : strPath , target : strPath , * , 
+    overwrite = False , indent : int = 1 , vb_level : lit.VerbosityLevel = 1 , **kwargs
+) -> None:
     """unpack files from tar file"""
     path = Path(path)
     target = Path(target)
@@ -197,10 +207,18 @@ def unpack_files_from_tar(path : strPath , target : strPath , * ,
 
 def packing(
     source_path : strPath | strPaths , target_path : strPath , * ,
-    prefix : str | None = None , overwrite = False , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    prefix : str | None = None , overwrite = False , 
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3 , **kwargs
+):
     if isinstance(source_path , strPath) and Path(source_path).is_dir():
-        return pack_dir_to_tar(source_path, target_path, prefix = prefix, overwrite = overwrite, indent = indent, vb_level = vb_level, **kwargs)
+        return pack_dir_to_tar(
+            source_path, target_path, prefix = prefix, overwrite = overwrite, 
+            indent = indent, vb_level = vb_level, **kwargs
+        )
     else:
         if isinstance(source_path , strPath):
             source_path = [source_path]
-        return pack_files_to_tar(source_path, target_path, prefix = prefix, overwrite = overwrite, indent = indent, vb_level = vb_level, **kwargs)
+        return pack_files_to_tar(
+            source_path, target_path, prefix = prefix, overwrite = overwrite, 
+            indent = indent, vb_level = vb_level, **kwargs
+        )

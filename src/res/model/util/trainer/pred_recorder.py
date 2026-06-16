@@ -147,7 +147,7 @@ class PredRecorder(TrainerPipeline):
         return pd.DataFrame([[path , *path.name.split('.')[:3]] for path in self.folder_avg_preds.glob('*.feather')], columns = ['path' , 'model_date' , 'min_pred_date' , 'max_pred_date']).\
             astype({'model_date' : int , 'min_pred_date' : int , 'max_pred_date' : int})
 
-    def update_missing_pred_dates(self , required_dates : Base.alias.intDates, existing_dates : Base.alias.intDates | None = None):
+    def update_missing_pred_dates(self , required_dates : Base.intDates, existing_dates : Base.alias.DateType = None):
         """log missing prediction dates in records folder"""
         existing_missing_dates = self.get_missing_pred_dates()
         missing_dates = existing_missing_dates.union(required_dates , inplace = False)
@@ -324,7 +324,7 @@ class PredRecorder(TrainerPipeline):
     def collect_avg_preds(self) -> None:
         self.save_avg_preds(self.model_date , async_save = True)
         
-    def get_preds(self , pred_dates : Base.alias.intDates , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
+    def get_preds(self , pred_dates : Base.intDates , model_num : int | None = None , closest : bool = False) -> pd.DataFrame:
         # maybe give start and end dates to the function? so that analysis can start from last analysis date, instead of last pred date
         pred_dates = Dates(pred_dates)
         if pred_dates.empty:

@@ -8,7 +8,7 @@ import numpy as np
 
 from functools import cached_property
 from torch import nn
-from typing import Any , Callable
+from typing import Any
 
 from src.proj import Base
 from src.res.model.util.core import BatchData
@@ -92,10 +92,10 @@ class TrainerMetrics(TrainerPipeline):
     def multilosses_kwargs(self): 
         return self.config.criterion_multilosses | {'num_head':self.model_param.get('num_output' , 1)}
     @property
-    def which_output(self) -> Base.alias.intNums | None: 
+    def which_output(self) -> Base.intNums | None: 
         return self.model_param.get('which_output' , None)
     @property
-    def which_label(self) -> Base.alias.intNums | None: 
+    def which_label(self) -> Base.intNums | None: 
         return self.model_param.get('which_label' , None)
     @cached_property
     def ignore_loss(self) -> list[str]:
@@ -144,7 +144,7 @@ class TrainerMetrics(TrainerPipeline):
         assert not self.batch_metrics.has_metrics('total_loss') , 'total loss is already calculated, please call set_loss_weights() before total_loss is used'
         self.aggregator.inject('loss' , loss_weights)
 
-    def set_accuracy_aggregator(self , aggregator : dict[str,float] | Callable[[dict[str,float]],float] | None):
+    def set_accuracy_aggregator(self , aggregator : AggregatorType):
         """
         set the aggregator to calculate the total accuracy
         used before collecting
@@ -155,7 +155,7 @@ class TrainerMetrics(TrainerPipeline):
         assert not self.batch_metrics.has_metrics('total_accuracy') , 'total accuracy is already calculated, please call set_accuracy_computer() before total_accuracy is used'
         self.aggregator.inject('accuracy' , aggregator)
 
-    def set_accuracy_verdict(self , verdict : dict[str,float] | Callable[[dict[str,float]],float] | None):
+    def set_accuracy_verdict(self , verdict : AggregatorType):
         """
         set the verdict to calculate the total accuracy of different attempts
         at most once in every model
@@ -219,17 +219,20 @@ class TrainerMetrics(TrainerPipeline):
         self.model_metrics.close()
         self.model_metrics.export(self.config.base_path.snapshot('metrics'))
 
-    def compare_epochs(self , epoch0 : EpochMetricResult | None , epoch1 : EpochMetricResult | None , aggregator : AggregatorType | None = None) -> bool:
+    def compare_epochs(
+        self , epoch0 : EpochMetricResult | None , epoch1 : EpochMetricResult | None , 
+        aggregator : AggregatorType = None
+    ) -> bool:
         if epoch0 is None:
             return False
         if epoch1 is None:
             return True
         return self.aggregator.larger(epoch0 , epoch1 , 'accuracy' , aggregator)
 
-    def argmax_epochs(self , epochs : list[EpochMetricResult] , aggregator : AggregatorType | None = None) -> int:
+    def argmax_epochs(self , epochs : list[EpochMetricResult] , aggregator : AggregatorType = None) -> int:
         return np.argmax(self.aggregator.compile_results(epochs , 'accuracy' , aggregator)).item()
 
-    def argmin_epochs(self , epochs : list[EpochMetricResult] , aggregator : AggregatorType | None = None) -> int:
+    def argmin_epochs(self , epochs : list[EpochMetricResult] , aggregator : AggregatorType = None) -> int:
         return np.argmin(self.aggregator.compile_results(epochs , 'loss' , aggregator)).item()
 
     def on_train_epoch_start(self):

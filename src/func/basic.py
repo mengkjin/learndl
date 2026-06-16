@@ -5,10 +5,15 @@ Module attribute ``DIV_TOL`` is a small denominator tolerance shared with ``func
 from __future__ import annotations
 import torch , sys
 import numpy as np
-from typing import Any , Literal , overload
+from typing import Any , Literal , overload , TypeVar , TypeAlias
 
 DIV_TOL = 1e-6
 IndexMergeMethod = Literal['union' , 'intersect' , 'check' , 'stack']
+T = TypeVar('T')
+
+ArrayAny : TypeAlias = np.ndarray | Any
+ArrayTensorAny : TypeAlias = np.ndarray | torch.Tensor | Any
+
 
 def alert_message(message : str , color : str = 'yellow'):
     """Emit a one-line message to stderr, optionally with ANSI color."""
@@ -324,7 +329,7 @@ def backward_fillna(arr , axis = 0 , * , force_value = None):
     """
     return _fillna(arr , axis , force_value , backward = True)
 
-def trim_index(index : np.ndarray | Any , min_value = None , max_value = None) -> np.ndarray:
+def trim_index(index : ArrayAny , min_value = None , max_value = None) -> np.ndarray:
     """Clip a 1-D index array by inclusive bounds.
 
     Args:
@@ -352,7 +357,7 @@ def index_intersect(idxs , min_value = None , max_value = None) -> np.ndarray:
     Returns:
         Sorted intersection, then trimmed.
     """
-    new_idx : np.ndarray | torch.Tensor | Any = None
+    new_idx : ArrayTensorAny = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
@@ -372,7 +377,7 @@ def index_union(idxs , min_value = None , max_value = None) -> np.ndarray:
     Returns:
         Sorted union, then trimmed.
     """
-    new_idx : np.ndarray | Any = None
+    new_idx : ArrayAny = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
@@ -394,7 +399,7 @@ def index_stack(idxs , min_value = None , max_value = None) -> np.ndarray:
     Raises:
         ValueError: If a new array neither is a subset of the accumulator nor disjoint from it.
     """
-    new_idx : np.ndarray | Any = None
+    new_idx : ArrayAny = None
     for i , idx in enumerate(idxs):
         if i == 0 or idx is None or new_idx is None:
             new_idx = new_idx if idx is None else idx
@@ -418,7 +423,7 @@ def index_check(idxs , min_value = None , max_value = None) -> np.ndarray:
     Raises:
         ValueError: If any array differs from the first.
     """
-    new_idx : np.ndarray | Any = None
+    new_idx : ArrayAny = None
     for i , idx in enumerate(idxs):
         if i == 0:
             new_idx = idx
@@ -458,7 +463,7 @@ def index_merge(
     else:
         raise ValueError(f'Invalid method: {method}')
 
-def intersect_pos_tensor(target_index : np.ndarray | Any , source_index : np.ndarray | Any) -> tuple[torch.Tensor , torch.Tensor]:
+def intersect_pos_tensor(target_index : ArrayAny , source_index : ArrayAny) -> tuple[torch.Tensor , torch.Tensor]:
     """Positions of common labels in two 1-D index arrays.
 
     Args:
@@ -471,7 +476,7 @@ def intersect_pos_tensor(target_index : np.ndarray | Any , source_index : np.nda
     _ , target_pos , source_pos = np.intersect1d(target_index , source_index , return_indices=True)
     return torch.from_numpy(target_pos), torch.from_numpy(source_pos)
 
-def intersect_pos_slice(target_index : np.ndarray | Any , source_index : np.ndarray | Any) -> tuple[slice | np.ndarray , slice | np.ndarray]:
+def intersect_pos_slice(target_index : ArrayAny , source_index : ArrayAny) -> tuple[slice | np.ndarray , slice | np.ndarray]:
     """Like ``intersect_pos_tensor`` but compress contiguous runs to ``slice`` objects.
 
     Args:
@@ -484,7 +489,7 @@ def intersect_pos_slice(target_index : np.ndarray | Any , source_index : np.ndar
     _ , target_pos , source_pos = np.intersect1d(target_index , source_index , return_indices=True)
     return convert_to_slice(target_pos), convert_to_slice(source_pos)
 
-def intersect_meshgrid(target_indices : list[torch.Tensor | np.ndarray | Any] , source_indices : list[torch.Tensor | np.ndarray | Any]) -> tuple[tuple[torch.Tensor , ...] , tuple[torch.Tensor , ...]]:
+def intersect_meshgrid(target_indices : list[ArrayTensorAny] , source_indices : list[ArrayTensorAny]) -> tuple[tuple[torch.Tensor , ...] , tuple[torch.Tensor , ...]]:
     """Meshgrid of intersect positions for multiple paired axes.
 
     Args:

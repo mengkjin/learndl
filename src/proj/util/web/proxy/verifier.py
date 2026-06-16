@@ -6,13 +6,16 @@ import threading
 from curl_cffi import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Iterable
+from typing import TypeAlias
+from collections.abc import Iterable
 
 from src.proj import Base
 
 from .core import Proxy , ProxySet
 
 __all__ = ['VerifyRecord' , 'VerificationRecords' , 'ProxyVerifier']
+
+strProxy : TypeAlias = 'str | Proxy'
 
 @dataclass
 class VerifyRecord:
@@ -85,7 +88,7 @@ class VerificationRecords:
                 return self.records[(target_url, proxy_url)].status
             return None
 
-    def unverified_proxies(self, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+    def unverified_proxies(self, target_url: str , proxies: Iterable[strProxy]) -> ProxySet:
         """Filter ``proxies`` to those not yet attempted for ``target_url``."""
         with self.lock:
             return ProxySet([proxy for proxy in proxies if (target_url, str(proxy)) not in self.records])
@@ -108,7 +111,7 @@ class ProxyVerifier(Base.BoundLogger):
     VERIFICATION_RECORDS = VerificationRecords()
 
     @classmethod
-    def verify_single(cls , proxy: Proxy | str , target_url: str , * , timeout: float = 10.0 , fast_test: bool = False) -> bool:
+    def verify_single(cls , proxy: strProxy , target_url: str , * , timeout: float = 10.0 , fast_test: bool = False) -> bool:
         """Whether the proxy can access the test URL (GET, non-4xx/5xx is considered available)."""
         from src.proj.util.web.request import test_connection
         record = cls.VERIFICATION_RECORDS.get_record(target_url, str(proxy))
@@ -122,12 +125,12 @@ class ProxyVerifier(Base.BoundLogger):
         return status
 
     @classmethod
-    def unverified_proxies(cls, target_url: str , proxies: Iterable[Proxy | str]) -> ProxySet:
+    def unverified_proxies(cls, target_url: str , proxies: Iterable[strProxy]) -> ProxySet:
         """Return the subset of ``proxies`` that have not yet been tested against ``target_url``."""
         return cls.VERIFICATION_RECORDS.unverified_proxies(target_url, proxies)
 
     @classmethod
-    def dummy_single(cls , proxy: Proxy | str, target_url: str , *args , timeout: float = 10.0 , **kwargs) -> bool:
+    def dummy_single(cls , proxy: strProxy, target_url: str , *args , timeout: float = 10.0 , **kwargs) -> bool:
         """Simulate a verification with random pass/fail after a random sleep — used for testing."""
         record = cls.VERIFICATION_RECORDS.get_record(target_url, str(proxy))
         from src.proj.util.web.request import http_session
@@ -148,8 +151,10 @@ class ProxyVerifier(Base.BoundLogger):
         return cls.VERIFICATION_RECORDS.stats()
 
     @classmethod
-    def parallel_verification(cls , proxies: Iterable[Proxy | str] , target_url : str , timeout : float = 10.0 , * ,
-                              fast_test: bool = False, workers : int = 50 , dummy: bool = False) -> ProxySet:
+    def parallel_verification(
+        cls , proxies: Iterable[strProxy] , target_url : str , timeout : float = 10.0 , * ,
+        fast_test: bool = False, workers : int = 50 , dummy: bool = False
+    ) -> ProxySet:
         """Verify all proxies against ``target_url`` concurrently; return only those that passed."""
         cands = dict.fromkeys(proxies , False)
         if not cands:
@@ -164,7 +169,10 @@ class ProxyVerifier(Base.BoundLogger):
         return ProxySet([proxy for proxy , valid in cands.items() if valid])
 
     @classmethod
-    def verified_proxies(cls , proxies: Iterable[Proxy | str] , target_url: str , * , timeout: float = 10.0, workers: int = 50, silent: bool = False, dummy: bool = False) -> ProxySet:
+    def verified_proxies(
+        cls , proxies: Iterable[strProxy] , target_url: str , * , 
+        timeout: float = 10.0, workers: int = 50, silent: bool = False, dummy: bool = False
+    ) -> ProxySet:
         """parallel verify, take the first ``max_keep`` passed proxies in the original order of the candidate list."""
         proxies = ProxySet(proxies)
         with cls.logger.timer(f'Quick Verify ({timeout/2:.1f}s) for {cls.QUICK_VERIFY_URL}', idt = 1, vb = 2 , silent=silent) as timer:
@@ -186,7 +194,9 @@ class ProxyVerifier(Base.BoundLogger):
             return ""
 
     @classmethod
-    def check_proxy_anonymity(cls, proxy: Proxy | str, real_ip: str , test_url: str = "https://httpbin.org/ip", timeout: float = 5.0) -> Proxy | None:
+    def check_proxy_anonymity(
+        cls, proxy: strProxy, real_ip: str , test_url: str = "https://httpbin.org/ip", timeout: float = 5.0
+    ) -> Proxy | None:
         """Check proxy anonymity (whether transparent)"""
         try:
             resp = requests.get(test_url, proxy=str(proxy), timeout=timeout)
@@ -216,7 +226,7 @@ class ProxyVerifier(Base.BoundLogger):
             return None
 
     @classmethod
-    def filter_proxies_by_anonymity(cls, proxies: Iterable[Proxy | str]) -> ProxySet:
+    def filter_proxies_by_anonymity(cls, proxies: Iterable[strProxy]) -> ProxySet:
         """Remove transparent proxies: fetch the real public IP, then drop any proxy that leaks it."""
         real_ip = cls.get_real_ip()
         if not real_ip:

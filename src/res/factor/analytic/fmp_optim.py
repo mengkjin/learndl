@@ -5,7 +5,7 @@ Optimized portfolio calculator for Factor Model Portfolio
 from __future__ import annotations
 import pandas as pd
 
-from typing import Any , Literal , Type
+from typing import Literal , Any , TypeAlias
 
 from src.proj import Base
 from src.proj.bases import TestType
@@ -25,6 +25,8 @@ __all__ = [
     'Exp_Style' , 'Exp_Indus' , 'Attrib_Source' , 'Attrib_Style' ,
     'OptimFMPTest'
 ]
+
+BenchAny : TypeAlias = Benchmark | Any
 
 class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
@@ -117,7 +119,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
         'attrib_style' : Attribution Style
     """
     TEST_TYPE = TestType.OPTIM
-    TASK_LIST : list[Type[OptimCalc]] = [
+    TASK_LIST : list[type[OptimCalc]] = [
         FrontFace , 
         Perf_Curve ,
         Drawdown , 
@@ -131,7 +133,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
         Attrib_Style ,
     ]
 
-    def optim(self , factor: StockFactor , benchmarks: list[Benchmark|Any] | Any = 'defaults' , 
+    def optim(self , factor: StockFactor , benchmarks: list[BenchAny] | BenchAny = 'defaults' , 
               add_lag = 1 , optim_config = None):
         alpha_models = factor.alpha_models()
         benchmarks = Benchmark.to_benchmarks(benchmarks)
@@ -142,9 +144,11 @@ class OptimFMPTest(BaseFactorAnalyticTest):
             start = self.start , end = self.end , **self.kwargs)
         self.total_account = self.portfolio_group.build().total_account()
 
-    def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
-             add_lag = 1 , optim_config : str | Literal['default' , 'custome'] | None = None , 
-             **kwargs):
+    def calc(
+        self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
+        add_lag = 1 , optim_config : str | Literal['default', 'custome'] | None = None , 
+        **kwargs
+    ):
         self.optim(factor , benchmarks , add_lag = add_lag ,optim_config = optim_config)
         if self.total_account.empty:
             self.logger.error(f'No accounts created for {self.test_name}!')

@@ -4,7 +4,6 @@ Top calculator for Factor Model Portfolio
 
 from __future__ import annotations
 import pandas as pd
-from typing import Type
 
 from src.proj import Base
 from src.res.factor.util import Benchmark , StockFactor
@@ -113,7 +112,7 @@ class TopFMPTest(BaseFactorAnalyticTest):
         'attrib_style' : Attribution Style
     """
     TEST_TYPE = test_type
-    TASK_LIST : list[Type[TopCalc]] = [
+    TASK_LIST : list[type[TopCalc]] = [
         FrontFace , 
         Perf_Curve ,
         Perf_Excess ,

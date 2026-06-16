@@ -11,13 +11,13 @@ import pandas as pd
 import numpy as np
 from abc import ABC , abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import cast
 
-from src.proj import Const
+from src.proj import Const , Base
 from src.res.factor.util import Portfolio
 from src.res.factor.util.stats import eval_cum_ret , eval_drawdown , eval_uncovered_max_drawdown
 
-from .portfolio_accountant import PortfolioAccount
+from .portfolio_accountant import PortfolioAccount , AccountInputType
 
 __all__ = [
     'BaseConditioner' 
@@ -43,7 +43,7 @@ class AccountConditioner:
 
     @property
     def position_end(self) -> pd.Series:
-        pe : pd.Series | Any = self.conditions.shift(1).fillna(1)
+        pe : pd.Series = self.conditions.shift(1).fillna(1)
         return pe
     
     @property
@@ -52,7 +52,7 @@ class AccountConditioner:
     
     @property
     def position_start(self) -> pd.Series:
-        ps : pd.Series | Any = self.position_end.shift(1).fillna(1)
+        ps : pd.Series = self.position_end.shift(1).fillna(1)
         return ps
     
     @property
@@ -77,7 +77,7 @@ class BaseConditioner(ABC):
     """
     the base abstract class of the conditioner
     """
-    CONDITIONER_NAME : str | list[str] | None = None
+    CONDITIONER_NAME : Base.alias.NamesType = None
 
     def __init__(self , portfolio : Portfolio | None = None):
         assert self.CONDITIONER_NAME is not None , 'CONDITIONER_NAME must be set'
@@ -85,12 +85,7 @@ class BaseConditioner(ABC):
 
     @classmethod
     def match(cls , name : str):
-        if isinstance(cls.CONDITIONER_NAME , str):
-            return name == cls.CONDITIONER_NAME
-        elif isinstance(cls.CONDITIONER_NAME , list):
-            return name in cls.CONDITIONER_NAME
-        else:
-            return False
+        return name in Base.ensure_name_list(cls.CONDITIONER_NAME , [])
         
     @staticmethod
     def drawdown_rebound_condition(account : PortfolioAccount , stop_threshold : float = 0.1 , rebounce_threshold : float = 0.25) -> pd.Series:
@@ -100,7 +95,7 @@ class BaseConditioner(ABC):
             rebounce_threshold : the threshold of the rebounce from bottom to change the condition to 1
         """
         drawdown = eval_drawdown(account.pf , how = 'exp')
-        umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
+        umd = eval_uncovered_max_drawdown(cast(pd.Series, drawdown)) # uncovered max drawdown
         rebounce = drawdown - umd.fillna(1)
         condition = account.pf * 0 + 1
         for i , (dd , uu , rb) in enumerate(zip(drawdown.values , umd.values , rebounce.values)):
@@ -123,7 +118,7 @@ class BaseConditioner(ABC):
                     if None, will use the rebounce_threshold to change the stop_threshold
         """
         drawdown = eval_drawdown(account.pf , how = 'exp')
-        umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
+        umd = eval_uncovered_max_drawdown(cast(pd.Series, drawdown)) # uncovered max drawdown
         recover_ratio = (1 - drawdown / umd.fillna(1))
         condition = account.pf * 0 + 1
         init_stop = stop_threshold
@@ -157,9 +152,9 @@ class BaseConditioner(ABC):
         """
         ...
     
-    def conditioning(self , input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | list[float] | None = None):
+    def conditioning(self , input : AccountInputType | None = None):
         """
-        input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | PortfolioAccount | None
+        input : AccountInputType
             if input is None, will use the self.portfolio's account
             if input is Portfolio, will use the input's account
             if input is pd.DataFrame, it should be the account of the portfolio
@@ -176,8 +171,10 @@ class BaseConditioner(ABC):
         assert self.portfolio is not None , 'portfolio is not set'
         return self.portfolio.replace(self())
     
-    def conditioned_pf_ret(self , input : Portfolio | pd.DataFrame | pd.Series | np.ndarray | list[float] | None = None , 
-                           plot = False) -> np.ndarray:
+    def conditioned_pf_ret(
+        self , input : AccountInputType | None = None , 
+        plot : bool = False
+    ) -> np.ndarray:
         """
         return the conditioned comparison pf return
         """
@@ -218,54 +215,54 @@ class BalanceOptimisticConditioner(BaseConditioner):
     the default conditioner, which is the balance_neutral conditioner
     """
     CONDITIONER_NAME = ['balance', 'balance_optimistic']
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.1 , rebounce_threshold = 0.025)
     
 class BalanceNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'balance_neutral'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.1 , rebounce_threshold = 0.0375)
     
 class BalancePessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'balance_pessimistic'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.1 , rebounce_threshold = 0.05)
     
 class ConservativeOptimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = ['conservative', 'conservative_optimistic']
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.05 , rebounce_threshold = 0.0125)
     
 class ConservativeNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'conservative_neutral'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.05 , rebounce_threshold = 0.01875)
     
 class ConservativePessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'conservative_pessimistic'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.05 , rebounce_threshold = 0.025)
     
 class RadicalOptimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = ['radical', 'radical_optimistic']
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.2 , rebounce_threshold = 0.05)
     
 class RadicalNeutralConditioner(BaseConditioner):
     CONDITIONER_NAME = 'radical_neutral'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.2 , rebounce_threshold = 0.075)
     
 class RadicalPessimisticConditioner(BaseConditioner):
     CONDITIONER_NAME = 'radical_pessimistic'
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         return self.drawdown_rebound_condition(account , stop_threshold = 0.2 , rebounce_threshold = 0.1)
 
     
 class ProgressiveConditioner(BaseConditioner):
-    def conditions(self , account : PortfolioAccount) -> pd.Series | Any:
+    def conditions(self , account : PortfolioAccount) -> pd.Series:
         drawdown = eval_drawdown(account.pf , how = 'exp')
-        umd = eval_uncovered_max_drawdown(drawdown) # uncovered max drawdown
+        umd = eval_uncovered_max_drawdown(cast(pd.Series, drawdown)) # uncovered max drawdown
         recover_ratio = (1 - drawdown / umd.fillna(1))
         condition = account.pf * 0 + 1
         init_stop = 0.1

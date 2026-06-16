@@ -5,7 +5,6 @@ from __future__ import annotations
 import pandas as pd
 
 from collections import defaultdict
-from typing import Any
 from dataclasses import dataclass , field
 from threading import Lock
 
@@ -95,14 +94,14 @@ class FamaFrench3:
 
     @classmethod
     def smb(cls , df : pd.DataFrame) -> pd.Series:
-        mv_rank : pd.Series | Any = df['mv'].groupby('date').rank(pct = True)
+        mv_rank : pd.Series = df['mv'].groupby('date').rank(pct = True)
         ret_B = cls.group_ret(df.loc[mv_rank >= 0.9])
         ret_S = cls.group_ret(df.loc[mv_rank < 0.5])
         return (ret_S - ret_B).rename('smb')
     
     @classmethod
     def hml(cls , df : pd.DataFrame) -> pd.Series:
-        bp_rank : pd.Series | Any = df['bp'].groupby('date').rank(pct = True)
+        bp_rank : pd.Series = df['bp'].groupby('date').rank(pct = True)
         ret_H = cls.group_ret(df.loc[bp_rank >= 2/3])
         ret_L = cls.group_ret(df.loc[bp_rank < 1/3])
         return (ret_H - ret_L).rename('hml')

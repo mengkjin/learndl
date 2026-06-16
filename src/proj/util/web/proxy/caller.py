@@ -1,15 +1,18 @@
 """Run user callables through a ``AdaptiveProxyPool`` with fallback when proxies are missing."""
 from __future__ import annotations
 import numpy as np
-from typing import Callable , Any , Iterable , Union, Iterator
+from typing import Any  , TypeAlias
+from collections.abc import Callable, Iterable, Iterator
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.proj import Base
+from src.proj.core import lit
 
 __all__ = ['ProxyCaller' , 'ProxyCallerList' , 'ProxyCallerInput' , 'ProxyDepletionException']
 
-ProxyCallerInput = Union[Callable[..., bool | Exception] , tuple[str, Callable[..., bool | Exception]] , tuple[Callable[..., bool | Exception], str] , 'ProxyCaller']
+CallerResultType : TypeAlias = bool | Exception
+ProxyCallerInput : TypeAlias = Callable[..., CallerResultType] | tuple[str, Callable[..., CallerResultType]] | tuple[Callable[..., CallerResultType], str] | 'ProxyCaller'
 
 class ProxyDepletionException(Exception):
     """Exception raised when the proxy pool is depleted"""
@@ -17,7 +20,7 @@ class ProxyDepletionException(Exception):
 
 class ProxyCaller:
     """A function that can be used to execute a function with a proxy"""
-    def __init__(self, func: Callable[..., bool | Exception] , url: str = 'www.example.com' , * , pool = None , title = ''):
+    def __init__(self, func: Callable[..., CallerResultType] , url: str = 'www.example.com' , * , pool = None , title = ''):
         self.func = func
         self.url = url
         self.set_pool(pool)
@@ -29,7 +32,7 @@ class ProxyCaller:
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.title})"
 
-    def __call__(self, *args: Any, **kwargs: Any) -> bool | Exception:
+    def __call__(self, *args: Any, **kwargs: Any) -> CallerResultType:
         if self.url in self.pool.proxies:
             return self.proxied(*args, **kwargs)
         else:
@@ -54,7 +57,7 @@ class ProxyCaller:
         """Ban the caller"""
         self.banned = True
 
-    def proxied(self , *args: Any, **kwargs: Any) -> bool | Exception:
+    def proxied(self , *args: Any, **kwargs: Any) -> CallerResultType:
         """Call the function with a proxy"""
         proxy = self.pool.acquire(self.url)
         if proxy is None:
@@ -64,7 +67,7 @@ class ProxyCaller:
         self.pool.release(proxy, False if isinstance(self.result, Exception) else self.result)
         return self.result
 
-    def fallback(self , *args: Any, **kwargs: Any) -> bool | Exception:
+    def fallback(self , *args: Any, **kwargs: Any) -> CallerResultType:
         """Fallback to raw ip"""
         self.result = self.func(None , *args, **kwargs)
         self.finished = True
@@ -100,7 +103,7 @@ class ProxyCallerList(Base.BoundLogger):
     
     def __init__(
         self, callers: list[ProxyCaller] | dict[str, ProxyCaller] , * , 
-        pool = None, vb_level: int = 2, indent: int = 1 , **kwargs
+        pool = None, vb_level : lit.VerbosityLevel = 2, indent : int = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         if isinstance(callers , dict):
@@ -124,7 +127,7 @@ class ProxyCallerList(Base.BoundLogger):
             return self
         from src.proj.util.web.proxy.api import ProxyAPI
         if pool is None:
-            pool = ProxyAPI.get_proxy_pool(set([caller.url for caller in self.callers]))
+            pool = ProxyAPI.get_proxy_pool(list(set([caller.url for caller in self.callers])))
         self.pool = pool
         [caller.set_pool(pool) for caller in self.callers]
         return self
@@ -152,7 +155,7 @@ class ProxyCallerList(Base.BoundLogger):
         shutdown_urls = [url for url in self.pool.target_urls if self.pool.proxies[url].shutdown]
         [caller.ban() for caller in self.callers if caller.url in shutdown_urls]
 
-    def results(self) -> list[bool | Exception]:
+    def results(self) -> list[CallerResultType]:
         """Return the result of each caller (True on success, False on failure, or an Exception)."""
         return [caller.result for caller in self.callers]
 
@@ -180,7 +183,7 @@ class ProxyCallerList(Base.BoundLogger):
 
     @classmethod
     def from_inputs(cls , inputs : Iterable[ProxyCallerInput] | dict[str, ProxyCallerInput] , pool = None) -> ProxyCallerList:
-        """Create a ProxyCallerList from inputs of Iterable[func: Callable[..., bool]] | Iterable[tuple[url: str, func: Callable[..., bool]]]"""
+        """Create a ProxyCallerList from inputs of Iterable[func: Callable[..., CallerResultType]] | dict[str, func: Callable[..., CallerResultType]]"""
         if isinstance(inputs , ProxyCallerList):
             return inputs.set_pool(pool)
         assert pool is not None , "pool is required"
@@ -216,7 +219,7 @@ class ProxyCallerList(Base.BoundLogger):
                     fut.result()
 
     def execute_with_partition(
-        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , **kwargs) -> list[bool | Exception]:
+        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , **kwargs) -> list[CallerResultType]:
         """
         Execute all callers in multiple rounds with adaptive partitioning.
 
@@ -247,7 +250,7 @@ class ProxyCallerList(Base.BoundLogger):
         return self.results()
 
     def execute_with_partition_old(
-        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , grouping_num : int = 100 , **kwargs) -> list[bool | Exception]:
+        self , * , fallback_to_raw_ip: bool = False, max_workers : int = 10 , grouping_num : int = 100 , **kwargs) -> list[CallerResultType]:
         """Legacy partitioned execution; kept for reference. Prefer :meth:`execute_with_partition`."""
         groups = self.partition(grouping_num)
         for group in groups:

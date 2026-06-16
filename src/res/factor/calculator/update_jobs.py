@@ -7,7 +7,8 @@ import polars as pl
 
 from abc import ABC , abstractmethod
 from datetime import datetime
-from typing import Any , Generator , TypedDict
+from typing import Any  , TypedDict
+from collections.abc import Generator
 
 from src.proj import Base , Logger , Dates
 from src.proj.util.functional.parallel import parallel

@@ -9,7 +9,7 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import Any
 
-from src.proj import Const , Logger
+from src.proj import Const , Logger , Base
 from src.res.factor.util import (
     Port , AlphaModel , AlphaScreener , 
     Amodel , AlphaComposite , PortCreator , PortCreateResult
@@ -25,8 +25,8 @@ class BasicCreatorConfig:
 
     def __init__(
         self , 
-        sorter : str | list[str] | None = None , 
-        screener : str | list[str] | None = None , 
+        sorter : Base.alias.NamesType = None , 
+        screener : Base.alias.NamesType = None , 
         n_best : int = Const.Factor.FMP.creator['generator']['n_best'] , 
         turn_control : float = Const.Factor.FMP.creator['generator']['turn_control'] , 
         buffer_zone : float = Const.Factor.FMP.creator['generator']['buffer_zone'] , 
@@ -41,8 +41,8 @@ class BasicCreatorConfig:
         self.no_zone = no_zone
         self.indus_control = indus_control
         self.kwargs = kwargs
-        self.sorter : list[str] = [sorter] if isinstance(sorter , str) else (sorter or ['self'])
-        self.screener : list[str] = [screener] if isinstance(screener , str) else (screener or [])
+        self.sorter : list[str] = Base.ensure_name_list(sorter , []) or ['self']
+        self.screener : list[str] = Base.ensure_name_list(screener , [])
         self.screen_ratio : float = screen_ratio
         assert 'self' in (self.sorter + self.screener) , f'sorter or screener must contain "self" , but got {sorter} and {screener}'
         

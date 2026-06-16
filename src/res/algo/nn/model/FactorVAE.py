@@ -72,9 +72,11 @@ class FactorVAE(nn.Module):
         self.bn = nn.BatchNorm1d(1)
         self.sampling = VAESampling()
 
-    def forward(self, x : Tensor, y : Tensor | None = None , 
-                factor_noise : Tensor | None = None ,
-                alpha_noise : Tensor | None = None):
+    def forward(
+        self, x : Tensor, y : Tensor | None = None , 
+        factor_noise : Tensor | None = None ,
+        alpha_noise : Tensor | None = None
+    ):
         """
         in  : 
             x : [bs x seq_len x input_dim]

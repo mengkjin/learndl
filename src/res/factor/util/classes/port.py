@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Any , Literal
+from typing import Literal , cast
 
 from src.proj import Const , Base
 from src.data import DATAVENDOR
@@ -17,8 +17,10 @@ class Port:
     """portfolio realization of one day"""
     weight_eps = 1 / 10 ** Const.Factor.ROUNDING.weight
 
-    def __init__(self , port : pd.DataFrame | None , date : int | Any = -1 , 
-                 name : str | Any = 'default' , value : float = 1.) -> None:
+    def __init__(
+        self , port : pd.DataFrame | None , date : Base.intDate = -1 , 
+        name : str = 'default' , value : float = 1.
+    ) -> None:
         self.exists = port is not None 
         if port is None or port.empty:
             df = pd.DataFrame(columns=['secid','weight']).astype({'secid':int,'weight':float})
@@ -31,7 +33,7 @@ class Port:
             else:
                 df = df[['secid','weight']].reset_index(drop=True)
         self.port = df
-        self.date = date
+        self.date = int(date)
         self._name = name
         self.value = value
     def __len__(self): 
@@ -87,7 +89,7 @@ class Port:
         assert n < 0 , f'n must be non-positive! ({n})'
         return self.evolve_to_date(DATAVENDOR.td(self.date , n) , inplace)
     
-    def evolve_to_date(self , date : int | Any , inplace = False , rebalance = False):
+    def evolve_to_date(self , date : Base.intDate , inplace = False , rebalance = False):
         rslt = self if inplace else self.copy()
         if date == rslt.date: 
             return rslt
@@ -146,8 +148,10 @@ class Port:
         return self
 
     @classmethod
-    def create(cls , secid : np.ndarray | Any , weight : np.ndarray | Any , **kwargs):
-        weight = weight * ((weight >= cls.weight_eps) + (weight <= -cls.weight_eps))
+    def create(cls , secid : Base.alias.SecidType , weight : Base.alias.npValueType , **kwargs):
+        secid = Base.ensure_secid(secid , [])
+        weight = Base.ensure_npvalue(weight , np.ones(len(secid)))
+        weight = np.where((weight >= cls.weight_eps) + (weight <= -cls.weight_eps) , weight , 0)
         effective = weight != 0
         df = pd.DataFrame({'secid':secid[effective] , 'weight' : weight[effective]})
         return cls(df , **kwargs)
@@ -216,7 +220,7 @@ class Port:
         if name is not None: 
             new.with_name(name)
         if not new.emtpy and not another.emtpy:
-            combined : pd.DataFrame | Any= pd.concat([new.port, another.port], ignore_index=True).groupby('secid', as_index=False)['weight'].sum()
+            combined : pd.DataFrame = cast(pd.DataFrame, pd.concat([new.port, another.port], ignore_index=True).groupby('secid', as_index=False)['weight'].sum())
         elif new.emtpy:
             combined = another.port.copy()
         else:
@@ -230,7 +234,8 @@ class Port:
         turn = (self - another).port['weight'].abs().sum()
         return np.round(turn , Const.Factor.ROUNDING.turnover)
 
-    def filter_secid(self , secid : np.ndarray | Any | None = None , exclude = False):
+    def filter_secid(self , secid : Base.alias.SecidType , exclude = False):
+        secid = Base.ensure_secid(secid)
         if secid is None: 
             return self
         self.port = self.port.query('secid not in @secid' if exclude else 'secid in @secid')

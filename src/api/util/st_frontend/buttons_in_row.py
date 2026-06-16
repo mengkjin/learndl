@@ -1,4 +1,3 @@
-# coding: utf-8
 """Horizontal ``sac.buttons`` row where each entry has its own ``on_click`` handler."""
 
 from __future__ import annotations

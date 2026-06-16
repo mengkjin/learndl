@@ -5,7 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Any , Iterable
+from typing import Any
+from collections.abc import Iterable
 
 from src.proj import DB , Const , Base , Dates
 from src.data import DataBlock , DATAVENDOR
@@ -26,7 +27,7 @@ class Benchmark(Portfolio):
     CATEGORIES = Const.Factor.BENCH.categories
     NONE       = Const.Factor.BENCH.none
     
-    def __new__(cls , name : str | Any | None , *args , **kwargs):
+    def __new__(cls , name : Base.alias.SingleBenchmark , *args , **kwargs):
         name = cls.get_object_name(name)
         if name in cls._instance_dict:
             return cls._instance_dict[name]
@@ -37,7 +38,7 @@ class Benchmark(Portfolio):
         else:
             raise ValueError(name , cls.AVAILABLES + cls.NONE)
 
-    def __init__(self , name : str | Any | None) -> None:
+    def __init__(self , name : Base.alias.SingleBenchmark) -> None:
         if getattr(self , 'ports' , None): 
             return # avoid double initialization
         super().__init__(name)
@@ -92,16 +93,17 @@ class Benchmark(Portfolio):
         self.append(port)
         return port
     
-    def get_dates(self , dates : Base.alias.intDates):
+    def get_dates(self , dates : Base.intDates):
         dates = Dates(dates).diff(self.benchmark_attempted_dates)
         for d in dates: 
             self.get(d , closest = True)
 
-    def sec_num(self , date : np.ndarray | list):
+    def sec_num(self , date : Base.intDates):
+        dates = Base.ensure_date(date , [])
         if self:
-            return np.array([self.get(d).size for d in date]) 
+            return np.array([self.get(d).size for d in dates]) 
         else:
-            return np.array([DATAVENDOR.secid(d).size for d in date])
+            return np.array([DATAVENDOR.secid(d).size for d in dates])
 
     def universe(self , secid : np.ndarray , date : np.ndarray):
         assert self , 'No need of calculating universe for none benchmark'
@@ -128,7 +130,7 @@ class Benchmark(Portfolio):
         return factor_val.dropna(how = 'all')
     
     @classmethod
-    def day_port(cls , bm : Port|Portfolio|str|dict|Any , model_date : int , default_config = None) -> Port:
+    def day_port(cls , bm : Port | Portfolio | str | dict | Any , model_date : int , default_config = None) -> Port:
         if bm is None:
             if default_config:
                 return cls.day_port(default_config , model_date)
@@ -228,7 +230,8 @@ class Benchmark(Portfolio):
             raise ValueError(f'Unknown benchmark type: {type(benchmark)}')
     
     @classmethod
-    def defaults(cls): return [cls(bm) for bm in cls.DEFAULTS]
+    def defaults(cls): 
+        return [cls(bm) for bm in cls.DEFAULTS]
 
     @classmethod
     def as_category(cls , bm : Any):

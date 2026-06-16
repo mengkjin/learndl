@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 
 from functools import cached_property
-from typing import Any , ClassVar , Literal , Self , overload
+from typing import Any , ClassVar , Literal , Self , overload , TypeAlias , cast
 
 from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load , Dates
 from src.data.util import DataBlock
@@ -16,6 +16,8 @@ from src.res.model.util import PredictorPath , ModelConfig , DataModule , Predic
 from src.res.model.model_module.module import get_predictor_module
 
 __all__ = ['ArchivedPredictorModel']
+
+ModelNumInputType : TypeAlias = Base.intNums | Literal['all'] | Any | None
 
 class _Grads:
     def __init__(self , require_grad : bool = True):
@@ -40,15 +42,15 @@ class ArchivedPredictorModel(Base.BoundLogger):
         """Initialize from a PredictorPath object"""
     @overload
     def __init__(
-        self , model_input : Base.strPath | None | Any , 
-        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
+        self , model_input : Base.strPath | Any | None , 
+        model_num : ModelNumInputType = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1
     ) -> None:
         """Initialize from a model input, and convert to PredictorPath object"""
     def __init__(
-        self , model_input : Base.strPath | None | Any | PredictorPath, 
-        model_num : Base.alias.intNums | Literal['all'] | Any | None = None ,
+        self , model_input : Base.strPath | PredictorPath | Any | None , 
+        model_num : ModelNumInputType = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
         indent : int = 0 , vb_level : Any = 1 , **kwargs
     ) -> None:
@@ -217,7 +219,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             return model.get_batch_data(batch_input)
 
     def _get_dates(
-        self , dates : Base.alias.intDates | None = None , 
+        self , dates : Base.alias.DateType = None , 
         start : int | None = None , end : int | None = None , step : int = 1
     ) -> Dates:
         if start is not None or end is not None:
@@ -228,7 +230,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         return dates
 
     def iter_batch_data(
-        self , dates : Base.alias.intDates | None , model_date : int , * , 
+        self , dates : Base.alias.DateType , model_date : int , * , 
         start : int | None = None , end : int | None = None , step : int = 1 , 
         model_num : int | None = None , submodel : str | None = None , 
         require_grad = False , silent = True
@@ -236,7 +238,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         """
         Iterate batch data of a given model number, model date, start date, and end date
         Args:
-            dates : Base.alias.intDates | None , the dates to iterate
+            dates : Base.alias.DateType , the dates to iterate
             model_date : int, the model date of the archived model
             start : int | None = None, the start date, if given, iterate dates from start to end with step
             end : int | None = None, the end date, if given, iterate dates from start to end with step
@@ -271,16 +273,16 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     def hidden_block(
         self , 
-        dates : Base.alias.intDates | None , model_date : int , * , 
+        dates : Base.alias.DateType , model_date : int , * , 
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
-        align_secid : np.ndarray | None = None , align_date : np.ndarray | None = None ,
+        align_secid : Base.alias.SecidType = None , align_date : Base.alias.DateType = None ,
         load_first = True , silent = True
     ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
         Args:
-            dates : Base.alias.intDates | None , the dates to iterate
+            dates : Base.alias.DateType , the dates to iterate
             model_date : int, the model date of the archived model
             start : int | None = None, the start date, if given, iterate dates from start to end with step
             end : int | None = None, the end date, if given, iterate dates from start to end with step
@@ -324,9 +326,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
                 prefix = f'{self.pred_name} Hidden Values' , 
                 indent = self.indent + 1 , vb_level = self.vb_level + 1)
             
-        if align_secid is not None:
+        if (align_secid := Base.ensure_secid(align_secid)) is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))
-        if align_date is not None:
+        if (align_date := Base.ensure_date(align_date)) is not None:
             df = df.filter(pl.col('date').is_in(align_date))
 
         block = DataBlock.from_polars(df)
@@ -340,7 +342,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def hidden_values_path(self , model_num : int , model_date : int , submodel : str):
         return self.path.snapshot('hidden_values' , f'{model_num}.{model_date}.{submodel}.feather')
 
-    def predict_dates(self , dates : Base.alias.intDates | None) -> Self:
+    def predict_dates(self , dates : Base.alias.DateType) -> Self:
         """predict recent days"""
         dates = Dates(dates)
         if dates.empty: 
@@ -350,9 +352,11 @@ class ArchivedPredictorModel(Base.BoundLogger):
         if pred_dates.empty: 
             return self
         assert any(self.path.model_dates < pred_dates.min) , f'no model date before {pred_dates}'
-        df_task = pd.DataFrame({'pred_dates' : pred_dates , 
-                                'model_date' : [max(self.path.model_dates[self.path.model_dates < d]) for d in pred_dates] , 
-                                'calculated' : 0})
+        df_task = pd.DataFrame({
+            'pred_dates' : pred_dates , 
+            'model_date' : [max(self.path.model_dates[self.path.model_dates < d]) for d in pred_dates] , 
+            'calculated' : 0
+        })
         torch.set_grad_enabled(False)
         df_list : list[pd.DataFrame] = []
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
@@ -387,7 +391,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         for date , subdf in df.groupby(date_col):
             subdf = subdf.drop(columns='date').set_index(secid_col)
             self.path.set_vb(self.vb_level + 1 , self.indent + 1)
-            self.path.save_pred(subdf , date , overwrite)
+            self.path.save_pred(subdf , cast(int, date) , overwrite)
             self.current_update_dates.append(date)
         if not self.current_update_dates:
             self.logger.stdout(df)

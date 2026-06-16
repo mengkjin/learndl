@@ -41,9 +41,11 @@ class ExposureAccess(DateDataAccess):
         return self.get(date , 'daily_risk')
 
     def get_risks(
-        self , start : Base.alias.intDate , end : Base.alias.intDate ,
-        field : Literal['true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
-        'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'] | str | list , prev = False ,
+        self , start : Base.intDate , end : Base.intDate ,
+        field : Base.ArrayLike[Literal[
+            'true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
+            'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'
+        ] | str] , prev = False ,
         mask = False , pivot = False , **kwargs
     ) -> pd.DataFrame:
         """
@@ -52,6 +54,7 @@ class ExposureAccess(DateDataAccess):
         Optionally applies listing-date masking and pivots to wide format.
         The underlying cache is truncated after each call (``drop_old=True``).
         """
+        field = Base.ensure_name_list(field , [])
         qte = self.get_specific_data(
             start , end , 'daily_risk' , field = field , prev = prev , 
             mask = mask , pivot = False , drop_old = True)

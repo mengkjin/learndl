@@ -8,13 +8,14 @@ use ``TS.lock`` (via ``TS.locked()``) to serialise API calls.
 from __future__ import annotations
 import threading
 import functools
-
 import tushare as ts
 import numpy as np
 import pandas as pd
 
 from functools import cached_property
-from typing import Callable , TypeVar
+from typing import TypeVar
+from collections.abc import Callable
+
 from src.proj import CALENDAR , MACHINE , Base , Dates
 from src.data.util import secid_adjust
 
