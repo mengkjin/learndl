@@ -11,7 +11,7 @@ from abc import ABC , abstractmethod
 from datetime import datetime
 from matplotlib.figure import Figure
 from pathlib import Path
-from typing import Any  , Literal , TypeAlias
+from typing import Any  , TypeAlias
 from collections.abc import Callable
 
 from src.proj import PATH , DB , Base , Save
@@ -32,7 +32,7 @@ def _camel_to_snake(name : str) -> str:
     return re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
     
 class CalcWarningsManager(Base.BoundLogger):
-    def __init__(self , *args , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , *args , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.timer = self.logger.timer(*args , **kwargs)
     def __enter__(self):
@@ -107,7 +107,7 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
     def __init__(
         self , test_path : Base.strPath | None = None , 
         resume : bool = False, save_resumable : bool = False , start : int = -1 , end : int = 99991231 , 
-        which : Base.alias.NamesType | Literal['all'] = 'all' , **kwargs
+        which : Base.alias.NamesType | Base.ALL = 'all' , **kwargs
     ):
         super().__init__(**kwargs)
         candidates = {task.task_name():task for task in self.TASK_LIST}

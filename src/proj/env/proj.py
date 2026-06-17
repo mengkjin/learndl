@@ -1,6 +1,6 @@
 """Non-instantiable project facade: config namespaces, verbosity, logging, and shared instances."""
 from __future__ import annotations
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.__version__ import __version__
 from src.proj.core import Silence , NoInstanceMeta
@@ -10,6 +10,8 @@ from .verbosity import Verbosity , VerbosityLevel
 from .variable import LogWriterFile , UniqueFileList , InstanceCollection
 
 __all__ = ['Proj']
+
+InfoPrintType : TypeAlias = Literal['os', 'script'] | None
 
 class ProjMeta(NoInstanceMeta):
     """Metaclass for ``Proj``: blocks direct instantiation and exposes module-level descriptors."""
@@ -36,7 +38,7 @@ class Proj(metaclass=ProjMeta):
         return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
-    def print_info(cls , once_type : Literal['os', 'script'] | None = None , identifier = 'project_initialized'):
+    def print_info(cls , once_type : InfoPrintType = None , identifier = 'project_initialized'):
         """
         Print project info once per process (script: ``Proj.instances`` flag; OS: env var).
 

@@ -6,7 +6,7 @@ import pandas as pd
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any , ClassVar , Literal
+from typing import Any , ClassVar , Literal , TypeAlias
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.data import DATAVENDOR
@@ -15,6 +15,9 @@ from src.res.factor.fmp import PortfolioBuilder
 from src.res.factor.analytic.fmp_top import FrontFace , Perf_Curve , Perf_Excess , Drawdown , Perf_Year , TopCalc
 
 __all__ = ['TradingPort' , 'TrackingPort' , 'BacktestPort']
+
+TradingPortCategory : TypeAlias = Literal['top' , 'screen' , 'reinforce']
+WeightsType : TypeAlias = list[float] | Base.EQUAL | None
 
 TASK_LIST : list[type[TopCalc]] = [
     FrontFace , 
@@ -32,9 +35,9 @@ class TradingPort(Base.BoundLogger):
     name          : str 
     alpha         : str | list[str]
     universe      : str = 'top-500'
-    category      : Literal['top' , 'screen' , 'reinforce'] = 'top'
+    category      : TradingPortCategory = 'top'
     components    : Base.alias.NamesType = None
-    weights       : list[float] | Literal['equal'] | None = None
+    weights       : WeightsType = None
     top_num       : int = 50
     freq          : int | Base.lit.FreqUpdate = 1
     init_value    : float = 1e6
@@ -84,7 +87,7 @@ class TradingPort(Base.BoundLogger):
         self.last_ports : dict[int , pd.DataFrame] = {}
     
     @classmethod
-    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> TradingPort:
+    def load(cls , name : str , * , vb_level : Base.lit.VerbosityLevel | None = None , indent : int | None = None) -> TradingPort:
         """
         Load a trading port from given name.
         """
@@ -151,7 +154,7 @@ class TradingPort(Base.BoundLogger):
         return self.result_dir.joinpath(f'{self.name}_analytic_plot.pdf')
 
     @property
-    def trading_portfolio_type(self) -> Literal['tracking' , 'backtest']:
+    def trading_portfolio_type(self):
         """
         Trading portfolio type for the trading port (tracking or backtest).
         """
@@ -338,7 +341,7 @@ class TrackingPort(TradingPort):
     """
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.tracking_ports
     @classmethod
-    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> TrackingPort:
+    def load(cls , name : str , * , vb_level : Base.lit.VerbosityLevel | None = None , indent : int | None = None) -> TrackingPort:
         """
         Load a tracking port from given name.
         """
@@ -417,7 +420,7 @@ class BacktestPort(TradingPort):
     """
     candidate_ports : ClassVar[dict[str , dict]] = Const.TradingPort.backtest_ports
     @classmethod
-    def load(cls , name : str , * , vb_level : Any | None = None , indent : int | None = None) -> BacktestPort:
+    def load(cls , name : str , * , vb_level : Base.lit.VerbosityLevel | None = None , indent : int | None = None) -> BacktestPort:
         if name in cls.candidate_ports:
             kwargs : dict[str , Any] = {'name' : name , **cls.candidate_ports[name]} | {'backtest' : True}
             instance = cls(**kwargs)

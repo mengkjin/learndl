@@ -115,7 +115,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
             return 0.
         return prev_port.fut_ret(date)
 
-    def update_dates(self , dates : Base.alias.DateType , indent : int = 1 , vb_level : Any = 1) -> None:
+    def update_dates(self , dates : Base.alias.DateType , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1) -> None:
         """update index return for given dates"""
         dates = Dates(dates)
         if dates.empty:

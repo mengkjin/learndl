@@ -24,6 +24,12 @@ __all__ = ['PortfolioAccountant' , 'PortfolioAccountManager' , 'AccountInputData
 
 AccountInputDataType : TypeAlias = pd.DataFrame | pd.Series | np.ndarray | list[float]
 AccountInputType : TypeAlias = Portfolio | AccountInputDataType
+AccountAnalyticTaskType : TypeAlias = Literal[
+    'FrontFace' , 'Perf_Curve' , 'Perf_Drawdown' , 'Perf_Year' , 
+    'Perf_Month' , 'Perf_Excess' , 'Perf_Lag' , 'Exp_Style' , 
+    'Exp_Indus' , 'Attrib_Source' , 'Attrib_Style']
+PortCreatorType : TypeAlias = Literal['optim' , 'top']
+
 
 @dataclass(frozen=True)
 class AccountConfig:              
@@ -243,7 +249,7 @@ class PortfolioAccount:
             account.loc[date , 'attribution'] = v #type:ignore
         return cls(account.reset_index(drop = False) , index = index)
 
-    def save(self , path : Base.strPath | None = None , vb_level : Any = 1 , indent : int = 0 , async_save = True):
+    def save(self , path : Base.strPath | None = None , vb_level : Base.lit.VerbosityLevel = 1 , indent : int = 0 , async_save = True):
         if path is None or self.empty:
             return self
         path = Path(path)
@@ -379,7 +385,7 @@ class PortfolioAccountant(Base.BoundLogger):
             cls._instances[key] = instance
         return cls._instances[key]
     
-    def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
+    def __init__(self , portfolio : Portfolio , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.portfolio = portfolio
         self.account = PortfolioAccount()
@@ -542,7 +548,7 @@ class PortfolioAccountManager(Base.BoundLogger):
     """
     Manage portfolio accounts in a directory.
     """
-    def __init__(self , account_dir : Base.strPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , account_dir : Base.strPath , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.account_dir = Path(account_dir)
         self.account_dir.mkdir(exist_ok=True)
@@ -609,7 +615,7 @@ class PortfolioAccountManager(Base.BoundLogger):
         self.accounts.clear()
         return self
     
-    def deploy(self , fmp_names : Base.alias.NamesType = None , overwrite = False , indent : int = 0 , vb_level : Any = 1 , async_save = True):
+    def deploy(self , fmp_names : Base.alias.NamesType = None , overwrite = False , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , async_save = True):
         fmp_names = Base.ensure_name_list(fmp_names , list(self.accounts.keys()))
         fmp_paths = {name:self.account_dir.joinpath(f'{name}.tar') for name in fmp_names}
         if not overwrite:
@@ -619,7 +625,7 @@ class PortfolioAccountManager(Base.BoundLogger):
             self.accounts[name].save(fmp_paths[name] , indent = indent , vb_level = vb_level , async_save = async_save)
         return self
     
-    def select_analytic(self , category : Literal['optim' , 'top'] , task_name : str , **kwargs):
+    def select_analytic(self , category : PortCreatorType , task_name : str , **kwargs):
         from src.res.factor.analytic import OptimFMPTest , TopFMPTest , BaseFactorAnalyticCalculator
 
         task_list = TopFMPTest.TASK_LIST if category == 'top' else OptimFMPTest.TASK_LIST
@@ -633,12 +639,9 @@ class PortfolioAccountManager(Base.BoundLogger):
         return self.analytic_tasks[task_name]
     
     def analyze(
-        self , category : Literal['optim' , 'top'] ,
-        task_name : Literal[
-            'FrontFace', 'Perf_Curve', 'Perf_Drawdown', 'Perf_Year', 'Perf_Month',
-            'Perf_Excess','Perf_Lag','Exp_Style','Exp_Style','Exp_Indus',
-            'Attrib_Source','Attrib_Style'] , 
-        plot = True , display = True , **kwargs
+        self , category : PortCreatorType ,
+        task_name : AccountAnalyticTaskType , 
+        plot : bool = True , display : bool = True , **kwargs
     ):
         dfs = {name : df for name , df in self.accounts.items() if name.lower().startswith(category)}
         if not dfs: 

@@ -23,7 +23,7 @@ runs_page_url(script_key)
 from __future__ import annotations
 import os , sys , re , time
 import pandas as pd
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Sequence
 from dataclasses import dataclass , field , asdict
 from datetime import datetime
@@ -40,8 +40,10 @@ __all__ = [
     'TaskDatabase' , 'TaskQueue' , 'TaskItem' , 'runs_page_url'
 ]
 
-RunStatus = Literal['starting', 'running', 'complete', 'error' , 'killed']
-RunSource = Literal['script' , 'shell' , 'os'] | str
+RunStatus : TypeAlias = Literal['starting', 'running', 'complete', 'error' , 'killed']
+RunSource : TypeAlias = Literal['script' , 'shell' , 'os'] | str
+TimeType : TypeAlias = Literal['create', 'start', 'end']
+InfoType : TypeAlias = Literal['all' , 'enter' , 'exit']
 
 def timestamp() -> float:
     """Return the current UTC time as a POSIX timestamp (seconds since epoch)."""
@@ -862,7 +864,7 @@ class TaskItem:
         """Return True if this task was launched from *script_runner*'s script."""
         return self.script == str(script_runner.script)
 
-    def time_str(self , time_type : Literal['create', 'start', 'end'] = 'create' , format : str = '%Y-%m-%d %H:%M:%S') -> str:
+    def time_str(self , time_type : TimeType = 'create' , format : str = '%Y-%m-%d %H:%M:%S') -> str:
         """Return a formatted datetime string for the given time type.
 
         Returns ``'N/A'`` on conversion failure.
@@ -1293,8 +1295,9 @@ class TaskItem:
                            f"Dur: {self.duration_str}" ,
                            f"Exit Code: {self.exit_code}"])
 
-    def info_list(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all' ,
-                  sep_exit_files : bool = True) -> list[tuple[str, str]]:
+    def info_list(
+        self , info_type : InfoType = 'all' , sep_exit_files : bool = True
+    ) -> list[tuple[str, str]]:
         """Return a list of ``(label, value)`` pairs describing this task.
 
         Parameters
@@ -1336,7 +1339,7 @@ class TaskItem:
                     exit_info.append(('Exit Files', '\n'.join(self.exit_files)))
         return enter_info + exit_info
         
-    def dataframe(self , info_type : Literal['all' , 'enter' , 'exit'] = 'all') -> pd.DataFrame:
+    def dataframe(self , info_type : InfoType = 'all') -> pd.DataFrame:
         """Return task metadata as a two-column DataFrame (Item / Value)."""
         data_list = self.info_list(info_type = info_type)
         df = pd.DataFrame(data_list , columns = pd.Index(['Item', 'Value']))

@@ -1,7 +1,7 @@
 """Mutable training resume options and static model settings from configs."""
 
 from __future__ import annotations
-from typing import Literal
+
 from src.proj.core import SingletonMeta
 from src.proj.env.machine import MACHINE
 
@@ -25,14 +25,14 @@ class ModelConstants(metaclass=SingletonMeta):
         return value
 
     @property
-    def resume_test_start(self) -> Literal['last_model_date' , 'last_pred_date']:
+    def resume_test_start(self):
         """resume option of model train: if resume testing"""
         value = MACHINE.preference('model' , 'resuming_options/testing_start')
-        assert value in ['last_model_date' , 'last_pred_date'] , f'Invalid value: {value}'
+        assert value == 'last_model_date' or value == 'last_pred_date' , f'Invalid value: {value}'
         return value
 
     @property
-    def resume_fmp(self) -> Literal[False] | str:
+    def resume_fmp(self):
         """resume option of model train: if resume test fmp"""
         value = MACHINE.preference('model' , 'resuming_options/fmp')
         assert value is False or (isinstance(value , str) and value.startswith('trailing_')) , f'Invalid value: {value}'

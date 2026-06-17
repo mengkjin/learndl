@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import CALENDAR , Base
 from src.data import DATAVENDOR 
@@ -20,6 +20,8 @@ __all__ = [
     'calc_pnl_curve' , 'calc_style_corr' , 'calc_group_return' , 'calc_group_curve' , 
     'calc_group_decay' , 'calc_group_year' , 'calc_distrib_curve' , 'calc_distrib_qtile'
 ]
+
+DirectionType : TypeAlias = Literal[1,0,-1]
 
 def calc_frontface(
     factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
@@ -141,7 +143,7 @@ def calc_ic_monotony(
 def calc_pnl_curve(
     factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
     nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-    ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 ,
+    ret_type : Base.lit.ReturnType = 'close' , direction : DirectionType = 0 ,
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     pnl = factor.eval_weighted_pnl(nday , lag , group_num , ret_type , direction)

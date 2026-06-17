@@ -76,7 +76,7 @@ class DataCache:
             return None
         return PATH.datacache.joinpath(self.key)
 
-    def save_data(self , data : Any , * , vb_level : Any = 3 , **additional_metadata : Any):
+    def save_data(self , data : Any , * , vb_level : Base.lit.VerbosityLevel = 3 , **additional_metadata : Any):
         """Save the data to the cache file folder as 'data.pt' and update the metadata file"""
         if not self.key or not self.path:
             # if key is not created, the data is not saved (data_type_list is empty)
@@ -89,7 +89,7 @@ class DataCache:
         with self._get_lock(self.key):
             torch.save(data , self.path.joinpath('data.pt'))
 
-    def load_data(self , vb_level : Any = 3) -> tuple[Any , dict[str, Any]]:
+    def load_data(self , vb_level : Base.lit.VerbosityLevel = 3) -> tuple[Any , dict[str, Any]]:
         """Load the data from the cache file folder as 'data.pt' and metadata from 'metadata.json'"""
         if not self.path or not self.path.joinpath('data.pt').exists():
             return None , {}

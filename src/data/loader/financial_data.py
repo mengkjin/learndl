@@ -20,7 +20,7 @@ import re
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal , get_args
+from typing import Any , Literal , TypeAlias , get_args
 from src.proj import CALENDAR , DB
 
 from .access import DateDataAccess
@@ -30,14 +30,13 @@ __all__ = [
 ]
 
 ANN_DATA_COLS : tuple[str,...] = ('f_ann_date' , 'ann_date')
-
-FSType = Literal['is' , 'cf' , 'indi' , 'bs'] 
-FsOper = Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq']
-FsCat  = Literal['latest' , 'hist']
-QtrMethod = Literal['diff' , 'exact']
-QoQMethod = Literal['qtr' , 'ttm' , 'acc']
-YoyMethod = Literal['qtr' , 'ttm' , 'acc']
-DiffMethod = Literal['pct' , 'diff']
+FSType : TypeAlias = Literal['is' , 'cf' , 'indi' , 'bs'] 
+FsOper : TypeAlias = Literal['ttm' , 'qtr' , 'acc' , 'yoy' , 'qoq']
+FsCat : TypeAlias = Literal['latest' , 'hist']
+QtrMethod : TypeAlias = Literal['diff' , 'exact']
+QoQMethod : TypeAlias = Literal['qtr' , 'ttm' , 'acc']
+YoyMethod : TypeAlias = Literal['qtr' , 'ttm' , 'acc']
+DiffMethod : TypeAlias = Literal['pct' , 'diff']
 
 def _calc_diff(df : pd.DataFrame , shift : int = 1 , method : DiffMethod | None = 'pct'):
     method = method or 'pct'

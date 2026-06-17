@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import ValueFactor
@@ -17,10 +17,13 @@ __all__ = [
     'stop_stability'
 ]
 
+ReindexLike : TypeAlias = Literal['numerator' , 'denominator']
+DenominatorType : TypeAlias = Literal['mv' , 'ev'] | str
+
 def calc_stability(
     numerator : pd.DataFrame | pd.Series | float | int , 
     denominator : pd.DataFrame | pd.Series | float | int , 
-    reindex_like : Literal['numerator' , 'denominator'] = 'denominator'
+    reindex_like : ReindexLike = 'denominator'
 ):
     if isinstance(numerator , pd.DataFrame) and isinstance(denominator , pd.DataFrame):
         union_index = numerator.index.union(denominator.index).sort_values()
@@ -53,7 +56,7 @@ def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
     ev = mv + added
     return ev
 
-def get_denominator_hist(denominator : Literal['mv', 'ev'] | str , date : int , n_year = 3 , date_step = 21):
+def get_denominator_hist(denominator : DenominatorType , date : int , n_year = 3 , date_step = 21):
     if denominator == 'mv':
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
         v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 

@@ -3,7 +3,7 @@ API for test operations of this project.
 """
 
 from __future__ import annotations
-from typing import Any
+
 from src.proj import Logger , Base
 
 
@@ -16,7 +16,8 @@ class TestAPI:
         cls , names : str = '' , factor_type : Base.lit.FactorType = 'factor' , 
         benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         start : int = 20240101 , end : int | None = None , step : int = 5 ,
-        write_down : bool = True , display_figs : bool = False , indent : int = 0 , vb_level : Any = 1 , 
+        write_down : bool = True , display_figs : bool = False , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , 
     ):
         """
         Run top fmp test on factors resolved via ``get_factor``.

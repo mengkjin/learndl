@@ -2,10 +2,12 @@
 from __future__ import annotations
 import os
 import functools
-from typing import Any  , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable, Iterable
 
 __all__ = ['Once']
+
+OnceObject : TypeAlias = Any | Literal['os'] | None
 
 class Once:
     """
@@ -56,7 +58,7 @@ class Once:
     @classmethod
     def run(
         cls, func: Callable, func_args : Iterable, func_kwargs : dict , 
-        mark: Any = 'default' , object: Any | Literal['os'] | None = None
+        mark: Any = 'default' , object: OnceObject = None
     ) -> Any:
         with cls.get_lock():
             if object is None:

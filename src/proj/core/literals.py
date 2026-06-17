@@ -2,6 +2,13 @@
 from __future__ import annotations
 from typing import Literal , TypeAlias
 
+ALL : TypeAlias = Literal['all']
+ANY : TypeAlias = Literal['any']
+NONE : TypeAlias = Literal['none']
+SELF : TypeAlias = Literal['self']
+RANDOM : TypeAlias = Literal['random']
+EQUAL : TypeAlias = Literal['equal']
+
 # proj package
 VerbosityLevel : TypeAlias = Literal['max','min','never','always'] | int
 PandasAccelerator : TypeAlias = Literal['thread' , 'dask' , 'polars' , 'polars_thread']

@@ -9,7 +9,7 @@ on the configured ``navigation_position``.
 from __future__ import annotations
 import streamlit as st
 import streamlit_antd_components as sac
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import Const
 from src.api.interactive.util.session_control import SC 
@@ -18,6 +18,8 @@ __all__ = [
     'page_config' , 'top_navigation' , 'custom_sidebar_navigation' , 'page_setup' ,
     'intro_links' , 'script_links'
 ]
+
+NavigationPosition : TypeAlias = Literal['top' , 'sidebar' , 'both']
 
 def page_config() -> None:
     """Configure the Streamlit page and apply custom CSS styling.
@@ -34,7 +36,7 @@ def page_config() -> None:
     from src.api.interactive.util.style import apply_style
     apply_style()
 
-def top_navigation(position : Literal['top',  'hidden'] = 'top'):
+def top_navigation(hidden : bool = False):
     """Build a Streamlit multi-page navigation object grouped by page category.
 
     Groups intro pages under ``'Intro'`` and script pages under
@@ -54,7 +56,7 @@ def top_navigation(position : Literal['top',  'hidden'] = 'top'):
         if group_name not in pages: 
             pages[group_name] = []
         pages[group_name].append(page['page'])
-    pg = st.navigation(pages = pages , position=position)
+    pg = st.navigation(pages = pages , position='hidden' if hidden else 'top')
     if intro_only:
         # Combine page targets into a single hidden rule block
         hidden_idx = len(pages[''])
@@ -138,7 +140,7 @@ def script_links() -> None:
                     st.page_link(page['page'] , label = '> '.join([*parts[1:]]) , icon = page['icon'] , help = f":blue[**{parts[0].upper()}**] - {page['help']}" , width = 'stretch')
             group = page['group']
 
-def page_setup(navigation_position : Literal['top', 'sidebar', 'both'] | None = None):
+def page_setup(navigation_position : NavigationPosition | None = None):
     """Apply page config and build navigation according to ``navigation_position``.
 
     - ``'top'``    — top bar only (hidden sidebar nav)
@@ -154,10 +156,7 @@ def page_setup(navigation_position : Literal['top', 'sidebar', 'both'] | None = 
     if navigation_position is None:
         navigation_position = Const.Pref.interactive.get('navigation_position' , 'both')
     page_config()
-    if navigation_position == 'top' or navigation_position == 'both':
-        pg = top_navigation('top')
-    else:
-        pg = top_navigation('hidden')
+    pg = top_navigation(hidden = navigation_position == 'sidebar')
     if navigation_position == 'sidebar' or navigation_position == 'both':
         custom_sidebar_navigation()
     return pg

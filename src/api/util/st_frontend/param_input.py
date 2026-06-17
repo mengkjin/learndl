@@ -7,7 +7,7 @@ which renders a complete parameter form for a given script and manages the
 option ↔ value transformation pipeline.
 """
 from __future__ import annotations
-from typing import Literal , Any
+from typing import Literal , TypeAlias , Any , cast
 from collections.abc import Callable
 import streamlit as st
 import ast
@@ -19,7 +19,10 @@ from src.api.util.backend import ScriptRunner , ScriptParamInput , TaskItem
 
 __all__ = ['WidgetParamInput' , 'ParamInputsForm' , 'ParamCache']
 
-CacheType = Literal['option' , 'value' , 'valid']
+CacheType : TypeAlias = Literal['option' , 'value' , 'valid']
+ScriptParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
+ParamFormType : TypeAlias = Literal['customized', 'form']
+NarrowedParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'enum']
 
 class NoCachedValue:
     """Sentinel type returned when a cache lookup finds no stored value."""
@@ -90,7 +93,7 @@ class WidgetParamInput:
     """Streamlit-aware extension of :class:`ScriptParamInput`."""
     runner_key: str
     name: str
-    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
+    type: ScriptParamType
     desc: str
     required: bool = False
     default: Any = None
@@ -318,7 +321,7 @@ class ParamInputsForm:
         widgets = [frozen_widget] + [WidgetParamInput.from_endpoint_parameter(endpoint.runner_key, p , help_info_dict = help_info_dict) for p in endpoint.parameters]
         return cls(endpoint.runner_key, widgets, cache, item)
 
-    def init_param_inputs(self , type : Literal['customized', 'form'] = 'customized' , cmd : str | None = None) -> ParamInputsForm:
+    def init_param_inputs(self , type : ParamFormType = 'customized' , cmd : str | None = None) -> ParamInputsForm:
         """Render the parameter form widgets.
 
         Parameters
@@ -699,7 +702,7 @@ def annotation_to_type_enum(
     annotation: str,
     *,
     default: Any = None,
-) -> tuple[Literal["str", "int", "float", "bool", "enum"], list[str] | None]:
+) -> tuple[NarrowedParamType, list[str] | None]:
     """Infer ``(widget_type, enum_options)`` from a string annotation."""
     raw = (annotation or "").strip()
     if not raw:
@@ -752,7 +755,7 @@ def signature_row_to_input_param(row: dict[str, Any] , help_info_dict : dict[str
         t = str(ovr["type"])
         if t not in ["str", "int", "float", "bool", "enum"]:
             raise ValueError(f"invalid override.type {t!r} for parameter {name!r}")
-        wtype: Literal["str", "int", "float", "bool", "enum"] = t  # type: ignore[assignment]
+        wtype = cast(NarrowedParamType, t)
         if wtype == "enum":
             opts = ovr.get("enum")
             if not isinstance(opts, list) or not opts:

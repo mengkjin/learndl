@@ -1,5 +1,6 @@
 from src.proj.core.types import *
-from src.proj.core import lit , alias
+from src.proj.core import lit
+from . import alias
 from .enums import *
 from .classes import *
 from .metas import *

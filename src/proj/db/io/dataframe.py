@@ -8,7 +8,7 @@ import os
 from uuid import uuid4
 
 from pathlib import Path
-from typing import Any , Literal , TYPE_CHECKING
+from typing import Any , Literal , TypeAlias , TYPE_CHECKING
 from collections.abc import Mapping, Iterable, Callable
 
 from src.proj.env import MACHINE
@@ -18,10 +18,14 @@ from src.proj.core.literals import PandasAccelerator , PolarsAccelerator
 
 from src.proj.db.basic import DF_SUFFIX , path_date , dfHandler
 
+WriteMode : TypeAlias = Literal['a' , 'w']
 if TYPE_CHECKING:
     import polars as pl
-    PL_MAPPER_TYPE = Iterable[Callable[[pl.DataFrame], pl.DataFrame]] | Callable[[pl.DataFrame], pl.DataFrame] | None
-    PD_MAPPER_TYPE = Iterable[Callable[[pd.DataFrame], pd.DataFrame]] | Callable[[pd.DataFrame], pd.DataFrame] | None
+    PlCallable : TypeAlias = Callable[[pl.DataFrame], pl.DataFrame]
+    PdCallable : TypeAlias = Callable[[pd.DataFrame], pd.DataFrame]
+    PlMapper : TypeAlias = Iterable[PlCallable] | PlCallable | None
+    PdMapper : TypeAlias = Iterable[PdCallable] | PdCallable | None
+
     
 __all__ = [
     'save_df' , 'append_df' , 
@@ -35,7 +39,7 @@ class dfIOHandler:
     def load_pandas(
         cls , path : strPath | io.BytesIO , * , 
         missing_ok = True , 
-        mapper : PD_MAPPER_TYPE = None
+        mapper : PdMapper = None
     ) -> pd.DataFrame:
         """load dataframe from path"""
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
@@ -52,7 +56,7 @@ class dfIOHandler:
         return df
 
     @classmethod
-    def load_polars(cls , path : strPath | io.BytesIO , * , missing_ok = True , mapper : PL_MAPPER_TYPE = None) -> pl.DataFrame:
+    def load_polars(cls , path : strPath | io.BytesIO , * , missing_ok = True , mapper : PlMapper = None) -> pl.DataFrame:
         """load dataframe from path"""
         import polars as pl
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
@@ -119,7 +123,7 @@ class dfIOHandler:
     def load_pandas_multiple(
         cls , paths : strPaths , * ,
         accelerator : PandasAccelerator | None = 'thread' , 
-        mapper : PD_MAPPER_TYPE = None
+        mapper : PdMapper = None
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
         paths = {d:p for d,p in cls.to_path_dict(paths).items() if p.exists()}
@@ -155,7 +159,7 @@ class dfIOHandler:
     def load_polars_multiple(
         cls , paths : strPaths , * , 
         accelerator : PolarsAccelerator | None = 'thread' , 
-        mapper : PL_MAPPER_TYPE = None ,
+        mapper : PlMapper = None ,
     ) -> dict[int | Any, pl.DataFrame]:
         """
         load dataframe from multiple paths in accelerating mode
@@ -231,7 +235,7 @@ def load_df(
     path : strPath | strPaths , * , 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
     accelerator : PandasAccelerator | None = 'thread' , 
-    mapper : PD_MAPPER_TYPE = None
+    mapper : PdMapper = None
 ):
     """
     load dataframe from path or paths
@@ -277,7 +281,7 @@ def load_df(
 def load_dfs(
     paths : strPath | strPaths , * ,  
     accelerator : PandasAccelerator | None = 'thread' , 
-    mapper : PD_MAPPER_TYPE = None , **kwargs
+    mapper : PdMapper = None , **kwargs
 ) -> dict[int | Any, pd.DataFrame]:
     """
     load dataframe from multiple paths , return dict of date and dataframe
@@ -298,7 +302,7 @@ def load_df_pl(
     path : strPath | strPaths , *, 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
     accelerator : PolarsAccelerator | None = 'thread' , 
-    mapper : PL_MAPPER_TYPE = None
+    mapper : PlMapper = None
 ) -> pl.DataFrame:
     """
     load polars dataframe from path or paths
@@ -340,7 +344,7 @@ def load_df_pl(
 def load_dfs_pl(
     paths : strPaths , * ,  
     accelerator : PolarsAccelerator | None = 'thread' , 
-    mapper : PL_MAPPER_TYPE = None
+    mapper : PlMapper = None
 ) -> dict[int | Any, pl.DataFrame]:
     """
     load dataframe from multiple paths
@@ -375,7 +379,7 @@ def load_df_min_date(path : strPath , key_column : str = 'date') -> int:
 
 def dfs_to_excel(
     dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , 
-    mode : Literal['a','w'] = 'w' , sheet_prefix = '' , prefix : str | None = None , 
+    mode : WriteMode = 'w' , sheet_prefix = '' , prefix : str | None = None , 
     indent : int = 1 , vb_level : lit.VerbosityLevel = 3
 ):
     """Write each DataFrame to a sheet; optionally log via ``Logger.footnote``.

@@ -6,7 +6,7 @@ import torch
 import pandas as pd
 from datetime import datetime
 from functools import wraps
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj import Base
@@ -15,9 +15,11 @@ from .memory import MemoryManager
 
 __all__ = ['AccTimer' , 'gpTimer']
 
+TimerLevel : TypeAlias = Literal[1,2,3,4,5]
+
 class AccTimer(Base.BoundLogger):
-    def __init__(self , key , title = '' , timer_level : Literal[1,2,3,4,5] = 3 , * , 
-        indent : int = 1 , vb_level : Any = 2 , memory_check = False , **kwargs):
+    def __init__(self , key , title = '' , timer_level : TimerLevel = 3 , * , 
+        indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2 , memory_check = False , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.key = key
         self.title = title.title()
@@ -90,7 +92,7 @@ class gpTimer(Base.BoundLogger):
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , record = False , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+    def __init__(self , record = False , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(record)
 
@@ -109,7 +111,7 @@ class gpTimer(Base.BoundLogger):
     def __bool__(self): 
         return self.recording
     def timer(self , category : str , key : str , title : str = '' , memory_check = False , 
-              timer_level : Literal[1,2,3,4,5] = 3) -> AccTimer:
+              timer_level : TimerLevel = 3) -> AccTimer:
         if category not in self.timers.keys():
             self.timers[category] = {}
         if key not in self.timers[category].keys():

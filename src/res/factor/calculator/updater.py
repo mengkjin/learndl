@@ -34,7 +34,7 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
     """manager of factor update jobs"""
     update_type : Base.lit.FactorMetaType | Base.lit.FactorStatsType
 
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.jobs = BaseUpdateJobList(f'{self.name} Factor Jobs')
     

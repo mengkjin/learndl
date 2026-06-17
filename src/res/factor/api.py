@@ -3,8 +3,6 @@ Factor related API for the project
 """
 from __future__ import annotations
 
-from typing import Any , Literal
-from collections.abc import Iterable
 
 from src.proj import Base
 from src.res.factor.util import StockFactor
@@ -111,7 +109,7 @@ class FactorTestAPI:
         factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
         test_path : Base.strPath | None = None , 
         resume : bool = False , save_resumable : bool = False , 
-        indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , start : int = -1 , end : int = 99991231 ,
         write_down = False , display_figs = False , **kwargs
     ):
         test_type = Base.TestType(test_type)
@@ -127,15 +125,20 @@ class FactorTestAPI:
         return testor
 
     @classmethod
-    def create(cls , test_type : Base.TestType ,
-               test_path : Base.strPath | None = None , resume : bool = False , save_resumable : bool = False ,
-               start : int = -1 , end : int = 99991231 ,**kwargs):
+    def create(
+        cls , test_type : Base.TestType ,
+        test_path : Base.strPath | None = None , 
+        resume : bool = False , save_resumable : bool = False ,
+        start : int = -1 , end : int = 99991231 , **kwargs
+    ):
         testor_type = cls.get_test_class(test_type)
         testor = testor_type.create(test_path , resume , save_resumable , start , end , **kwargs)
         return testor
 
     @classmethod
-    def last_portfolio_date(cls , test_path : Base.strPath , test_types : Base.TestType | Iterable[Base.TestType] | Literal['all']):
+    def last_portfolio_date(
+        cls , test_path : Base.strPath , 
+        test_types : Base.IterableLike[Base.TestType]):
         last_portfolio_dates = []
         for test_type in Base.TestType.ensure_list(test_types):
             last_portfolio_date = cls.get_test_class(test_type).last_portfolio_date(test_path)
@@ -150,7 +153,7 @@ class FactorTestAPI:
     def FactorPerf(
         cls , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
         test_path : Base.strPath | None = None , resume : bool = False , 
-        indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , start : int = -1 , end : int = 99991231 ,
         write_down = False , display_figs = False , save_resumable : bool = False , **kwargs
     ):
         pm = cls.run_test('factor' , factor , benchmarks , test_path , resume , save_resumable , 
@@ -162,7 +165,7 @@ class FactorTestAPI:
     def FmpOptim(
         cls , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         test_path : Base.strPath | None = None , resume : bool = False , 
-        indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , start : int = -1 , end : int = 99991231 ,
         write_down = False , display_figs = False , save_resumable : bool = False , **kwargs
     ):
         pm = cls.run_test('optim' , factor , benchmarks , test_path , resume , save_resumable , 
@@ -175,7 +178,7 @@ class FactorTestAPI:
     def FmpTop(
         cls , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         test_path : Base.strPath | None = None , resume : bool = False , 
-        indent : int = 0 , vb_level : Any = 1 , start : int = -1 , end : int = 99991231 ,
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , start : int = -1 , end : int = 99991231 ,
         write_down = False , display_figs = False , save_resumable : bool = False , **kwargs
     ):
         pm = cls.run_test('top' , factor , benchmarks , test_path , resume , save_resumable , 

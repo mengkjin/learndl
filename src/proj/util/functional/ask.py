@@ -3,19 +3,19 @@ from __future__ import annotations
 
 import sys
 from IPython.core.getipython import get_ipython
-from typing import Any , Literal  , Generic , TypeVar , Self
+from typing import Any , Literal , TypeAlias , Generic , TypeVar , Self
 from collections.abc import Generator
 
 from src.proj.log import Logger
 
 __all__ = ['AskFor']
 
+AskFlagType : TypeAlias = Literal['yes' , 'no' , 'abort']
+T = TypeVar('T')
+
 def _print_title(title : str):
     if title:
         Logger.stdout(f'{title}' , color = 'lightpurple')
-
-AskFlagType = Literal['yes' , 'no' , 'abort']
-T = TypeVar('T')
 class AskFlag(Generic[T]):
     """
     Ask for confirmation, selections, or retry.

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sys
-from typing import Literal
+from typing import Literal , TypeAlias
 
 __all__ = ["compose_with_done_action" , "DoneActionType"]
 
-DoneActionType = Literal['pause' , 'close' , 'keep']
+DoneActionType : TypeAlias = Literal['pause' , 'close' , 'keep']
 
 _WIN_ACTION_SUFFIX : dict[DoneActionType , str] = {
     'pause': " & echo. & echo Task complete. Press any key to exit... & timeout /t -1 >nul & exit",

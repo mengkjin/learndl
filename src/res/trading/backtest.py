@@ -3,7 +3,6 @@ Backtest portfolio manager class for the project.
 """
 
 from __future__ import annotations
-from typing import Any
 
 from src.proj import CALENDAR , Base , Dates
 from .trading_port import BacktestPort
@@ -31,7 +30,7 @@ class BacktestPortfolioManager(Base.BoundLogger):
         return tp.build(date).analyze(start = start , end = end , **kwargs)
 
     @classmethod
-    def rebuild(cls , port_name : str , date : int | None = None , export = True , analyze = True , indent : int = 1 , vb_level : Any = 2):
+    def rebuild(cls , port_name : str , date : int | None = None , export = True , analyze = True , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         """
         Rebuild a backtest port.
         """
@@ -43,7 +42,7 @@ class BacktestPortfolioManager(Base.BoundLogger):
         return tp
 
     @classmethod
-    def update(cls , reset_ports : Base.alias.NamesType = None , indent : int = 0 , vb_level : Any = 1):
+    def update(cls , reset_ports : Base.alias.NamesType = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1):
         """
         Update all or specific backtest ports.
         """

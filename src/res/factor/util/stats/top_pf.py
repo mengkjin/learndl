@@ -4,7 +4,7 @@ Statistical functions for Top Portfolio
 from __future__ import annotations
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.res.factor.util.agency import BaseConditioner
 from .basic import eval_pf_stats , eval_cum_ret , eval_drawdown
@@ -14,6 +14,8 @@ __all__ = [
     'calc_perf_excess_drawdown' , 'calc_perf_period' , 'calc_perf_year' , 'calc_perf_month' , 
     'calc_exp_style' , 'calc_exp_indus' , 'calc_attrib_source' , 'calc_attrib_style'
 ]
+
+PeriodType : TypeAlias = Literal['year' , 'yearmonth' , 'month']
 
 def _filter_account(acc : pd.DataFrame , lag0 = True , pos_model_date = False):
     """drop lag if exists , and select lag0"""
@@ -88,7 +90,7 @@ def calc_perf_excess_drawdown(acc : pd.DataFrame):
     df = df.set_index('trade_date' , append=True).loc[:,['excess' , 'drawdown']]
     return df
 
-def calc_perf_period(acc : pd.DataFrame , period : Literal['year' , 'yearmonth' , 'month'] = 'year'):
+def calc_perf_period(acc : pd.DataFrame , period : PeriodType = 'year'):
     """Calculate performance stats for each period"""
     if period=='year': 
         acc[period] = acc['end'].astype(str).str[:4]

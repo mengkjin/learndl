@@ -1,12 +1,13 @@
 """ABC for database path"""
 from __future__ import annotations
-from typing import Literal
+from typing import Literal , TypeAlias
 
 __all__ = [
     'DF_SUFFIX' , 'SRC_ALTERNATIVES' , 'DB_BY_NAME' , 'DB_BY_DATE' , 
     'EXPORT_BY_NAME' , 'EXPORT_BY_DATE' , 'TAR_SUFFIXES']
 
-DF_SUFFIX : Literal['feather' , 'parquet'] = 'feather'
+DfSuffix : TypeAlias = Literal['feather' , 'parquet']
+DF_SUFFIX : DfSuffix = 'feather'
 TAR_SUFFIXES : tuple[str, ...] = ('.tar' , '.tar.gz' , '.tar.bz2' , '.tar.xz' , '.tar.zst')
 
 SRC_ALTERNATIVES : dict[str , tuple[str,...]] = {

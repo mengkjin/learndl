@@ -1,6 +1,5 @@
 """Low-level utils: timing, silence, colored terminal I/O, singletons, HTML helpers, ``Once``."""
-from .func import as_int_array , as_float_array , as_str_array
-from .types import strPath , strPaths , intNums , intDate , intDateNone , intDates , intDatesNone , StrEnum
+from .types import *
 from .duration import Elapsed , Since
 from .silence import Silence
 from .output import stdout , stderr , FormatStr
@@ -10,4 +9,3 @@ from .once import Once
 from .trade_date import TradeDate
 
 from . import literals as lit
-from . import alias

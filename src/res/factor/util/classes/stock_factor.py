@@ -36,6 +36,7 @@ __all__ = ['StockFactor' , 'CacheFactorStats' , 'FactorStats']
 
 dfAny : TypeAlias = pd.DataFrame | Any
 seriesAny : TypeAlias = pd.Series | Any
+DirectionType : TypeAlias = Literal[1,0,-1]
 
 def append_indus(df : pd.DataFrame) -> pd.DataFrame:
     """
@@ -1022,9 +1023,11 @@ class StockFactor:
         stat = self.cache_factor_stats.group_perf.get_stat(params)
         return stat if all_dates else stat.query('date in @self.date')
     
-    def eval_weighted_pnl(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                          ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 ,
-                          use_cache = True , all_dates = False) -> pd.DataFrame:
+    def eval_weighted_pnl(
+        self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
+        ret_type : Base.lit.ReturnType = 'close' , direction : DirectionType = 0 ,
+        use_cache = True , all_dates = False
+    ) -> pd.DataFrame:
         """
         evaluate the weighted pnl of the factor
         """

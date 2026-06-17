@@ -4,18 +4,21 @@ Correlation volume-price factors for stock level0
 from __future__ import annotations
 import numpy as np
 
-from typing import Literal
+from typing import Literal , TypeAlias
 from src.data import DATAVENDOR
 from src.res.factor.calculator import CorrelationFactor
-
 
 __all__ = [
     'turnvp_corr1m' , 'turnvp_corr2m' , 'turnvp_corr3m' , 'turnvp_corr6m' , 'turnvp_corr12m'
 ]
 
-def vp_correlation(date , n_months : int , volume_type : Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr'] = 'volume' ,
-                   price_type : Literal['open' , 'high' , 'close' , 'low' , 'vwap'] = 'close' ,
-                   min_finite_ratio = 0.25):
+VolumeType : TypeAlias = Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr']
+PriceType : TypeAlias = Literal['open' , 'high' , 'close' , 'low' , 'vwap']
+
+def vp_correlation(
+    date , n_months : int , volume_type : VolumeType = 'volume' ,
+    price_type : PriceType = 'close' , min_finite_ratio = 0.25
+):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     
     volume = DATAVENDOR.TRADE.get_quotes(start, end , volume_type , pivot = True)

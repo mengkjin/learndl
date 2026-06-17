@@ -16,7 +16,7 @@ from .memory import MemoryManager
 __all__ = ['EliteGroup' , 'EliteBlock']
 
 class EliteGroup(Base.BoundLogger):
-    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+    def __init__(self , start_i_elite = 0 , device = None , block_max_len = 50 , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.start_i_elite = start_i_elite
         self.elite_count   = 0
@@ -140,7 +140,7 @@ class EliteGroup(Base.BoundLogger):
         return corr_mat
     
 class EliteBlock(Base.BoundLogger):
-    def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , max_len = 50 , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.max_len = max_len
         self.names : list[str] = []

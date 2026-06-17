@@ -9,7 +9,7 @@ import torch
 
 from datetime import datetime
 from pathlib import Path
-from typing import Literal , Any
+from typing import Literal , Any , TypeAlias
 from collections.abc import Sequence
 
 from src.proj import PATH , Base , Load
@@ -19,7 +19,7 @@ from .status import gpStatus
 
 __all__ = ['gpRecorder']
 
-gpStateType = Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params']
+gpStateType : TypeAlias = Literal['res' , 'neu' , 'elt' , 'elitelog' , 'hoflog' , 'secid' , 'date' , 'runtime' , 'params']
 
 class gpRecorder(Base.BoundLogger):
     """process recorder for genetic programming"""
@@ -31,7 +31,7 @@ class gpRecorder(Base.BoundLogger):
 
     def __init__(
         self , job_dir : Base.strPath | None = None , status : gpStatus | None = None , *args ,
-        indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_dir , status , *args , **kwargs)
 

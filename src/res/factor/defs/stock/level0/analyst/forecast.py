@@ -2,7 +2,7 @@
 Forecast factors for the project
 """
 from __future__ import annotations
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import ForecastFactor
@@ -20,11 +20,14 @@ __all__ = [
     'price_potential'
 ]
 
-ValType = Literal['sales' , 'np' , 'tp' , 'op']
-ValExpandedType = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
+ValType : TypeAlias = Literal['sales' , 'np' , 'tp' , 'op']
+ValExpandedType : TypeAlias = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
 
-def val_cagr(date : int , val : ValType, forward_years : Literal[1,2] = 1 , 
-             n_month : int = 12 , lag_month : int = 0):
+def val_cagr(
+    date : int , val : ValType, forward_years : int = 1 , 
+    n_month : int = 12 , lag_month : int = 0
+):
+    assert forward_years in [1,2] , 'forward_years must be 1 or 2'
     year = date // 10000
     month = date // 100 % 100
     real_year = (year - 1) if month >= 5 else (year - 2)

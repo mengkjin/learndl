@@ -9,7 +9,6 @@ and calls their ``update()`` or ``rollback()`` methods.
 CSV backup data that supplements the live Tushare pipeline.
 """
 from __future__ import annotations
-from typing import Any
 from collections.abc import Generator
 
 from src.proj import Base
@@ -31,12 +30,12 @@ class TushareDataDownloader(Base.BasicUpdater):
     @classmethod
     def proceed_update(
         cls , update_type : Base.UpdateType , rollback_date : int | None = None , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs
+        **kwargs
     ) -> Base.UpdateFlag:
         flags = Base.UpdateFlagList()
         rollback_date = rollback_date if update_type == Base.UpdateType.ROLLBACK else None
         TSBackUpDataTransform.clear(rollback_date = rollback_date)
         for fetcher in cls.iter_fetchers():
-            flags += fetcher.update(rollback_date = rollback_date , indent = indent + 1 , vb_level = vb_level + 1)
+            flags += fetcher.update(rollback_date = rollback_date , indent = cls.indent + 1 , vb_level = cls.vb_level + 1)
         TSBackUpDataTransform.update()
         return flags.summarize()

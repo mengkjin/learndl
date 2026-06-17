@@ -6,16 +6,20 @@ import traceback
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any  , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable, Sequence
 
 from src.proj.env import PATH , Proj
 from src.proj.core import Elapsed , Since , stdout , stderr , FormatStr , Once , Silence , StrEnum
 from src.proj.core.literals import VerbosityLevel
+from src.proj.core.once import OnceObject
 from .display import Display
 from .logfile import LogFile
 
 __all__ = ['Logger' , 'StderrType' , 'StdoutType' , 'LOG_FILE' , 'ENTRY_POINT']
+
+SeperatorChar : TypeAlias = Literal['-' , '=' , '*']
+ParagraphLevel : TypeAlias = Literal[1,2,3,4,5]
 
 LOG_FILE = LogFile.initialize('main' , 'project' , rotate = True)
 ENTRY_POINT = Path(sys.argv[0]).stem
@@ -372,7 +376,7 @@ class Logger:
         new_stderr(*args , **_combine_kwargs(StderrType.CRITICAL.palette , kwargs | {'vb_level' : 0}))
 
     @classmethod
-    def only_once(cls , *args , object : Any | Literal['os', 'logger'] | None = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
+    def only_once(cls , *args , object : OnceObject = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
         func : Callable = getattr(cls , printer) if isinstance(printer , str) else printer
         if object == 'logger':
@@ -386,7 +390,7 @@ class Logger:
             Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def divider(cls , width : int = 140 , char : Literal['-' , '=' , '*'] = '-' , msg : str | None = None , 
+    def divider(cls , width : int = 140 , char : SeperatorChar = '-' , msg : str | None = None , 
                 color : str | None = None , bold : bool = True , vb_level : VerbosityLevel = 0 , **kwargs):
         """Divider mesge , use stdout"""
         if msg is None:
@@ -587,13 +591,13 @@ class Logger:
         """
         VB_LEVEL = 1
         def __init__(
-            self , title : str , level : Literal[1,2,3,4,5] , char : Literal['-' , '=' , '*'] = '*', 
+            self , title : str , level : ParagraphLevel , char : SeperatorChar = '*', 
             vb_level : VerbosityLevel = 0 , enter_vb_level : VerbosityLevel = 0 , **kwargs
         ):
             self.key = title.title()
             self.key_suffix = ''
             self.level = level
-            self.char : Literal['-' , '=' , '*'] = char
+            self.char : SeperatorChar = char
             self.color = ['yellow' , 'lightgreen' , 'lightcyan' , 'white' , 'gray'][level-1]
             self.vb_level = max(Proj.vb(vb_level) , 1 if level == 1 else 2)
             self.enter_vb_level = max(Proj.vb(enter_vb_level) , 1 if level == 1 else 2)

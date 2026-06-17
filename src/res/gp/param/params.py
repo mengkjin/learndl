@@ -4,7 +4,6 @@ Parameters for genetic programming
 from __future__ import annotations
 import torch
 import shutil
-from typing import Literal , Any
 
 from src.proj import PATH , Base
 from .default import gpDefaults
@@ -25,7 +24,7 @@ class gpParameters(Base.BoundLogger):
     def __init__(
         self , job_id : int | None = None , train : bool = True , 
         continuation : bool = False , test_code : bool = False , * ,
-        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.initiate(job_id , train , continuation , test_code , **kwargs)
 
@@ -144,17 +143,23 @@ class gpParameters(Base.BoundLogger):
         """[大循环]中新因子与老因子的最高相关系数,相关系数绝对值高于此值的因子不入库"""
         return self.params.get('corr_cap' , 0.6)
     @property
-    def factor_neut_type(self) -> Literal[0,1,2]:
+    def factor_neut_type(self):
         """[大循环]i_iter>0时如何中性化因子 0:不中性化, 1:根据样本内的相关性一口气中性化, 2:每天单独中性化"""
-        return self.params.get('factor_neut_type' , 0)
+        value = self.params.get('factor_neut_type' , 0)
+        assert value == 0 or value == 1 or value == 2 , value
+        return value
     @property
-    def labels_neut_type(self) -> Literal['svd' , 'all']:
+    def labels_neut_type(self):
         """[大循环]计算残差收益时,怎么使用Elite因子: 'svd' , 'all'"""
-        return self.params.get('labels_neut_type' , 'all')
+        value = self.params.get('labels_neut_type' , 'all')
+        assert value == 'svd' or value == 'all' , value
+        return value
     @property
-    def svd_mat_method(self) -> Literal['total' , 'coef_ts']:
+    def svd_mat_method(self):
         """[大循环]svd factor的矩阵怎么计算: 'total'代表所有日期所有因子值相关矩阵, 'coef_ts'代表所有因子值时序与labels相关性时序的相关矩阵"""
-        return self.params.get('svd_mat_method' , 'coef_ts')
+        value = self.params.get('svd_mat_method' , 'coef_ts')
+        assert value == 'total' or value == 'coef_ts' , value
+        return value
     @property
     def svd_top_ratio(self) -> float:
         """[大循环]svd factor最小解释力度"""
@@ -172,9 +177,11 @@ class gpParameters(Base.BoundLogger):
         """[小循环]中个体算子树的最大深度,即因子表达式的最大复杂度"""
         return self.params.get('max_depth' , 5)
     @property
-    def select_offspring(self) -> Literal['best' , '2Tour' , 'Tour' , 'nsga2']:
+    def select_offspring(self):
         """[小循环]每次后代如何选择是否进入遗传突变环节,可以是 'best' , '2Tour' , 'Tour' , 'nsga2'"""
-        return self.params.get('select_offspring' , 'nsga2')
+        value = self.params.get('select_offspring' , 'nsga2')
+        assert value == 'best' or value == '2Tour' or value == 'Tour' or value == 'nsga2' , value
+        return value
     @property
     def surv_rate(self) -> float:
         """[小循环]上面选best的话,这里输入具体比例"""

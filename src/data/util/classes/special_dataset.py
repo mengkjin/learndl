@@ -8,7 +8,6 @@ in ``SpecialDataSet.candidates``.
 """
 from __future__ import annotations
 import torch
-from typing import Any
 
 from src.proj import Base , Dates
 from .data_block import DataBlock
@@ -30,7 +29,7 @@ class SpecialDataSet:
         cls , key : str , * , 
         dates : Base.alias.DateType = None , secid : Base.alias.SecidType = None , 
         start : int | None = None , end : int | None = None ,
-        dtype : torch.dtype = torch.float , vb_level : Any = 2
+        dtype : torch.dtype = torch.float , vb_level : Base.lit.VerbosityLevel = 2
     ) -> DataBlock:
         """
         Load a special dataset as a DataBlock.
@@ -48,7 +47,7 @@ class SpecialDataSet:
             Date range (yyyyMMdd) used when ``dates`` is not provided.
         dtype : torch dtype
             Cast the result to this dtype (default: ``torch.float``).
-        vb_level : Any
+        vb_level : Base.lit.VerbosityLevel
             Verbosity level forwarded to the underlying loader.
         """
         if key == 'dfl2':
@@ -60,7 +59,7 @@ class SpecialDataSet:
     def load_dfl2(
         cls , dates : Base.alias.DateType = None , secid : Base.alias.SecidType = None , 
         start : int | None = None , end : int | None = None , 
-        dtype : torch.dtype = torch.float , vb_level : Any = 2
+        dtype : torch.dtype = torch.float , vb_level : Base.lit.VerbosityLevel = 2
     ) -> DataBlock:
         """
         Load Dongfang L2 characteristics (``sellside/dongfang.l2_chars``) as a DataBlock.

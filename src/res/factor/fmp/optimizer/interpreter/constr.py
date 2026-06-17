@@ -16,6 +16,7 @@ __all__ = [
 
 FloatAny : TypeAlias = float | Any
 ArrayAny : TypeAlias = np.ndarray | Any
+CovModelType : TypeAlias = Literal['normal' , 'model']
 
 @dataclass
 class LinearConstraint:
@@ -205,7 +206,7 @@ class CovConstraint:
     C    : ArrayAny = None
     S    : ArrayAny = None
     cov  : ArrayAny = None
-    cov_type : Literal['normal' , 'model'] = 'model'
+    cov_type : CovModelType = 'model'
     
     def __post_init__(self):
         self.check()
@@ -280,7 +281,7 @@ class CovConstraint:
         self.cov_type = 'normal'
 
     @classmethod
-    def rand(cls , N : int , cov_type : Literal['normal' , 'model'] = 'model'):
+    def rand(cls , N : int , cov_type : CovModelType = 'model'):
         if cov_type == 'normal':
             v = np.random.randn(N , 10)
             cov = v @ v.T + np.eye(N) * 1e-6

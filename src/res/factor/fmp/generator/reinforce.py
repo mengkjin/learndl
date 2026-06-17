@@ -2,7 +2,6 @@
 Reinforce portfolio creator for Factor Model Portfolio
 """
 from __future__ import annotations
-from typing import Any , Literal
 
 from src.proj import Const , Base
 from src.proj.bases import TestType
@@ -27,12 +26,12 @@ class ReinforcePortfolioCreatorConfig(BasicCreatorConfig):
     def __init__(
         self , 
         screener : Base.alias.NamesType = Const.Factor.FMP.creator[test_type.value]['screener'] , 
-        sorter : Literal['self'] = 'self' ,
+        sorter : Base.SELF = 'self' ,
         **kwargs
     ):
         super().__init__(screener = screener , sorter = 'self' , **kwargs)
     
 class ReinforcePortfolioCreator(BasicPortfolioCreator):
-    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    def setup(self , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         self.conf = ReinforcePortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self

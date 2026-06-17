@@ -23,9 +23,9 @@ __all__ = [
     'SSLVerify' , 'RequestMethodType' , 'CHROME_UA'
 ]
 
-SSLVerify : TypeAlias = str | ssl.SSLContext
 T = TypeVar("T")
-RequestMethodType = Literal['get', 'post']
+SSLVerify : TypeAlias = str | ssl.SSLContext
+RequestMethodType : TypeAlias = Literal['get', 'post']
 
 CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

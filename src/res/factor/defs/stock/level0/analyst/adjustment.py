@@ -4,7 +4,7 @@ Adjustment factors for the project
 from __future__ import annotations
 import numpy as np
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import AdjustmentFactor
@@ -15,8 +15,11 @@ __all__ = [
     'uppct_npro_12m' , 'uppct_npro_6m' , 'uppct_npro_3m' , 'uppct_npro_6m_anndt'
 ]
 
-def get_npro_adjustment(date : int , n_month : int , type : Literal['rec' , 'upnum' , 'uppct'] , 
-                        within_ann_days : int | None = None , ):
+AdjustmentType : TypeAlias = Literal['rec' , 'upnum' , 'uppct']
+
+def get_npro_adjustment(
+    date : int , n_month : int , type : AdjustmentType , within_ann_days : int | None = None
+):
     target_quarter = f'{date // 10000}Q4' # noqa
     start = DATAVENDOR.CALENDAR.cd(date , -30 * n_month) # noqa
 

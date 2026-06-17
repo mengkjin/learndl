@@ -27,6 +27,7 @@ __all__ = [
 ]
 
 BenchAny : TypeAlias = Benchmark | Any
+OptimConfigType : TypeAlias = str | Literal['default', 'custome'] | None
 
 class OptimCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
@@ -146,7 +147,7 @@ class OptimFMPTest(BaseFactorAnalyticTest):
 
     def calc(
         self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' ,
-        add_lag = 1 , optim_config : str | Literal['default', 'custome'] | None = None , 
+        add_lag = 1 , optim_config : OptimConfigType = None , 
         **kwargs
     ):
         self.optim(factor , benchmarks , add_lag = add_lag ,optim_config = optim_config)

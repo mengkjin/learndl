@@ -26,6 +26,7 @@ __all__ = [
 
 strProxy : TypeAlias = 'str | Proxy'
 UrlsType : TypeAlias = ArrayLike[str] | str
+DetailLevel : TypeAlias = Literal['all','none','simple']
 
 class WorkingProxies(BoundLogger):
     TEST_PROXIES = ProxySet(["http://1.2.3.4:8080", "http://5.6.7.8:3128", "http://9.10.11.12:9999", "http://4.4.4.4:8080", "http://5.5.5.5:3129"])
@@ -33,7 +34,7 @@ class WorkingProxies(BoundLogger):
     def get(
         cls, target_url: str , start_with: Iterable[strProxy] = () , * , 
         min_count: int = 5, max_round: int = 3 , timeout: float = 10.0, workers: int = 50 , 
-        dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: Literal['all','none','simple'] = 'all'
+        dummy: bool = False, go_with_cached_proxies: bool = False, detail_level: DetailLevel = 'all'
     ) -> ProxySet:
         """
         return the list of available proxy URLs; with in-process short-term cache to avoid hitting the free proxy site for each failed task.
@@ -160,7 +161,7 @@ class ProxyStatsSetURL(ProxyStatsSet , BoundLogger):
             return False
         return self.valid_count > 0
 
-    def refresh_proxies(self , go_with_cached_proxies: bool = False , detail_level: Literal['all','none','simple'] = 'all'):
+    def refresh_proxies(self , go_with_cached_proxies: bool = False , detail_level: DetailLevel = 'all'):
         """Discover new working proxies and replace the invalid ones in the pool."""
         old_proxies = [proxy for proxy in self.proxies if proxy.invalid]
         new_proxies = [
@@ -210,8 +211,7 @@ class ProxyStatsSetURL(ProxyStatsSet , BoundLogger):
         Create a ProxyStatsSetURL for each URL in the list.
         do not use thread pool to create the proxy sets, because some of the proxy finders website will block the ip if too many requests are made.
         """
-        if isinstance(urls, str):
-            urls = [urls]
+        urls = ensure_name_list(urls, [])
         return {url: cls(url = url, **kwargs) for url in urls}
 
 class ProxyPool(BoundLogger):

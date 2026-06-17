@@ -18,7 +18,7 @@ import numpy as np
 
 from dataclasses import dataclass , field
 from pathlib import Path
-from typing import Any  , Literal
+from typing import Any  , Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj import PATH , MACHINE , DB , Base , Logger , Dates
@@ -28,6 +28,8 @@ from src.data.util import (
 )
 
 __all__ = ['FailedData' , 'JSFetcher' , 'JSDownloader']
+
+BenchmarkType : TypeAlias = Literal['csi300' , 'csi500' , 'csi800' , 'csi1000']
 
 @dataclass
 class FailedData:
@@ -467,7 +469,7 @@ class JSFetcher:
         return df
     
     @classmethod
-    def benchmark(cls , date : int , bm : Literal['csi300' , 'csi500' , 'csi800' , 'csi1000'] , **kwargs) -> pd.DataFrame | FailedData | None:
+    def benchmark(cls , date : int , bm : BenchmarkType , **kwargs) -> pd.DataFrame | FailedData | None:
         """get risk model from R environment , bm_any('CSI300' , 20240325)"""
         path = Path(f'D:/Coding/ChinaShareModel/ModelData/B_index_weight/1_csi_index/{bm.upper()}/{bm.upper()}_{date}.csv')
         if not path.exists():  

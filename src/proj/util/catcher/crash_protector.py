@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj.env import PATH
 from src.proj.core import Since
@@ -11,6 +11,7 @@ from .basic import OutputCatcher , DeflectorGroup , MarkdownWriter
 
 __all__ = ['CrashProtectorCatcher']
 
+ContentSeperatingBy : TypeAlias = Literal['min', 'hour', 'day'] | None
 class CrashProtectorCatcher(OutputCatcher):
     """
     Crash protector catcher for stdout and stderr, export to crash protector file in runtime, and then remove the crash protector file at exit
@@ -24,8 +25,10 @@ class CrashProtectorCatcher(OutputCatcher):
     export_dir = PATH.runtime.joinpath('crash_protector')
     export_suffix : str = '.md'
 
-    def __init__(self, task_id : str | None = None, init_time: datetime | None = None, 
-                 seperating_by: Literal['min', 'hour', 'day'] | None = 'min', **kwargs):
+    def __init__(
+        self, task_id : str | None = None, init_time: datetime | None = None, 
+        seperating_by: ContentSeperatingBy = 'min', **kwargs
+    ):
         self.task_id = task_id
         self.init_time = init_time if init_time else datetime.now()
         

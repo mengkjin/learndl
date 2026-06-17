@@ -1,7 +1,7 @@
 """SMTP email sending using credentials from machine secrets and ``Proj`` attachments."""
 from __future__ import annotations
 from pathlib import Path
-from typing import Literal , Any
+from typing import Any , Literal , TypeAlias
 
 from src.proj.env import MACHINE , Proj
 from src.proj.core import strPath
@@ -9,7 +9,7 @@ from src.proj.bases import BoundLogger , NoInstance
 
 __all__ = ['Email']
 
-ServerType = Literal['netease']
+ServerType : TypeAlias = Literal['netease']
 _EmailSettings : dict = {}
 
 def _get_email_setting(name : str , server : ServerType = 'netease') -> Any:

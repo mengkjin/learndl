@@ -2,7 +2,6 @@
 Callback to retrain if nan loss, exit too early, or get a very low RankIC
 """
 from __future__ import annotations
-from typing import Literal
 
 from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
@@ -74,7 +73,8 @@ class BadAttemptRetrain(BaseCallBack):
             message = f'Get a very low RankIC for {self.texts.attempt_key}. Start new attempt {self.status.attempt+1} with lr multiplier {self.next_attempt_lr_multiplier}'
             self.trigger_retrain(FittingEventType.NEW_ATTEMPT , 'low_ic' , message , self.next_attempt_lr_multiplier)
 
-    def trigger_retrain(self , event_type : Literal[FittingEventType.NEW_ATTEMPT , FittingEventType.REDO_ATTEMPT] , reason : str , message : str = '' , new_lr_multiplier : float = 1.):
+    def trigger_retrain(self , event_type : FittingEventType , reason : str , message : str = '' , new_lr_multiplier : float = 1.):
+        assert event_type in [FittingEventType.NEW_ATTEMPT , FittingEventType.REDO_ATTEMPT] , f'Invalid event type: {event_type}'
         self.model.stack_model()
         self.status.add_epoch_event(event_type , reason , message = message)
         self.trainer.new_attempt('attempt' , lr_multiplier = new_lr_multiplier)

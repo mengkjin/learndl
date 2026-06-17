@@ -9,7 +9,7 @@ metadata records.
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import Base
 from src.proj.util.web.proxy import ProxyAPI , ProxyCaller
@@ -24,6 +24,7 @@ __all__ = ['FetcherTask']
 
 AnnouncementsResult = list[Announcement] | Exception
 SuccessResult = bool | Exception
+HandleError : TypeAlias = Literal['raise' , 'return']
 
 class FetcherTask(Base.BoundLogger):
     def __init__(self, exchange: ExchangeType, start: int, end: int, redownload: bool = False, * , indent: int = 1 , vb_level: int = 2, **kwargs):
@@ -118,7 +119,7 @@ class FetcherTask(Base.BoundLogger):
     def to_proxy_caller(self , pool) -> ProxyCaller:
         return ProxyCaller(self.crawl, self.url, pool = pool)
 
-    def run(self, pool = None, *, max_proxies_try: int = 3, error : Literal['raise' , 'return'] = 'return') -> bool | Exception:
+    def run(self, pool = None, *, max_proxies_try: int = 3, error : HandleError = 'return') -> bool | Exception:
         """
         Fetch by natural day and exchange; try public proxy list when direct connection (and optional fixed proxy) 
         still fails and ``auto_discover_proxy`` is enabled.

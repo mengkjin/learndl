@@ -8,7 +8,7 @@ import pandas as pd
 import polars as pl
 
 from functools import cached_property
-from typing import Any , ClassVar , Literal , Self , overload , TypeAlias , cast
+from typing import Any , ClassVar , Self , overload , TypeAlias , cast
 
 from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load , Dates
 from src.data.util import DataBlock
@@ -17,7 +17,7 @@ from src.res.model.model_module.module import get_predictor_module
 
 __all__ = ['ArchivedPredictorModel']
 
-ModelNumInputType : TypeAlias = Base.intNums | Literal['all'] | Any | None
+ModelNumInputType : TypeAlias = Base.intNums | Base.ALL | Any | None
 
 class _Grads:
     def __init__(self , require_grad : bool = True):
@@ -37,7 +37,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     @overload
     def __init__(
-        self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Any = 1
+        self , model_input : PredictorPath , / , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ) -> None:
         """Initialize from a PredictorPath object"""
     @overload
@@ -45,14 +45,14 @@ class ArchivedPredictorModel(Base.BoundLogger):
         self , model_input : Base.strPath | Any | None , 
         model_num : ModelNumInputType = None ,
         submodel : str = 'best' , pred_name : str | None = None , / , 
-        indent : int = 0 , vb_level : Any = 1
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ) -> None:
         """Initialize from a model input, and convert to PredictorPath object"""
     def __init__(
         self , model_input : Base.strPath | PredictorPath | Any | None , 
         model_num : ModelNumInputType = None ,
         submodel : str | None = 'best' , pred_name : str | None = None , / , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         if isinstance(model_input , PredictorPath):
@@ -447,7 +447,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     @classmethod
     def update(
         cls , model_name : str | None = None , 
-        start = None , end = None , indent : int = 0 , vb_level : Any = 1
+        start = None , end = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ) -> Base.UpdateFlag:
         """Update prediction factors to '//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha' """
         cls.SetClassVB(vb_level , indent)
@@ -467,7 +467,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     @classmethod
     def recalculate(
         cls , model_name : str | None = None , 
-        start = None , end = None , indent : int = 0 , vb_level : Any = 1
+        start = None , end = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ) -> Base.UpdateFlag:
         """Recalculate all model predictions"""
         cls.SetClassVB(vb_level , indent)

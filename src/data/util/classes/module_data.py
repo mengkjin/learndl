@@ -27,7 +27,6 @@ import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import partial, cached_property
-from typing import Any
 
 from src.proj import CALENDAR , Base , Logger
 
@@ -103,7 +102,7 @@ class ModuleData(Base.BoundLogger):
     def __init__(
         self,
         config: ModuleDataConfig, * ,
-        indent: int = 1, vb_level: Any = 2 , **kwargs
+        indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config = config
@@ -118,7 +117,7 @@ class ModuleData(Base.BoundLogger):
         factor_end_dt: int | None = None,
         filter_secid: str | None = None,
         filter_date: str | None = None,
-        indent: int = 1, vb_level: Any = 2, dtype=torch.float
+        indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2, dtype=torch.float
     ) -> ModuleData:
         config = ModuleDataConfig(
             data_type_list=tuple(sorted([cls.abbr(data_type) for data_type in data_type_list])),

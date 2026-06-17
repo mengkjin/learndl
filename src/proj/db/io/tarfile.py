@@ -18,11 +18,11 @@ from .dataframe import dfIOHandler
 
 if TYPE_CHECKING:
     import polars as pl
-    from src.proj.db.io.dataframe import PD_MAPPER_TYPE
+    from src.proj.db.io.dataframe import PdMapper
 
 __all__ = ['load_tar_meta' , 'load_dfs_from_tar' , 'save_dfs_to_tar' , 'pack_files_to_tar' , 'unpack_files_from_tar']
 
-def load_tar(path : strPath , mapper : PD_MAPPER_TYPE = None) -> dict[str , pd.DataFrame]:
+def load_tar(path : strPath , mapper : PdMapper = None) -> dict[str , pd.DataFrame]:
     """
     load dataframes from tar file , except meta.json
     Parameters:
@@ -127,7 +127,7 @@ def save_dfs_to_tar(
         Logger.alert1(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level)
         return False
 
-def load_dfs_from_tar(path : strPath , * , missing_ok = True , mapper : PD_MAPPER_TYPE = None , **kwargs) -> dict[str , pd.DataFrame]:
+def load_dfs_from_tar(path : strPath , * , missing_ok = True , mapper : PdMapper = None , **kwargs) -> dict[str , pd.DataFrame]:
     """load multiple dataframes from tar file"""
     path = Path(path)
     if not path.exists():

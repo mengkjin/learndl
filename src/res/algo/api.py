@@ -7,14 +7,14 @@ Classes:
 """
 from __future__ import annotations
 import torch
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from .nn.api import get_nn_module , get_nn_category , get_nn_datatype , AVAILABLE_NNS
 from .boost.api import AVAILABLE_BOOSTS , OptunaBoostModel , GeneralBoostModel
 
 __all__ = ['AlgoModule' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' , 'OptunaBoostModel' , 'GeneralBoostModel']
 
-GetModuleType = Literal['nn' , 'boost' , 'all']
+GetModuleType : TypeAlias = Literal['nn' , 'boost' , 'all']
 
 class AlgoModule:
     """Unified registry and factory for all NN and boost models.

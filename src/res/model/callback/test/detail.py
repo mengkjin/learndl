@@ -4,7 +4,7 @@ Callback to perform detailed factor and portfolio level analysis
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from matplotlib.figure import Figure
 
 from src.proj import Proj , Const , Save
@@ -15,6 +15,8 @@ from src.res.factor.api import FactorTestAPI
 from src.res.model.util import BaseCallBack
 
 __all__ = ['DetailedAlphaAnalysis']
+
+FactorChoice : TypeAlias = Literal['first' , 'avg']
 
 class DetailedAlphaAnalysis(BaseCallBack):
     """Detailed Factor and Portfolio Level Analysis"""
@@ -64,7 +66,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
     @property
     def test_dates(self) -> np.ndarray: return self.trainer.data.test_full_dates
 
-    def get_factor(self , pred_dates : np.ndarray , which : Literal['first' , 'avg'] = 'avg') -> StockFactor:
+    def get_factor(self , pred_dates : np.ndarray , which : FactorChoice = 'avg') -> StockFactor:
         if which == 'first':
             df = self.record.get_preds(pred_dates = pred_dates , model_num = 0 , closest = True)
         elif which == 'avg':

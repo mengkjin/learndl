@@ -4,12 +4,14 @@ import sys , os , pytz , yaml , json
 from dataclasses import dataclass
 
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from tzlocal import get_localzone
 
 from src.proj.core import stderr
 
 __all__ = ['MACHINE']
+
+SystemName : TypeAlias = Literal['linux' , 'windows' , 'macos']
 
 def get_project_root() -> Path:
     """Get the project root path of the project, depending on the pyproject.toml file"""
@@ -73,7 +75,7 @@ class _MachineSettings:
         return Path('//hfm-pubshare/HFM各部门共享/量化投资部/龙昌伦/Alpha') if self.belong_to_hfm else None
 
 
-def _get_system_name():
+def _get_system_name() -> SystemName:
     """Normalize OS name to ``linux`` or ``windows`` or ``macos``.
 
     Returns:
@@ -238,7 +240,7 @@ class MACHINE:
 
     """
     name : str = _machine_name_init()
-    system_name : Literal['linux' , 'windows' , 'macos'] = _get_system_name()
+    system_name : SystemName = _get_system_name()
     
     main_path = MAIN_PATH
     secret = ConfFileLazyLoader('Secret' , SECRET_PATH)

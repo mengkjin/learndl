@@ -7,7 +7,6 @@ import pandas as pd
 import numpy as np
 from itertools import combinations
 from pathlib import Path
-from typing import Any
 from collections.abc import Generator, Iterator
 
 from src.proj import PATH , MACHINE , Base
@@ -28,7 +27,7 @@ class StockFactorHierarchy(Base.BoundLogger):
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         if getattr(self, '_inited', False):
             return
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)

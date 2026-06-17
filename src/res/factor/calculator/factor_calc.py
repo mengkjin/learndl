@@ -10,7 +10,7 @@ from importlib import import_module
 from abc import abstractmethod
 from functools import cached_property
 from pathlib import Path
-from typing import Any  , Literal
+from typing import Any  , Literal , TypeAlias
 from collections.abc import Callable, Generator
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
@@ -25,6 +25,14 @@ __all__ = [
     'MomentumFactor' , 'VolatilityFactor' , 'CorrelationFactor' , 'LiquidityFactor' , 'HoldingFactor' , 'TradingFactor' ,
     'StyleFactor' , 'SellsideFactor' , 'MarketEventFactor' , 'WeightedPoolingCalculator' , 'NonlinearPoolingCalculator'
 ]
+
+FactorPropertyType : TypeAlias = Literal['is_pooling' , 'is_market']
+FactorDBSrcType : TypeAlias = Literal['stock_factor' , 'market_factor']
+FactorCalendarType : TypeAlias = Literal['update' , 'calendar']
+FactorStoredDatesType : TypeAlias = Literal['min' , 'max']
+AlternativeDBs : TypeAlias = list[dict[Literal['src' , 'key' , 'col'] , str]]
+
+
 
 class _FactorProperty:
     """get any property of a factor calculator , cached"""
@@ -70,7 +78,7 @@ class _FactorPropertyStr(_FactorProperty):
 
 class _FactorPropertyBool(_FactorProperty):
     """property of boolean"""
-    def __init__(self , method : Literal['is_pooling' , 'is_market']):
+    def __init__(self , method : FactorPropertyType):
         self.method = method
 
     def __get__(self,instance,owner) -> bool:
@@ -90,7 +98,7 @@ class _FactorMetaType:
 
 class _FactorDBSrc:
     """db source of factor"""
-    def __get__(self,instance,owner) -> Literal['stock_factor' , 'market_factor']:
+    def __get__(self,instance,owner) -> FactorDBSrcType:
         meta_type = getattr(owner, 'meta_type')
         if meta_type == 'market':
             return 'market_factor'
@@ -108,7 +116,7 @@ class _FactorCalendar:
     """calendar of factor"""
     _dates = CALENDAR.range(Const.Factor.UPDATE.init_date , None , 'td')
 
-    def __init__(self , method : Literal['update' , 'calendar'] = 'calendar'):
+    def __init__(self , method : FactorCalendarType = 'calendar'):
         self.method = method
     
     def __get__(self,instance,owner) -> Dates:
@@ -126,7 +134,7 @@ class _FactorCalendar:
 
 class _FactorStoredDates:
     """min date of factor"""
-    def __init__(self , method : Literal['min' , 'max'] = 'min'):
+    def __init__(self , method : FactorStoredDatesType = 'min'):
         self.method = method
     def __get__(self,instance,owner) -> int:
         return getattr(owner , f'get_{self.method}_date')()
@@ -270,7 +278,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
     UPDATE_MIN_VALID_COUNT_STRICT : int = 100
     UPDATE_RELAX_DATES : list[int] = []
 
-    def __init__(self , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
+    def __init__(self , * , indent : int = 2 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self._date : int | None = None
         self._df : pd.DataFrame | None = None
@@ -498,7 +506,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
     @classmethod
     def Factor(cls , dates : Base.intDates , normalize = True , 
                fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
-               multi_thread = True , ignore_error = True , indent : int = 1 , vb_level : Any = 'max') -> StockFactor:
+               multi_thread = True , ignore_error = True , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 'max') -> StockFactor:
         """get factor values of a given date range , load if exist , calculate if not exist"""
         calc = cls(indent = indent , vb_level = vb_level)
         return calc.stock_factor(dates , normalize = normalize , fill_method = fill_method , multi_thread = multi_thread , ignore_error = ignore_error)
@@ -519,14 +527,14 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         ModelTrainer.test_factor(cls.factor_name , False , start = dates[0] , end = dates[-1] , **kwargs)
 
     @classmethod
-    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , * , indent : int = 1 , vb_level : Any = 1) -> None:
+    def update_all(cls , start : int | None = None , end : int | None = None , overwrite = False , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1) -> None:
         """update factor data and stats of a given date"""
         calc = cls(indent = indent , vb_level = vb_level)
         calc.update_all_factors(start , end , overwrite)
         calc.update_all_stats(start , end , overwrite)
 
     @classmethod
-    def recalculate_all(cls , start : int | None = None , end : int | None = None , * , indent : int = 1 , vb_level : Any = 1) -> None:
+    def recalculate_all(cls , start : int | None = None , end : int | None = None , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1) -> None:
         calc = cls(indent = indent , vb_level = vb_level)
         if isinstance(calc , WeightedPoolingCalculator):
             calc.drop_pooling_weight(after = start , overwrite = True)
@@ -669,7 +677,7 @@ class AffiliateFactorCalculator(FactorCalculator):
     load_db_key : str = '' # 'tushare_cne5_exp' / 'dongfang.scores_v0' / 'huatai.master_combined' ...
     load_db_col : str = ''
 
-    alternative_dbs : list[dict[Literal['src' , 'key' , 'col'] , str]] = [] # [{'src' : 'sellside' , 'key' : 'huayuan.scores_v0'}]
+    alternative_dbs : AlternativeDBs = [] # [{'src' : 'sellside' , 'key' : 'huayuan.scores_v0'}]
 
     def calc_history(self , date : int) -> pd.DataFrame:
         """no need to validate value for affiliate factor"""
@@ -684,7 +692,7 @@ class AffiliateFactorCalculator(FactorCalculator):
         raise NotImplementedError(f'{self.factor_name} validate_value is not implemented')
 
     @classmethod
-    def full_dbs(cls) -> list[dict[Literal['src' , 'key' , 'col'] , str]]:
+    def full_dbs(cls) -> AlternativeDBs:
         return [{'src':cls.load_db_src , 'key':cls.load_db_key , 'col':cls.load_db_col} , *cls.alternative_dbs]
 
     @classmethod
@@ -844,7 +852,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 class MarketFactorCalculator(FactorCalculator):
     """base class of market factor calculator"""
     @classmethod
-    def recalculate(cls , date : int | None = None , indent : int = 1 , vb_level : Any = 'max') -> bool:
+    def recalculate(cls , date : int | None = None , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 'max') -> bool:
         """recalculate factor data of a given date"""
         calc_date = CALENDAR.updated() if date is None else int(date)
         instance = cls(indent = indent , vb_level = vb_level)

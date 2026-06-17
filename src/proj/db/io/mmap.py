@@ -6,7 +6,7 @@ import shutil
 import numpy as np
 
 from pathlib import Path
-from typing import Literal , TYPE_CHECKING , Any
+from typing import Literal , TypeAlias , TYPE_CHECKING , Any
 from dataclasses import dataclass
 
 from src.proj.core import strPath
@@ -20,11 +20,12 @@ __all__ = ['ArrayMemoryMap']
 _STAGING_SUFFIX = '.staging'
 _BACKUP_SUFFIX = '.old'
 
+ArrayType : TypeAlias = Literal['Tensor' , 'ndarray']
 @dataclass
 class ArrayMeta:
     """Serializable descriptor for a memory-mapped array (dtype, shape, tensor vs ndarray)."""
 
-    array_type: Literal['Tensor' , 'ndarray']
+    array_type: ArrayType
     dtype: str
     shape: tuple
 

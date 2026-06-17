@@ -14,7 +14,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any , ClassVar , Literal  , get_args
+from typing import Any , ClassVar , Literal , TypeAlias , get_args
 from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
@@ -26,7 +26,8 @@ INDAY_MARK_COLUMNS : tuple[str,...] = ('inday' , 'minute')
 FREQUENT_DBS : tuple[str,...] = ('trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp')
 FREQUENT_MIN_DATES : int = 500
 
-DumpSuffix = Literal['.mmap' , '.pt' , '.feather']
+DumpSuffix : TypeAlias = Literal['.mmap' , '.pt' , '.feather']
+FillNanOption : TypeAlias = Literal['guess'] | bool | None
 PREFERRED_DUMP_SUFFIX : DumpSuffix = '.mmap'
 
 def data_type_abbr(key : str) -> str:
@@ -777,7 +778,7 @@ class DataBlock:
         
     @staticmethod
     def guess_fillna(
-        name : str , fillna : Literal['guess'] | bool | None = 'guess' ,
+        name : str , fillna : FillNanOption = 'guess' ,
         excl : tuple[str,...] = ('y','day','15m','min','30m','60m','week'
     )) -> bool:
         """
@@ -931,7 +932,7 @@ class DataBlock:
 
     def extend_to(
         self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
-        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , inplace = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , inplace = True , vb_level : Base.lit.VerbosityLevel = 'max'
     ) -> DataBlock:
         """
         Extend this block by loading missing dates from the database.
@@ -1015,7 +1016,7 @@ class DataBlock:
     def blocks_align(
         cls , blocks : dict[str,DataBlock] , * , 
         secid = None , date = None , start = None , end = None ,
-        intersect_secid = True , inplace : Literal[True] = True , vb_level : Any = 2
+        intersect_secid = True , inplace : bool = True , vb_level : Base.lit.VerbosityLevel = 2
     ) -> dict[str,DataBlock]:
         """
         Align a dict of blocks to a common (secid, date) grid.
@@ -1052,7 +1053,7 @@ class DataBlock:
     @classmethod
     def blocks_ffill(
         cls , blocks : dict[str,DataBlock] , * ,
-        fillna : Literal['guess'] | bool | None = 'guess' , 
+        fillna : FillNanOption = 'guess' , 
         exclude : Iterable[str] | None = None
     ) -> dict[str,DataBlock]:
         """Apply forward-fill to each block in the dict, optionally excluding specific keys."""
@@ -1076,7 +1077,7 @@ class DataBlock:
     @classmethod
     def load_from_db(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Base.lit.VerbosityLevel = 'max'
     ) -> DataBlock:
         """Load the data block from the database"""
         return cls.load_from_db_polars(db_src , db_key , start , end , dates = dates , feature = feature , use_alt = use_alt , vb_level = vb_level)
@@ -1084,7 +1085,7 @@ class DataBlock:
     @classmethod
     def load_from_db_pandas(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Base.lit.VerbosityLevel = 'max'
     ) -> DataBlock:
         """Load the data block from the database using pandas dataframe , usually slower than polars"""
         dates = Dates(dates , start , end)
@@ -1097,7 +1098,7 @@ class DataBlock:
     @classmethod
     def load_from_db_polars(
         cls , db_src : str , db_key : str , start = None , end = None , * , 
-        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Base.lit.VerbosityLevel = 'max'
     ) -> DataBlock:
         """Load the data block from the database using polars dataframe , usually faster than pandas"""
         dates = Dates(dates , start , end)
@@ -1110,7 +1111,7 @@ class DataBlock:
     @classmethod
     def load_raw(
         cls , db_src : str , db_key : str , start = None , end = None , * ,
-        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Any = 'max'
+        dates : Base.alias.DateType = None , feature : Base.alias.NamesType = None , use_alt = True , vb_level : Base.lit.VerbosityLevel = 'max'
     ) -> DataBlock:
         """
         Load a block from the database, with smart caching for frequent DB keys.

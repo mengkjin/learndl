@@ -25,8 +25,6 @@ import torch
 import numpy as np
 import polars as pl
 
-from typing import Any
-
 from src.proj import DB , CALENDAR , Const , Base
 from src.func.tensor import neutralize_2d , process_factor
 from src.data.util import DataBlock
@@ -56,7 +54,10 @@ class PrePros:
         return PreProcessor.start_date(frame)
 
     @classmethod
-    def get_processor(cls , key : str , frame : Base.lit.DataBlockTimeFrame , indent : int = 0 , vb_level : Any = 'max') -> PreProcessor:
+    def get_processor(
+        cls , key : str , frame : Base.lit.DataBlockTimeFrame , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 'max'
+    ) -> PreProcessor:
         """Instantiate and return the preprocessor registered under ``key``."""
         return PreProcessor.registry[key](frame , indent = indent , vb_level = vb_level)
 
@@ -302,7 +303,8 @@ class PrePro_dfl2(MicellaneousPreProcessor):
     FEATURE_CHUNK_SIZE = 20
     def pre_process(
         self , start : int | None = None , end : int | None = None , * , 
-        secid : Base.alias.SecidType = None , indent = 0 , vb_level : Any = 'max' , **kwargs) -> DataBlock:
+        secid : Base.alias.SecidType = None , 
+        indent = 0 , vb_level : Base.lit.VerbosityLevel = 'max' , **kwargs) -> DataBlock:
         """
         Load Dongfang L2 chars and apply per-secid rolling z-score normalisation.
 
@@ -353,7 +355,8 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
 
     def pre_process(
         self , start : int | None = None , end : int | None = None , * , 
-        secid : Base.alias.SecidType = None , indent = 0 , vb_level : Any = 'max' , **kwargs
+        secid : Base.alias.SecidType = None , 
+        indent = 0 , vb_level : Base.lit.VerbosityLevel = 'max' , **kwargs
     ) -> DataBlock:
         """
         Load Dongfang L2 chars and apply cross-sectional z-score normalisation.

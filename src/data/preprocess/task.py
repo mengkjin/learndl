@@ -44,7 +44,7 @@ class PreProcessorTask(Base.BasicUpdater):
     def proceed_update(
         cls , * , reconstruct : bool = False , rollback_date : int | None = None , 
         frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , data_types : Iterable[str] | None = None , 
-        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , force_update : bool = False , **kwargs
     ) -> Base.UpdateFlag:
         """
         Run the preprocessing update for all (or selected) registered processors.
@@ -85,7 +85,7 @@ class PreProcessorTask(Base.BasicUpdater):
     def update(
         cls , * , 
         frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , data_types : list[str] | None = None , 
-        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , force_update : bool = False , **kwargs
     ) -> Base.UpdateFlag:
         """
         update the preprocessed data
@@ -98,7 +98,7 @@ class PreProcessorTask(Base.BasicUpdater):
                 Explicit list of processor keys to update.  Defaults to all.
             indent : int
                 Indent level for logging.
-            vb_level : Any
+            vb_level : Base.lit.VerbosityLevel
                 Verbosity level for logging.
             force_update : bool
                 If True, skip the "already updated" check.
@@ -117,7 +117,7 @@ class PreProcessorTask(Base.BasicUpdater):
     def reconstruct(
         cls , * , 
         frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , data_types : list[str] | None = None , 
-        indent : int = 0 , vb_level : Any = 1 , force_update : bool = False , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , force_update : bool = False , **kwargs
     ) -> Base.UpdateFlag:
         """
         Alias for ``PreProcessorTask.recalculate``.

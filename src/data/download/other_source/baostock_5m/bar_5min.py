@@ -13,12 +13,14 @@ import baostock as bs
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import PATH , CALENDAR , Dates , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
 
 __all__ = ['Baostock5minBarDownloader']
+
+BaostockFileType : TypeAlias = Literal['secdf' , '5min']
 
 START_DATE = 20401231
 BAO_PATH = PATH.miscel.joinpath('Baostock')
@@ -52,7 +54,7 @@ def baostock_secdf(date : int):
     Save.df(secdf , path , vb_level = 'max' , prefix = 'Baostock Secdf')
     return secdf
 
-def baostock_past_dates(file_type : Literal['secdf' , '5min']):
+def baostock_past_dates(file_type : BaostockFileType):
     path = final_path if file_type == '5min' else secdf_path
     past_files = [p for p in path.iterdir()]
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])

@@ -8,7 +8,7 @@ import pandas as pd
 import torch.nn as nn
 from dataclasses import dataclass , field
 from functools import cached_property
-from typing import Any, Literal
+from typing import Any
 
 from src.proj import Proj , Logger , Base
 from src.proj.util.functional.device import Device
@@ -201,12 +201,12 @@ class BatchInput:
         return cls(x , y , w , i , v , y_date , y_secid)
 
     @classmethod
-    def generate(cls , data_type : str = 'day+style' , label_num : Literal[1,2] = 1):
+    def generate(cls , data_type : str = 'day+style' , label_num : int = 1):
         if data_type == 'random':
             return cls.random()
         else:
             from src.res.model.util import ModelConfig , DataModule
-
+            assert label_num <= 2 , label_num
             override = {
                 'model.module':'gru',
                 'input.type':'data',

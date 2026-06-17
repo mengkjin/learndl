@@ -17,7 +17,7 @@ import pandas as pd
 import polars as pl
 
 from functools import cached_property
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import CALENDAR , Proj , DB , Const , Base , Dates
 from src.data.util import DataBlock , INFO
@@ -32,6 +32,8 @@ from .exposure import EXPO
 __all__ = [
     'DataVendor' , 'DATAVENDOR'
 ]
+
+ReservedDataBlock : TypeAlias = Literal['daily_quotes' , 'risk_exp']
 
 class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
     """
@@ -204,9 +206,8 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
     def update_named_data_block(
         self,
-        data_key: Literal["daily_quotes", "risk_exp"],
-        db_src: str,
-        db_key: str,
+        data_key: ReservedDataBlock,
+        db_src: str , db_key: str,
         dates : Base.alias.DateType = None,
         extend=0,
     ) -> None:

@@ -27,6 +27,7 @@ __all__ = [
 ]
 
 BenchAny : TypeAlias = Benchmark | Any
+Direction : TypeAlias = Literal[1,0,-1]
 
 class FactorPerfCalc(BaseFactorAnalyticCalculator):
     TEST_TYPE = test_type
@@ -129,7 +130,7 @@ class IC_Monotony(FactorPerfCalc):
 class PnL_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
-                 ret_type : Base.lit.ReturnType = 'close' , direction : Literal[1,0,-1] = 0 , **kwargs) -> None:
+                 ret_type : Base.lit.ReturnType = 'close' , direction : Direction = 0 , **kwargs) -> None:
         params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type ,
                   'direction' : direction}
         super().__init__(params = params , **kwargs)
@@ -217,7 +218,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     """
     Factor Performance Calculator Manager
     Parameters:
-        which : str | Base.ArrayLike[str] | Literal['all']
+        which : Base.alias.NamesType | ALL
             Which tasks to run. Can be any of the following:
             'frontface' : Factor Front Face
             'coverage' : Factor Coverage

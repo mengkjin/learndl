@@ -6,15 +6,17 @@ from __future__ import annotations
 from abc import ABC , abstractmethod
 from dataclasses import dataclass , field
 from datetime import datetime
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import Base
 from src.res.factor.util.classes import Port , Benchmark , AlphaModel , Amodel , RiskAnalytic , RISK_MODEL
 
 __all__ = ['PortCreator' , 'PortCreateResult' , 'PortCreateAccuracy' , 'PortCreateUtility']
 
+PortOptimStatusType : TypeAlias = Literal['optimal' , 'max_iteration' , 'stall']
+
 class PortCreator(ABC , Base.BoundLogger):
-    def __init__(self , name : str , * , indent : int = 2 , vb_level : Any = 3 , **kwargs):
+    def __init__(self , name : str , * , indent : int = 2 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name
         self.setup(indent = self.indent + 1, vb_level = self.vb_level + 2, **kwargs)
@@ -148,7 +150,7 @@ class PortCreateAccuracy:
 class PortCreateResult:
     port        : Port
     is_success  : bool = False
-    status      : Literal['optimal', 'max_iteration', 'stall'] | Any = ''
+    status      : PortOptimStatusType | Any = ''
     utility     : PortCreateUtility | Any = None
     accuracy    : PortCreateAccuracy | Any = None
     analytic    : RiskAnalytic | Any = None

@@ -7,7 +7,7 @@ import itertools
 import numpy as np
 
 from functools import wraps
-from typing import Any , Literal   , cast
+from typing import Any , Literal , TypeAlias , cast
 from collections.abc import Sized, Callable
 
 from src.proj import Const , Base
@@ -19,6 +19,8 @@ from .pipeline import BasePipeline
 from .future_utils import FutureUtils
 
 __all__ = ['BaseTrainer']
+
+NewAttemptType : TypeAlias = Literal['model' , 'attempt']
 
 class TrainerHookWrapper:
     """
@@ -72,7 +74,7 @@ class BaseTrainer(BasePipeline):
                  module : str | None = None , schedule_name = None , 
                  override : dict | None = None , 
                  use_data : Base.lit.DataBlockTimeFrames = 'fit' , 
-                 indent : int = 0 , vb_level : Any = 1 , **kwargs):
+                 indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         assert use_data != 'predict' , 'use_data cannot be predict when training models'
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self._config_kwargs = {
@@ -459,7 +461,7 @@ class BaseTrainer(BasePipeline):
         self.model.print_out(vb_level = 2 , min_key_len = 30)
         self.callback.print_out(vb_level = 2 , min_key_len = 30)
 
-    def new_attempt(self , type : Literal['model' , 'attempt'] , **kwargs):
+    def new_attempt(self , type : NewAttemptType , **kwargs):
         self.model.new_model(**kwargs)
         self.checkpoint.new_model(**self.status.status)
         if type == 'attempt':

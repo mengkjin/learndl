@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from datetime import datetime
 from torch import nn
-from typing import TYPE_CHECKING , Any , Literal , cast
+from typing import TYPE_CHECKING , Any , Literal , cast , TypeAlias
 
 from src.proj import MACHINE , Base
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 __all__ = ['CompileStage', 'TorchCompiler']
 
-CompileStage = Literal['fit', 'test']
+CompileStage : TypeAlias = Literal['fit', 'test']
 
 _COMPILED_MARK = '_learndl_torch_compiled'
 

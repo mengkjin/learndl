@@ -7,12 +7,14 @@ import threading
 import time
 import subprocess
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from .cli import CmuxCli
 from .verify import CmuxVerifier
 from ...util import process , BasicOpener
 from ... import preference
+
+CmuxRenameOn : TypeAlias = Literal["workspace", "surface", "all"]
 
 __all__ = ['CmuxTree' , 'CmuxWindow' , 'CmuxWorkspace' , 'CmuxSurface']
 
@@ -272,7 +274,7 @@ class CmuxSurface:
         CmuxCli.cmux("send", "--workspace", self.workspace.ref , "--surface", self.ref, f'{command}\n')
         return self
 
-    def rename(self , title: str | None = None , where: Literal["workspace", "surface", "all"] = "surface"):
+    def rename(self , title: str | None = None , where: CmuxRenameOn = "surface"):
         """
         Rename this surface and/or its parent workspace.
 

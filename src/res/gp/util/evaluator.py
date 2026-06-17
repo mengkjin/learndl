@@ -4,7 +4,7 @@ Evaluator for genetic programming
 from __future__ import annotations
 import torch
 import numpy as np
-from typing import Literal , Any
+from typing import Literal , Any , TypeAlias
 from collections.abc import Callable
 from deap import gp
 from torch.multiprocessing import Pool
@@ -22,6 +22,8 @@ from .recorder import gpRecorder
 from .fitness import gpFitness
 
 __all__ = ['gpEvaluator']
+
+NeutralType : TypeAlias = Literal[0,1,2]
 
 def _except_MemoryError(func : Callable , out = None) -> Callable[..., Any]:
     def wrapper(*args , print_str = '' , **kwargs):
@@ -44,8 +46,10 @@ def _compiler(syntax : CompilerInputType) -> Callable[..., torch.Tensor]:
         ind = syntax
     return gp.compile(ind , ind.pset)
 
-def _raw_neutralize(y : torch.Tensor | None , x : torch.Tensor | None , * , insample : torch.Tensor | None = None , neutral_type : Literal[0,1,2] = 0) -> torch.Tensor | None:
-    assert neutral_type in [0,1,2] , neutral_type
+def _raw_neutralize(
+    y : torch.Tensor | None , x : torch.Tensor | None , * , 
+    insample : torch.Tensor | None = None , neutral_type : NeutralType = 0
+) -> torch.Tensor | None:
     if y is None or neutral_type == 0 or x is None:
         pass
     elif neutral_type == 1:
@@ -63,7 +67,7 @@ _neutralizer = _except_MemoryError(_raw_neutralize)
 
 class gpEvaluator(Base.BoundLogger):
     def __init__(self , param : gpParameters , input : gpInput , status : gpStatus ,  
-                timer : gpTimer , recorder : gpRecorder , * , indent : int = 1 , vb_level : Any = 2 , **kwargs):
+                timer : gpTimer , recorder : gpRecorder , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.param = param
         self.input = input
@@ -74,7 +78,7 @@ class gpEvaluator(Base.BoundLogger):
 
     def to_value(
         self , individual : CompilerInputType , * , 
-        neutral_type : Literal[0,1,2] = 0 , process_key='inf_winsor_norm', **kwargs
+        neutral_type : NeutralType = 0 , process_key='inf_winsor_norm', **kwargs
     ) -> FF.FactorValue:
         """
         根据迭代出的因子表达式,计算因子值

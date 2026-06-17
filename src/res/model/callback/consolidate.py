@@ -3,10 +3,9 @@ Consolidate all callbacks into one
 """
 from __future__ import annotations
 import inspect , itertools
-from typing import Any
 from collections.abc import Callable
 
-from src.proj import Proj
+from src.proj import Proj , Base
 from src.res.model.util import BaseCallBack , BaseTrainer , ModelConfig
 from . import monitor, fit, test, specific
 
@@ -35,7 +34,7 @@ class ConsolidateCallBack(BaseCallBack):
                 cb.at_exit(hook , *args , **kwargs)
         self.logger.stdout(f'In Stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
 
-    def print_out(self , vb_level : Any = 2 , min_key_len = -1):
+    def print_out(self , vb_level : Base.lit.VerbosityLevel = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]
         infos_dict = {name:f'({param}), {doc}' if doc else f'({param})' for name , param , doc in infos}
         self.logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)

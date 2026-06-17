@@ -11,7 +11,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Any, Literal
+from typing import Any, Literal , TypeAlias
 
 from src.func.metric import mse , pearson , ccc
 
@@ -279,9 +279,11 @@ class SoftTopKLoss(BaseLoss):
 class ProgressiveGlobal2Top(BaseLoss):
     """Progressive Global to Top-K loss."""
     key = 'global2top'
+    GlobalOptionType : TypeAlias = Literal['pearson', 'ccc' , 'mse']
+    TopOptionType : TypeAlias = Literal['soft_topk']
     def __init__(self, 
-        global_option : Literal['pearson', 'ccc' , 'mse'] = 'ccc', 
-        top_option : Literal['soft_topk'] = 'soft_topk', 
+        global_option : GlobalOptionType = 'ccc', 
+        top_option : TopOptionType = 'soft_topk', 
         global_kwargs : dict[str, Any] | None = None , 
         top_kwargs : dict[str, Any] | None = None , 
         hidden_corr_lambda : float = 0.01 ,

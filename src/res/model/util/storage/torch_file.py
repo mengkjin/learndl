@@ -7,15 +7,17 @@ import gc , torch
 import numpy as np
 import pandas as pd
 
-from typing import Any , Literal , TypeVar
+from typing import Any , Literal , TypeVar , TypeAlias
 from collections.abc import Sequence
 
 from src.proj import PATH , Load
 from src.proj.util.functional.device import Device
 
-T = TypeVar('T')
-
 __all__ = ['TorchFileStorage' , 'StoredTorchFileLoader']
+
+T = TypeVar('T')
+ShuffleTime : TypeAlias = Literal['init' , 'epoch']
+ShuffleOption : TypeAlias = Literal['static' , 'init' , 'epoch']
 
 class TorchFileStorage:
     """Interface of mem or disk storage, methods"""
@@ -77,7 +79,7 @@ class TorchFileStorage:
 
 class StoredTorchFileLoader(Sequence):
     """'retrieve batch_input from a Storage"""
-    def __init__(self, loader_storage : TorchFileStorage , keys : list[str] , shuffle_option : Literal['static' , 'init' , 'epoch'] = 'static'):
+    def __init__(self, loader_storage : TorchFileStorage , keys : list[str] , shuffle_option : ShuffleOption = 'static'):
         self.storage = loader_storage
         self.shufopt = shuffle_option
         self.keys   = self.shuf(keys)
@@ -89,7 +91,7 @@ class StoredTorchFileLoader(Sequence):
     def __iter__(self):
         for key in self.shuf(self.keys , 'epoch'): 
             yield self.storage.load(key)
-    def shuf(self , loader : list[T] , stage : Literal['init' , 'epoch'] = 'init') -> list[T]:
+    def shuf(self , loader : list[T] , stage : ShuffleTime = 'init') -> list[T]:
         """shuffle at init or each epoch"""
         new_loader : Any = loader
         if stage == self.shufopt: 

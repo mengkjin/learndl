@@ -27,7 +27,7 @@ class SellsideFTPDownloader(Base.BasicUpdater):
     ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE , )
     START_DATE = 20991231
 
-    def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self, source='msjg' , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(vb_level=vb_level, indent=indent, **kwargs)
         assert source in MACHINE.secret.get('accounts' , 'sellside') , f'{source} is not a valid source name, check .secret/accounts.yaml[sellside]'
         self.ftp_param : dict[str , Any] = MACHINE.secret.get('accounts' , f'sellside/{source}')

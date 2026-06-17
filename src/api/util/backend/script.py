@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re , yaml
 from pathlib import Path
-from typing import Literal , Any , ClassVar
+from typing import Literal , TypeAlias , Any , ClassVar
 from dataclasses import dataclass , asdict , field
 
 from src.proj import PATH , MACHINE , Base , Options # noqa
@@ -28,7 +28,8 @@ from .task import TaskItem , TaskQueue , runs_page_url
 
 __all__ = ['PathItem' , 'ScriptHeader' , 'ScriptParamInput' , 'ScriptRunner']
 
-ReadyStatus = Literal[0, 1, 2, 3]
+ReadyStatus : TypeAlias = Literal[0, 1, 2, 3]
+ScriptParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
 
 def _format_path(script_key : str) -> str:
     """get human-readable breadcrumb path, e.g. ``'Data > Train Data'`` from script_key"""
@@ -275,7 +276,7 @@ class ScriptParamInput:
         Enumeration values for ``list``/``tuple``/``enum`` types.
     """
     name: str
-    type: Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
+    type: ScriptParamType
     desc: str
     required: bool = False
     default: Any = None

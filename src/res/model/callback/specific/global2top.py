@@ -5,13 +5,15 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Literal
+from typing import Literal , TypeAlias
 from collections.abc import Callable
 from src.proj.bases import FittingEventType
 from src.res.model.util import BaseCallBack
 from src.res.model.util.core import epoch_key
 
 __all__ = ['SpecificCB_Global2Top']
+
+G2TPhase : TypeAlias = Literal['global' , 'top']
 
 def arr_plateau(arr , n : int , eps = 0.) -> bool:
     """Last n element of arr are all smaller than the previous one"""
@@ -53,7 +55,7 @@ def synthetic_accuracy(glb , top , * , glb_climax : float | None = None , glb_mu
         return top + glb * glb_multiplier
     return top - np.maximum(0 , glb_climax - glb) * glb_multiplier
 
-def aggregator_factory(phase : Literal['global' , 'top'] , glb_climax : float | None = None , glb_multiplier : float = 5.) -> Callable[[dict[str,float]],float]:
+def aggregator_factory(phase : G2TPhase , glb_climax : float | None = None , glb_multiplier : float = 5.) -> Callable[[dict[str,float]],float]:
     if phase == 'global':
         def _aggregator(accuracies : dict[str,float]) -> float:
             glb , _ = split_accuracies(accuracies)
@@ -108,7 +110,7 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.global_support_level = -1
         self.loss_weights_set = False
         self.accuracy_computer_set = False
-        self.fitting_phase : Literal['global' , 'top'] = 'global'
+        self.fitting_phase : G2TPhase = 'global'
         self.set_accuracy_verdict()
 
     def collect_accuracies(self):

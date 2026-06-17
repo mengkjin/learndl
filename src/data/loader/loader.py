@@ -16,8 +16,6 @@ FactorCategory1Loader
 from __future__ import annotations
 import pandas as pd
 
-from typing import Any
-
 from src.proj import PATH , DB , CALENDAR , Const , Base
 from src.data.util import DataBlock
 
@@ -36,7 +34,7 @@ class BlockLoader(Base.BoundLogger):
         db_key : str | list | None = None , 
         feature : Base.alias.NamesType = None , 
         use_alt : bool = True , * , 
-        indent : int = 1 , vb_level : Any = 1 , **kwargs
+        indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
@@ -86,7 +84,7 @@ class FrameLoader(Base.BoundLogger):
     """
     def __init__(
         self , db_src : str , db_key : str , reserved_src : Base.alias.NamesType = None , 
-        use_alt : bool = True , * , indent : int = 1 , vb_level : Any = 1 , **kwargs
+        use_alt : bool = True , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.db_src = db_src
@@ -117,7 +115,7 @@ class FactorLoader(BlockLoader):
         names : Base.alias.NamesType , 
         normalize = False , 
         fill_method : Base.lit.FactorFillNanMethod = 'drop' , * ,
-        indent : int = 1 , vb_level : Any = 1 ,
+        indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1 ,
         **kwargs
     ):
         super().__init__('factor' , indent = indent , vb_level = vb_level)

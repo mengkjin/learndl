@@ -7,7 +7,6 @@ import numpy as np
 
 from abc import abstractmethod
 from functools import cached_property
-from typing import Any
 
 from src.proj import Const , Logger , Base
 from src.res.factor.util import (
@@ -50,7 +49,7 @@ class BasicCreatorConfig:
         return f'{self.__class__.__name__}({", ".join([f"{k}={getattr(self, k)}" for k in self.slots])})'
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.slots and v is not None}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.slots}
         if use_kwargs and drop_kwargs: 
@@ -137,7 +136,7 @@ class BasicCreatorConfig:
 
 class BasicPortfolioCreator(PortCreator):
     @abstractmethod
-    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    def setup(self , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         self.conf = BasicCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self
     

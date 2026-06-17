@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.ticker import FuncFormatter
 from matplotlib.typing import LegendLocType
 from plottable import Table , ColumnDefinition
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import Base
 from src.proj.log import Logger
@@ -21,7 +21,10 @@ plt.rcParams['font.family'] = ['monospace'] # ['sans-serif']
 # plt.rcParams['font.sans-serif'] = ['SimHei'] # for chinese
 plt.rcParams['axes.unicode_minus'] = False
 
-AxisFormatType = Literal['pct' , 'flt' , 'int' , 'default']
+AxisFormatType : TypeAlias = Literal['pct' , 'flt' , 'int' , 'default']
+DropnaType : TypeAlias = Literal['all' , 'any'] | bool
+XAxisTickPosType : TypeAlias = Literal['top' , 'bottom' , 'both' , 'default' , 'none'] | None
+YAxisTickPosType : TypeAlias = Literal['left' , 'right' , 'both' , 'default' , 'none'] | None
 
 def new_figure(size = (16 , 7)):
     """Create a figure with default research-friendly size."""
@@ -99,7 +102,7 @@ class PlotFactorData:
         sort_keys : Base.alias.NamesType = (
             'prefix' , 'factor_name' , 'benchmark' , 'strategy' , 'suffix' , 
             'trade_date' , 'model_date' , 'end' , 'start') ,
-        dropna : bool | Literal['all', 'any'] = True , rounding = 6 , suptitle = False
+        dropna : DropnaType = True , rounding = 6 , suptitle = False
     ):
         if isinstance(data , SubPlotData):
             data , name_key , fig  = data.sub_data , data.group_by , data.get_fig()
@@ -229,7 +232,7 @@ def set_xaxis(
     index : Any | None = None , labels : Any | None = None , rotation : float | None = 45 , 
     format : AxisFormatType = 'default' , digits = 1 , 
     title = '' , title_color = None , 
-    tick_pos : Literal['top', 'bottom', 'both', 'default', 'none'] = 'default', 
+    tick_pos : XAxisTickPosType = 'default', 
     tick_color = None , tick_size = None , tick_length = None ,
     num_ticks = 10 , grid = True
 ):
@@ -275,10 +278,12 @@ def set_xaxis(
     if tick_args: 
         ax.xaxis.set_tick_params(**tick_args)
 
-def set_yaxis(ax : Axes , format : AxisFormatType = 'pct' , digits = 1 , 
-              title = '' , title_color = None , 
-              tick_pos : Literal['left', 'right', 'both', 'default', 'none'] | None = 'default' , 
-              tick_color = None , tick_size = None , tick_length = None , tick_lim = None):
+def set_yaxis(
+    ax : Axes , format : AxisFormatType = 'pct' , digits = 1 , 
+    title = '' , title_color = None , 
+    tick_pos : YAxisTickPosType = 'default' , 
+    tick_color = None , tick_size = None , tick_length = None , tick_lim = None
+):
     tick_args : dict[str , Any] = {}
     title_args : dict[str , Any] = {}
 

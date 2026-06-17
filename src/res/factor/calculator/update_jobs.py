@@ -45,7 +45,7 @@ class JobChunkPayload(TypedDict):
 
 class BaseUpdateJob(ABC):
     """base job class"""
-    def __init__(self , calc : FactorCalculator , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+    def __init__(self , calc : FactorCalculator , overwrite : bool = False , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         self.calc : FactorCalculator | Any = calc
         self.level = calc.level
         self.factor_name = calc.factor_name
@@ -53,7 +53,7 @@ class BaseUpdateJob(ABC):
         self.done = False
 
         self.indent = indent
-        self.vb_level = vb_level
+        self.vb_level : Base.lit.VerbosityLevel = vb_level
 
     def __repr__(self):
         return self.factor_name
@@ -145,7 +145,7 @@ def run_job_chunk_payload(payload: JobChunkPayload) -> JobChunkReport:
 class BaseUpdateJobList(Base.BoundLogger):
     """base update job list class"""
     def __init__(self , name : str , jobs : list[BaseUpdateJob] | None = None , * ,
-        multithreading : bool = False , timeout : float = -1 , vb_level : Any = 1 , indent : int = 0 , **kwargs):
+        multithreading : bool = False , timeout : float = -1 , vb_level : Base.lit.VerbosityLevel = 1 , indent : int = 0 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.name = name
         self.jobs : list[BaseUpdateJob] = jobs or []
@@ -186,7 +186,7 @@ class BaseUpdateJobList(Base.BoundLogger):
 
     def with_kwargs(
         self , multithreading : bool | None = None ,
-        vb_level : Any | None = None , indent : int | None = None , timeout : float | None = None ,
+        vb_level : Base.lit.VerbosityLevel | None = None , indent : int | None = None , timeout : float | None = None ,
     ) -> BaseUpdateJobList:
         if multithreading is not None:
             self.multithreading = multithreading
@@ -316,7 +316,7 @@ class BaseUpdateJobList(Base.BoundLogger):
         return BaseUpdateJobList(name , jobs , **kwargs)
 
 class UpdateJobDate(BaseUpdateJob):
-    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+    def __init__(self , calc : FactorCalculator , date : int , overwrite : bool = False , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.date = date
 
@@ -352,7 +352,7 @@ class UpdateJobDate(BaseUpdateJob):
 
 class UpdateJobAll(BaseUpdateJob):
     def __init__(self , calc : FactorCalculator , start : int | None = None , end : int | None = None ,
-                 overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+                 overwrite : bool = False , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.target_dates = calc.target_dates(start , end , overwrite=overwrite)
         self.start = start
@@ -392,7 +392,7 @@ class UpdateJobAll(BaseUpdateJob):
 
 class UpdateJobStats(BaseUpdateJob):
     def __init__(self , calc : FactorCalculator , stats_type : Base.lit.FactorStatsPeriod ,
-                 year : int , dates : np.ndarray , overwrite : bool = False , * , indent : int = 1 , vb_level : Any = 2):
+                 year : int , dates : np.ndarray , overwrite : bool = False , * , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         super().__init__(calc , overwrite , indent = indent , vb_level = vb_level)
         self.stats_type = stats_type
         self.year = year

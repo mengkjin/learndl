@@ -3,7 +3,7 @@ Trading factors for the project
 """
 from __future__ import annotations
 import numpy as np
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import TradingFactor
@@ -13,7 +13,9 @@ __all__ = [
     'flow_elsm' , 'flow_corr_elsm' , 'flow_corr_smlag'
 ]
 
-def inflow_by_return(date , n_months : int , direction : Literal[-1,1] , div_amt = True , min_finite_ratio = 0.25):
+DirectionType : TypeAlias = Literal[-1,1]
+
+def inflow_by_return(date , n_months : int , direction : DirectionType , div_amt = True , min_finite_ratio = 0.25):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     net_mfs   = DATAVENDOR.TRADE.get_mf_data(start , end , 'net_mf_amount' , pivot = True)
     rets_sign = np.sign(DATAVENDOR.TRADE.get_returns(start , end , pivot = True))

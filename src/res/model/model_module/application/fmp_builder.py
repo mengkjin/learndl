@@ -22,7 +22,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
     N_BESTS    = [-1 , 50]
     BENCHMARKS = Benchmark.DEFAULTS
 
-    def __init__(self , pred_path : PredictorPath , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , pred_path : PredictorPath , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.pred_path = pred_path
         self.pred_path.set_vb(vb_level , indent)
@@ -182,7 +182,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
     @classmethod
     def update(
         cls , model_name : str | None = None , update = True , 
-        overwrite = False , indent : int = 0 , vb_level : Any = 1
+        overwrite = False , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ) -> Base.UpdateFlag:
         """Update prediction models' factor model portfolios"""
         cls.SetClassVB(vb_level , indent)

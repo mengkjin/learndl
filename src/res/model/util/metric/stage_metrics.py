@@ -8,7 +8,7 @@ import torch
 
 from collections import defaultdict
 from torch import Tensor
-from typing import Any  , Literal
+from typing import Any  , Literal , TypeAlias
 from collections.abc import Callable
 from pathlib import Path
 
@@ -20,6 +20,9 @@ from .metric_result import EpochMetricResult
 
 __all__ = ['BatchMetrics' , 'EpochMetrics' , 'AttemptMetrics' , 'ModelMetrics']
 
+MetricStage : TypeAlias = Literal['fit' , 'test'] | Any
+BatchMetricKey : TypeAlias = Literal['accuracies' , 'losses' , 'rankic' , 'total_loss' , 'total_accuracy' , 'total_loss_item' , 'loss_weights']
+EpochMetricKey : TypeAlias = Literal['accuracies' , 'losses' , 'weights' , 'totals']
 
 class BatchMetrics:
     def __init__(self , aggregator : MetricAggregator) -> None:
@@ -32,7 +35,7 @@ class BatchMetrics:
     def __repr__(self):
         return f'{self.__class__.__name__}(key={self.key},accuracies={self.accuracies},losses={self.losses})'
 
-    def set_metrics(self , key : Literal['accuracies' , 'losses' , 'rankic' , 'total_loss' , 'total_accuracy' , 'total_loss_item' , 'loss_weights'] , metrics : Any):
+    def set_metrics(self , key : BatchMetricKey , metrics : Any):
         match key:
             case 'accuracies' | 'losses' | 'loss_weights':
                 assert isinstance(metrics , dict) , f'{key} should be a dict[str,float], but got {metrics}'
@@ -44,10 +47,10 @@ class BatchMetrics:
                 raise ValueError(f'Invalid metric key: {key}')
         self.metrics[key] = metrics
 
-    def has_metrics(self , key : Literal['accuracies' , 'losses' , 'rankic' , 'total_loss' , 'total_accuracy' , 'total_loss_item' , 'loss_weights']) -> bool:
+    def has_metrics(self , key : BatchMetricKey) -> bool:
         return key in self.metrics
 
-    def reset_metrics(self , key : Base.alias.NamesType | Literal['all']):
+    def reset_metrics(self , key : Base.alias.NamesType | Base.ALL):
         if not key:
             return
         if key == 'all':
@@ -205,7 +208,7 @@ class EpochMetrics(AggregatedMetrics):
             self.collected_tables[f'epoch_{name}'] = self.get_epoch_table(name)
         self.collected = True
 
-    def get_epoch_table(self , name : Literal['accuracies', 'losses', 'weights', 'totals'] | str) -> pd.DataFrame:
+    def get_epoch_table(self , name : EpochMetricKey | str) -> pd.DataFrame:
         if f'epoch_{name}' in self.collected_tables:
             return self.collected_tables[f'epoch_{name}']
         batch_table = self.get_table(name)
@@ -335,7 +338,7 @@ class AttemptMetrics(AggregatedMetrics):
         return [df['total_loss'].item() for df in self.tables['valid_epoch_totals']]
 
 class ModelMetrics(AggregatedMetrics):
-    def new(self , stage : Literal['fit' , 'test'] | Any = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
+    def new(self , stage : MetricStage = 'fit' , model_num : int = 0 , model_date : int = 0 , submodel : str  = 'best' , **kwargs):
         assert stage in ['fit' , 'test'] , f'[{stage}] stage is not allowed to be used for model metrics'
         super().new(stage = stage , model_num = model_num , model_date = model_date , submodel = submodel)
         self.attempt_metric_results : list[EpochMetricResult | None] = []

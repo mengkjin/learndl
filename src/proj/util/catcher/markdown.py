@@ -4,13 +4,15 @@ import shutil
 
 from datetime import datetime
 from functools import cached_property
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj.env import PATH , MACHINE
 from src.proj.core import Elapsed , Since
 from .basic import OutputCatcher , DeflectorGroup , MarkdownWriter
 
 __all__ = ['MarkdownCatcher']
+
+ContentSeperatingBy : TypeAlias = Literal['min', 'hour', 'day'] | None
  
 class MarkdownCatcher(OutputCatcher):
     """
@@ -24,14 +26,15 @@ class MarkdownCatcher(OutputCatcher):
     export_dir = PATH.logs.joinpath('catcher' , 'markdown')
     export_suffix : str = '.md'
 
-    def __init__(self, title: str | None = None,
-                 category : str = 'miscelaneous',
-                 init_time: datetime | None = None,
-                 add_time_to_title: bool = False,
-                 to_share_folder: bool = MACHINE.cuda_server ,
-                 seperating_by: Literal['min', 'hour', 'day'] | None = 'min',
-                 **kwargs):
-
+    def __init__(
+        self, title: str | None = None,
+        category : str = 'miscelaneous',
+        init_time: datetime | None = None,
+        add_time_to_title: bool = False,
+        to_share_folder: bool = MACHINE.cuda_server ,
+        seperating_by: ContentSeperatingBy = 'min',
+        **kwargs
+    ):
         self.category = category
         self.init_time = init_time if init_time else datetime.now()
         self.title = title

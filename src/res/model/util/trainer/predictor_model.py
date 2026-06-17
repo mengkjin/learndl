@@ -9,6 +9,7 @@ from abc import abstractmethod
 from functools import cached_property
 from typing import Any
 
+from src.proj import Base
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.advance.torch_compile import TorchCompiler
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , BatchData , ModelFile
@@ -23,7 +24,7 @@ class PredictorModel(TrainerPipeline):
     COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     AllowTorchCompile = False
 
-    def __init__(self, *args , vb_level : Any = 1 , **kwargs) -> None:
+    def __init__(self, *args , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:
         self.reset()
         self.net : torch.nn.Module | Any = None
         self.model_dict = ModelDict()
@@ -57,7 +58,7 @@ class PredictorModel(TrainerPipeline):
         model = get_predictor_module(config , **kwargs).bound_with(binder)
         return model
 
-    def print_out(self , vb_level : Any = 2 , min_key_len = 30):
+    def print_out(self , vb_level : Base.lit.VerbosityLevel = 2 , min_key_len = 30):
         infos = {'Module Type' : self.__class__.__name__}
         self.logger.stdout_pairs(infos , title = f'Predictor Model Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
     

@@ -13,7 +13,7 @@ import rqdatac
 import pandas as pd
 import numpy as np
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
@@ -21,6 +21,8 @@ from src.data.util import secid_adjust , trade_min_reform
 from .initializer import RQInitializer , MinDataType , RQ_PATH
 
 __all__ = ['RcquantMinBarDownloader']
+
+RcquantFileType : TypeAlias = Literal['secdf' , 'min']
 
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
@@ -64,7 +66,7 @@ def write_min(df : pd.DataFrame , date : int , data_type : MinDataType) -> None:
     path.parent.mkdir(exist_ok=True , parents=True)
     Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
 
-def rcquant_past_dates(data_type : MinDataType , file_type : Literal['secdf' , 'min']) -> Dates:
+def rcquant_past_dates(data_type : MinDataType , file_type : RcquantFileType) -> Dates:
     path = RQ_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RQ_PATH.joinpath(f'{data_type}df')
     past_files = [p for p in path.iterdir()]
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])

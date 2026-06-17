@@ -4,7 +4,7 @@ Static valuation factors for the project
 from __future__ import annotations
 import pandas as pd
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import ValueFactor
@@ -27,10 +27,13 @@ __all__ = [
     'cfev_ttm' , 'cfev_ttm_rank1y' , 'cfev_ttm_rank3y' , 
 ]
 
+ReindexLike : TypeAlias = Literal['numerator' , 'denominator']
+DenominatorType : TypeAlias = Literal['mv' , 'cp' , 'ev'] | str
+
 def calc_valuation(
     numerator : pd.DataFrame | pd.Series | float | int , 
     denominator : pd.DataFrame | pd.Series | float | int , 
-    pct = True , reindex_like : Literal['numerator' , 'denominator'] = 'denominator'
+    pct = True , reindex_like : ReindexLike = 'denominator'
 ):
     if isinstance(numerator , pd.DataFrame) and isinstance(denominator , pd.DataFrame):
         union_index = numerator.index.union(denominator.index).sort_values()
@@ -81,7 +84,7 @@ def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
     ev = mv + added
     return ev
 
-def get_denominator(denominator : Literal['mv', 'cp', 'ev'] | str , date : int):
+def get_denominator(denominator : DenominatorType , date : int):
     if denominator == 'mv':
         v = DATAVENDOR.TRADE.get_val(date , ['secid','total_mv']).set_index(['secid'])['total_mv'].sort_index()
     elif denominator == 'cp':
@@ -92,7 +95,7 @@ def get_denominator(denominator : Literal['mv', 'cp', 'ev'] | str , date : int):
         raise KeyError(denominator)
     return v
 
-def get_denominator_hist(denominator : Literal['mv', 'cp', 'ev1'] | str , date : int , n_year = 1 , date_step = 1):
+def get_denominator_hist(denominator : DenominatorType , date : int , n_year = 1 , date_step = 1):
     if denominator == 'mv':
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
         v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 

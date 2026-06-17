@@ -204,7 +204,7 @@ class _PipelineMeta(ABCMeta):
 
 class BasePipeline(_Pipeline, Base.BoundLogger, Base.CacheProps, metaclass=_PipelineMeta):
     """Base class for all model pipelines , e.g. trainer, predictor, data module, etc."""
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         
     @cached_property

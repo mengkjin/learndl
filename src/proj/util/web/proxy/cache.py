@@ -3,11 +3,12 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from datetime import datetime , timedelta
-from typing import Literal , Any
+from typing import Any
 from collections.abc import Iterable
 
 from src.proj.env import PATH
 from src.proj.cal import BJ_TZ
+from src.proj.bases import ALL
 from .core import ProxySet , strProxy
 
 _default_time = datetime.strptime('1900-01-01 00:00:00', "%Y-%m-%d %H:%M:%S").replace(tzinfo=BJ_TZ)
@@ -84,7 +85,7 @@ class ProxyCache:
             PATH.dump_json({name: cache.to_dict() for name, cache in cls._cached_proxies.items()}, cls._proxies_file, overwrite=True)
 
     @classmethod
-    def get_cached_proxies(cls , target_url: str | Literal['all']) -> ProxySet:
+    def get_cached_proxies(cls , target_url: str | ALL) -> ProxySet:
         """Get cached proxies from cache , return is if_obsolete and proxies"""
         proxies = cls.load()
         if target_url == 'all':

@@ -5,8 +5,6 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 
-from typing import Literal
-
 from src.data import DATAVENDOR , DataBlock 
 from src.proj import DB , CALENDAR , Save , Load , Base , Dates
 from .portfolio import Portfolio
@@ -98,7 +96,7 @@ class Universe:
         return df
     
     def get(
-        self , dates : Literal['all'] | Base.alias.DateType = None , 
+        self , dates : Base.alias.DateType | Base.ALL = None , 
         exclusions : str = 'st_lowprice_bse_loser_warnst'
     ) -> Portfolio:
         if isinstance(dates , str) and dates == 'all':

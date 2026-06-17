@@ -8,7 +8,7 @@ import pandas as pd
 import statsmodels.api as sm
 
 from dataclasses import dataclass
-from typing import Any , ClassVar , Literal
+from typing import Any , ClassVar , Literal , TypeAlias
 
 from src.proj import DB , Const , Proj , Dates , Base
 from src.data import BlockLoader , FrameLoader , DATAVENDOR
@@ -20,6 +20,10 @@ __all__ = ['RiskModel' , 'RiskProfile' , 'RiskAnalytic' , 'Attribution' , 'RISK_
 
 _style = Const.Factor.RISK.style
 _indus = Const.Factor.RISK.indus
+
+PortType : TypeAlias = Literal['portfolio' , 'initial' , 'benchmark' , 'active']
+RiskAnalyticType : TypeAlias = Literal['industry' , 'style' , 'risk']
+FillNanType : TypeAlias = Literal['max' , 'min'] | float | None
 
 @dataclass
 class Rmodel:
@@ -120,9 +124,12 @@ class Rmodel:
             self.futret = futret.loc[:,['tot']].join(excess_ret).join(model.resid.rename('specific'))
             self.regressed = target_date
         return self
-    def get_model(self , *args , **kwargs): return self
+
+    def get_model(self , *args , **kwargs): 
+        return self
+
     @staticmethod
-    def loc_secid(df : pd.DataFrame | Any , secid : Base.alias.SecidType , fillna : Literal['max', 'min'] | float | None = None):    
+    def loc_secid(df : pd.DataFrame | Any , secid : Base.alias.SecidType , fillna : FillNanType = None):    
         secid = Base.ensure_secid(secid)
         if secid is None:
             return df
@@ -266,7 +273,7 @@ class RiskAnalytic:
     def __repr__(self):
         return f'{self.__class__.__name__}({self.date})'
 
-    def append(self , port_type : Literal['portfolio' , 'benchmark' , 'initial' , 'active'] , risk_profile : RiskProfile):
+    def append(self , port_type : PortType , risk_profile : RiskProfile):
         df = risk_profile.to_dataframe()
         if df is None: 
             return
@@ -292,7 +299,7 @@ class RiskAnalytic:
             self.risk     = self.risk.round(Const.Factor.ROUNDING.exposure)
         return self
 
-    def styler(self , which : Literal['industry' , 'style' , 'risk'] = 'style'):
+    def styler(self , which : RiskAnalyticType = 'style'):
         if which == 'industry':
             assert self.industry is not None
             return self.industry.style.format(lambda x:f'{x:.2%}')

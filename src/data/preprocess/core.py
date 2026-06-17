@@ -129,7 +129,8 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
-        mask : dict[str, Any] | None = None , indent : int = 0 , vb_level : Any = 'max' , **kwargs
+        mask : dict[str, Any] | None = None , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 'max' , **kwargs
     ) -> None:
         """
         Parameters

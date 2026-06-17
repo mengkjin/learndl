@@ -218,7 +218,7 @@ class FittingEpochs:
     
 class TrainerStatus(BasePipeline):
     """Trainer status class, used to store the status of the trainer"""
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.stage   : Base.lit.StageAll = 'setup'
         self.dataset : Base.lit.DatasetAll = 'train'

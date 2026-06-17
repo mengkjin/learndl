@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any , Literal
+from typing import Any
 
 from src.proj.env import MACHINE
 from src.proj.core import SingletonMeta , lit
@@ -19,9 +19,11 @@ class DataUpdateConfig(metaclass=SingletonMeta):
     - target_dates: target dates of factor update
     """
     @cached_property
-    def _use_schedule(self) -> Literal['production' , 'testing']:
+    def _use_schedule(self):
         """use schedule"""
-        return MACHINE.preference('update_schedule' , 'machine_schedules').get(MACHINE.name , 'testing')
+        schedule = MACHINE.preference('update_schedule' , 'machine_schedules').get(MACHINE.name , 'testing')
+        assert schedule == 'production' or schedule == 'testing' , f'Invalid schedule: {schedule}'
+        return schedule
     @cached_property
     def _production(self) -> dict[str , Any]:
         """production schedule"""

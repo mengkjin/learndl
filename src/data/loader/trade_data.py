@@ -16,14 +16,14 @@ from .access import DateDataAccess
 __all__ = ['TRADE']
 
 QuoteField = Literal['adjfactor','open','high','low','close','amount','volume', 
-'vwap','status','limit','pctchange','preclose','turn_tt', 'turn_fl','turn_fr']
+'vwap','status','limit','pctchange','preclose','turn_tt', 'turn_fl','turn_fr'] | str
 ValField = Literal['turnover_rate','turnover_rate_f','volume_ratio','pe','pe_ttm','pb',
-'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share','free_share','total_mv','circ_mv']
+'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share','free_share','total_mv','circ_mv'] | str
 MfField = Literal['buy_sm_vol','buy_sm_amount','sell_sm_vol','sell_sm_amount','buy_md_vol',
 'buy_md_amount','sell_md_vol','sell_md_amount','buy_lg_vol','buy_lg_amount','sell_lg_vol',
 'sell_lg_amount','buy_elg_vol','buy_elg_amount','sell_elg_vol','sell_elg_amount','net_mf_vol',
-'net_mf_amount']
-LimitField = Literal['up_limit','down_limit','pre_close']
+'net_mf_amount'] | str
+LimitField = Literal['up_limit','down_limit','pre_close'] | str
 ReturnType = Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight']
 VolumeType = Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr']
 MvType = Literal['circ_mv' , 'total_mv']
@@ -89,7 +89,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_quotes(
         self , start : Base.intDate , end : Base.intDate ,
-        field : Base.ArrayLike[QuoteField | str] ,
+        field : Base.ArrayLike[QuoteField] ,
         mask = False , pivot = False , drop_old = False , adj_price = True
     ) -> pd.DataFrame:
         """
@@ -125,7 +125,7 @@ class TradeDataAccess(DateDataAccess):
     
     def get_val_data(
         self , start : Base.intDate , end : Base.intDate ,
-        field : Base.ArrayLike[ValField | str] ,
+        field : Base.ArrayLike[ValField] ,
         prev = True , mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return valuation data (PE, PB, market cap, etc.) with point-in-time shifting."""
@@ -134,7 +134,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_mf_data(
         self , start : Base.intDate , end : Base.intDate ,
-        field : Base.ArrayLike[MfField | str] , 
+        field : Base.ArrayLike[MfField] , 
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return money-flow data (large/medium/small buy-sell classifications)."""
@@ -143,7 +143,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_limit_data(
         self , start : Base.intDate , end : Base.intDate ,
-        field : Base.ArrayLike[LimitField | str] ,
+        field : Base.ArrayLike[LimitField] ,
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return limit-price data (daily limit-up / limit-down prices and previous close)."""

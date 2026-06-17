@@ -8,7 +8,7 @@ Registry keys: 'mse', 'pearson', 'ccc', 'spearman'
 from __future__ import annotations
 import torch
 import torch.nn as nn
-from typing import Literal , Any
+from typing import Literal , Any , TypeAlias
 
 from src.func.metric import mse , pearson , ccc , spearman
 
@@ -97,9 +97,11 @@ class LongShortDiff(BaseAccuracy):
 class ProgressiveGlobal2Top(BaseAccuracy):
     """Progressive Global to Top-K loss."""
     key = 'global2top'
+    GlobalOptionType : TypeAlias = Literal['mse' , 'pearson', 'ccc' , 'spearman']
+    TopOptionType : TypeAlias = Literal['long_avg' , 'long_short']
     def __init__(self, 
-        global_option : Literal['mse' , 'pearson', 'ccc' , 'spearman'] = 'spearman', 
-        top_option : Literal['long_avg' , 'long_short'] = 'long_avg', 
+        global_option : GlobalOptionType = 'spearman', 
+        top_option : TopOptionType = 'long_avg', 
         global_kwargs : dict[str, Any] | None = None , 
         top_kwargs : dict[str, Any] | None = None , 
         base_top_lambda : float = 1. ,

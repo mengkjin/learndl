@@ -3,23 +3,24 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from datetime import datetime , timedelta
-from typing import Any  , Literal   , TypeVar , TYPE_CHECKING , TypeAlias
+from typing import Any , Literal  , TypeVar , TypeAlias
 from collections.abc import Callable, Mapping, Iterable
 from uuid import uuid4
 
 from src.proj import MACHINE , Logger
 
-if TYPE_CHECKING:
-    T = TypeVar('T')
-    INPUT_TYPE : TypeAlias = (
-        Callable[..., T] | tuple[Callable[..., T], Iterable[Any] | None] |
-        tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
-    )
-
 __all__ = ['parallel' , 'is_main_process']
 
+T = TypeVar('T')
+FuncCallInput : TypeAlias = (
+    Callable[..., T] | tuple[Callable[..., T], Iterable[Any] | None] |
+    tuple[Callable[..., T], list[Any] | tuple[Any, ...] | None, dict[str, Any] | None]
+)
+FuncCallInputs : TypeAlias = Mapping[Any, FuncCallInput[T]] | Iterable[FuncCallInput[T]]
+ParallelMethodType : TypeAlias = Literal['forloop' , 'thread' , 'process']
+
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
-ParallelMethodType = Literal['forloop' , 'thread' , 'process']
+
 
 def is_main_process() -> bool:
     """True only in the process that launched the job (not a ``ProcessPoolExecutor`` worker)."""
@@ -27,8 +28,7 @@ def is_main_process() -> bool:
     return mp.current_process().name == 'MainProcess'
 
 def parallel(
-    inputs : Mapping[Any, INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
-    method : int | bool | ParallelMethodType = 'thread' , 
+    inputs : FuncCallInputs[T] , method : int | bool | ParallelMethodType = 'thread' , 
     max_workers : int = MAX_WORKERS , ignore_error : bool = False , timeout : float = -1 , indent : int = 0 ,
     capture_mp_output : bool = False , keep_mp_output_on_error : bool = False , **kwargs
 ) -> dict[Any , T]:
@@ -107,7 +107,7 @@ def _get_method(method : int | bool | ParallelMethodType , max_workers : int = M
 class _FuncCall:
     """Wraps one callable spec with optional result capture and error policy."""
 
-    def __init__(self , func_input : INPUT_TYPE , key : Any , 
+    def __init__(self , func_input : FuncCallInput , key : Any , 
                  result_dict : dict , catch_errors : tuple[type[Exception],...] = () ,
                  **kwargs):
         """Store call specification, result bucket key, and exception types to swallow."""
@@ -125,7 +125,7 @@ class _FuncCall:
         return self.go()
 
     @staticmethod
-    def unwrap(func_input : INPUT_TYPE[T] , **kwargs) -> tuple[Callable[..., T] , tuple[Any, ...] , dict[str, Any]]:
+    def unwrap(func_input : FuncCallInput[T] , **kwargs) -> tuple[Callable[..., T] , tuple[Any, ...] , dict[str, Any]]:
         """Normalize ``func_input`` into ``(callable, args, kwargs)``."""
         args = []
         if isinstance(func_input , Callable):
@@ -152,7 +152,7 @@ class _FuncCall:
 
     @classmethod
     def try_call(
-        cls , func_input : INPUT_TYPE[T] , key : Any | None = None , 
+        cls , func_input : FuncCallInput[T] , key : Any | None = None , 
         result_dict : dict | None = None , catch_errors : tuple[type[Exception],...] = () ,
         **kwargs
     ) -> T | None:
@@ -184,8 +184,7 @@ class _FuncCall:
 
     @classmethod
     def from_func_calls(
-        cls , inputs : Mapping[Any, INPUT_TYPE[T]] | Iterable[INPUT_TYPE[T]] , 
-        ignore_error : bool = False , **kwargs
+        cls , inputs : FuncCallInputs[T] , ignore_error : bool = False , **kwargs
     ) -> tuple[dict[Any , T] , list[_FuncCall]]:
         """Build result dict and ``FuncCall`` list from a mapping or iterable."""
         iterance = inputs.items() if isinstance(inputs , dict) else enumerate(inputs)

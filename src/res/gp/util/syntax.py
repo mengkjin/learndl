@@ -17,6 +17,8 @@ from .fitness import FitnessObjectMin
 __all__ = ['BaseIndividual' , 'SyntaxRecord' , 'Population' , 'CompilerInputType']
 
 CompilerInputType : TypeAlias = 'BaseIndividual | str | SyntaxRecord'
+ChangeStateDirection : TypeAlias = Literal['purify' , 'revert']
+SelectionMethod : TypeAlias = Literal['nsga2' , 'best' , 'Tour' , '2Tour']
 
 class BaseIndividual(gp.PrimitiveTree):
     """
@@ -60,7 +62,7 @@ class BaseIndividual(gp.PrimitiveTree):
     def revert(self):
         return self.change_state('revert')
 
-    def change_state(self , direction : Literal['purify' , 'revert']):
+    def change_state(self , direction : ChangeStateDirection):
         if self.purified == (direction == 'purify'):
             return self
         if direction == 'purify':
@@ -271,7 +273,7 @@ class Population(Sequence):
         [ind.prune() for ind in self.pop]
         return self
 
-    def selection(self , method : Literal['nsga2' , 'best' , 'Tour' , '2Tour'] , selection_size : int) -> Population:
+    def selection(self , method : SelectionMethod , selection_size : int) -> Population:
         # Selection of population to pass to next generation, consider surv_rate
         k = len(self) if method in ['Tour' , '2Tour'] else min(selection_size, len(self))
         if method == 'nsga2':

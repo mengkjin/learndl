@@ -4,7 +4,7 @@ Liquidity cap factors for stock level0
 from __future__ import annotations
 import numpy as np
 
-from typing import Literal
+from typing import Literal , TypeAlias
 from src.data import DATAVENDOR
 from src.res.factor.calculator import LiquidityFactor
 
@@ -12,7 +12,9 @@ __all__ = [
     'lncap' , 'lncap_liq' , 'lncap_free' , 'lockedstk'
 ]
 
-def cap_classic(date , cap_type : Literal['tt' , 'fl' , 'fr']):
+CapType : TypeAlias = Literal['tt' , 'fl' , 'fr']
+
+def cap_classic(date , cap_type : CapType):
     val = DATAVENDOR.TRADE.get_val(date).set_index('secid')
     if cap_type == 'tt':
         return np.log(val['total_share'] * val['close'])

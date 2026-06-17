@@ -2,7 +2,7 @@
 from __future__ import annotations
 import pandas as pd
 from pathlib import Path
-from typing import Any , Literal  , TYPE_CHECKING
+from typing import Any , Literal , TypeAlias , TYPE_CHECKING
 from collections.abc import Mapping
 
 from src.proj.core import strPath , strPaths
@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     from concurrent.futures import Future
 
 __all__ = ['Save']
+
+AsyncSaveType : TypeAlias = Literal['df' , 'dfs' , 'figs' , 'torch' , 'pack']
 
 class Save:
     """
@@ -197,7 +199,7 @@ class Save:
         return ArrayMemoryMap.save(values, path , **kwargs)
 
     @classmethod
-    def async_save(cls , save_type : Literal['df' , 'dfs' , 'figs' , 'torch' , 'pack'] , data : Any , path : strPath , * ,
+    def async_save(cls , save_type : AsyncSaveType , data : Any , path : strPath , * ,
         prefix : str | None = None , future_group : str | None = None , **kwargs) -> Future:
         """
         async saving api for different types of data

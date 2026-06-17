@@ -6,7 +6,7 @@ import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from typing import ClassVar , Literal , TypeAlias
+from typing import ClassVar , Literal , TypeAlias , get_args
 
 from src.proj import Logger , Base
 
@@ -18,6 +18,7 @@ STOCK_LB , STOCK_UB = -1. , +1.
 
 FloatOrArray : TypeAlias = np.ndarray | float
 ArrayOrNone : TypeAlias = Base.ArrayLike | None
+GeneralBoundType : TypeAlias = Literal['abs' , 'rel' , 'por'] | str
 
 @dataclass
 class StockBound:
@@ -229,12 +230,12 @@ class IndustryPool:
 @dataclass
 class GeneralBound:
     """one of abs , rel , por bound"""
-    key : str | Literal['abs', 'rel', 'por']
+    key : GeneralBoundType | str
     lb : FloatOrArray | None = None
     ub : FloatOrArray | None = None
 
     def __post_init__(self): 
-        assert self.key in ['abs' , 'rel' , 'por'] , self.key
+        assert self.key in get_args(GeneralBoundType) , self.key
     def __bool__(self): 
         return self.lb is not None or self.ub is not None
     

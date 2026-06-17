@@ -1,7 +1,7 @@
 """Task queue page: full task list with filter controls, pagination, and inline reports."""
 from __future__ import annotations
 import streamlit as st
-from typing import Literal 
+from typing import Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj import PATH
@@ -9,6 +9,8 @@ from src.proj import PATH
 from src.api.interactive.util.session_control import SC
 
 __all__ = ['show_task_queue']
+
+QueueType : TypeAlias = Literal['full' , 'filter' , 'latest']
 
 def on_first_page(max_page : int) -> None:
     """Callback: jump to page 1 of the task queue list."""
@@ -34,7 +36,7 @@ def on_next_page(max_page : int) -> None:
         return
     st.session_state['choose-task-page'] = (st.session_state.get('choose-task-page') or 1) + 1
 
-def show_task_queue(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter') -> None:
+def show_task_queue(queue_type : QueueType = 'filter') -> None:
     """Render the complete task-queue page content.
 
     Args:
@@ -151,7 +153,7 @@ def show_task_filters() -> None:
                         format_func = lambda x: x.name ,
                         on_change = SC.change_queue_filter_path_file)    
         
-def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'filter') -> None:
+def show_queue_item_list(queue_type : QueueType = 'filter') -> None:
     """Render the paginated task-item list with per-item action buttons.
 
     Args:
@@ -168,6 +170,8 @@ def show_queue_item_list(queue_type : Literal['full' , 'filter' , 'latest'] = 'f
         queue = SC.get_latest_queue()
         container_height = 'content'
         st.info(f"Showing latest {len(queue)} tasks" , icon = ":material/info:")
+    else:
+        raise ValueError(f"Invalid queue type: {queue_type}")
     cols = st.columns(2)
     with cols[0].container(key = f"task-stats-unfiltered-container"):
         st.info(f"**:blue[:material/bar_chart:] Stats: All Tasks**")

@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import CALENDAR , DB
 
@@ -17,7 +17,7 @@ from .access import DateDataAccess
 
 __all__ = ['ANALYST']
 
-AnalystVals = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
+AnalystVal : TypeAlias = Literal['sales' , 'np' , 'tp' , 'op' , 'eps' , 'roe']
 
 class AnalystDataAccess(DateDataAccess):
     """
@@ -89,7 +89,7 @@ class AnalystDataAccess(DateDataAccess):
         """Return the unit scaling factor for a valuation metric (1e4 for flow metrics, else 1)."""
         return 1e4 if val in ['sales' , 'op' , 'np' , 'tp'] else 1
 
-    def get_val_est(self , date : int , year : int , val : AnalystVals ,
+    def get_val_est(self , date : int , year : int , val : AnalystVal ,
                     n_month : int = 12 , lag_month : int = 0):
         """
         Return the consensus estimate for ``val`` for fiscal year ``year``.
@@ -105,7 +105,7 @@ class AnalystDataAccess(DateDataAccess):
         est = self.weighted_val(df , date , col) * multiplier
         return est
     
-    def get_val_ftm(self , date : int , val : AnalystVals , n_month : int = 12 , lag_month : int = 0):
+    def get_val_ftm(self , date : int , val : AnalystVal , n_month : int = 12 , lag_month : int = 0):
         """
         Return the forward-twelve-months (FTM) estimate for ``val``.
 

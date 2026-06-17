@@ -6,22 +6,25 @@ from __future__ import annotations
 
 from collections import defaultdict
 from threading import Lock
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import CALENDAR , Base
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
-
-# Guard creation of per-date locks so two threads never get different Lock
-# instances for the same cache key (defaultdict is not thread-safe alone).
-_pead_lock_keeper : Lock = Lock()
-_pead_locks : dict[int , Lock] = defaultdict(Lock)
 
 __all__ = [
     'pead_aog' , 'pead_alg' , 'pead_aog_rank' , 'pead_alg_rank' , 
     'pead_aog_rank_demax' , 'pead_alg_rank_demax' , 'pead_aog_rank_quantile' , 
     'pead_alg_rank_quantile'
 ]
+
+# Guard creation of per-date locks so two threads never get different Lock
+# instances for the same cache key (defaultdict is not thread-safe alone).
+_pead_lock_keeper : Lock = Lock()
+_pead_locks : dict[int , Lock] = defaultdict(Lock)
+
+PeadPriceType : TypeAlias = Literal['open' , 'low']
+
 
 def get_profit_ann_dt(date : int):
     ann_dt = DATAVENDOR.IS.get_ann_dt(date , 1 , 180)
@@ -102,7 +105,7 @@ class PeadCalculator(Base.BoundLogger):
         quotes['act_low_rtn_rank'] = quotes.groupby('date')['act_low_rtn'].rank(pct=True)
         self.quotes = quotes.loc[:,['act_open_rtn' , 'act_low_rtn' , 'act_open_rtn_rank' , 'act_low_rtn_rank']]
 
-    def pead_df(self , price_type : Literal['open' , 'low'] , rank_pct : bool = True):
+    def pead_df(self , price_type : PeadPriceType , rank_pct : bool = True):
         with self.lock:
             rtn_str = f'act_{price_type}_rtn'
             if rank_pct:

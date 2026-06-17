@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 
 from pathlib import Path
-from typing import Any
 
 from src.proj import PATH , Proj , CALENDAR , Const , Base , Dates
 from src.res.trading.util.trade_suggestion import TradeSuggestion
@@ -21,7 +20,7 @@ class TrackingPortfolioManager(Base.BoundLogger):
     Tracking portfolio manager class for the project.
     """
     @classmethod
-    def update(cls , reset_ports : Base.alias.NamesType = None , indent : int = 0 , vb_level : Any = 1):
+    def update(cls , reset_ports : Base.alias.NamesType = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1):
         """
         Update the tracking portfolios.
         """

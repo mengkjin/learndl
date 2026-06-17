@@ -5,14 +5,17 @@ import pandas as pd
 import statsmodels.api as sm
 import warnings
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from scipy.linalg import lstsq
 
 from .basic import alert_message , DIV_TOL
 
 warnings.filterwarnings('ignore' , category=RuntimeWarning , message='Mean of empty slice')
 
-DataArrayLike = np.ndarray | pd.DataFrame | pd.Series
+DataArrayLike : TypeAlias = np.ndarray | pd.DataFrame | pd.Series
+WinsorCenter : TypeAlias = Literal['median' , 'mean']
+WinsorScale : TypeAlias = Literal['mad' , 'sd']
+SimpleFillNa : TypeAlias = Literal['min' , 'max' , 'median' , 'mean'] | float
 
 def fill_na_as_const(x: np.ndarray, fill : float | None = None , inplace = True):
     """Replace NaNs with a constant (copy).
@@ -277,8 +280,7 @@ def standard_normal(v : DataArrayLike , weight = None) -> Any:
 
 def winsorize(
     v , 
-    center : Literal['median' , 'mean'] = 'median', 
-    scale : Literal['mad' , 'sd'] = 'mad', 
+    center : WinsorCenter = 'median', scale : WinsorScale = 'mad', 
     const : float | np.floating | None = None , 
     trim_val : tuple[float | None, float | None] = (None , None) , 
     winsor_val : tuple[float | None, float | None] = (None , None) , 
@@ -345,7 +347,7 @@ def time_weight(length : int , halflife : int = 0):
     wgt /= np.mean(wgt)
     return wgt
 
-def descriptor(v : pd.Series , whiten_weight , fillna : Literal['min', 'max', 'median'] | float , group = None) -> pd.Series:
+def descriptor(v : pd.Series , whiten_weight , fillna : SimpleFillNa , group = None) -> pd.Series:
     """Winsorize, whiten, then fill remaining NaNs.
 
     Args:

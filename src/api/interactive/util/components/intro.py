@@ -125,20 +125,24 @@ def show_developer_info(H = 500):
     with st.container(key = "developer-info-container"):
         col_name , col_widget = st.columns([1,3])
         col_name.info('Select Developer Info Types')
-        col_widget.segmented_control('developer-info-selected' , 
-                                options = ["All" , "None"] + list(segments.keys()) , 
-                                key = "developer-info-selected" , 
-                                selection_mode = "multi" ,
-                                default = list(segments.keys()) , label_visibility = "collapsed" ,
-                                on_change = developer_info_selected_change)
+        col_widget.segmented_control(
+            'developer-info-selected' , 
+            options = ["All" , "None"] + list(segments.keys()) , 
+            key = "developer-info-selected" , 
+            selection_mode = "multi" ,
+            default = list(segments.keys()) , label_visibility = "collapsed" ,
+            on_change = developer_info_selected_change
+        )
         
         col_name , col_widget = st.columns([1,3])
         col_name.info('Developer Level Operations')
         with col_widget.container(key = "developer-info-buttons"):
             cols = st.columns(5)
-            cols[0].button("Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
-                        help = "Clear Both Action and Error Logs" ,
-                        on_click = SC.click_log_clear_confirmation)
+            cols[0].button(
+                "Log" , icon = ":material/delete_forever:" , key = "developer-log-clear" , 
+                help = "Clear Both Action and Error Logs" ,
+                on_click = SC.click_log_clear_confirmation
+            )
         
         for seg , content in segments.items():
             if seg not in st.session_state['developer-info-selected']: 

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any , Literal , cast , TypeAlias , get_args
 
 from src.proj import PATH, MACHINE, Const, Proj , Base
 from src.proj.util.functional.device import Device
@@ -24,6 +24,11 @@ from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
 
 __all__ = ['ModelConfig']
+
+ConfigSourceOption : TypeAlias = Literal['current' , 'default']
+InputType : TypeAlias = Literal['data' , 'hidden' , 'factor' , 'combo']
+SampleMethod : TypeAlias = Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']
+ShuffleOption : TypeAlias = Literal['static' , 'init' , 'epoch']
 
 def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -> Base.FlattenDict:
     """
@@ -41,7 +46,11 @@ def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -
 
 class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
-    def __init__(self, base_path: ModelPath | None = None, schedule_name: str | None = None, model_name: Any | None = None , * , indent: int = 1 , vb_level: Any = 2, **kwargs):
+    def __init__(
+        self, base_path: ModelPath | None = None, 
+        schedule_name: str | None = None, model_name: Any | None = None , * , 
+        indent: int = 1 , vb_level: Base.lit.VerbosityLevel = 2, **kwargs
+    ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.base_path = base_path
         self.schedule_name = schedule_name
@@ -104,7 +113,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     def __init__(
         self, base_path: ModelPath | Base.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None, 
-        indent: int = 1 , vb_level: Any = 2, **kwargs,
+        indent: int = 1 , vb_level: Base.lit.VerbosityLevel = 2, **kwargs,
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.base_path = ModelPath(base_path)
@@ -144,7 +153,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     def current_config_param(self) -> Base.FlattenDict:
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 
-    def optional_load_params(self , option : Literal["current", "default"]):
+    def optional_load_params(self , option : ConfigSourceOption):
         Param = None if self.start_with_none else self.resumed_config_param()
         if Param is None:
             Param = self.current_config_param() if option == "current" else self.default_config_param()
@@ -396,8 +405,8 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return self["model.submodels"]
 
     @property
-    def input_type(self) -> Literal["data", "hidden", "factor", "combo"]:
-        assert self["input.type"] in ["data", "hidden", "factor", "combo"], self["input.type"]
+    def input_type(self) -> InputType:
+        assert self["input.type"] in get_args(InputType), self["input.type"]
         return self["input.type"]
 
     @property
@@ -547,13 +556,11 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return float(self["train.dataloader.train_ratio"])
 
     @property
-    def sample_method(
-        self,
-    ) -> Literal["total_shuffle", "sequential", "both_shuffle", "train_shuffle"]:
+    def sample_method(self) -> SampleMethod:
         return self["train.dataloader.sample_method"]
 
     @property
-    def shuffle_option(self) -> Literal["static", "init", "epoch"]:
+    def shuffle_option(self) -> ShuffleOption:
         return self["train.dataloader.shuffle_option"]
 
     @property
@@ -651,7 +658,7 @@ class AlgoConfig(Base.BoundLogger , Base.CacheProps):
         boost_head: bool | str = False,
         short_test: bool | None = None,
         schedule_config: ScheduleConfig | None = None,
-        indent: int = 1 , vb_level: Any = 2,
+        indent: int = 1 , vb_level: Base.lit.VerbosityLevel = 2,
         **kwargs,
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
@@ -814,7 +821,7 @@ class ModelConfig(BaseModelConfig):
         base_path: ModelPath | Base.strPath | None = None, *,
         module: str | None = None, schedule_name: str | None = None, override=None,
         start: int | None = None, end: int | None = None, stage=-1, resume=-1, selection=-1,
-        indent: int = 1 , vb_level: Any = 2,
+        indent: int = 1 , vb_level: Base.lit.VerbosityLevel = 2,
         **kwargs,
     ):
         self.set_vb(vb_level , indent)
@@ -1159,7 +1166,7 @@ class ModelConfig(BaseModelConfig):
             self.logger.error(msg)
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 
-    def print_out(self, color: str | None = None, vb_level: Any = 2, min_key_len: int = -1):
+    def print_out(self, color: str | None = None, vb_level: Base.lit.VerbosityLevel = 2, min_key_len: int = -1):
         info_strs: list[tuple[int, str, str]] = []  # indent , key , value
 
         info_strs.append((0, "Module", f"{self.full_module_name}"))

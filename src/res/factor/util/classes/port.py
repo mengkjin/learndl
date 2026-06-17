@@ -6,12 +6,14 @@ import numpy as np
 import pandas as pd
 
 from copy import deepcopy
-from typing import Literal , cast
+from typing import Literal , cast , TypeAlias
 
 from src.proj import Const , Base
 from src.data import DATAVENDOR
 
 __all__ = ['Port']
+
+PortSortKey : TypeAlias = Literal['secid' , 'weight']
 
 class Port:
     """portfolio realization of one day"""
@@ -72,7 +74,7 @@ class Port:
     def emtpy(self): 
         return not self.exists or self.port.empty
 
-    def sorted(self , by : Literal['secid' , 'weight'] = 'weight' , ascending=False) -> pd.DataFrame:
+    def sorted(self , by : PortSortKey = 'weight' , ascending=False) -> pd.DataFrame:
         return self.port.sort_values(by , ascending=ascending).reset_index(drop=True)
 
     def forward(self , n : int = 1 , inplace = True):

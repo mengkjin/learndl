@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 import pandas as pd
 import numpy as np
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import Proj , Base
 
@@ -13,6 +13,11 @@ from src.res.gp.func import factor_func as FF
 from src.res.gp.util import EliteGroup , GeneticProgramming
 
 __all__ = ['gpGenerator']
+
+WeightScheme : TypeAlias = Literal['ic' , 'ir' , 'ew']
+WindowType : TypeAlias = Literal['insample' , 'rolling']
+WeightDecay : TypeAlias = Literal['constant' , 'linear' , 'exp']
+LoadLogSource : TypeAlias = Literal['elitelog' , 'hoflog']
 
 class gpGenerator(Base.BoundLogger):
     """
@@ -25,9 +30,9 @@ class gpGenerator(Base.BoundLogger):
     def __init__(
         self , job_id : int | None = None , 
         process_key : str = 'inf_winsor_norm' ,  
-        weight_scheme : Literal['ic' , 'ir' , 'ew'] = 'ic', 
-        window_type  : Literal['insample' , 'rolling'] = 'rolling', 
-        weight_decay : Literal['constant' , 'linear' , 'exp'] = 'exp' , 
+        weight_scheme : WeightScheme = 'ic', 
+        window_type  : WindowType = 'rolling', 
+        weight_decay : WeightDecay = 'exp' , 
         ir_window : int = 40 , 
         roll_window : int = 40 , 
         halflife : int = 20 , 
@@ -92,7 +97,7 @@ class gpGenerator(Base.BoundLogger):
     def hof_elites(self) -> list[str]:
         return self.load_log('hoflog').syntax.tolist()
 
-    def load_log(self , key : Literal['elitelog' , 'hoflog']) -> pd.DataFrame:
+    def load_log(self , key : LoadLogSource) -> pd.DataFrame:
         return self.gp.recorder.load_state(key)
 
     def entire_elites(self , block_len = 50 , process_key = None):
@@ -142,9 +147,9 @@ class gpGenerator(Base.BoundLogger):
         self , 
         elites : EliteGroup | None = None , 
         process_key : str | None = None ,  
-        weight_scheme : Literal['ic', 'ir', 'ew'] | None = None, 
-        window_type  : Literal['insample', 'rolling'] | None = None, 
-        weight_decay : Literal['constant', 'linear', 'exp'] | None = None , 
+        weight_scheme : WeightScheme | None = None, 
+        window_type  : WindowType | None = None, 
+        weight_decay : WeightDecay | None = None , 
         ir_window : int | None = None , 
         roll_window : int | None = None , 
         halflife : int | None = None , 

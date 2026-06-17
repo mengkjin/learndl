@@ -2,7 +2,6 @@
 Screening portfolio creator for Factor Model Portfolio
 """
 from __future__ import annotations
-from typing import Any , Literal
 
 from src.proj import Const , Base
 from src.res.factor.analytic.test_basics import TestType
@@ -26,12 +25,12 @@ class ScreeningPortfolioCreatorConfig(BasicCreatorConfig):
     def __init__(
         self , 
         sorter : Base.alias.NamesType = Const.Factor.FMP.creator[test_type.value]['sorter'] , 
-        screener : Literal['self'] = 'self' ,
+        screener : Base.SELF = 'self' ,
         **kwargs
     ):
         super().__init__(sorter = sorter , screener = 'self' , **kwargs)
     
 class ScreeningPortfolioCreator(BasicPortfolioCreator):
-    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    def setup(self , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 'max' , **kwargs):
         self.conf = ScreeningPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         return self

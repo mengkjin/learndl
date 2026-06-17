@@ -82,7 +82,7 @@ class PortfolioBuilder(Base.BoundLogger):
         self , category : str | Any , 
         alpha : AlphaModel , benchmark : Base.alias.SingleBenchmark = None, lag : int = 0 ,
         strategy : str = 'default' , suffixes : Base.alias.NamesType = None , build_on : Portfolio | None = None , 
-        resume_path : Base.strPath | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs
+        resume_path : Base.strPath | None = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
 
         assert build_on is None or resume_path is None , 'build_on and resume_path cannot be provided together'
@@ -202,7 +202,7 @@ class PortfolioBuilder(Base.BoundLogger):
         return self
 
     @classmethod
-    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def from_full_name(cls , full_name : str , alpha : AlphaModel , build_on : Portfolio | None = None , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         elements = parse_full_name(full_name)
         assert alpha.name.lower() == elements['factor_name'].lower() , f'Alpha name mismatch: {alpha.name} != {elements["factor_name"]}'
         return cls(alpha = alpha , build_on = build_on , indent = indent , vb_level = vb_level , **elements , **kwargs)
@@ -265,7 +265,7 @@ class PortfolioGroupBuilder(Base.BoundLogger):
         start : int = -1 ,
         end : int = 99991231 ,
         caller = None ,
-        indent : int = 0 , vb_level : Any = 1 , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.category = category

@@ -4,12 +4,13 @@ import inspect , os
 from pathlib import Path
 
 from functools import wraps , cached_property
-from typing import Any  , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj.env import PATH
 from src.proj.log import Logger
 
+SourceMode : TypeAlias = Literal['script' , 'api']
 
 __all__ = ['ScriptTool']
 
@@ -65,7 +66,7 @@ class ScriptTool:
         lock_timeout : int = 60 , 
         markdown_catcher : bool = False ,
         verbosity : int | None = None ,
-        source_mode : Literal['script' , 'api'] = 'script' ,
+        source_mode : SourceMode = 'script' ,
         interaction : dict[str, Any] | None = None ,
         **kwargs
     ):  

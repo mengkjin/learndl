@@ -5,12 +5,11 @@ from __future__ import annotations
 import pandas as pd
 import polars as pl
 
-from typing import Literal 
+from typing import Literal , TypeAlias
 from collections.abc import Callable
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import HfLiquidityFactor
-
 
 __all__ = [
     'inday_smart_money' , 'inday_stupid_money' , 
@@ -21,7 +20,9 @@ __all__ = [
     'vol_high_std' ,
 ]
 
-def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : Literal['avg' , 'std' , 'cv' , 'max'] , window : int = 20):
+AggType : TypeAlias = Literal['avg' , 'std' , 'cv' , 'max']
+
+def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : AggType , window : int = 20):
     dates = DATAVENDOR.CALENDAR.trailing(date , window , 'td')
     df = pl.concat([func(date) for date in dates])
     grp = df.group_by('secid')

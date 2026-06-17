@@ -12,7 +12,6 @@ from __future__ import annotations
 import numpy as np
 
 from deap import tools
-from typing import Any
 from collections.abc import Sequence, Callable
 
 from src.proj import Proj , Base
@@ -38,7 +37,7 @@ class GeneticProgramming(Base.BoundLogger):
         return cls._instance
 
     def __init__(self , job_id : int | None = None , train : bool = True , start_iter = 0 , start_gen = 0 , 
-                 test_code : bool = False , timer = True , * , indent : int = 0 , vb_level : Any = 2 , **kwargs):
+                 test_code : bool = False , timer = True , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 2 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.param     = gpParameters(job_id , train , start_iter > 0 or start_gen > 0 , test_code , indent = self.indent , vb_level = self.vb_level , **kwargs)
         self.status    = gpStatus(self.param.n_iter , self.param.n_gen , start_iter , start_gen , self.param.train , indent = self.indent , vb_level = self.vb_level)
@@ -338,7 +337,7 @@ class GeneticProgramming(Base.BoundLogger):
 
     @classmethod
     def main(cls , job_id : int | None = None , start_iter = 0 , start_gen = 0 , test_code : bool = False , 
-             timer = True , vb : int | None = None , vb_level : Any = 2 , **kwargs):
+             timer = True , vb : int | None = None , vb_level : Base.lit.VerbosityLevel = 2 , **kwargs):
         """
         训练的主程序,[大循环]的过程出发点,从start_iter的start_gen开始训练
         input:

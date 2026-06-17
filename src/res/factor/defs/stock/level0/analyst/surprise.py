@@ -4,17 +4,19 @@ Surprise factors for the project
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.data import DATAVENDOR
 from src.res.factor.calculator import SurpriseFactor
-
 
 __all__ = [
     'outperform_title' , 'outperform_titlepct' , 'outperform_npro' , 'outperform_sales'
 ]
 
-def get_title_outperform(date : int , type : Literal['num' , 'pct']):
+OutperformType : TypeAlias = Literal['num' , 'pct']
+OutperformValue : TypeAlias = Literal['tp' , 'npro' , 'sales' , 'op']
+
+def get_title_outperform(date : int , type : OutperformType):
     target_quarter = f'{date // 10000}Q4'
     n_month = 12
     within_ann_days = 7
@@ -41,7 +43,7 @@ def get_title_outperform(date : int , type : Literal['num' , 'pct']):
         df = df.groupby(['secid' , 'org_name']).last().groupby(['secid'])['title_outperform'].mean()
     return df    
 
-def get_profit_outperform(date : int , val : Literal['tp' , 'npro' , 'sales' , 'op']):
+def get_profit_outperform(date : int , val : OutperformValue):
     rp_col = {'tp':'tp' , 'npro':'np' , 'sales':'op_rt' , 'op':'op_pr'}[val]
     is_col = {'tp':'total_np@acc' , 'npro':'npro@acc' , 'sales':'sales@acc' , 'op':'oper_np@acc'}[val]
 

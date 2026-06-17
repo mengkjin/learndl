@@ -10,9 +10,13 @@ import torch
 import numpy as np
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal , TypeAlias
 
 __all__ = ['BoostWeightMethod']
+
+TimeSeriesWeight : TypeAlias = Literal['lin', 'exp'] | None
+CrossSectionalWeight : TypeAlias = Literal['top', 'positive', 'ones'] | None
+BenchmarkWeight : TypeAlias = Literal['in'] | None
    
 @dataclass(slots=True)
 class BoostWeightMethod:
@@ -40,9 +44,9 @@ class BoostWeightMethod:
         bm_rate:           Multiplier applied to benchmark members (default 2.0).
         bm_secid:          Security IDs that constitute the benchmark universe.
     """
-    ts_type : Literal['lin', 'exp'] | None = None
-    cs_type : Literal['top', 'positive', 'ones'] | None = None
-    bm_type : Literal['in'] | None = None
+    ts_type : TimeSeriesWeight = None
+    cs_type : CrossSectionalWeight = None
+    bm_type : BenchmarkWeight = None
     ts_lin_rate : float = 0.5
     ts_half_life_rate : float = 0.5
     cs_top_tau : float = 0.75*np.log(0.5)/np.log(0.75)

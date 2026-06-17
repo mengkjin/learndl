@@ -16,7 +16,7 @@ from dataclasses import dataclass , field
 from datetime import datetime
 from functools import wraps , cached_property
 from pathlib import Path
-from typing import Any , ClassVar  , Literal
+from typing import Any , ClassVar
 from collections.abc import Callable
 
 from src.proj import PATH , Const , Logger
@@ -215,7 +215,7 @@ class SessionControl:
         self.click_script_runner_run(runner, pending.get('params'))
 
     @queue_refresh_trigger
-    def page_header(self , page_name : str , type : Literal['intro' , 'script'] = 'intro'):
+    def page_header(self , page_name : str):
         """Register the active page and render the shared header and control panel.
 
         Called at the top of every page's ``main()`` function.  Sets the current

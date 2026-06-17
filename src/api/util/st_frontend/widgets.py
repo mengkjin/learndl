@@ -13,12 +13,15 @@ expander_subheader
 from __future__ import annotations
 import html
 import streamlit as st
-from typing import Any  , Literal
+from typing import Any  , Literal , TypeAlias
 from collections.abc import Callable
 
 from .basic import unique_st_key
 
 __all__ = ['action_confirmation']
+
+ContainerColor : TypeAlias = Literal['blue' , 'green' , 'red' , 'orange' , 'purple' , 'gray']
+ContainerHeight : TypeAlias = Literal['content' , 'stretch'] | int
       
 @st.dialog("Please Confirm Your Action")
 def action_confirmation(
@@ -47,8 +50,7 @@ def action_confirmation(
 
 
 def colored_container(
-    color : Literal['blue' , 'green' , 'red' , 'orange' , 'purple' , 'gray'] = 'gray' , 
-    key : str | None = None , **kwargs
+    color : ContainerColor = 'gray' , key : str | None = None , **kwargs
 ) -> Any:
     """Render a custom container with a colored background.
 
@@ -68,12 +70,9 @@ def colored_container(
     container = st.container(key = unique_key , **kwargs)
     return container
 
-
-
 def subheader_expander(
     label : str , icon : str | None = None , expanded : bool = False ,
-    height : int | Literal['content', 'stretch'] = 'content' , 
-    help : str | None = None , status : bool = False , 
+    height : ContainerHeight = 'content' , help : str | None = None , status : bool = False , 
     color : str = 'blue' , key : str | None = None
 ) -> Any:
     """Render a custom collapsible section header with an optional help tooltip.

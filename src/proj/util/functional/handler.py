@@ -14,6 +14,7 @@ TInside = TypeVar('TInside')
 HandlerResult : TypeAlias = str | Exception
 HandlerType : TypeAlias = Callable[[Exception], HandlerResult]
 RetryResult : TypeAlias = T | Exception
+HandleError : TypeAlias = Literal['raise' , 'return']
 
 class UnattainableException(Exception):
     """Marker for control-flow paths that should be unreachable after retries."""
@@ -74,7 +75,7 @@ def retry_call(
     attempts: int = 3,
     exceptions: type[Exception] | tuple[type[Exception], ...] = Exception,
     base_delay: float = 1.5,
-    error: Literal['raise' , 'return'] = 'raise',
+    error: HandleError = 'raise',
 ) -> RetryResult[T]:
     """
     retry a function call with a given exceptions and delay
@@ -175,7 +176,7 @@ class ErrorHandler(Generic[T]):
             else:
                 return type(self.raw_result).__name__
 
-        def unwrap(self , error : Literal['raise' , 'return'] = 'return') -> RetryResult[T]:
+        def unwrap(self , error : HandleError = 'return') -> RetryResult[T]:
             """Return value or exception; ``error='raise'`` re-raises if result is an exception."""
             if isinstance(self.raw_result, Exception) and error == 'raise':
                 raise self.raw_result

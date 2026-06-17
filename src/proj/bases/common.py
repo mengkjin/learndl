@@ -4,7 +4,7 @@ import numpy as np
 from typing import Any , TypeVar
 
 from src.proj.core import as_int_array , as_str_array , as_float_array , intDates , intNums
-from src.proj.core.alias import SecidType , DateType , NamesType , npValueType
+from .alias import SecidType , DateType , NamesType , npValueType
 
 __all__ = [
     'ensure_secid' , 'ensure_date' , 'ensure_feature' , 'ensure_name_list' , 

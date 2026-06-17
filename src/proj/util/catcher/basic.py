@@ -10,7 +10,7 @@ from functools import cached_property
 from io import TextIOWrapper
 from pathlib import Path
 from string import Template
-from typing import Any , Literal  , TextIO,  TYPE_CHECKING
+from typing import Any , Literal , TypeAlias , TextIO,  TYPE_CHECKING
 from collections.abc import Callable
 
 from src.proj.env import PATH , Proj , MACHINE
@@ -20,6 +20,9 @@ from src.proj.bases import BoundLogger
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
+
+StdIOType : TypeAlias = Literal['stdout' , 'stderr']
+OutputType : TypeAlias = Literal['stdout' , 'stderr' , 'data_frame' , 'figure']
 
 __all__ = [
     'OutputCatcher' , 'OutputDeflector' , '_get_html_templates' , 'TimedOutput'
@@ -43,7 +46,7 @@ class OutputDeflector(BoundLogger):
     """
     def __init__(
         self, 
-        type : Literal['stdout' , 'stderr'] ,
+        type : StdIOType ,
         catcher : OutputDeflector | OutputCatcher | None, 
         keep_original : bool = True, * , 
         indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs
@@ -228,7 +231,7 @@ class OutputCatcher(BoundLogger , ABC):
 @dataclass
 class TimedOutput:
     """time ordered output item"""
-    type: Literal['stdout', 'stderr', 'data_frame', 'figure'] | str
+    type: OutputType | str
     content: str | pd.DataFrame | pd.Series | Figure | Any | None
     infos: dict[str, Any] = field(default_factory=dict)
     valid: bool = True
@@ -242,7 +245,7 @@ class TimedOutput:
     def __bool__(self):
         return self.valid
     
-    def get_type_fmt(self) -> Literal['stdout', 'stderr', 'dataframe', 'image'] | str:
+    def get_type_fmt(self) -> OutputType | str:
         match self.type:
             case 'stdout':
                 return 'stdout'
@@ -255,7 +258,7 @@ class TimedOutput:
             case _:
                 return 'other'
     
-    def get_type_str(self) -> Literal['STDERR', 'STDOUT', 'TABLE', 'IMAGE'] | str:
+    def get_type_str(self):
         match self.type:
             case 'stderr':
                 return 'STDERR'

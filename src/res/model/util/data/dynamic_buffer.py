@@ -3,10 +3,12 @@ Dynamic buffer space for some module to use (trainer, predictor, etc.), can be u
 """
 from __future__ import annotations
 
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable
 
 __all__ = ['DynamicDataBuffer']
+
+BufferStage : TypeAlias = Literal['setup' , 'update']
 
 class DynamicDataBuffer:
     """dynamic buffer space for some module to use (tra), can be updated at each batch / epoch """
@@ -44,7 +46,7 @@ class DynamicDataBuffer:
             result = self.device(result)
         return result
 
-    def process(self , stage : Literal['setup' , 'update'] , data_module):
+    def process(self , stage : BufferStage , data_module):
         new = getattr(self , f'{stage}_wrapper')(data_module)
         if new is not None: 
             if self.always and self.device is not None: 

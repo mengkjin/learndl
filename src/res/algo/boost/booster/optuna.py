@@ -10,13 +10,15 @@ from __future__ import annotations
 import optuna
 
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import PATH , MACHINE , Proj 
 from src.proj.bases import BoostModuleType
 from .general import GeneralBoostModel
 
 __all__ = ['OptunaBoostModel']
+
+OptunaPlotType : TypeAlias = Literal['slice' , 'optimization_history' , 'param_importances' , 'contour']
 
 class OptunaSilent:
     """Context manager that sets Optuna log level to ERROR on entry and restores it on exit."""
@@ -157,8 +159,8 @@ class OptunaBoostModel(GeneralBoostModel):
         return self
 
     def study_plot(
-        self , plot_type : Literal['slice' , 'optimization_history' , 'param_importances' , 'contour'] , 
-        params : list[str] | None = None , **kwargs):
+        self , plot_type : OptunaPlotType , params : list[str] | None = None , **kwargs
+    ):
         if plot_type == 'slice':
             return optuna.visualization.plot_slice(self.study , params = params , **kwargs)
         elif plot_type == 'optimization_history':

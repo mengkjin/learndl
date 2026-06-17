@@ -8,11 +8,11 @@ from abc import ABC , abstractmethod
 from copy import deepcopy
 from torch import nn , no_grad
 from torch.optim.swa_utils import AveragedModel
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.res.model.util import BaseTrainer , BatchInput , Checkpoint , TrainerMetrics , EpochMetricResult , TrainerStatus
 
-SWAEnsemblerType = Literal['best' , 'swabest' , 'swalast']
+SWAEnsemblerType : TypeAlias = Literal['best' , 'swabest' , 'swalast']
 
 __all__ = ['choose_swa_method' , 'SWAEnsembler' , 'SWAModel' , 'EnsembleBestOne' , 'EnsembleSWABest' , 'EnsembleSWALast']
 

@@ -8,7 +8,7 @@ Exported as the ``EXPO`` singleton.
 from __future__ import annotations
 import pandas as pd
 
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import DB , Base
 from src.data.util import INFO
@@ -16,6 +16,11 @@ from src.data.util import INFO
 from .access import DateDataAccess
 
 __all__ = ['EXPO']
+
+ExposureField : TypeAlias = Literal[
+    'true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
+    'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'] | str
+
 class ExposureAccess(DateDataAccess):
     """
     Singleton data access object for custom daily microstructure risk exposures.
@@ -42,10 +47,7 @@ class ExposureAccess(DateDataAccess):
 
     def get_risks(
         self , start : Base.intDate , end : Base.intDate ,
-        field : Base.ArrayLike[Literal[
-            'true_range' , 'turnover' , 'large_buy_pdev' , 'small_buy_pct' ,
-            'sqrt_avg_size' , 'open_close_pct' , 'ret_volatility' , 'ret_skewness'
-        ] | str] , prev = False ,
+        field : Base.ArrayLike[ExposureField] , prev = False ,
         mask = False , pivot = False , **kwargs
     ) -> pd.DataFrame:
         """

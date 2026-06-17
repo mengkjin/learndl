@@ -3,7 +3,7 @@ Trainer for model , which can train the model
 """
 from __future__ import annotations
 from contextlib import nullcontext
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj import MACHINE , Proj , PATH , Base , Save
 from src.proj.util.catcher import HtmlCatcher
@@ -11,6 +11,8 @@ from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
 __all__ = ['ModelTrainer']
+
+ModelLogOperation : TypeAlias = Literal['update_models' , 'resume_testing']
 
 class ModelTrainer(BaseTrainer):
     """run through the whole process of training"""
@@ -37,8 +39,8 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def GO(cls , * , base_path : ModelPath | Base.strPath | None = None , title : str | None = None , 
            paragraph : bool = False , html_catcher : bool = True, 
-           check_operation : Literal['update_models', 'resume_testing'] | None = None , 
-           log_operation : Literal['update_models', 'resume_testing'] | None = None , 
+           check_operation : ModelLogOperation | None = None , 
+           log_operation : ModelLogOperation | None = None , 
            use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
            stage = -1 , resume = -1 , selection = -1 ,
            **kwargs):

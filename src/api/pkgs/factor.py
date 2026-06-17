@@ -2,7 +2,6 @@
 Factor API for the project
 """
 from __future__ import annotations
-from typing import Any
 
 from src.proj import Logger , Proj , Options , Base
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
@@ -275,7 +274,8 @@ class FactorAPI:
         factor_type : Base.lit.FactorType = 'factor' , 
         benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         start : int = 20240101 , end : int = 20240331 , step : int = 5 ,
-        write_down : bool = True , display_figs : bool = False , indent : int = 0 , vb_level : Any = 1):
+        write_down : bool = True , display_figs : bool = False , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1):
         """
         Run FactorPerf test on factors resolved via ``get_factor``.
 
@@ -317,7 +317,8 @@ class FactorAPI:
         cls , names : str = '' , factor_type : Base.lit.FactorType = 'factor' , 
         benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         start : int = 20240101 , end : int = 20240331 , step : int = 5 ,
-        write_down : bool = True , display_figs : bool = False , indent : int = 0 , vb_level : Any = 1 , 
+        write_down : bool = True , display_figs : bool = False , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , 
         prob_type : Base.PortOptimProblem | str = Base.PortOptimProblem.LINPROG ,
     ):
         """
@@ -362,7 +363,8 @@ class FactorAPI:
         cls , names : str = '' , factor_type : Base.lit.FactorType = 'factor' , 
         benchmarks : Base.alias.MultipleBenchmark = 'defaults' , 
         start : int = 20240101 , end : int = 20240331 , step : int = 5 ,
-        write_down : bool = True , display_figs : bool = False , indent : int = 0 , vb_level : Any = 1 , 
+        write_down : bool = True , display_figs : bool = False , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , 
     ):
         """
         Run top fmp test on factors resolved via ``get_factor``.

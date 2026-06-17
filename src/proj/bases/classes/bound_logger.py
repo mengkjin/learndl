@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from functools import cached_property
-from typing import Any,Literal, TypeVar
+from typing import Any , Literal , TypeVar , TypeAlias
 from collections.abc import Callable, Sequence
 
 from src.proj.core.literals import VerbosityLevel
@@ -21,7 +21,7 @@ from src.proj.env import Proj
 from src.proj.log import Logger , StderrType
 
 T = TypeVar('T')
-
+OnlyOnceObject : TypeAlias = Any | Literal['os', 'logger'] | None
 __all__ = ['BoundLogger']
 
 class ModuleLogger:
@@ -155,7 +155,7 @@ class ModuleLogger:
         """Critical level stderr"""
         Logger.critical(*args , **self.grep_kwargs(vb = 0 , vb_level = vb_level, **kwargs))
 
-    def only_once(self , *args , object : Any | Literal['os', 'logger'] | None = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
+    def only_once(self , *args , object : OnlyOnceObject = 'logger' , mark : str = 'default' , printer : Callable | str = 'stdout' ,  **kwargs):
         """display the message only once for the same object and key"""
         Logger.only_once(*args , printer = printer , object = object , mark = mark , **kwargs)
 

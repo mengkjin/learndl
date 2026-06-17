@@ -4,7 +4,7 @@ Behavior slice factors for stock level0
 from __future__ import annotations
 import numpy as np
 
-from typing import Literal
+from typing import Literal , TypeAlias
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
@@ -15,6 +15,8 @@ __all__ = [
     'mom_slicevol1m' , 'corr_slicevol1m' , 'beta_slicevol1m' , 'skew_slicevol1m' , 'ampl_slicecp1m'
 ]
 
+SlicedBy : TypeAlias = Literal['amplitude' , 'vol' , 'cp']
+
 def get_amplitudes(start , end , pivot = True):
     quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['high' , 'low' , 'preclose'] , adj_price = False)
     amplitudes = ((quotes['high'] - quotes['low']) / quotes['preclose']).rename('amplitude').\
@@ -23,7 +25,7 @@ def get_amplitudes(start , end , pivot = True):
         amplitudes = amplitudes.pivot_table('amplitude' , 'date' , 'secid').fillna(0)
     return amplitudes
 
-def get_slicing(start , end , sliced_by : Literal['amplitude' , 'vol' , 'cp'] , slice_ratio = 0.5):
+def get_slicing(start , end , sliced_by : SlicedBy , slice_ratio = 0.5):
     if sliced_by == 'amplitude':
         slice_values = get_amplitudes(start , end , pivot = True)
     elif sliced_by == 'vol':

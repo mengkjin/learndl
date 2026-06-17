@@ -39,15 +39,15 @@ class Portfolio:
     .from_dataframe(df : pd.DataFrame , name : str = 'default') : create a portfolio from a dataframe
     .to_dataframe() : convert the portfolio to a dataframe
     .load(path : Base.strPath) : load a portfolio from a path (dataframe)
-    .save(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the portfolio to a path (dataframe)
+    .save(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2) : save the portfolio to a path (dataframe)
     .filter_secid(secid : Base.alias.SecidType , exclude = False , inplace = False) : filter the portfolio by secid , if exclude is True, filter out the secid, otherwise filter in the secid
     .filter_dates(dates : Base.alias.DateType , exclude = False , inplace = False) : filter the portfolio by dates , if exclude is True, filter out the dates, otherwise filter in the dates
     .replace(port : Port | Portfolio , inplace = False) : replace the portfolio with the given port or portfolio
     .rename(new_name : str) : rename the portfolio
     .from_ports(*ports : Port , name : str | None = None) : create a portfolio from a list of ports
     .activate_accountant() : activate the accountant for the portfolio
-    .accounting(benchmark : Base.alias.SingleBenchmark = None , start : Base.intDate = -1 , end : Base.intDate = 99991231 , analytic = True , attribution = True , * , start_port : Portfolio | None = None , trade_engine : Base.lit.TradeEngine = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Any = 1) : account the portfolio
-    .save_account(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2) : save the account to a path (a dir containing multiple dataframes)
+    .accounting(benchmark : Base.alias.SingleBenchmark = None , start : Base.intDate = -1 , end : Base.intDate = 99991231 , analytic = True , attribution = True , * , start_port : Portfolio | None = None , trade_engine : Base.lit.TradeEngine = 'default' , daily = False , cache = False , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1) : account the portfolio
+    .save_account(path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2) : save the account to a path (a dir containing multiple dataframes)
     .load_account(path : Base.strPath) : load the account from a path (a dir containing multiple dataframes)
     .account : return the account of the portfolio
     .cached_accounts : return the cached accounts of the portfolio
@@ -221,7 +221,7 @@ class Portfolio:
         else:
             return cls(path.stem)
 
-    def save(self , path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Any = 2):
+    def save(self , path : Base.strPath , overwrite = False , append = True , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 2):
         """save the portfolio to a path (dataframe)"""
         if self.empty:
             return
@@ -304,7 +304,7 @@ class Portfolio:
         daily = False , cache = False , with_index = None ,
         resume_path : Base.strPath | None = None , 
         resume_end : Base.intDate | None = None , resume_drop_last = True , save_after = True ,
-        indent : int = 0 , vb_level : Any = 1
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1
     ):
         """account the portfolio"""
         if not hasattr(self , 'accountant'): 

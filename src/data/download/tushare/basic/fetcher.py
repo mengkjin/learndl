@@ -28,7 +28,7 @@ import pandas as pd
 from abc import abstractmethod , ABCMeta
 from importlib import import_module
 from pathlib import Path
-from typing import Any , Literal , TypeVar
+from typing import Any , Literal , TypeVar , TypeAlias
 from collections.abc import Callable
 
 from src.proj import MACHINE , PATH , CALENDAR , Dates , DB , Base , Save , Load 
@@ -41,6 +41,7 @@ __all__ = [
     'FinaFetcher' , 'RollingFetcher']
 
 T = TypeVar('T')
+TushareDbTarget : TypeAlias = Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , '']
 
 class TushareFetcherMeta(ABCMeta):
     """meta class of TushareFetcher , check if the subclass is valid and register all subclasses without abstract methods"""
@@ -86,8 +87,11 @@ class TushareIterateFetcher(Base.BoundLogger):
     base_path.mkdir(parents=True, exist_ok=True)
     survival_time : int = 4 # in hours
 
-    def __init__(self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * ,
-                 max_fetch_times : int = -1 , breakpoint : bool = True , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(
+        self , fetcher_name : str , tushare_api : Callable[..., T] , limit : int = 2000 , * ,
+        max_fetch_times : int = -1 , breakpoint : bool = True , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
+    ):
         """
         Parameters
         ----------
@@ -231,7 +235,7 @@ class TushareIterateFetcher(Base.BoundLogger):
 class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
     START_DATE  : int = 19970101
-    DB_TYPE     : Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , ''] = ''
+    DB_TYPE     : TushareDbTarget = ''
     UPDATE_FREQ : Base.lit.FreqUpdate | Any = None
     DB_SRC      : str = ''
     DB_KEY      : str = ''
@@ -345,7 +349,10 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
         return ldate
 
     @classmethod
-    def update(cls , * , rollback_date : int | None = None , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> Base.UpdateFlag:
+    def update(
+        cls , * , rollback_date : int | None = None , 
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
+    ) -> Base.UpdateFlag:
         """update the fetcher"""
         try:
             if MACHINE.name in cls.SKIP_ON_MACHINES:

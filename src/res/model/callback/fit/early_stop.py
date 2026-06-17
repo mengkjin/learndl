@@ -3,7 +3,7 @@ Callback to early stop if valid peaked or converged
 """
 from __future__ import annotations
 import numpy as np
-from typing import Literal
+from typing import Literal , TypeAlias
 
 from src.proj.bases import FittingEventType
 from src.res.model.util.trainer.status import EpochRecord
@@ -33,7 +33,11 @@ def arr_converge(arr , n : int , tolerance = 1e-4) -> bool:
 class EarlyStoppage(BaseCallBack):
     """Early Stoppage of Fitting, Peaked / Converged Valid Accuracy or Train Loss"""
     CB_KEY_PARAMS = ['peak_patience' , 'converge_patience' , 'converge_dataset']
-    def __init__(self , trainer , peak_patience = 20 , converge_patience = 5 , converge_dataset : Literal['valid' , 'any'] = 'valid' , **kwargs) -> None:
+    ConvergeDataset : TypeAlias = Literal['valid' , 'any']
+    def __init__(
+        self , trainer , peak_patience = 20 , converge_patience = 5 , 
+        converge_dataset : ConvergeDataset = 'valid' , **kwargs
+    ) -> None:
         super().__init__(trainer , **kwargs)
         self.peak_patience = peak_patience
         self.converge_patience = converge_patience

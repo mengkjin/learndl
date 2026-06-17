@@ -9,7 +9,7 @@ import shutil
 from datetime import datetime , timedelta
 from functools import cached_property
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any
 
 from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load , Dates
 from src.proj.core import as_int_array
@@ -388,9 +388,9 @@ class PredictorPath(ModelPath , Base.BoundLogger):
 
     def __init__(
         self, model_input : str | Base.strPath | ModelPath | None , 
-        model_num : Base.intNums | Literal['all'] | None = None ,
+        model_num : Base.intNums | Base.ALL | None = None ,
         submodel : str = 'best' , pred_name : str | None = None , * , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ) -> None:
         super().__init__(model_input = model_input , indent=indent, vb_level=vb_level, **kwargs)
         self._model_num = model_num

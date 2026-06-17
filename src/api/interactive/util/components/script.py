@@ -14,7 +14,7 @@ import streamlit as st
 import os , subprocess
 
 from pathlib import Path
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj import PATH , MACHINE , Base
@@ -29,6 +29,8 @@ from .param_control_buttons import param_control_buttons
 __all__ = [
     'show_task_history' , 'show_param_settings' , 'show_report_main'
 ]
+
+QueueItemType : TypeAlias = Literal['multiselect' , 'buttons']
 
 def on_first_page(max_page : int) -> None:
     """Callback: jump to the first page of the task list.
@@ -167,7 +169,7 @@ def show_task_history(runner : ScriptRunner | str | None):
             current_page = st.session_state.get('choose-task-page') or 1
             options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
             default_index = (choose_index % num_per_page) if choose_index is not None else None
-            show_queue_item_list(runner , script_queue , options , default_index , type = 'buttons')
+            show_queue_item_list(runner , script_queue , options , default_index , queue_item_type = 'buttons')
         
         if SC.current_task_item:
             st.success(f"Task Item {SC.current_task_item} chosen" , icon = ":material/check_circle:")
@@ -175,10 +177,10 @@ def show_task_history(runner : ScriptRunner | str | None):
 def show_queue_item_list(
     runner : ScriptRunner , queue : dict[str, TaskItem] , 
     options : list[str] , default_index : int | None = None ,
-    type : Literal['multiselect' , 'buttons'] = 'buttons'
+    queue_item_type : QueueItemType = 'buttons'
 ) -> None:
     """show queue item list"""
-    if type == 'multiselect':
+    if queue_item_type == 'multiselect':
         format_dict = {item.id : item.button_str_long(i + 1, plain_text = True).strip() 
                        for i, item in enumerate(queue.values())}
         st.selectbox("Choose Task Item from Queue", 
@@ -190,7 +192,7 @@ def show_queue_item_list(
                     placeholder = "Choose a Task Item from Filtered Queue",
                     on_change = SC.click_choose_item_selectbox , 
                     label_visibility = 'collapsed')
-    elif type == 'buttons':
+    elif queue_item_type == 'buttons':
         indexes = {item_id : i for i, item_id in enumerate(queue.keys())}
         for item_id in options:
             item = queue[item_id]
@@ -215,7 +217,7 @@ def show_queue_item_list(
                             key=f"script-queue-item-remove-{item_id}", help="Delete from Database (Irreversible)", 
                             on_click = SC.click_queue_remove_item , args = (queue[item_id],))
     else:
-        raise ValueError(f"Invalid type: {type}")
+        raise ValueError(f"Invalid type: {queue_item_type}")
 
 @clear_and_show
 def show_param_settings(runner : ScriptRunner | str | None) -> None:

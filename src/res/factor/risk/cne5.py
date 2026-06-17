@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from typing import Any , Literal
+from typing import Any , Literal , TypeAlias
 
 from src.proj import CALENDAR , DB , Const , Base , Dates
 from src.proj.util.catcher import WarningCatcher
@@ -15,7 +15,7 @@ from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid 
 
 __all__ = ['TuShareCNE5_Calculator']
 
-ModelJobType = Literal['exposure' , 'risk']
+ModelJobType : TypeAlias = Literal['exposure' , 'risk']
 
 def parse_ts_input(
     ts : pd.DataFrame , 
@@ -94,7 +94,7 @@ class TuShareCNE5_Calculator(Base.BasicUpdater):
     """calculator for CNE5 risk model"""
     ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, Base.UpdateType.ROLLBACK, Base.UpdateType.RECALC)
     START_DATE = 20050101
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> None:
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
 
         self.estuniv = DateDfs(50)

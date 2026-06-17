@@ -34,7 +34,7 @@ class DataModule(Base.BoundLogger):
     def __init__(
         self , config : ModelConfig | None = None , 
         use_data : Base.lit.DataBlockTimeFrames = 'fit' , * , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config   : ModelConfig = config or ModelConfig(stage=0)
@@ -60,7 +60,7 @@ class DataModule(Base.BoundLogger):
                 data.register_callbacks(hook , *trainer_or_config.callback.get_implemented_hook_callables(hook))
         return data
 
-    def print_out(self , vb_level : Any = 2 , min_key_len = 30):
+    def print_out(self , vb_level : Base.lit.VerbosityLevel = 2 , min_key_len = 30):
         self.logger.stdout_pairs({'Use Data' : self.use_data} , title = 'Module Data Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
 
     def __repr__(self): 

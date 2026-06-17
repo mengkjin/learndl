@@ -15,6 +15,7 @@ PROXY_MAX_CONCURRENT = 2
 __all__ = ['Proxy' , 'ProxySet' , 'ProxyStats' , 'ProxyStatsSet' , 'INVALID_THRESHOLD' , 'PROXY_MAX_CONCURRENT']
 
 strProxy : TypeAlias = 'str | Proxy'
+ProxyStatsType : TypeAlias = Literal['running', 'error', 'success']
 
 class Proxy:
     """Single proxy address (``protocol://host:port``) with source tracking and verification history."""
@@ -135,7 +136,7 @@ class ProxyStats(Proxy):
         return self.valid
 
     @cached_property
-    def stats(self) -> dict[Literal['running', 'error', 'success'], int]:
+    def stats(self) -> dict[ProxyStatsType, int]:
         """Lazy-initialised usage counters: running (in-flight), error, and success counts."""
         return {
             'running': 0,

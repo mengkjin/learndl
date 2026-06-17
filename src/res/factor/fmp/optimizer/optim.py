@@ -5,7 +5,6 @@ Optimized portfolio creator for factor portfolio optimization.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 from src.proj import MACHINE , Logger , Base
 from src.res.factor.util import PortCreator , PortCreateResult , Port
@@ -33,7 +32,7 @@ class OptimizedPortfolioCreatorConfig:
         self.cvxpy_solver = Base.PortOptimCvxpySolver(self.cvxpy_solver)
 
     @classmethod
-    def init_from(cls , indent : int = 1 , vb_level : Any = 3 , **kwargs):
+    def init_from(cls , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs):
         use_kwargs = {k: v for k, v in kwargs.items() if k in cls.__slots__ and v != cls.__dataclass_fields__[k].default}
         drop_kwargs = {k: v for k, v in kwargs.items() if k not in cls.__slots__}
         if use_kwargs and drop_kwargs: 
@@ -56,7 +55,7 @@ class OptimizedPortfolioCreatorConfig:
         return {'turn' : self.opt_turn , 'qobj' : self.opt_qobj , 'qcon' : self.opt_qcon , 'short' : self.opt_short}
 
 class OptimizedPortfolioCreator(PortCreator):
-    def setup(self , indent : int = 1 , vb_level : Any = 3 , **kwargs): 
+    def setup(self , indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 3 , **kwargs): 
         self.conf = OptimizedPortfolioCreatorConfig.init_from(indent = indent , vb_level = vb_level , **kwargs)
         self.opt_input = OptimizedPortfolioInput(self.name , self.conf.opt_config)
         return self

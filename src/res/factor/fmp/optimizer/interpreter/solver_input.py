@@ -127,7 +127,7 @@ class SolverInput:
 class Relaxer(Base.BoundLogger):
     """Relaxer for solver input"""
 
-    def __init__(self , * , indent : int = 0 , vb_level : Any = 1 , **kwargs):
+    def __init__(self , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.relax_queue : list[str] = [
             'conflicted_lin_con',

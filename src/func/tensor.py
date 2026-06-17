@@ -19,7 +19,10 @@ from collections.abc import Callable
 from .basic import alert_message , DIV_TOL , allna
 
 lit1 : TypeAlias = Literal[1]
+lit12 : TypeAlias = Literal[1,2]
 OptTensor : TypeAlias = Tensor | None
+ConditionalMethod : TypeAlias = Literal['btm' , 'top' , 'diff']
+ConditionalUseValue : TypeAlias = Literal['mean' , 'thres']
     
 def process_factor(value : OptTensor , * , stream = 'inf_winsor_norm' , dim = 0 , trim_ratio = 7. , **kwargs):
     """Apply a chained underscore-separated pipeline to factor values (trim, winsor, norm, etc.).
@@ -164,7 +167,7 @@ class TsRoller:
         return decorator
 
     @classmethod
-    def decor(cls , n_arg : Literal[1,2] = 1, **decor_kwargs):
+    def decor(cls , n_arg : lit12 = 1, **decor_kwargs):
         """Return ``decorator_x`` or ``decorator_xy`` with shared nan/inf kwargs.
 
         Args:
@@ -1423,8 +1426,8 @@ def ts_rankcorr(x : Tensor , y : Tensor , d : int , * , dim : lit1 = 1):
 
 @TsRoller.decor(1)
 def conditional_x(
-    x : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
-    dim : lit1 = 1, use : Literal['mean' , 'thres'] = 'mean',
+    x : Tensor , d : int , n : int , method : ConditionalMethod , * ,
+    dim : lit1 = 1, use : ConditionalUseValue = 'mean',
     force_directional_sign : bool = False
 ):
     """Rolling statistic of ``x`` conditioned on ``x`` being among the smallest/largest ``n`` in the window.
@@ -1471,8 +1474,8 @@ def conditional_x(
 
 @TsRoller.decor(2)
 def conditional_y_on_x(
-    x : Tensor , y : Tensor , d : int , n : int , method : Literal['btm' , 'top' , 'diff'] , * ,
-    dim : lit1 = 1, use : Literal['mean' , 'thres'] = 'mean',
+    x : Tensor , y : Tensor , d : int , n : int , method : ConditionalMethod , * ,
+    dim : lit1 = 1, use : ConditionalUseValue = 'mean',
     force_directional_sign : bool = False
 ):
     """Rolling statistic of ``y`` where ``x`` selects the bottom/top ``n`` observations in each window.

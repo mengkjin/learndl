@@ -1,11 +1,9 @@
 """base types alias for the project for type hints"""
 from __future__ import annotations
 
-from typing import (
-    Any , Literal , TypeAlias
-)
+from typing import Any , Literal , TypeAlias
 from collections.abc import Iterable
-from .types import ArrayLike , intDates
+from src.proj.core.types import ArrayLike , intDates
 
 SingleBenchmark : TypeAlias = str | Any | None
 MultipleBenchmark : TypeAlias = Iterable[SingleBenchmark] | SingleBenchmark | Literal['defaults'] | None

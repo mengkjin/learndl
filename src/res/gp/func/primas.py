@@ -4,7 +4,6 @@ Primitive functions for genetic programming
 from __future__ import annotations
 import torch
 from functools import wraps
-from typing import Literal
 from collections.abc import Callable
 
 from src.func.basic import allna , exact
@@ -20,7 +19,8 @@ def all_prim_names():
 class PrimTool:
     registry : dict[str, Callable] = {}
     @classmethod
-    def register(cls , n_arg : Literal[1,2] = 1, **decor_kwargs):
+    def register(cls , n_arg : int = 1, **decor_kwargs):
+        assert n_arg in [1,2] , n_arg
         def decorator(func):
             func_name = func.__name__
             assert func_name not in cls.registry , f'{func_name} already registered'

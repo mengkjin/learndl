@@ -11,13 +11,15 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
 from sqlalchemy import create_engine , exc
-from typing import Any , ClassVar , Literal , overload
+from typing import Any , ClassVar , Literal , TypeAlias , overload
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
 
 __all__ = ['SellsideSQLDownloader']
+
+DownloadOption : TypeAlias = Literal['since' , 'dates']
 
 factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'dongfang.hfq_chars' : (('dongfang' , 'hfq_chars'  , 'tradingdate' , 20050101 , 99991231 , '%Y%m%d') , {}) ,
@@ -156,7 +158,8 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         self , factor_src : str , factor_set : str , date_col : str , 
         start_date : int , end_date : int = 99991231 , date_fmt : str | None = None , 
         sub_factors : list | None = None , connection_key : str = '' , * , 
-        indent : int = 0 , vb_level : Any = 1 , **kwargs):
+        indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
+    ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.factor_src = factor_src
         self.factor_set = factor_set
@@ -175,7 +178,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         return super().parse_update_input(*args , key='sellside_sql' , **kwargs)
         
     @classmethod
-    def proceed_update(cls , * , indent : int = 0 , vb_level : Any = 1 , **kwargs) -> Base.UpdateFlag:
+    def proceed_update(cls , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> Base.UpdateFlag:
         return cls.update_since(trace = 0)
 
     def __repr__(self):
@@ -237,7 +240,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         return Connection.connection(self.use_connection_key)
     
     def download(
-        self , option : Literal['since' , 'dates'] , overwrite : bool = False ,
+        self , option : DownloadOption , overwrite : bool = False ,
         dates : Base.alias.DateType = None , trace = 1 , 
     ) -> Base.UpdateFlag:
         assert overwrite is False , 'overwrite is not supported for sellside sql download'

@@ -19,7 +19,7 @@ from .general_model import GeneralModel
 
 __all__ = ['AlphaModel' , 'Amodel' , 'AlphaComposite' , 'AlphaScreener']
 
-CombineWorstMethod = Literal['worst' , 'worst2']
+CombineWorstMethod : TypeAlias = Literal['worst' , 'worst2']
 AmodelsType : TypeAlias = 'Amodel | list[Amodel] | Mapping[int, Amodel] | AlphaModel | None'
 ComponentInputType : TypeAlias = 'str | AlphaModel | Amodel'
 CompositeInputType : TypeAlias = str | ComponentInputType | Sequence[ComponentInputType]
@@ -158,7 +158,7 @@ class Amodel:
 
     @classmethod
     def create(
-        cls , date : int , data: np.ndarray | pd.DataFrame | pd.Series | Literal['random'] , 
+        cls , date : int , data: np.ndarray | pd.DataFrame | pd.Series | Base.RANDOM , 
         secid : Base.alias.SecidType = None
     ) -> Amodel:
         if isinstance(data , str) and data == 'random':
@@ -488,7 +488,7 @@ class AlphaComposite(AlphaCombination):
     def __init__(
         self , alpha : CompositeInputType , 
         components : Base.alias.NamesType = None , 
-        weights : Base.alias.npValueType | Literal['equal'] = None
+        weights : Base.alias.npValueType | Base.EQUAL = None
     ) -> None:
         super().__init__(alpha , components)
         if weights is None or (isinstance(weights , str) and weights == 'equal'):

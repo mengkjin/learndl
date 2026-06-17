@@ -2,7 +2,7 @@
 Liquidity CV factors for stock level0
 """
 from __future__ import annotations
-from typing import Literal
+from typing import Literal , TypeAlias
 from src.data import DATAVENDOR
 from src.res.factor.calculator import LiquidityFactor
 
@@ -11,7 +11,9 @@ __all__ = [
     'turn_cv1m' , 'turn_cv2m' , 'turn_cv3m' , 'turn_cv6m' , 'turn_cv12m'
 ]
 
-def coefficient_variance(date , n_months : int , data_type : Literal['amount' , 'turnover'] , min_finite_ratio = 0.25):
+LiquidityType : TypeAlias = Literal['amount' , 'turnover']
+
+def coefficient_variance(date , n_months : int , data_type : LiquidityType , min_finite_ratio = 0.25):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_months , 'm')
     if data_type == 'amount':
         vals = DATAVENDOR.TRADE.get_volumes(start , end , volume_type = 'amount')

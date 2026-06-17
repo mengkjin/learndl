@@ -12,13 +12,13 @@ __all__ = ['Load']
 if TYPE_CHECKING:
     import pandas as pd
     import polars as pl
-    from src.proj.db.io.dataframe import PandasAccelerator , PolarsAccelerator , PL_MAPPER_TYPE , PD_MAPPER_TYPE
+    from src.proj.db.io.dataframe import PandasAccelerator , PolarsAccelerator , PlMapper , PdMapper
 class Load:
     """Loader for database"""
     @classmethod
     def df(cls , path : strPath | strPaths , * , missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
         accelerator : PandasAccelerator | None = 'thread' , 
-        mapper : PD_MAPPER_TYPE = None) -> pd.DataFrame:
+        mapper : PdMapper = None) -> pd.DataFrame:
         """
         load dataframe from path or paths
         Parameters
@@ -51,7 +51,7 @@ class Load:
         key_column: str | None = 'date',
         override_existing_key: bool = False,
         accelerator: PandasAccelerator | None = 'thread',
-        mapper: PD_MAPPER_TYPE = None,
+        mapper: PdMapper = None,
     ) -> pd.DataFrame:
         """
         Alias for Load.df
@@ -66,7 +66,7 @@ class Load:
     @classmethod
     def polars(cls , path : strPath | strPaths , * , missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
         accelerator : PolarsAccelerator | None = 'thread' , 
-        mapper : PL_MAPPER_TYPE = None) -> pl.DataFrame:
+        mapper : PlMapper = None) -> pl.DataFrame:
         """
         load polars dataframe from path or paths
         Parameters
@@ -94,7 +94,7 @@ class Load:
         return torch_load(path , weights_only = weights_only , **kwargs)
 
     @classmethod
-    def dfs(cls , path : strPath | strPaths , * , missing_ok = True , mapper : PD_MAPPER_TYPE = None , **kwargs) -> dict[Any , pd.DataFrame]:
+    def dfs(cls , path : strPath | strPaths , * , missing_ok = True , mapper : PdMapper = None , **kwargs) -> dict[Any , pd.DataFrame]:
         """load dataframes from tarfile , single / multiple dataframes
         Parameters
         ----------

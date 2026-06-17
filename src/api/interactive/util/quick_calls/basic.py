@@ -4,14 +4,14 @@ Quick call buttons for the interactive app, can be directly used in any page.
 from __future__ import annotations
 
 from abc import abstractmethod , ABCMeta
-from typing import Literal , Any , get_args
+from typing import Literal , TypeAlias , Any , get_args
 
 from src.proj.util.shell.util import DoneActionType
 from src.api.interactive.util.components.operations import ButtonOperation
 
 __all__ = ['QuickCallButton']
 
-EncodedColor = Literal[
+EncodedColor : TypeAlias = Literal[
     'red' , 'green' , 'blue' , 'orange' , 'purple' , 
     'gray' , 'yellow' , 'pink' , 'gold' , 'cyan'
 ]
