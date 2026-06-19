@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 import torch
 from pathlib import Path
-from typing import Any , TypeAlias
-from collections.abc import Mapping
+from typing import Any , TypeAlias , Mapping
 
 from src.proj import PATH , Base
 from src.proj.bases import ModuleType

@@ -9,7 +9,6 @@ Usage (from project root)::
 from __future__ import annotations
 
 from typing import Any
-from collections.abc import Iterable
 
 from src.proj import Base , Dates
 from .processors import PrePros
@@ -43,7 +42,8 @@ class PreProcessorTask(Base.BasicUpdater):
     @classmethod
     def proceed_update(
         cls , * , reconstruct : bool = False , rollback_date : int | None = None , 
-        frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , data_types : Iterable[str] | None = None , 
+        frame : Base.lit.DataBlockTimeFrame = 'fit', confirm : bool = True , 
+        data_types : Base.alias.NamesType = None , 
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , force_update : bool = False , **kwargs
     ) -> Base.UpdateFlag:
         """
@@ -68,7 +68,10 @@ class PreProcessorTask(Base.BasicUpdater):
             if not flag.yes:
                 return Base.UpdateFlag.FAILED
         
-        data_types = list(data_types) if data_types else (list(DATASET_PREDICT) if frame == 'predict' else list(DATASET_FIT))
+        if data_types is None:
+            data_types = DATASET_PREDICT if frame == 'predict' else DATASET_FIT
+        else:
+            data_types = Base.ensure_name_list(data_types , [])
         
         cls.logger.note(f'Data PreProcessing for {"fitting" if frame == 'fit' else "predicting"} start with {data_types} datas !')
         cls.logger.stdout(f'Will process {data_types} from {Dates(PrePros.start_date(frame = frame))}' , idt = 1 , vb = 1)

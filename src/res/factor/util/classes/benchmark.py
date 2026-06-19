@@ -198,23 +198,10 @@ class Benchmark(Portfolio):
         
     @classmethod
     def to_benchmarks(cls , benchmarks : Base.alias.MultipleBenchmark) -> list[Portfolio | Any]:
-        if benchmarks == 'defaults': 
-            return cls.defaults()
-        elif not benchmarks or benchmarks == 'none': 
-            return [cls(None)]
-        else:
-            if isinstance(benchmarks , str | Portfolio): 
-                benchmarks = [benchmarks]
-            benches = []
-            assert isinstance(benchmarks , Iterable) , benchmarks
-            for bm in benchmarks:
-                if bm is None or isinstance(bm , str): 
-                    benches.append(cls(bm))
-                elif isinstance(bm , Portfolio): 
-                    benches.append(bm)
-                else: 
-                    raise TypeError(bm)
-        return benches
+        if benchmarks is None or isinstance(benchmarks , str | Portfolio):
+            benchmarks = [benchmarks]
+        assert isinstance(benchmarks , Iterable) , benchmarks
+        return [cls.to_benchmark(bm) for bm in benchmarks]
 
     @classmethod
     def get_benchmark_name(cls , benchmark : Base.alias.SingleBenchmark):

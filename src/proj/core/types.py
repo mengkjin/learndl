@@ -4,7 +4,7 @@ Basic types alias for the project for type hints
 from __future__ import annotations
 import numpy as np
 import enum
-from typing import Any  , TypeAlias  , Self , TypeVar
+from typing import Any  , TypeAlias  , Self , TypeVar 
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from .trade_date import TradeDate

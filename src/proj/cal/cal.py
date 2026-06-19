@@ -10,10 +10,9 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime, timedelta, time
-from pathlib import Path
 from typing import Any
-from collections.abc import Iterable
 
+from src.proj import Base
 from src.proj.core import (
     NoInstanceMeta , lit , as_int_array , TradeDate , intDate , intDateNone , intDates , intDatesNone)
 from src.proj.env import PATH , Const
@@ -106,17 +105,14 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def get_modified_time(
-        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , * , 
+        cls, file_or_modified_time: Base.alias.PathsType | int | float | None , * , 
         bj_tz: bool = True
     ) -> int:
-        if isinstance(file_or_modified_time, Iterable):
-            mtime = min([PATH.file_modified_time(path) for path in file_or_modified_time])
-        elif isinstance(file_or_modified_time, Path):
-            mtime = PATH.file_modified_time(file_or_modified_time)
-        elif isinstance(file_or_modified_time, (int , float)):
+        if isinstance(file_or_modified_time, int | float):
             mtime = int(file_or_modified_time)
         else:
-            mtime = 19970101000000
+            paths  = Base.ensure_path_list(file_or_modified_time , [])
+            mtime = min([PATH.file_modified_time(path) for path in paths]) if paths else 19970101000000
         if mtime < 1e8:
             mtime = mtime * 1000000
         if bj_tz:
@@ -125,7 +121,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def is_updated_today(
-        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , 
+        cls, file_or_modified_time: Base.alias.PathsType | int | float | None , 
         hour=20, minute=0 , * , bj_tz: bool = True
     ) -> bool:
         """
@@ -141,7 +137,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def is_updated_recently(
-        cls, file_or_modified_time: Iterable[Path] | Path | int | float | None , 
+        cls, file_or_modified_time: Base.alias.PathsType | int | float | None , 
         hours : float = 1. , * , bj_tz: bool = True
     ) -> bool:
         """

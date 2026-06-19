@@ -4,7 +4,7 @@ Metric components for the project
 from __future__ import annotations
 
 from torch import Tensor
-from collections.abc import Callable
+from typing import Callable
 
 from src.proj import Base
 from src.proj.core import as_int_array

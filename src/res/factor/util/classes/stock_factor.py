@@ -21,7 +21,6 @@ from copy import deepcopy
 from functools import cached_property
 from pathlib import Path
 from typing import Any , Literal  , TypeAlias
-from collections.abc import Iterable
 
 from src.proj import DB , CALENDAR , Logger , Base , Save , Load
 from src.func.transform import standard_normal , winsorize
@@ -825,18 +824,19 @@ class StockFactor:
         df = DB.loads('factor' , factor_name , dates = dates , start=start , end=end)
         return cls(df)
         
-    def select(self , secid = None , date = None , factor_name = None):
+    def select(self , secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , factor_name : Base.alias.NamesType = None):
         """
         select the factor data by secid , date , factor name
         """
         prior_input = self.prior_input
         if isinstance(prior_input , pd.DataFrame):
             df = prior_input.reset_index()
+            date = Base.ensure_date(date)
+            secid = Base.ensure_secid(secid)
+            factor_name = Base.ensure_name_list(factor_name)
             if date is not None:  
-                date = date if isinstance(date , Iterable) else [date]
                 df = df.query('date in @date')
             if secid is not None: 
-                secid = secid if isinstance(secid , Iterable) else [secid]
                 df = df.query('secid in @secid')
             df = df.set_index(['date' , 'secid'])
             if factor_name is not None: 

@@ -1054,10 +1054,10 @@ class DataBlock:
     def blocks_ffill(
         cls , blocks : dict[str,DataBlock] , * ,
         fillna : FillNanOption = 'guess' , 
-        exclude : Iterable[str] | None = None
+        exclude : Base.alias.NamesType = None
     ) -> dict[str,DataBlock]:
         """Apply forward-fill to each block in the dict, optionally excluding specific keys."""
-        exclude = exclude or []
+        exclude = Base.ensure_name_list(exclude , [])
         fillnas = {key:cls.guess_fillna(key , fillna) for key in blocks}
         for key , blk in blocks.items():
             if key in exclude:

@@ -7,8 +7,7 @@ import itertools
 import numpy as np
 
 from functools import wraps
-from typing import Any , Literal , TypeAlias , cast
-from collections.abc import Sized, Callable
+from typing import Any , Literal , TypeAlias , cast , Sized , Callable
 
 from src.proj import Const , Base
 

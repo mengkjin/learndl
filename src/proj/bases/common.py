@@ -1,14 +1,18 @@
 """Common type conversion functions for the project"""
 from __future__ import annotations
 import numpy as np
-from typing import Any , TypeVar
+from pathlib import Path
+from typing import Any , TypeVar , Mapping , Iterable
 
-from src.proj.core import as_int_array , as_str_array , as_float_array , intDates , intNums
-from .alias import SecidType , DateType , NamesType , npValueType
+from src.proj.core import (
+    as_int_array , as_str_array , as_float_array , intDates , intNums
+
+)
+from .alias import SecidType , DateType , NamesType , npValueType , PathsType
 
 __all__ = [
     'ensure_secid' , 'ensure_date' , 'ensure_feature' , 'ensure_name_list' , 
-    'ensure_int_list' , 'ensure_npvalue'
+    'ensure_path_list' , 'ensure_int_list' , 'ensure_npvalue'
 ]
 
 T = TypeVar('T')
@@ -33,7 +37,19 @@ def ensure_name_list(feature : NamesType , none_as : T = None) -> list[str] | T:
         return none_as
     return as_str_array(feature).tolist()
 
-def ensure_int_list(int_list : intNums , none_as : T = None) -> list[int] | T:
+def ensure_path_list(feature : PathsType , none_as : T = None) -> list[Path] | T:
+    if feature is None:
+        return none_as
+    if isinstance(feature, str | Path):
+        return [Path(feature)]
+    elif isinstance(feature, Mapping):
+        return [Path(path) for path in feature.values()]
+    elif isinstance(feature, Iterable):
+        return [Path(path) for path in feature]
+    else:
+        raise ValueError(f'Invalid path type: {type(feature)}')
+
+def ensure_int_list(int_list : intNums | None , none_as : T = None) -> list[int] | T:
     if int_list is None:
         return none_as
     return as_int_array(int_list).tolist()

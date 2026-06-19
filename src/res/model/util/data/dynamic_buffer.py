@@ -3,8 +3,7 @@ Dynamic buffer space for some module to use (trainer, predictor, etc.), can be u
 """
 from __future__ import annotations
 
-from typing import Any , Literal , TypeAlias
-from collections.abc import Callable
+from typing import Any , Literal , TypeAlias , Callable
 
 __all__ = ['DynamicDataBuffer']
 

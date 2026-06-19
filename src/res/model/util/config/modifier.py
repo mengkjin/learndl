@@ -4,8 +4,7 @@ Model configs modifier for the project, use it to modify the config files
 from __future__ import annotations
 
 from src.proj import PATH , Base
-from typing import TypeAlias
-from collections.abc import Callable
+from typing import TypeAlias , Callable
 
 __all__ = ['ModelConfigModifier' , 'ModelConfigsBatchModifier']
 

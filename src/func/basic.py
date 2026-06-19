@@ -8,11 +8,12 @@ import numpy as np
 from typing import Any , Literal , overload , TypeVar , TypeAlias
 
 DIV_TOL = 1e-6
-IndexMergeMethod = Literal['union' , 'intersect' , 'check' , 'stack']
+
 T = TypeVar('T')
 
 ArrayAny : TypeAlias = np.ndarray | Any
 ArrayTensorAny : TypeAlias = np.ndarray | torch.Tensor | Any
+IndexMergeMethod : TypeAlias = Literal['union' , 'intersect' , 'check' , 'stack']
 
 
 def alert_message(message : str , color : str = 'yellow'):

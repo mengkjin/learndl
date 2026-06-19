@@ -8,8 +8,7 @@ import pandas as pd
 import gc , torch
 
 from functools import cached_property
-from typing import Any
-from collections.abc import Callable
+from typing import Any , Callable
 
 from src.proj import CALENDAR , Const, MACHINE , Base , Proj , Dates
 from src.data import ModuleData

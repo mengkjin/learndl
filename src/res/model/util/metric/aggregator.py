@@ -17,8 +17,8 @@ from __future__ import annotations
 import pandas as pd
 import numpy as np
 import torch
-from typing import Any  , TypeAlias
-from collections.abc import Callable, Iterable
+from typing import Any  , TypeAlias , Callable 
+from collections.abc import Iterable
 
 from src.proj import Base
 from .metric_result import EpochMetricResult
