@@ -173,7 +173,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     def _get_model_num_and_submodel(self , model_num : int | None = None , submodel : str | None = None):
         if model_num is None:
-            assert len(self.path.use_model_nums) == 1 , f'model_num must be provided when there are multiple model numbers'
+            assert len(self.path.use_model_nums) == 1 , f'There should be only one model number for {self.path.pred_name}'
             model_num = int(self.path.use_model_nums[0])
         else:
             assert model_num in self.model_nums , f'model_num {model_num} not in {self.model_nums}'

@@ -18,8 +18,11 @@ input:
   type: hidden # [data , hidden , factor] , specify below
 
   hidden.types: # list of hidden states , use if input_type is hidden
-    - gru@gru_day@0@best
-    - gru@gru_avg@0@best
+    - gru@gru_day_new@0@best
+    - gru@gru_30m_new@0@best
+    - gru@gru_week_new@0@best
+    - gru@gru_dfl2_new@0@best
+    - gru@gru_dfl2cs_new@0@best
 
 train:
   criterion.boost:

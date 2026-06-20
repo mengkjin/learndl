@@ -11,7 +11,7 @@ from abc import abstractmethod
 from functools import cached_property
 from pathlib import Path
 from typing import Any  , Literal , TypeAlias
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Sequence
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.proj.util.functional.parallel import parallel
@@ -30,7 +30,7 @@ FactorPropertyType : TypeAlias = Literal['is_pooling' , 'is_market']
 FactorDBSrcType : TypeAlias = Literal['stock_factor' , 'market_factor']
 FactorCalendarType : TypeAlias = Literal['update' , 'calendar']
 FactorStoredDatesType : TypeAlias = Literal['min' , 'max']
-AlternativeDBs : TypeAlias = list[dict[Literal['src' , 'key' , 'col'] , str]]
+AlternativeDBs : TypeAlias = Sequence[dict[Literal['src' , 'key' , 'col'] , str]]
 
 
 
@@ -677,7 +677,7 @@ class AffiliateFactorCalculator(FactorCalculator):
     load_db_key : str = '' # 'tushare_cne5_exp' / 'dongfang.scores_v0' / 'huatai.master_combined' ...
     load_db_col : str = ''
 
-    alternative_dbs : AlternativeDBs = [] # [{'src' : 'sellside' , 'key' : 'huayuan.scores_v0'}]
+    alternative_dbs : AlternativeDBs = () # ({'src' : 'sellside' , 'key' : 'huayuan.scores_v0'} ,)
 
     def calc_history(self , date : int) -> pd.DataFrame:
         """no need to validate value for affiliate factor"""
@@ -693,7 +693,7 @@ class AffiliateFactorCalculator(FactorCalculator):
 
     @classmethod
     def full_dbs(cls) -> AlternativeDBs:
-        return [{'src':cls.load_db_src , 'key':cls.load_db_key , 'col':cls.load_db_col} , *cls.alternative_dbs]
+        return ({'src':cls.load_db_src , 'key':cls.load_db_key , 'col':cls.load_db_col} , *cls.alternative_dbs)
 
     @classmethod
     def load_from_db(cls , src : str , key : str , date : int , col : str | None = None , closest = False) -> pd.DataFrame:

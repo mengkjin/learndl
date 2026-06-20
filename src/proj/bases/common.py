@@ -5,10 +5,10 @@ from pathlib import Path
 from typing import Any , TypeVar , Mapping , Iterable
 
 from src.proj.core import (
-    as_int_array , as_str_array , as_float_array , intDates , intNums
+    as_int_array , as_str_array , as_float_array , intDates , intNums , PathsType
 
 )
-from .alias import SecidType , DateType , NamesType , npValueType , PathsType
+from .alias import SecidType , DateType , NamesType , npValueType 
 
 __all__ = [
     'ensure_secid' , 'ensure_date' , 'ensure_feature' , 'ensure_name_list' , 

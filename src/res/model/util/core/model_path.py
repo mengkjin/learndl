@@ -396,7 +396,7 @@ class PredictorPath(ModelPath , Base.BoundLogger):
         self._model_num = model_num
         self._submodel = submodel
         self._pred_name = pred_name
-
+        
     def to_model_path(self) -> ModelPath:
         return ModelPath(self.base)
 

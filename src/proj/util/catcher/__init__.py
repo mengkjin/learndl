@@ -1,3 +1,4 @@
+from .basic import OutputCatcher
 from .html import HtmlCatcher
 from .crash_protector import CrashProtectorCatcher
 from .log_writer import LogWriter

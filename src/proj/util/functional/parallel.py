@@ -127,7 +127,7 @@ class _FuncCall:
     @staticmethod
     def unwrap(func_input : FuncCallInput[T] , **kwargs) -> tuple[Callable[..., T] , tuple[Any, ...] , dict[str, Any]]:
         """Normalize ``func_input`` into ``(callable, args, kwargs)``."""
-        args = []
+        args : list[Any] = []
         if isinstance(func_input , Callable):
             func = func_input
         elif isinstance(func_input , tuple):

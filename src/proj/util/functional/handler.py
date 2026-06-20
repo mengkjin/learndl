@@ -3,8 +3,8 @@ from __future__ import annotations
 import httpx
 import time
 from curl_cffi.requests import exceptions
-from typing import Literal , TypeVar , Generic , Any , TypeAlias
-from collections.abc import Callable
+from typing import Literal , TypeVar , Generic , Any , TypeAlias , Callable
+from collections.abc import Sequence , Mapping
 from src.proj.log import Logger
 
 __all__ = ['retry_call' , 'ErrorHandler']
@@ -122,11 +122,11 @@ class ErrorHandler(Generic[T]):
     }
     def __init__(
         self, func: Callable[..., RetryResult[T]] , 
-        handle_types: dict[str, dict[str, Any]] | list[str] | tuple[str, ...] = () , * , 
+        handle_types: Mapping[str, Mapping[str, Any]] | Sequence[str] = () , * , 
         label: str = ''):
         self.raw_func = func
         for error_type in handle_types:
-            if isinstance(handle_types, dict):
+            if isinstance(handle_types, Mapping):
                 kwargs = handle_types.get(error_type, {})
             else:
                 kwargs = self.DEFAULT_KWARGS.get(error_type, {})

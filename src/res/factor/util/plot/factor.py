@@ -131,7 +131,7 @@ class Plotter:
             ax2.plot(df['group'], df['IR'], 'r-')
             ax2.legend(['Avg IR'], loc='upper right')
 
-            set_xaxis(ax1 , index = [] , tick_pos='bottom')
+            set_xaxis(ax1 , tick_pos='bottom')
             set_yaxis(ax1 , format='pct' , digits=2 , title = 'Average Ret' , title_color='b')
             set_yaxis(ax2 , format='flt' , digits=3 , title = 'Average IR' , title_color='r' , tick_pos=None)
         return self.plot_iter.figs

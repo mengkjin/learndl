@@ -12,7 +12,7 @@ from src.proj.core import lit
 __all__ = ['ProxyCaller' , 'ProxyCallerList' , 'ProxyCallerInput' , 'ProxyDepletionException']
 
 CallerResultType : TypeAlias = bool | Exception
-ProxyCallerInput : TypeAlias = Callable[..., CallerResultType] | tuple[str, Callable[..., CallerResultType]] | tuple[Callable[..., CallerResultType], str] | 'ProxyCaller'
+ProxyCallerInput : TypeAlias = 'Callable[..., CallerResultType] | tuple[str, Callable[..., CallerResultType]] | tuple[Callable[..., CallerResultType], str] | ProxyCaller'
 
 class ProxyDepletionException(Exception):
     """Exception raised when the proxy pool is depleted"""

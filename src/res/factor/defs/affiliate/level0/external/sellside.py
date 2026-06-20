@@ -11,9 +11,9 @@ class df_scores_v0(SellsideFactor):
     description = '东方金工,scores_v0'
     load_db_key = 'dongfang.scores_v0'
     load_db_col = 'avg'
-    alternative_dbs = [
-        {'src' : 'sellside' , 'key' : 'huayuan.scores_v0' , 'col' : 'scores_v0'}
-    ]
+    alternative_dbs = (
+        {'src' : 'sellside' , 'key' : 'huayuan.scores_v0' , 'col' : 'scores_v0'} ,
+    )
 
     def calc_factor(self , date : int):
         return self.load_factor(date)
@@ -23,9 +23,9 @@ class df_scores_v2(SellsideFactor):
     description = '东方金工,scores_v2'
     load_db_key = 'dongfang.scores_v2'
     load_db_col = 'pred'
-    alternative_dbs = [
-        {'src' : 'sellside' , 'key' : 'huayuan.scores_v2' , 'col' : 'scores_v2'}
-    ]
+    alternative_dbs = (
+        {'src' : 'sellside' , 'key' : 'huayuan.scores_v2' , 'col' : 'scores_v2'} ,
+    )
 
     def calc_factor(self , date : int):
         return self.load_factor(date)
@@ -35,9 +35,9 @@ class df_scores_v3(SellsideFactor):
     description = '东方金工,scores_v3'
     load_db_key = 'dongfang.scores_v3'
     load_db_col = 'pred'
-    alternative_dbs = [
-        {'src' : 'sellside' , 'key' : 'huayuan.scores_v3' , 'col' : 'scores_v3'}
-    ]
+    alternative_dbs = (
+        {'src' : 'sellside' , 'key' : 'huayuan.scores_v3' , 'col' : 'scores_v3'} ,
+    )
 
     def calc_factor(self , date : int):
         return self.load_factor(date)

@@ -14,7 +14,7 @@ class SharedSync:
     @classmethod
     def shared_files(cls) -> list[Path]:
         """get the files to sync"""
-        files = []
+        files : list[Path] = []
         if PATH.share_folder is None:
             return files
         for sync_dir in cls.SYNC_DIRS:
@@ -26,7 +26,7 @@ class SharedSync:
     @classmethod
     def local_files(cls) -> list[Path]:
         """get the files to sync"""
-        files = []
+        files : list[Path] = []
         for sync_dir in cls.SYNC_DIRS:
             for file in PATH.lc_share.joinpath(sync_dir).rglob('*'):
                 if file.is_file() and not file.name.startswith('.'):

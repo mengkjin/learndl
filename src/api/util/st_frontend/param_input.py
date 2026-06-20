@@ -7,7 +7,7 @@ which renders a complete parameter form for a given script and manages the
 option ↔ value transformation pipeline.
 """
 from __future__ import annotations
-from typing import Literal , TypeAlias , Any , cast
+from typing import Literal , TypeAlias , Any , cast , Sequence
 from collections.abc import Callable
 import streamlit as st
 import ast
@@ -20,7 +20,7 @@ from src.api.util.backend import ScriptRunner , ScriptParamInput , TaskItem
 __all__ = ['WidgetParamInput' , 'ParamInputsForm' , 'ParamCache']
 
 CacheType : TypeAlias = Literal['option' , 'value' , 'valid']
-ScriptParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | list[str] | tuple[str]
+ScriptParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | Sequence[str]
 ParamFormType : TypeAlias = Literal['customized', 'form']
 NarrowedParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'enum']
 

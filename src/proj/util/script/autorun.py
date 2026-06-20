@@ -67,8 +67,8 @@ class AutoRunCatchers:
         self.warning_catcher = warning_catcher
 
     def enter(self , title : str , category : str , init_time : datetime):
-        from src.proj.util.catcher import CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
-        self.catchers = []
+        from src.proj.util.catcher import OutputCatcher , CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
+        self.catchers : list[OutputCatcher | WarningCatcher] = []
         if self.crash_protector_catcher:
             self.catchers.append(CrashProtectorCatcher(self.task_id))
         if self.html_catcher:

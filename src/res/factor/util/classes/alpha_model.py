@@ -22,7 +22,7 @@ __all__ = ['AlphaModel' , 'Amodel' , 'AlphaComposite' , 'AlphaScreener']
 CombineWorstMethod : TypeAlias = Literal['worst' , 'worst2']
 AmodelsType : TypeAlias = 'Amodel | list[Amodel] | Mapping[int, Amodel] | AlphaModel | None'
 ComponentInputType : TypeAlias = 'str | AlphaModel | Amodel'
-CompositeInputType : TypeAlias = str | ComponentInputType | Sequence[ComponentInputType]
+CompositeInputType : TypeAlias = 'str | ComponentInputType | Sequence[ComponentInputType]'
 
 @dataclass
 class Amodel:

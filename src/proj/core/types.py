@@ -11,7 +11,7 @@ from .trade_date import TradeDate
 from .literals import ALL , ANY , NONE , SELF , RANDOM , EQUAL
 
 __all__ = [
-    'strPath' , 'strPaths' , 'intNums' , 
+    'strPath' , 'strPaths' , 'PathsType' , 'intNums' , 
     'intDate' , 'intDateNone' , 'intDates' , 'intDatesNone' ,
     'ArrayLike' , 'IterableLike' , 
     'StrEnum' , 'ALL' , 'ANY' , 'NONE' , 'SELF' , 'RANDOM' , 'EQUAL' ,
@@ -22,6 +22,7 @@ T = TypeVar('T')
 
 strPath : TypeAlias = Path | str
 strPaths : TypeAlias = Mapping[int | Any , strPath] | Iterable[strPath]
+PathsType : TypeAlias = strPaths | strPath | None
 intNums : TypeAlias = int | list[int] | np.ndarray[Any, np.dtype[np.int_]] | Sequence[int] | range
 intDate : TypeAlias = int | TradeDate
 intDateNone : TypeAlias = int | TradeDate | None

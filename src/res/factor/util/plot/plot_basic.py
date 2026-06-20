@@ -14,14 +14,17 @@ class PlotDfFigIterator:
         self.default_prefix = default_prefix
         self.args_set = False
 
-    def set_args(self , data : pd.DataFrame , show : bool , title_prefix : str | None , title : str , group_key : list[str] , drop_keys : bool = True , 
-                 drop_cols : list[str] = ['suffix' , 'strategy' , 'prefix'] , num_groups_per_iter = 1 , num_pages : int | None = None , **kwargs):
+    def set_args(
+        self , data : pd.DataFrame , show : bool , 
+        title_prefix : str | None , title : str , group_key : list[str] , drop_keys : bool = True , 
+        drop_cols : list[str] | None = ['suffix' , 'strategy' , 'prefix'] , 
+        num_groups_per_iter = 1 , num_pages : int | None = None , **kwargs):
         self.data = data
         self.show = show
         self.title_prefix = title_prefix
         self.title = title
         self.group_key = group_key
-        self.drop = drop_cols + (group_key if drop_keys else [])
+        self.drop = (drop_cols or []) + (group_key if drop_keys else [])
         self.num_groups_per_iter = num_groups_per_iter
         self.num_pages = num_pages
         assert 'drop' not in kwargs , '"drop" kwargs must not be set'
