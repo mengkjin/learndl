@@ -38,7 +38,7 @@ class TestLogger(QuickCallButton):
     """Button that tests the streamlit app."""
     key = "test-logger"
     button_title = ".🩺 Logger"
-    icon = ":material/keyboard_external_input:"
+    icon = ":material/developer_mode_tv:"
     default_help = 'Call Logger.test_logger() to test stdout.'
     color = 'cyan'
     
@@ -93,7 +93,7 @@ class ReplaceWeztermConfig(QuickCallButton):
     """Button that replaces the wezterm config."""
     key = "replace-wezterm-config"
     button_title = "⚙️ Wezterm"
-    icon = ":material/component_exchange:"
+    icon = ":material/handyman:"
     default_help = 'Replace the wezterm config file by the project\'s default.'
     color = 'blue'
     
@@ -107,7 +107,7 @@ class CarryOutSchedules(QuickCallButton):
     """Button that carries out the schedule model list."""
     key = "carry-out-schedules"
     button_title = "▶️ Schedules"
-    icon = ":material/order_play:"
+    icon = ":material/data_thresholding:"
     default_help = 'Carry out the schedule model list.'
     color = 'purple'
     research = True
@@ -121,21 +121,6 @@ class CarryOutSchedules(QuickCallButton):
         return """
             from src.api.calls.research import CarryOutScheduleModelList
             CarryOutScheduleModelList.go()
-        """
-
-class CheckConfigFiles(QuickCallButton):
-    """Button that modifies the config files."""
-    key = "check-configs"
-    button_title = "🔍 Config YAML"
-    icon = ":material/search_insights:"
-    default_help = 'Check and auto modify the config files.'
-    color = 'cyan'
-    research = True
-    
-    def script_string(self) -> str:
-        return """
-            from src.api.calls.research import CheckAllConfigFiles
-            CheckAllConfigFiles.go()
         """
 
 class RebuildPreprocessedData(QuickCallButton):
@@ -152,6 +137,22 @@ class RebuildPreprocessedData(QuickCallButton):
             from src.api.calls.data import ReconstructPreprocessedData
             ReconstructPreprocessedData.go()
         """
+
+class CheckConfigFiles(QuickCallButton):
+    """Button that modifies the config files."""
+    key = "check-configs"
+    button_title = "🔍 Config YAML"
+    icon = ":material/stethoscope:"
+    default_help = 'Check and auto modify the config files.'
+    color = 'cyan'
+    research = True
+    
+    def script_string(self) -> str:
+        return """
+            from src.api.calls.research import CheckAllConfigFiles
+            CheckAllConfigFiles.go()
+        """
+
 
 class ModelArchiveOperations(QuickCallButton):
     """Button that manages the model archive operations."""

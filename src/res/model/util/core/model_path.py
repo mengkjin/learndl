@@ -211,10 +211,10 @@ class ModelPath:
             return
         target_model_path = self.copy().with_new_index(1)
         if target_model_path.base.exists():
-            Logger.alert1(f'{target_model_path.base} already exists, {self.base} remains unchanged, please manually rename it')
+            Logger.alert1(f'{PATH.relative(self.base)} remains! ({PATH.relative(target_model_path.base)} exists)')
         else:
             self.rename(target_model_path.model_clean_name , target_model_path.model_name_index)
-            Logger.success(f'{self.base} has been reindexed to {target_model_path.base}')
+            Logger.success(f'{PATH.relative(self.base)} >> {PATH.relative(target_model_path.base)}')
 
     def rename(self , new_clean_name : str , new_index : int = 1):
         """rename model directory"""
@@ -365,6 +365,16 @@ class ModelPath:
         assert not target.exists() , f'{target} already exists'
         shutil.move(source , target)
         Logger.success(f'{PATH.relative(source)} has been moved to archive {PATH.relative(target)}')
+
+    def get_creation_time(self , all_resumables : bool = False):
+        if all_resumables:
+            candidates = self.find_resumable_candidates()
+            if not candidates:
+                return None
+            else:
+                return max([datetime.fromtimestamp(cand.base.stat().st_ctime) for cand in candidates])
+        else:
+            return datetime.fromtimestamp(self.base.stat().st_ctime)
 
     @classmethod
     def resume_from_archive(cls , start_with : str):

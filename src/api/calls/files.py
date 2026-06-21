@@ -67,7 +67,7 @@ class ModelArchiveOperations(DirectCall):
     @classmethod
     def _iter_current_models(cls , parents : tuple[str,...]= ('nn' , 'boost' , 'factor') , print_paths : bool = True) -> list[Path]:
         roots : list[Path] = [getattr(PATH, f'model_{parent}') for parent in parents]
-        paths = [(root.name , path) for root in roots for path in root.iterdir() if path.is_dir()]
+        paths = [(root.name , path) for root in roots for path in sorted(root.iterdir()) if path.is_dir()]
         if paths:
             Logger.note(f'There are {len(paths)} models currently in {parents} directories...')
         else:
@@ -106,7 +106,7 @@ class ModelArchiveOperations(DirectCall):
     @classmethod
     def reindex_all_current_models(cls):
         from src.res.model.util import ModelPath
-        paths = cls._iter_current_models(parents = ('nn' , 'boost'))
+        paths = cls._iter_current_models(parents = ('nn' , 'boost') , print_paths = False)
         if not paths:
             return AskFor.flag('abort')
         else:
@@ -128,12 +128,24 @@ class ModelArchiveOperations(DirectCall):
         return flag
 
     @classmethod
+    def show_latest_creation_time(cls):
+        from src.res.model.util import ModelPath
+        paths = cls._iter_current_models(parents = ('nn' , 'boost' , 'factor') , print_paths = False)
+        if not paths:
+            return AskFor.flag('abort')
+        else:
+            for path in paths:
+                Logger.note(f'{PATH.relative(path)} >> {ModelPath(path).get_creation_time()}')
+            return AskFor.flag('yes')
+
+    @classmethod
     def _menu_for_operations(cls):
         options = [
             'Archive current models' , 
             'Resume archived models' , 
             'Reindex all current models' , 
             'Rename current models' ,
+            'Show latest creation time' ,
         ]
         flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What model archive operations to conduct?')
         if flag.result is None:
@@ -147,6 +159,8 @@ class ModelArchiveOperations(DirectCall):
             return cls.reindex_all_current_models()
         elif selection == 3:
             return cls.rename_current_models()
+        elif selection == 4:
+            return cls.show_latest_creation_time()
         else:
             raise ValueError(f'Invalid operation: {flag.result}')
 

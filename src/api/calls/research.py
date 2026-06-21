@@ -51,18 +51,14 @@ class CarryOutScheduleModelList(DirectCall):
             return module.main
         raise FileNotFoundError(f'Schedule model script not found: {cls.SCHEDULE_SCRIPT}')
     @classmethod
-    def _get_latest_creation_time(cls , schedule_name: str , exclude_short_test: bool = True):
+    def _get_latest_creation_time(cls , schedule_name: str):
         from src.res.model.util import ModelConfig
         config = ModelConfig(schedule_name = schedule_name , vb_level = 'never')
-        candidates = config.base_path.find_resumable_candidates()
-        if exclude_short_test:
-            candidates = [cand for cand in candidates if not cand.is_short_test]
-        creation_time = [datetime.fromtimestamp(cand.base.stat().st_ctime) for cand in candidates]
-        return max(creation_time) if creation_time else None
+        return config.base_path.get_creation_time(all_resumables = True)
 
     @classmethod
-    def _is_schedule_created_recently(cls , schedule_name: str , days: int = 7 , exclude_short_test: bool = True):
-        max_creation_time = cls._get_latest_creation_time(schedule_name , exclude_short_test)
+    def _is_schedule_created_recently(cls , schedule_name: str , days: int = 7):
+        max_creation_time = cls._get_latest_creation_time(schedule_name)
         if max_creation_time is None:
             return False
         return max_creation_time > datetime.now() - timedelta(days = days)
