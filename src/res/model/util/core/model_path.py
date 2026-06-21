@@ -228,7 +228,6 @@ class ModelPath:
         if (model_config_file := self.conf_file('model')).exists():
             configs = PATH.read_yaml(model_config_file) | {'model.name' : new_clean_name}
             PATH.dump_yaml(configs , model_config_file , overwrite = True)
-
         if (schedule_config_file := self.conf_file('schedule')).exists():
             configs = PATH.read_yaml(schedule_config_file) | {'model.name' : new_clean_name}
             PATH.dump_yaml(configs , schedule_config_file , overwrite = True)
@@ -243,7 +242,7 @@ class ModelPath:
 
             old_base_path = self.base
             self.full_name_kwargs['model_clean_name'] = new_clean_name
-            self.full_name = new_full_name
+            self.parse_input(new_full_name)
             old_base_path.rename(self.base)
             self.log_operation(f'rename_model_path from {old_full_name} to {new_full_name}')
         return self
