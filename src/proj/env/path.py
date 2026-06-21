@@ -34,13 +34,14 @@ class PATH:
     srcs        = main.joinpath('src')
     runs        = main.joinpath('runs')
     conf        = main.joinpath('configs') # configs folder and subfolders
-    template    = main.joinpath('templates') # templates folder and subfolders
     resource    = main.joinpath('.resources') # resouces folder (for update)
+    
     logs        = main.joinpath('.logs') # logs folder and subfolders
     local       = main.joinpath('.local_resources')
 
     # subpaths
     fac_def     = srcs.joinpath('res' , 'factor' , 'defs')
+    template    = resource.joinpath('templates') # templates folder and subfolders
     
     lc_share    = local.joinpath('shared')
     lc_machine  = local.joinpath(MACHINE.name)

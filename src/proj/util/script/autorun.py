@@ -76,8 +76,8 @@ class AutoRunCatchers:
         if self.markdown_catcher:
             self.catchers.append(MarkdownCatcher(title , category , init_time , add_time_to_title=True , to_share_folder=True))
         if self.warning_catcher:
-            raise_warnings = MACHINE.config.get('constant/project' , 'raise_warnings' , default = None)
-            ignore_warnings = MACHINE.config.get('constant/project' , 'ignore_warnings' , default = None)
+            raise_warnings = MACHINE.preference('project' , 'raise_warnings' , default = None)
+            ignore_warnings = MACHINE.preference('project' , 'ignore_warnings' , default = None)
             self.catchers.append(WarningCatcher(raise_warnings , ignore_warnings))
 
         for catcher in self.catchers:

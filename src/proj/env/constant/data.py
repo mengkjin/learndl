@@ -21,7 +21,7 @@ class DataUpdateConfig(metaclass=SingletonMeta):
     @cached_property
     def _use_schedule(self):
         """use schedule"""
-        schedule = MACHINE.preference('update_schedule' , 'machine_schedules').get(MACHINE.name , 'testing')
+        schedule = MACHINE.preference('project' , 'machine_schedules' , default = {}).get(MACHINE.name , 'testing')
         assert schedule == 'production' or schedule == 'testing' , f'Invalid schedule: {schedule}'
         return schedule
     @cached_property

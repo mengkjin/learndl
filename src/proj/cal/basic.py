@@ -38,7 +38,7 @@ class BasicCalendar(metaclass=SingletonMeta):
         if self._loaded:
             return
         calendar = pd.read_feather(PATH.db.joinpath("DB_information_ts" , "calendar.feather")).loc[:, ["calendar", "trade"]]
-        reserved = pd.DataFrame(MACHINE.config.get('constant/data/calendar'))
+        reserved = pd.DataFrame(MACHINE.dfdata.get('table/calendar'))
         if not reserved.empty:
             calendar = pd.concat([calendar, reserved.loc[:, ["calendar", "trade"]]])
         calendar = calendar.drop_duplicates(subset="calendar", keep="first").sort_values("calendar")

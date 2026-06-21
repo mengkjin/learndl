@@ -14,7 +14,7 @@
         ".streamlit/": true,
         ".secret/": true,
         ".logs/": true,
-        ".resources/": true,
+        ".resources/": false,
         ".local_resources/": true,
         ".context/": true,
         ".gitignore": true,

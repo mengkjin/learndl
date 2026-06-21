@@ -10,7 +10,7 @@ class DebugMode(metaclass=SingletonMeta):
     """Context manager: set ``VB.vb_level`` for the block."""
     def __init__(self):
         self._contents = MACHINE.preference('debug')
-        self._debug_mode = bool(MACHINE.config.get('constant/project' , 'debug_mode' , default = False))
+        self._debug_mode = bool(MACHINE.preference('project' , 'debug_mode' , default = False))
 
     @property
     def contents(self) -> dict[str, bool]:

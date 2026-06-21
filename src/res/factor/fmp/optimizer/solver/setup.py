@@ -8,7 +8,7 @@ __all__ = ['setup_solvers' , 'setup_mosek_lic']
 def setup_mosek_lic():
     import shutil
     from src.proj import MACHINE , PATH , Logger
-    source_lic = PATH.resource.joinpath('mosek.lic')
+    source_lic = PATH.resource.joinpath('certificate' , 'mosek.lic')
     target_lic = MACHINE.mosek_lic_path
 
     if target_lic and target_lic.exists():

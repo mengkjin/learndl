@@ -58,7 +58,7 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
             sort_values(['secid','entry_dt','remove_dt']).\
             drop_duplicates(['secid','change_reason','entry_dt'] , keep = 'first').reset_index(drop=True)
 
-        self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.config.get('constant/data/industry/tushare'))
+        self._indus_dict : pd.DataFrame | Any = pd.DataFrame(MACHINE.dfdata.get('mapping/industry/tushare'))
         self._indus_data : pd.DataFrame | Any = DB.load('information_ts' , 'industry') 
 
         self._indus_data['indus'] = self._indus_dict.loc[self._indus_data['l2_name'],'indus'].values

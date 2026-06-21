@@ -11,10 +11,3 @@ testing:
   
   start:
   end:
-
-machine_schedules:
-  mengkjin-server: production
-  HST-jinmeng: production
-  Matthews-Mac: testing
-    
-

@@ -24,6 +24,7 @@ def get_project_root() -> Path:
 MAIN_PATH = get_project_root()
 SECRET_PATH = MAIN_PATH.joinpath('.secret')
 CONFIG_PATH = MAIN_PATH.joinpath('configs')
+DFDATA_PATH = MAIN_PATH.joinpath('.resources/default_data')
 
 def _load_config_file(path: Path) -> dict:
     """Load the config file from the path , yaml or json"""
@@ -245,6 +246,7 @@ class MACHINE:
     main_path = MAIN_PATH
     secret = ConfFileLazyLoader('Secret' , SECRET_PATH)
     config = ConfFileLazyLoader('Config' , CONFIG_PATH)
+    dfdata = ConfFileLazyLoader('DefaultData' , DFDATA_PATH)
     setting = _MachineSettings(**secret.get('machines' , name))
     production_path = Path(setting.main_path)
 
@@ -311,4 +313,4 @@ class MACHINE:
     @classmethod
     def preference(cls, key: str , sub_key: str | None = None , **kwargs) -> Any:
         """Get the preference content of the config file by the main key and sub key"""
-        return cls.config.get(f'constant/preference/{key}' , sub_key, **kwargs)
+        return cls.config.get(f'preference/{key}' , sub_key, **kwargs)

@@ -71,9 +71,11 @@ class GitClearPull(DirectCall):
         if self.verbose_level >= 2:
             Logger.stdout(result.stdout)
         
+        clear_roots = [PATH.srcs , PATH.scpt , PATH.conf , PATH.resource]
+        all_folders = [path for root in clear_roots for path in root.rglob('*/') if path.is_dir()]
         empty_folders = []
-        for folder in [*PATH.main.joinpath('src').rglob('*/') , *PATH.main.joinpath('configs').rglob('*/')][::-1]:
-            if folder.is_dir() and not [x for x in folder.iterdir() if x.name != '__pycache__']:
+        for folder in all_folders[::-1]:
+            if not [x for x in folder.iterdir() if x.name != '__pycache__']:
                 subfiles = [x for x in folder.rglob('*') if x.is_file()]
                 if not len(subfiles):
                     if self.verbose_level >= 2:

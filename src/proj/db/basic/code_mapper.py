@@ -67,7 +67,7 @@ def code2code(code : T , decode_first = False) -> T:
     if decode_first: 
         new_code = pd.Series([(id.decode('utf-8') if isinstance(id , bytes) else str(id)) for id in new_code])
     new_code = new_code.astype(str)
-    new_code = new_code.map(MACHINE.config.get('constant/data/code_mapper/code')).fillna(new_code).astype(str)
+    new_code = new_code.map(MACHINE.dfdata.get('mapping/code/code')).fillna(new_code).astype(str)
     new_code = _from_series(new_code , code)
     return new_code
 
@@ -78,7 +78,7 @@ def secid2secid(secid : T) -> T:
         Same container shape/type as ``secid`` where possible.
     """
     new_secid = _to_series(secid)
-    new_secid = new_secid.astype(str).map(MACHINE.config.get('constant/data/code_mapper/secid')).fillna(new_secid).astype(int)
+    new_secid = new_secid.astype(str).map(MACHINE.dfdata.get('mapping/code/secid')).fillna(new_secid).astype(int)
     new_secid = _from_series(new_secid , secid)
     return new_secid
 

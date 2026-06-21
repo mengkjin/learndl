@@ -3,6 +3,11 @@
 # see configs/constant/preference/debug.yaml for more details
 debug_mode: false
 
+machine_schedules:
+  mengkjin-server: production
+  HST-jinmeng: production
+  Matthews-Mac: testing
+
 raise_warnings:
   - 'must accept context and return_scalar arguments'
   - 'an item of incompatible dtype'
