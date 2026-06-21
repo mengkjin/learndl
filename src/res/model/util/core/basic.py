@@ -40,6 +40,7 @@ def parse_model_input(model_input : Base.strPath | None) -> dict[str,Any]:
             'model_name_index' : ''
         }
     elif isinstance(model_input , Path):
+        model_input = model_input.resolve()
         assert model_input.is_relative_to(PATH.model), f'model_input {model_input} is not a subdirectory of {PATH.model}'
         if model_input.parent == PATH.model_st:
             return parse_model_input(f'st@{model_input.name}')

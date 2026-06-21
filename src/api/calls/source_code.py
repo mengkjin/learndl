@@ -179,9 +179,8 @@ class CheckCodeIssues(DirectCall):
         return flag
 
     def run(self) -> None:
-        for loop_flag in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
-            flag = self._menu_for_checking()
-            loop_flag.set_flag(flag)
+        for _ in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
+            self._menu_for_checking()
 
 class CheckDependencyVersion(DirectCall):
     """Check the dependency version in the project code if they are newer than the ones in pyproject.toml."""

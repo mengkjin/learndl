@@ -8,8 +8,8 @@ from src.api.interactive.util.quick_calls.basic import QuickCallButton
 __all__ = [
     'Reboot' , 'TestLogger' , 'CheckCodeIssues' , "CheckDependencyVersion" , 'CheckConfigFiles' , 
     'ClearCatcherLogs' , 'ReplaceWeztermConfig' ,
-    'CarryOutSchedules' , 'RebuildPreprocessedData' ,  
-    'ArchiveCurrentModel' , 'ResumeArchivedModel' , 
+    'CarryOutSchedules' , 'RebuildPreprocessedData' , 
+    'ModelArchiveOperations' ,
     'Tensorboard' , 'OptunaDashboard' , 
 ]
 
@@ -153,34 +153,19 @@ class RebuildPreprocessedData(QuickCallButton):
             ReconstructPreprocessedData.go()
         """
 
-class ArchiveCurrentModel(QuickCallButton):
-    """Button that archives the model."""
-    key = "archive-current-model"
-    button_title = "⬇️ Current Model"
-    icon = ":material/archive:"
-    default_help = 'Archive models from model directory to model archive directory, you can choose which model to archive.'
+class ModelArchiveOperations(QuickCallButton):
+    """Button that manages the model archive operations."""
+    key = "model-archive-operations"
+    button_title = "📂 Models"
+    icon = ":material/home_storage_gear:"
+    default_help = 'Manage the model archive operations, including archive / resume / rename / packing.'
     color = 'pink'
-    research = True
-
-    def script_string(self) -> str:
-        return """
-            from src.api.calls.files import ArchiveCurrentModel
-            ArchiveCurrentModel.go()
-        """
-
-class ResumeArchivedModel(QuickCallButton):
-    """Button that resumes the model."""
-    key = "resume-archived-model"
-    button_title = "⬆️ Archived Model"
-    icon = ":material/unarchive:"
-    default_help = 'Resume models from model archive directory, you can choose which model to resume.'
-    color = 'green'
     research = True
     
     def script_string(self) -> str:
         return """
-            from src.api.calls.files import ResumeArchivedModel
-            ResumeArchivedModel.go()
+            from src.api.calls.files import ModelArchiveOperations
+            ModelArchiveOperations.go()
         """
 
 class Tensorboard(QuickCallButton):

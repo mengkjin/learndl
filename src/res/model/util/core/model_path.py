@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import shutil
+from copy import deepcopy
 from datetime import datetime , timedelta
 from functools import cached_property
 from pathlib import Path
@@ -55,6 +56,9 @@ class ModelPath:
         assert self.full_name_kwargs['st'] in ['st' , ''] , f'st {self.full_name_kwargs['st']} is not valid'
         if isinstance(model_input , Path):
             assert model_input == self.base , f'model_input {model_input} is not the same as base {self.base} , should adjust mannually'
+
+    def copy(self) -> ModelPath:
+        return deepcopy(self)
 
     @property
     def is_short_test(self) -> bool:
@@ -201,22 +205,33 @@ class ModelPath:
         self.rslt().mkdir(exist_ok=True)
         self.snapshot().mkdir(exist_ok=True)
 
-    def rename(self , new_clean_name : str):
+    def auto_reindex(self):
+        """auto reindex model directory"""
+        if self.is_null_model or self.is_short_test or not self.is_resumable or self.model_name_index == 1:
+            return
+        target_model_path = self.copy().with_new_index(1)
+        if target_model_path.base.exists():
+            Logger.alert1(f'{target_model_path.base} already exists, {self.base} remains unchanged, please manually rename it')
+        else:
+            self.rename(target_model_path.model_clean_name , target_model_path.model_name_index)
+            Logger.success(f'{self.base} has been reindexed to {target_model_path.base}')
+
+    def rename(self , new_clean_name : str , new_index : int = 1):
         """rename model directory"""
         # get new full name
-        if new_clean_name == self.model_clean_name:
+        if new_clean_name == self.model_clean_name and new_index == self.model_name_index:
             return self
         old_full_name = self.full_name
-        new_full_name = combine_full_name(**self.full_name_kwargs | {'model_clean_name' : new_clean_name})
+        new_full_name = combine_full_name(**self.full_name_kwargs | {'model_clean_name' : new_clean_name , 'model_name_index' : new_index})
         assert not ModelPath(new_full_name).base.exists() , f'{new_full_name} already exists , cannot rename to it!'
         
         if (model_config_file := self.conf_file('model')).exists():
             configs = PATH.read_yaml(model_config_file) | {'model.name' : new_clean_name}
-            PATH.dump_yaml(configs , model_config_file)
+            PATH.dump_yaml(configs , model_config_file , overwrite = True)
 
         if (schedule_config_file := self.conf_file('schedule')).exists():
             configs = PATH.read_yaml(schedule_config_file) | {'model.name' : new_clean_name}
-            PATH.dump_yaml(configs , schedule_config_file)
+            PATH.dump_yaml(configs , schedule_config_file , overwrite = True)
 
         if self.log_file.host_file.exists():
             self.log_file.rename(new_full_name)
@@ -224,7 +239,7 @@ class ModelPath:
         if self.base.exists():
             config_file = PATH.read_yaml(self.conf_file('model'))
             config_file['model.name'] = new_clean_name
-            PATH.dump_yaml(config_file , self.conf_file('model'))
+            PATH.dump_yaml(config_file , self.conf_file('model') , overwrite = True)
 
             old_base_path = self.base
             self.full_name_kwargs['model_clean_name'] = new_clean_name

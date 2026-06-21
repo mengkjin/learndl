@@ -11,6 +11,7 @@ from src.proj.log import Logger
 __all__ = ['AskFor']
 
 AskFlagType : TypeAlias = Literal['yes' , 'no' , 'abort']
+ExitFlag : TypeAlias = Literal['q']
 T = TypeVar('T')
 
 def _print_title(title : str):
@@ -102,6 +103,23 @@ class AskFor:
         flag = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
         flag = AskFor.Retry('Do you want to archive more models?')
     """
+
+    @classmethod
+    def flag(cls , flag : AskFlagType) -> AskFlag:
+        return AskFlag(flag = flag)
+
+    @classmethod
+    def string(cls , title : str = '') -> AskFlag[str]:
+        if not cls.check_interactive():
+            Logger.error('Not interactive mode, return false!')
+            return AskFlag('no')
+        _print_title(title)
+        selection = input(f'Please input (q to quit): ')
+        if selection.lower() == 'q':
+            return AskFlag('abort')
+        else:
+            return AskFlag('yes').set_result([selection])
+        
    
     @classmethod
     def check_interactive(cls) -> bool:
@@ -227,16 +245,17 @@ class AskFor:
     @classmethod
     def Options(
         cls , options : list[T] , confirm : bool = True , 
-        multiple : bool = False , title : str = ''
+        multiple : bool = False , title : str = '' , print_options : bool = True
     ) -> AskFlag[T]:
         """Ask for options from a list of options."""
         if not cls.check_interactive():
             Logger.error('Not interactive mode, return false!')
             return AskFlag('no')
         _print_title(title)
-        Logger.stdout(f'There are {len(options)} options available...')
-        for i , option in enumerate(options):
-            Logger.stdout(f'{i+1:02d}. {option}' , indent = 1)
+        if print_options:
+            Logger.stdout(f'There are {len(options)} options available...')
+            for i , option in enumerate(options):
+                Logger.stdout(f'{i+1:02d}. {option}' , indent = 1)
         flag = cls.Selections(options , confirm = confirm , multiple = multiple)
         new_flag = AskFlag(flag.flag)
         if flag.yes:
