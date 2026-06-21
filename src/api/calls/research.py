@@ -16,20 +16,23 @@ class CarryOutScheduleModelList(DirectCall):
     category = 'Research'
     schedules : tuple[str, ...] = (
         'gru_30m_new',
+        'gru_week_new',
         'gru_dfl2_new',
         'gru_dfl2cs_new',
+        'lgbm_of_hidden',
     )
     max_test_schedules = 1
     SCHEDULE_SCRIPT = PATH.scpt.joinpath('4_train' , '2_schedule_model.py')
     @classmethod
-    def get_schedules(cls) -> list[str]:
+    def get_schedules(cls , exclude_recent_created: bool = True) -> list[str]:
         ret = list(cls.schedules)
+        if exclude_recent_created:
+            ret = [schedule for schedule in ret if not cls._is_schedule_created_recently(schedule)]
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
     @classmethod
     def schedule_names(cls) -> str:
-        all_schedules = cls.get_schedules()
-        recent_schedules = [schedule for schedule in all_schedules if not cls._is_schedule_created_recently(schedule)]
-        return ', '.join(recent_schedules)
+        schedules = cls.get_schedules(exclude_recent_created = True)
+        return ', '.join(schedules)
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
