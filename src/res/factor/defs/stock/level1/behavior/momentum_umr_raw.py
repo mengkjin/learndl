@@ -27,6 +27,8 @@ def calc_umr_raw(date , n_months : int , risk_window : int = 10):
     umrs : dict[str , pd.Series] = {}
     for risk_type in risk_type_list:
         risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end , field = risk_type , pivot = True)
+        if isinstance(risks.columns, pd.MultiIndex):
+            risks.columns = risks.columns.get_level_values(-1)
         avg_risk = risks.rolling(risk_window).mean().tail(n_days)
         exc_risk = avg_risk - risks.tail(n_days)
         exc_risk = exc_risk.dropna(how = 'all')
