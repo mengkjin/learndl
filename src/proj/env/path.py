@@ -52,8 +52,9 @@ class PATH:
     optuna      = lc_machine.joinpath('optuna')
     tsboard     = lc_machine.joinpath('tensorboard')
 
-    sched          = conf.joinpath('model' , 'schedule')
-    sched_archive  = conf.joinpath('model' , 'schedule' , 'archive')
+    sched          = conf.joinpath('schedule' , 'current')
+    sched_archive  = conf.joinpath('schedule' , 'archive')
+    sched_worklist = conf.joinpath('schedule' , 'worklist.yaml')
     sched_shared   = lc_share.joinpath('schedule_model')
 
     # production paths (in the production environment, i.e. the base path of the project)
@@ -209,14 +210,6 @@ class PATH:
             return default
         
     @classmethod
-    def initialize_path(cls) -> None:
-        """Initialize the all paths under the main path"""
-        for name in dir(cls):
-            member = getattr(cls , name)
-            if isinstance(member , Path) and member.is_relative_to(cls.main):
-                member.mkdir(parents=True , exist_ok=True)
-
-    @classmethod
     def list_files(cls , directory : strPath , fullname = False , recur = False) -> list[Path]:
         """List all files in directory"""
         if isinstance(directory , str): 
@@ -260,7 +253,7 @@ class PATH:
         """Initialize the all paths under the main path"""
         for name in dir(cls):
             member = getattr(cls , name)
-            if isinstance(member , Path) and (member.is_relative_to(cls.main) or member.is_relative_to(cls.production)):
+            if isinstance(member , Path) and not member.is_file() and (member.is_relative_to(cls.main) or member.is_relative_to(cls.production)):
                 member.mkdir(parents=True , exist_ok=True)
 
 PATH.mkdir_path()

@@ -65,7 +65,7 @@ class PreProcessorTask(Base.BasicUpdater):
         if confirm: 
             from src.proj.util.functional.ask import AskFor
             flag = AskFor.Confirmation(title = 'Are you sure to update the preprocessed data?')
-            if not flag.yes:
+            if not flag.valid:
                 return Base.UpdateFlag.FAILED
         
         if data_types is None:

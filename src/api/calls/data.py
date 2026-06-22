@@ -21,14 +21,14 @@ class ReconstructPreprocessedData(DirectCall):
             return
 
         with Proj.vb.temporary_vb('max'):
-            for loop_flag in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
+            for loop in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
                 flag_key = AskFor.Options(data_keys , confirm = False , multiple = False , title = f'Which data preprocessor to reconstruct?')
-                if not loop_flag.set_flag(flag_key) or flag_key.result is None:
+                if not loop.set_flag(flag_key) or flag_key.result is None:
                     continue
                 
                 Logger.note(f'Select [{flag_key.result}] data to reconstruct...')
                 flag_type = AskFor.Options(['fit' , 'predict' , 'both'] , confirm = False , multiple = False , title = f'Which type of data to reconstruct? (fit/predict/both)')
-                if not loop_flag.set_flag(flag_type) or flag_type.result is None:
+                if not loop.set_flag(flag_type) or flag_type.result is None:
                     continue
                 data_type = flag_type.result
                 if MACHINE.platform_coding and flag_type.result != 'predict':

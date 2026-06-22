@@ -9,23 +9,16 @@ from typing import Any
 from src.proj import MACHINE , PATH , Logger
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['CarryOutScheduleModelList' , 'CheckAllConfigFiles']
+__all__ = ['CarryOutScheduleWorkList']
 
-class CarryOutScheduleModelList(DirectCall):
+class CarryOutScheduleWorkList(DirectCall):
     """Carry out training of a predefined schedule model list."""
     category = 'Research'
-    schedules : tuple[str, ...] = (
-        'gru_30m_new',
-        'gru_week_new',
-        'gru_dfl2_new',
-        'gru_dfl2cs_new',
-        'lgbm_of_hidden',
-    )
-    max_test_schedules = 1
+    max_test_schedules = 3
     SCHEDULE_SCRIPT = PATH.scpt.joinpath('4_train' , '2_schedule_model.py')
     @classmethod
     def get_schedules(cls , exclude_recent_created: bool = True) -> list[str]:
-        ret = list(cls.schedules)
+        ret = list(PATH.read_yaml(PATH.sched_worklist)['fit'])
         if exclude_recent_created:
             ret = [schedule for schedule in ret if not cls._is_schedule_created_recently(schedule)]
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
@@ -33,6 +26,11 @@ class CarryOutScheduleModelList(DirectCall):
     def schedule_names(cls) -> str:
         schedules = cls.get_schedules(exclude_recent_created = True)
         return ', '.join(schedules)
+    @classmethod
+    def update_worklist(cls , finish : str) -> None:
+        content = PATH.read_yaml(PATH.sched_worklist)
+        content['fit'].remove(finish)
+        PATH.dump_yaml(content , PATH.sched_worklist , overwrite = True)
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
@@ -81,20 +79,8 @@ class CarryOutScheduleModelList(DirectCall):
                     end=None,
                     email=True,
                 )
+                self.update_worklist(schedule_name)
         finally:
             self._restore_main_script_file()
         Logger.success('Training schedule model list completed')
 
-class CheckAllConfigFiles(DirectCall):
-    """Check and auto modify all config files."""
-    category = 'Research'
-    def run(self) -> None:
-        from src.res.model.util.config.inspector import ModelConfigsInspector
-        from src.res.model.util.config.modifier import ModelConfigsBatchModifier
-        from src.proj import Logger
-        Logger.stdout('Checking all config files...')
-        modifier = ModelConfigsBatchModifier()
-        modifier.batch_modify()
-        inspecter = ModelConfigsInspector()
-        inspecter.inspect_key_values()
-        Logger.success('All config files checked.')

@@ -205,16 +205,18 @@ class ModelPath:
         self.rslt().mkdir(exist_ok=True)
         self.snapshot().mkdir(exist_ok=True)
 
-    def auto_reindex(self):
+    def auto_reindex(self) -> ModelPath | None:
         """auto reindex model directory"""
         if self.is_null_model or self.is_short_test or not self.is_resumable or self.model_name_index == 1:
-            return
+            return None
         target_model_path = self.copy().with_new_index(1)
         if target_model_path.base.exists():
             Logger.alert1(f'{PATH.relative(self.base)} remains! ({PATH.relative(target_model_path.base)} exists)')
+            return None
         else:
-            self.rename(target_model_path.model_clean_name , target_model_path.model_name_index)
+            new_model_path = self.rename(target_model_path.model_clean_name , target_model_path.model_name_index)
             Logger.success(f'{PATH.relative(self.base)} >> {PATH.relative(target_model_path.base)}')
+            return new_model_path
 
     def rename(self , new_clean_name : str , new_index : int = 1):
         """rename model directory"""

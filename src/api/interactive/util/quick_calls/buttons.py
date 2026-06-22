@@ -6,9 +6,9 @@ import os
 from src.api.interactive.util.quick_calls.basic import QuickCallButton
 
 __all__ = [
-    'Reboot' , 'TestLogger' , 'CheckCodeIssues' , "CheckDependencyVersion" , 'CheckConfigFiles' , 
-    'ClearCatcherLogs' , 'ReplaceWeztermConfig' ,
-    'CarryOutSchedules' , 'RebuildPreprocessedData' , 
+    'Reboot' , 'TestCode' , 'CheckCodeIssues' , 
+    'ProjectAutoFix' ,
+    'CarryOutScheduleWorkList' , 'RebuildPreprocessedData' , 
     'ModelArchiveOperations' ,
     'Tensorboard' , 'OptunaDashboard' , 
 ]
@@ -34,18 +34,18 @@ class Reboot(QuickCallButton):
             KillAndRebootApp.go(running_pid={self.current_pid})
         """
 
-class TestLogger(QuickCallButton):
-    """Button that tests the streamlit app."""
-    key = "test-logger"
-    button_title = ".🩺 Logger"
+class TestCode(QuickCallButton):
+    """Button that tests the project code."""
+    key = "test-project-code"
+    button_title = ".🩺 Test Code"
     icon = ":material/developer_mode_tv:"
-    default_help = 'Call Logger.test_logger() to test stdout.'
-    color = 'cyan'
+    default_help = 'Running tests for the project code, including logger , quick train , parallel factor calculation.'
+    color = 'orange'
     
     def script_string(self) -> str:
         return """
-            from src.proj import Logger
-            Logger.test_logger()
+            from src.api.calls.test import TestCode
+            TestCode.go()
         """
 
 class CheckCodeIssues(QuickCallButton):
@@ -62,65 +62,38 @@ class CheckCodeIssues(QuickCallButton):
             CheckCodeIssues.go()
         """
 
-class CheckDependencyVersion(QuickCallButton):
-    """Button that checks the dependency version."""
-    key = "check-dependency-version"
-    button_title = "🔎 Dependencies"
-    icon = ":material/package:"
-    default_help = 'Check the dependency version in the project code if they are newer than the ones in pyproject.toml.'
-    color = 'cyan'
-    
-    def script_string(self) -> str:
-        return """
-            from src.api.calls.source_code import CheckDependencyVersion
-            CheckDependencyVersion.go()
-        """
-
-class ClearCatcherLogs(QuickCallButton):
-    """Button that clears the catcher logs."""
-    key = "clear-catcher-logs"
-    button_title = "🆑 CatcherLog"
-    icon = ":material/auto_delete:"
-    default_help = 'Clear outdated catcher logs , default is 30 days.'
-    color = 'red'
-    
-    def script_string(self) -> str:
-        return """
-            from src.api.calls.files import ClearOutdatedCatcherLogs
-            ClearOutdatedCatcherLogs.go()
-        """
-class ReplaceWeztermConfig(QuickCallButton):
-    """Button that replaces the wezterm config."""
-    key = "replace-wezterm-config"
-    button_title = "⚙️ Wezterm"
+class ProjectAutoFix(QuickCallButton):
+    """Button that applies the project patches."""
+    key = "project-auto-fix"
+    button_title = "🔧 AutoFix"
     icon = ":material/handyman:"
-    default_help = 'Replace the wezterm config file by the project\'s default.'
+    default_help = 'Apply the project auto fixes , including check & fix all config files , replace wezterm config , clear outdated catcher logs.'
     color = 'blue'
     
     def script_string(self) -> str:
         return """
-            from src.api.calls.files import ReplaceWeztermConfig
-            ReplaceWeztermConfig.go()
+            from src.api.calls.files import ProjectAutoFix
+            ProjectAutoFix.go()
         """
 
-class CarryOutSchedules(QuickCallButton):
+class CarryOutScheduleWorkList(QuickCallButton):
     """Button that carries out the schedule model list."""
     key = "carry-out-schedules"
     button_title = "▶️ Schedules"
     icon = ":material/data_thresholding:"
-    default_help = 'Carry out the schedule model list.'
+    default_help = 'Carry out the schedule model work list.'
     color = 'purple'
     research = True
 
     def __init__(self , **kwargs):
         super().__init__(**kwargs)
-        from src.api.calls.research import CarryOutScheduleModelList
-        self.update(help = CarryOutScheduleModelList.get_description())
+        from src.api.calls.research import CarryOutScheduleWorkList
+        self.update(help = CarryOutScheduleWorkList.get_description())
     
     def script_string(self) -> str:
         return """
-            from src.api.calls.research import CarryOutScheduleModelList
-            CarryOutScheduleModelList.go()
+            from src.api.calls.research import CarryOutScheduleWorkList
+            CarryOutScheduleWorkList.go()
         """
 
 class RebuildPreprocessedData(QuickCallButton):
@@ -137,22 +110,6 @@ class RebuildPreprocessedData(QuickCallButton):
             from src.api.calls.data import ReconstructPreprocessedData
             ReconstructPreprocessedData.go()
         """
-
-class CheckConfigFiles(QuickCallButton):
-    """Button that modifies the config files."""
-    key = "check-configs"
-    button_title = "🔍 Config YAML"
-    icon = ":material/stethoscope:"
-    default_help = 'Check and auto modify the config files.'
-    color = 'cyan'
-    research = True
-    
-    def script_string(self) -> str:
-        return """
-            from src.api.calls.research import CheckAllConfigFiles
-            CheckAllConfigFiles.go()
-        """
-
 
 class ModelArchiveOperations(QuickCallButton):
     """Button that manages the model archive operations."""

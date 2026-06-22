@@ -114,76 +114,6 @@ class RunRuffPyrightCheck(DirectCall):
             if ret.stderr.strip():
                 Logger.stderr(ret.stderr.strip())
 
-class CheckCodeIssues(DirectCall):
-    """Check the code issues in the project code."""
-    category = 'Codes'
-    @staticmethod
-    def _skip_path(path : Path , exempt_paths : list[Path] , exempt_names : list[str]) -> bool:
-        if not path.is_file() or path.name in exempt_names or any(path.is_relative_to(exempt_path) for exempt_path in exempt_paths):
-            return True
-        return False
-    @classmethod
-    def _check_future_annotations_existence(cls ,path : Path) -> bool:
-        """Check future annotations existence."""
-        if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
-            return True
-        return 'from __future__ import annotations' in path.read_text()
-    @classmethod
-    def _check___all___existence(cls ,path : Path) -> bool:
-        """Check __all__ existence."""
-        exempt_paths = [
-            PATH.main.joinpath('src' , 'func') ,
-            PATH.main.joinpath('src' , 'proj' , 'core' , 'literals.py') ,
-            PATH.main.joinpath('src' , 'proj' , 'core' , 'alias.py') ,
-        ]
-        if cls._skip_path(path , exempt_paths , ['__init__.py' , '__version__.py']):
-            return True
-        return '__all__' in path.read_text()
-    @classmethod
-    def _check_module_docstring_existence(cls , path : Path) -> bool:
-        """Check module docstring existence."""
-        if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
-            return True
-        for line in path.read_text().split('\n'):
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-            return line.startswith('"""') or line.startswith("'''")
-        return False
-
-    @classmethod
-    def _run_check(cls , checker : Callable[[Path], bool]) -> None:
-        """Run the check."""
-        Logger.note(f"{checker.__doc__}...")
-        files = [file for file in PATH.main.joinpath('src').rglob('*.py') if not checker(file)]
-        if files:
-            [Logger.stdout(file , indent = 1) for file in files]
-        else:
-            Logger.success(f'No files found with the issue {checker.__doc__}.')
-
-    @classmethod
-    def _menu_for_checking(cls):
-        checkers : list[Callable[[Path], bool]] = [getattr(cls, name) for name in dir(cls) if name.startswith('_check_')]
-        options = ['All checks in one' , 'Run ruff pyright check' , *[checkers.__doc__ for checkers in checkers]]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
-        if flag.result is None:
-            return flag
-        selection = options.index(flag.result)
-        if selection == 0:
-            for checker in checkers:
-                cls._run_check(checker)
-            RunRuffPyrightCheck.go()
-        elif selection == 1:
-            RunRuffPyrightCheck.go()
-        else:
-            checker = checkers[selection - 2]
-            cls._run_check(checker)
-        return flag
-
-    def run(self) -> None:
-        for _ in AskFor.LoopTillExit(False , message = f'Do you want to check more code issues?' , max_trials = 100):
-            self._menu_for_checking()
-
 class CheckDependencyVersion(DirectCall):
     """Check the dependency version in the project code if they are newer than the ones in pyproject.toml."""
     category = 'Codes'
@@ -261,5 +191,85 @@ class CheckDependencyVersion(DirectCall):
             Logger.success("\nAll installed packages perfectly match their lower '>=' boundaries.")
 
     def run(self) -> None:
-        for _ in AskFor.LoopTillExit(True , message = f'Do you want to check more dependency version?' , max_trials = 100):
-            self.check_dependency_version()
+        for loop in AskFor.LoopTillExit(message = f'Do you want to check more dependency version?'):
+            loop.set_flag(self.check_dependency_version())
+
+class CheckCodeIssues(DirectCall):
+    """Check the code issues in the project code."""
+    category = 'Codes'
+    @staticmethod
+    def _skip_path(path : Path , exempt_paths : list[Path] , exempt_names : list[str]) -> bool:
+        if not path.is_file() or path.name in exempt_names or any(path.is_relative_to(exempt_path) for exempt_path in exempt_paths):
+            return True
+        return False
+    @classmethod
+    def _check_future_annotations_existence(cls ,path : Path) -> bool:
+        """Check future annotations existence."""
+        if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
+            return True
+        return 'from __future__ import annotations' in path.read_text()
+    @classmethod
+    def _check___all___existence(cls ,path : Path) -> bool:
+        """Check __all__ existence."""
+        exempt_paths = [
+            PATH.main.joinpath('src' , 'func') ,
+            PATH.main.joinpath('src' , 'proj' , 'core' , 'literals.py') ,
+            PATH.main.joinpath('src' , 'proj' , 'core' , 'alias.py') ,
+        ]
+        if cls._skip_path(path , exempt_paths , ['__init__.py' , '__version__.py']):
+            return True
+        return '__all__' in path.read_text()
+    @classmethod
+    def _check_module_docstring_existence(cls , path : Path) -> bool:
+        """Check module docstring existence."""
+        if cls._skip_path(path , [] , ['__init__.py' , '__version__.py']):
+            return True
+        for line in path.read_text().split('\n'):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            return line.startswith('"""') or line.startswith("'''")
+        return False
+
+    @classmethod
+    def _run_check(cls , checker : Callable[[Path], bool]) -> None:
+        """Run the check."""
+        Logger.note(f"{checker.__doc__}...")
+        files = [file for file in PATH.main.joinpath('src').rglob('*.py') if not checker(file)]
+        if files:
+            [Logger.stdout(file , indent = 1) for file in files]
+        else:
+            Logger.success(f'No files found with the issue {checker.__doc__}.')
+
+    @classmethod
+    def _menu_for_checking(cls):
+        checkers : list[Callable[[Path], bool]] = [getattr(cls, name) for name in dir(cls) if name.startswith('_check_')]
+        options = [
+            'All checks in one' , 
+            'Run ruff pyright check' , 
+            *[checkers.__doc__ for checkers in checkers] ,
+            'Non Checker: Dependency Version Matching'
+        ]
+        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
+        if flag.result is None:
+            return flag
+        selection = options.index(flag.result)
+        if selection == 0:
+            for checker in checkers:
+                cls._run_check(checker)
+            RunRuffPyrightCheck.go()
+        elif selection == 1:
+            RunRuffPyrightCheck.go()
+        elif selection <= len(checkers) + 1:
+            checker = checkers[selection - 2]
+            cls._run_check(checker)
+        elif flag.result == 'Non Checker: Dependency Version Matching':
+            CheckDependencyVersion.go()
+        else:
+            raise ValueError(f'Unexpected selection: {selection}.{flag.result}')
+        return flag
+
+    def run(self) -> None:
+        for loop in AskFor.LoopTillExit(False):
+            loop.set_flag(self._menu_for_checking())
+

@@ -315,10 +315,10 @@ class ModelAPI:
     def schedule_model(cls , schedule_name : str | None = None , short_test : bool | None = None , resume : int = 1 , 
                        start : int | None = None , end : int | None = None , **kwargs):
         """
-        Train a schedule model in config/model/schedule or .local_resources/shared/schedule_model folder
+        Train a schedule model in config/schedule/current or .local_resources/shared/schedule_model folder
 
         Args:
-          schedule_name: Schedule name , if None, use default schedule specified in configs/model/schedule/schedule.yaml.
+          schedule_name: Schedule name
           short_test: Whether to perform a short test.
           resume: Whether to resume training.
           start: Start date.
@@ -335,6 +335,7 @@ class ModelAPI:
           execution_time: long
           memory_usage: medium
         """
+        assert schedule_name is not None , 'schedule_name is required'
         with Proj.vb.temporary_vb('max' if short_test else None):
             return ModelTrainer.schedule(schedule_name , short_test , start = start , end = end , resume = resume , **kwargs)
     

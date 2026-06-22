@@ -1,57 +1,21 @@
-#! /usr/bin/env python
-# author: jinmeng
-# date: 2026-05-21
-# description: Smoke test parallel stock factor update
-# content: |
-#   Run up to N stock factors on a single trading day with process pool vs for-loop.
-#   Use after DataVendor / DFCollection thread-safety changes to verify jobs complete.
-# email: True
-# mode: shell
-# parameters:
-#   date:
-#       type: int
-#       desc: trading day YYYYMMDD (default = data update date)
-#       required: False
-#       default: -1
-#   n_factors:
-#       type: int
-#       desc: number of stock factors to run (first N updatable calculators)
-#       required: False
-#       default: 20
-#   compare:
-#       type: [forloop, process, both]
-#       desc: forloop only, process pool only, or run both and stdout timing
-#       required: False
-#       default: both
-#   overwrite:
-#       type: [True, False]
-#       desc: force recalc on that day even if factor file exists
-#       required: False
-#       default: True
-#   lookback_td:
-#       type: int
-#       desc: if too few factors on requested date, walk back trading days (max)
-#       required: False
-#       default: 10
-
+"""
+Smoke test parallel stock factor update
+"""
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any , Literal , TypeAlias
 
 from src.proj import CALENDAR, Logger, Proj
-from src.proj.util.script import ScriptTool
 from src.res.factor.api import FactorUpdaterAPI
 from src.res.factor.calculator.update_jobs import UpdateJobDate
 
-COMPARE_MODES = ('forloop', 'process', 'both')
-
+CompareMode : TypeAlias = Literal['forloop', 'process', 'both']
 
 def _resolve_date(date: int | None) -> int:
     if date is None or int(date) < 0:
         return int(CALENDAR.updated())
     return int(date)
-
 
 def _pick_factors_for_date(date: int, n_factors: int , pick_pead : bool = False) -> list[str]:
     """
@@ -192,20 +156,16 @@ def _print_summary(results: list[dict[str, Any]]) -> None:
             Logger.stdout(f'Both modes finished same job count; faster={faster} (~{ratio:.2f}x)', indent=1)
 
 
-@ScriptTool('test_parallel_factors', lock_num=0)
-def main(
+def test_parallel_factor_calculation(
     date: int | None = None,
     n_factors: int | None = 60,
-    compare: str | None = 'both',
+    compare: CompareMode = 'both',
     overwrite: bool | None = True,
     lookback_td: int | None = 10,
     **kwargs,
 ) -> None:
     requested = _resolve_date(date)
     n_factors = int(n_factors or 20)
-    compare = (compare or 'both').lower()
-    if compare not in COMPARE_MODES:
-        raise ValueError(f'compare must be one of {COMPARE_MODES}, got {compare!r}')
     overwrite = True if overwrite is None else bool(overwrite)
     lookback_td = int(lookback_td if lookback_td is not None else 10)
 
@@ -232,7 +192,3 @@ def main(
     _print_summary(results)
     if any(r['failed'] for r in results):
         raise RuntimeError('Some factor jobs failed; see log above')
-
-
-if __name__ == '__main__':
-    main()

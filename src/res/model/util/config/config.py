@@ -45,7 +45,7 @@ def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -
         return Base.FlattenDict.from_input(input , keep_nested = keep_nested)
 
 class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
-    """load schedule config from config/model/schedule or .local_resources/shared/schedule_model/schedule or the model's base_path"""
+    """load schedule config from config/schedule/current or .local_resources/shared/schedule_model/schedule or the model's base_path"""
     def __init__(
         self, base_path: ModelPath | None = None, 
         schedule_name: str | None = None, model_name: Any | None = None , * , 
@@ -90,7 +90,7 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
             schedule_path_0 = PATH.sched.joinpath(f"{name}.yaml")
             schedule_path_1 = PATH.sched_shared.joinpath(f"{name}.yaml")
             assert not (schedule_path_0.exists() and schedule_path_1.exists()), \
-                f"{name} exists in both config/model/schedule and .local_resources/shared/schedule_model/schedule"
+                f"{name} exists in both config/schedule/current and .local_resources/shared/schedule_model/schedule"
             if schedule_path_0.exists():
                 return schedule_path_0
             elif schedule_path_1.exists():

@@ -10,13 +10,10 @@ from src.proj.log import Logger
 
 __all__ = ['AskFor']
 
-AskFlagType : TypeAlias = Literal['yes' , 'no' , 'abort']
-ExitFlag : TypeAlias = Literal['q']
+AskFlagType : TypeAlias = Literal['valid' , 'invalid' , 'exit']
+ExitFlags : frozenset[str] = frozenset(['q'])
 T = TypeVar('T')
 
-def _print_title(title : str):
-    if title:
-        Logger.stdout(f'{title}' , color = 'lightpurple')
 class AskFlag(Generic[T]):
     """
     Ask for confirmation, selections, or retry.
@@ -37,28 +34,36 @@ class AskFlag(Generic[T]):
         self , 
         flag : AskFlagType ,
     ):
-        self.flag : AskFlagType = flag
+        self._flag : AskFlagType = flag
 
     def __repr__(self) -> str:
-        return f'AskFlag({self.flag})'
+        return f'AskFlag({self._flag})'
     def __str__(self) -> str:
-        return self.flag
+        return self._flag
     def __bool__(self) -> bool:
-        return self.yes
+        return self.valid
+
+    def set_flag(self , flag : AskFlagType) -> Self:
+        self._flag = flag
+        return self
 
     def set_result(self , results : list[T]) -> Self:
         self._results : list[T] = results
         return self
 
     @property
-    def yes(self) -> bool:
-        return self.flag == 'yes'
+    def flag(self) -> AskFlagType:
+        return self._flag
+
     @property
-    def no(self) -> bool:
-        return self.flag == 'no'
+    def valid(self) -> bool:
+        return self._flag == 'valid'
     @property
-    def abort(self) -> bool:
-        return self.flag == 'abort'
+    def exit(self) -> bool:
+        return self._flag == 'exit'
+    @property
+    def invalid(self) -> bool:
+        return self._flag == 'invalid'
     @property
     def result(self) -> T | None:
         assert len(self.results) <= 1 , f'result must be a single value'
@@ -73,7 +78,7 @@ class LoopFlag:
     """
     Loop flag for the loop until exit.
     """
-    def __init__(self , round : int = 0 , flag : AskFlagType = 'yes'):
+    def __init__(self , round : int = 0 , flag : AskFlagType = 'valid'):
         self.round : int = round
         self._flag : AskFlag = AskFlag(flag = flag)
 
@@ -83,7 +88,15 @@ class LoopFlag:
         return f'Round {self.round} , Flag: {self._flag}'
 
     def __bool__(self) -> bool:
-        return self._flag.yes
+        return self._flag.valid
+
+    @property
+    def break_loop(self) -> bool:
+        return self._flag.exit
+
+    @property
+    def continue_loop(self) -> bool:
+        return self._flag.valid or self._flag.invalid
 
     def set_flag(self , flag : AskFlag | None) -> LoopFlag:
         if flag is None:
@@ -94,6 +107,7 @@ class LoopFlag:
     @property
     def flag(self) -> AskFlag:
         return self._flag
+
 class AskFor:
     """
     Ask for confirmation, selections, or retry.
@@ -105,22 +119,9 @@ class AskFor:
     """
 
     @classmethod
-    def flag(cls , flag : AskFlagType) -> AskFlag:
+    def flag(cls , flag : AskFlagType = 'valid') -> AskFlag:
         return AskFlag(flag = flag)
 
-    @classmethod
-    def string(cls , title : str = '') -> AskFlag[str]:
-        if not cls.check_interactive():
-            Logger.error('Not interactive mode, return false!')
-            return AskFlag('no')
-        _print_title(title)
-        selection = input(f'Please input (q to quit): ')
-        if selection.lower() == 'q':
-            return AskFlag('abort')
-        else:
-            return AskFlag('yes').set_result([selection])
-        
-   
     @classmethod
     def check_interactive(cls) -> bool:
         """Check if the current environment is interactive."""
@@ -130,8 +131,26 @@ class AskFor:
             shell = get_ipython().__class__.__name__
             return shell in {"ZMQInteractiveShell", "TerminalInteractiveShell"}
         except NameError:
+            Logger.error('Not interactive mode, return!')
             return False
 
+    @classmethod
+    def print_title(cls , title : str):
+        """Print the ask title."""
+        if title:
+            Logger.stdout(f'{title}' , color = 'lightpurple')
+
+    @classmethod
+    def string(cls , title : str = '') -> AskFlag[str]:
+        if not cls.check_interactive():
+            return AskFlag('exit')
+        cls.print_title(title)
+        selection = input(f'Please input (q to quit): ')
+        if selection.lower() in ExitFlags:
+            return AskFlag('invalid')
+        else:
+            return AskFlag('valid').set_result([selection])
+        
     @classmethod
     def Confirmation(cls , timeout = -1 , ask_times = 1 , title = '') -> AskFlag[None]:
         """Prompt up to ``recurrent`` times with optional per-prompt timeout.
@@ -139,12 +158,11 @@ class AskFor:
         Returns:
             Tuple of (inputs list, bool list from ``proceed_condition``).
         """
-        if not cls.check_interactive():
-            Logger.error('Not interactive mode, return false!')
-            return AskFlag('no')
-        assert ask_times > 0 , 'ask_times must be greater than 0'
+        assert ask_times > 0 , f'ask_times must be greater than 0 , but got {ask_times}'
         
-        _print_title(title)
+        if not cls.check_interactive():
+            return AskFlag('exit')
+        cls.print_title(title)
         for i in range(ask_times):
             prefix = f'Please press y to confirm' 
             if ask_times > 1:
@@ -162,11 +180,11 @@ class AskFor:
                 is_timeout = False
             if is_timeout:
                 Logger.stdout(f'Input is timed out at the {i+1}th round.')
-                return AskFlag('no')
+                return AskFlag('exit')
             if value.strip().lower() != 'y':
                 Logger.error(f'Invalid input: {value} , confirmation is rejected at the {i+1}th round')
-                return AskFlag('no') 
-        return AskFlag('yes')
+                return AskFlag('exit') 
+        return AskFlag('valid')
 
     @classmethod
     def Selections(
@@ -175,10 +193,11 @@ class AskFor:
     ) -> AskFlag[int]:
         """Ask for selections out of a number of options starting from a given index."""
         if not cls.check_interactive():
-            Logger.error('Not interactive mode, return false!')
-            return AskFlag('no')
+            return AskFlag('exit')
         if not options:
             Logger.alert1('No options provided')
+            return AskFlag('invalid')
+        cls.print_title(title)
         if isinstance(options , int):
             num = options
             option_strs = [f'#{i+start_index:02d}' for i in range(num)]
@@ -186,14 +205,13 @@ class AskFor:
             num = len(options)
             option_strs = [f'{i+start_index}.{option}' for i, option in enumerate(options)]
         min , max = start_index , num + start_index - 1
-        _print_title(title)
         if multiple:
-            selection = input(f'Choose from {min} to {max}, (sep by "," or range by "-") , q to quit: ')
-            if selection.lower() == 'q':
-                return AskFlag('no')
+            selection = input(f'Choose from {min} to {max}, (sep by "," or range by "-" , q to quit): ')
+            if selection.lower() in ExitFlags:
+                return AskFlag('exit')
             if not selection.strip().replace('-', '').replace(',', '').replace(' ', '').isdigit():
                 Logger.error(f'Contains non-digit characters: {selection}')
-                return AskFlag('abort')
+                return AskFlag('invalid')
             if '-' in selection:
                 start , end = selection.split('-')
                 start , end = int(start.strip()) , int(end.strip())
@@ -206,39 +224,41 @@ class AskFor:
             choices = [int(i) for i in choices]
             if any(s < start_index or s > num + start_index - 1 for s in choices):
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
-                return AskFlag('abort')
+                return AskFlag('invalid')
         else:
-            selection = input(f'Choose from {min} to {max}, q to quit: ')
-            if selection.lower() == 'q':
-                return AskFlag('no')
+            selection = input(f'Choose from {min} to {max} (q to quit): ')
+            if selection.lower() in ExitFlags:
+                return AskFlag('exit')
             if not selection.isdigit():
                 Logger.error(f'Invalid input: {selection} , please choose from {min} to {max} or q to quit')
-                return AskFlag('abort')
+                return AskFlag('invalid')
             choices = [int(selection)]
             if choices[0] < start_index or choices[0] > num + start_index - 1:
                 Logger.error(f'Contains indices out of range [{min}-{max}]: {selection}')
-                return AskFlag('abort')
+                return AskFlag('invalid')
 
         if confirm:
             message = f'Are you sure to select {option_strs[choices[0] - start_index] if len(choices) == 1 else choices}?'
             flag = cls.Confirmation(title = message)
-            return AskFlag('yes').set_result(choices) if flag.yes else AskFlag('abort')
+            return AskFlag('valid').set_result(choices) if flag.valid else AskFlag('invalid')
         else:
-            return AskFlag('yes').set_result(choices)
+            return AskFlag('valid').set_result(choices)
 
     @classmethod
     def Retry(cls , title : str = '') -> AskFlag:
         """Ask for exit."""
         if not cls.check_interactive():
-            Logger.error('Not interactive mode, return false!')
-            return AskFlag('no')
-        _print_title(title)
+            return AskFlag('exit')
+        cls.print_title(title)
         while True:
             value = input(f'Choose yes or no or quit (y/n/q): ')
-            if value.strip().lower() in ['n' , 'q']:
-                return AskFlag('no')
-            elif value.strip().lower() == 'y':
-                return AskFlag('yes')
+            stripped_value = value.strip().lower()
+            if stripped_value in ExitFlags:
+                return AskFlag('exit')
+            elif stripped_value == 'n':
+                return AskFlag('invalid')
+            elif stripped_value == 'y':
+                return AskFlag('valid')
             else:
                 Logger.error(f'Invalid input: {value} , please choose yes or no or quit (y/n/q)')
 
@@ -249,16 +269,15 @@ class AskFor:
     ) -> AskFlag[T]:
         """Ask for options from a list of options."""
         if not cls.check_interactive():
-            Logger.error('Not interactive mode, return false!')
-            return AskFlag('no')
-        _print_title(title)
+            return AskFlag('exit')
+        cls.print_title(title)
         if print_options:
             Logger.stdout(f'There are {len(options)} options available...')
             for i , option in enumerate(options):
                 Logger.stdout(f'{i+1:02d}. {option}' , indent = 1)
         flag = cls.Selections(options , confirm = confirm , multiple = multiple)
-        new_flag = AskFlag(flag.flag)
-        if flag.yes:
+        new_flag = AskFlag(flag._flag)
+        if flag.valid:
             new_flag.set_result([options[i - 1] for i in flag.results])
         return new_flag
 
@@ -271,9 +290,9 @@ class AskFor:
         Loop until the user exits. Basic use:
 
         >> 1. if there is ask inside loop:
-        for loop_flag in AskFor.LoopTillExit(True , message = f'Do you want to check more?' , max_trials = 100):
+        for loop in AskFor.LoopTillExit(True , message = f'Do you want to check more?' , max_trials = 100):
             flag = AskFor.Confirmation(title = f'Do you want to check?')
-            if not loop_flag.set_flag(flag):
+            if not loop.set_flag(flag):
                 continue
             # do something
 
@@ -283,15 +302,11 @@ class AskFor:
         
         """
         if not cls.check_interactive():
-            Logger.error('Not interactive mode, return!')
             return
         for trial in range(max_trials):
             loop_flag = LoopFlag(round = trial)
             yield loop_flag
-            if loop_flag.flag.no:
-                return
-            if not ask:
-                continue
-            retry_flag = AskFor.Retry(message)
-            if retry_flag.no:
-                return
+            if loop_flag.break_loop:
+                break
+            if ask and AskFor.Retry(message).exit:
+                break

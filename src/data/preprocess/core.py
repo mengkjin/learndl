@@ -349,7 +349,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             if confirm:
                 from src.proj.util.functional.ask import AskFor
                 flag = AskFor.Confirmation(title = 'Are you sure to reconstruct the preprocessed data?')
-                if not flag.yes:
+                if not flag.valid:
                     return Base.UpdateFlag.FAILED
             force_build = True
 

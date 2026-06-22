@@ -129,7 +129,7 @@ class OptunaDBAPI:
         """
         Interactively pick Optuna Dashboard database(s) to delete.
         """
-        for loop_flag in AskFor.LoopTillExit(message = f'Do you want to delete more Optuna Dashboard databases?'):
+        for loop in AskFor.LoopTillExit(message = f'Do you want to delete more Optuna Dashboard databases?'):
             candidates = list(PATH.optuna.rglob('*.sqlite3'))
             if not candidates:
                 Logger.alert1("No available Optuna Dashboard databases found")
@@ -138,7 +138,7 @@ class OptunaDBAPI:
                 [db_path.relative_to(PATH.optuna) for db_path in candidates] , 
                 multiple=True , confirm=True ,
                 title = f'Choose from available Optuna Dashboard databases to delete:')
-            if loop_flag.set_flag(flag):
+            if loop.set_flag(flag):
                 for db_path in flag.results:
                     PATH.optuna.joinpath(db_path).resolve().unlink()
                 Logger.success(f"Deleted {len(flag.results)} Optuna Dashboard databases")
@@ -168,9 +168,8 @@ class OptunaDBAPI:
         """
         launch Optuna Dashboard menu iteratively.
         """
-        for loop_flag in AskFor.LoopTillExit(ask = False):
-            flag = cls.launch_option_menu(open_browser = open_browser)
-            loop_flag.set_flag(flag)
+        for loop in AskFor.LoopTillExit(False):
+            loop.set_flag(cls.launch_option_menu(open_browser = open_browser))
 
 class TSBoardAPI:
     """API for launching TensorBoard."""
@@ -265,7 +264,7 @@ class TSBoardAPI:
         """
         Interactively pick TensorBoard log(s) to delete.
         """
-        for loop_flag in AskFor.LoopTillExit(message = f'Do you want to delete more TensorBoard logs?'):
+        for loop in AskFor.LoopTillExit(message = f'Do you want to delete more TensorBoard logs?'):
             candidates = list(PATH.tsboard.glob('*.tar'))
             if not candidates:
                 Logger.alert1("No available TensorBoard logs found")
@@ -274,7 +273,7 @@ class TSBoardAPI:
                 [log_dir.relative_to(PATH.tsboard) for log_dir in candidates] , 
                 multiple=True , confirm=True ,
                 title = f'Choose from available TensorBoard logs to delete:')
-            if loop_flag.set_flag(flag):
+            if loop.set_flag(flag):
                 for log_dir in flag.results:
                     PATH.tsboard.joinpath(log_dir).resolve().unlink()
                 Logger.success(f"Deleted {len(flag.results)} TensorBoard logs")
@@ -303,6 +302,5 @@ class TSBoardAPI:
         """
         launch TensorBoard menu iteratively.
         """
-        for loop_flag in AskFor.LoopTillExit(ask = False):
-            flag = cls.launch_option_menu(open_browser = open_browser)
-            loop_flag.set_flag(flag)
+        for loop in AskFor.LoopTillExit(False):
+            loop.set_flag(cls.launch_option_menu(open_browser = open_browser))

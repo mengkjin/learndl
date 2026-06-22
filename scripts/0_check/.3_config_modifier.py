@@ -7,11 +7,11 @@
 # mode: shell
 
 from src.proj.util.script import ScriptTool
-from src.api.calls.research import CheckAllConfigFiles
+from src.api.calls.files import CheckFixAllConfigFiles
 
 @ScriptTool('config_modifier')
 def main(**kwargs):     
-    CheckAllConfigFiles.go()
+    CheckFixAllConfigFiles.go()
 
 if __name__ == '__main__':
     main()
