@@ -179,14 +179,17 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         if min_finite_ratio <= 0: 
             return df
         assert min_finite_ratio <= 1 , f'min_finite_ratio must be less than or equal to 1 , got {min_finite_ratio}'
-        pivoted = df.columns.name == 'secid' and df.index.name == 'date'
+        pivoted = df.index.name == 'date' and not isinstance(df.index, pd.MultiIndex)
         if pivoted:
-            secid_values = df.columns.values
-            min_finite_mask = pd.Series(np.where(np.isfinite(df).sum() < len(df) * min_finite_ratio , np.nan , 0) , index = secid_values)
-        else:
-            secid_values = df.index.get_level_values('secid').values
-            min_finite_mask = df.isna().groupby('secid').sum() > df.groupby('secid').count() * min_finite_ratio
-            min_finite_mask = np.where(min_finite_mask.reindex(secid_values).fillna(False).values , np.nan , 0)
+            bad_cols = np.isfinite(df).sum(axis=0) < len(df) * min_finite_ratio
+            if not bad_cols.any():
+                return df
+            df = df.copy()
+            df.loc[:, bad_cols] = np.nan
+            return df
+        secid_values = df.index.get_level_values('secid').values
+        min_finite_mask = df.isna().groupby('secid').sum() > df.groupby('secid').count() * min_finite_ratio
+        min_finite_mask = np.where(min_finite_mask.reindex(secid_values).fillna(False).values , np.nan , 0)
 
         return df + min_finite_mask
     
