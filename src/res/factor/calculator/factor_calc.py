@@ -163,6 +163,8 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
             raise TypeError(f'calc_factor must return a Series or DataFrame , but got {type(df)} for factor {instance.factor_name}')
         
         if isinstance(df , pd.Series): 
+            if isinstance(df.index, pd.MultiIndex):
+                df.index = df.index.get_level_values(-1)
             df = df.rename(instance.factor_name).to_frame()
             
         if len(df.index.names) > 1 or df.index.name:
@@ -174,7 +176,8 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
             df = df.drop_duplicates(subset = ['date'] , keep = 'first').sort_values('date')
         elif instance.meta_type in ['stock' , 'affiliate' , 'pooling']:
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
-            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
+            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').loc[:, ['secid' , instance.factor_name]]
+            df = df.set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
         else:
             raise ValueError(f'undefined meta type: {instance.meta_type}')
 
@@ -336,7 +339,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         """get factor value of a given date , load if exist , calculate if not exist , return a Series"""
         df = self.eval_factor(date)
         if 'secid' in df.columns:
-            return df.set_index('secid').iloc[:,0]
+            return df.set_index('secid')[self.factor_name]
         elif 'date' in df.columns:
             return df.set_index('date').iloc[:,0]
         else:
