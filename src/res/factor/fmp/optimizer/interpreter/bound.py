@@ -6,7 +6,7 @@ import numpy as np
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
-from typing import ClassVar , Literal , TypeAlias , get_args
+from typing import ClassVar , Literal , TypeAlias
 
 from src.proj import Logger , Base
 
@@ -235,7 +235,7 @@ class GeneralBound:
     ub : FloatOrArray | None = None
 
     def __post_init__(self): 
-        assert self.key in get_args(GeneralBoundType) , self.key
+        assert self.key in ['abs' , 'rel' , 'por'] , self.key
     def __bool__(self): 
         return self.lb is not None or self.ub is not None
     

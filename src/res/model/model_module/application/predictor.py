@@ -304,11 +304,23 @@ class ArchivedPredictorModel(Base.BoundLogger):
         hidden_dfs : list[pl.DataFrame] = []
 
         saved_hidden_df = Load.polars(hidden_path)
+        required_cols = {'date' , 'secid'}
+        if saved_hidden_df.height > 0 and not required_cols.issubset(set(saved_hidden_df.columns)):
+            self.logger.warning(
+                f'Ignore malformed hidden values at {hidden_path}: '
+                f'missing {sorted(required_cols - set(saved_hidden_df.columns))}'
+            )
+            saved_hidden_df = pl.DataFrame()
+
         if not load_first and saved_hidden_df.height > 0:
             saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates))
         if saved_hidden_df.height > 0:
             hidden_dfs.append(saved_hidden_df)
-        existing_dates = saved_hidden_df['date'].unique()
+        if saved_hidden_df.height > 0 and 'date' not in saved_hidden_df.columns:
+            self.logger.error(f'date column not found in {hidden_path}')
+            self.logger.display(saved_hidden_df)
+            raise ValueError(f'date column not found in {hidden_path}')
+        existing_dates = saved_hidden_df['date'].unique() if 'date' in saved_hidden_df.columns else np.array([], dtype=int)
         dates = dates.diff(existing_dates , inplace = False)
             
         batch_data_iterator = self.iter_batch_data(
