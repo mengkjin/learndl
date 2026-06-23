@@ -1,6 +1,2 @@
 fit:
-  - gru_30m_new
-  - gru_week_new
-  - gru_dfl2_new
-  - gru_dfl2cs_new
   - lgbm_of_hidden

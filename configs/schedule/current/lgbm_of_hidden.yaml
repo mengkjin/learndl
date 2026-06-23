@@ -19,8 +19,8 @@ input:
 
   hidden.types: # list of hidden states , use if input_type is hidden
     - gru@gru_day_new@0@best
-    - gru@gru_30m_new@0@best
-    - gru@gru_week_new@0@best
+    - resnet_gru@gru_30m_new@0@best
+    - resnet_gru@gru_week_new@0@best
     - gru@gru_dfl2_new@0@best
     - gru@gru_dfl2cs_new@0@best
 
