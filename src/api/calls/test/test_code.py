@@ -27,7 +27,7 @@ class TestCode(DirectCall):
     def _menu_for_operations(cls):
         testors = [getattr(cls, name) for name in dir(cls) if name.startswith('_test_')]
         options = [testors.__doc__ for testors in testors]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What project auto fixes to conduct?')
+        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What project tests to conduct?')
         if flag.result is None:
             return flag
         selection = options.index(flag.result)

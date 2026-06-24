@@ -44,7 +44,7 @@ end
 
 -- Use local unix domain multiplexer by default
 config.default_mux_server_domain = 'local'
-config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 1000 }
+config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 10000}
 
 -- Set colorscheme
 config.color_scheme = "Banana Blueberry"
