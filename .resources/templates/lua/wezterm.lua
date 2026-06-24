@@ -53,6 +53,15 @@ config.color_scheme = "Banana Blueberry"
 -- config.font = wezterm.font("0xProto Nerd Font")
 config.font_size = $FONT_SIZE$
 
+config.window_frame = {
+  font_size = $FONT_SIZE$,
+}
+
+config.inactive_pane_hsb = {
+  saturation = 0.3,
+  brightness = 0.3,
+}
+
 -- Window setting/ appearance
 config.window_decorations = "TITLE|RESIZE"
 config.window_background_opacity = 0.9
@@ -123,8 +132,8 @@ wezterm.on("update-status", function(window, pane)
 	table.insert(status, { Foreground = { Color = "#e0af68" } })
 	table.insert(status, { Text = wezterm.nerdfonts.fa_code .. "  " .. cmd })
 	table.insert(status, "ResetAttributes")
-	table.insert(status, { Text = " | " })
-	table.insert(status, { Text = wezterm.nerdfonts.md_clock .. "  " .. time })
+	-- table.insert(status, { Text = " | " })
+	-- table.insert(status, { Text = wezterm.nerdfonts.md_clock .. "  " .. time })
 	table.insert(status, { Text = "  " })
 
 	window:set_right_status(wezterm.format(status))

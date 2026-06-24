@@ -31,4 +31,3 @@ train:
 algo:
   lgbm:
     seqlens:        [{day: 1}]
-    max_depth:      [6 , 8 , 10]
