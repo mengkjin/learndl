@@ -24,6 +24,7 @@ model.window.boost: 240
 model.special.dsize: False
 model.special.vae: False
 model.special.tra: False
+model.special.moe: False
 model.special.global2top: False
 
 input.data.types: day

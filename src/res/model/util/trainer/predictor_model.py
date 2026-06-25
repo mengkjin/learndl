@@ -21,7 +21,6 @@ __all__ = ['PredictorModel']
 
 class PredictorModel(TrainerPipeline):
     """a group of ensemble models , of same net structure"""
-    COMPULSARY_CALLBACKS = ['BasicTestResult' , 'DetailedAlphaAnalysis' , 'StatusDisplay' , 'SummaryWriter']
     AllowTorchCompile = False
 
     def __init__(self, *args , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> None:

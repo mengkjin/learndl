@@ -23,5 +23,8 @@ def get_specific_cbs(config : ModelConfig) -> list[type[BaseCallBack]]:
     if special.get('global2top') or module_name.endswith('_global2top') or model_name.endswith('_global2top'):
         from src.res.model.callback.specific.global2top import SpecificCB_Global2Top
         cbs.append(SpecificCB_Global2Top)
+    if special.get('moe') or module_name == 'moe_gru':
+        from src.res.model.callback.specific.moe import SpecificCB_MOE
+        cbs.append(SpecificCB_MOE)
 
     return cbs

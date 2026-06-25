@@ -32,3 +32,4 @@ train.callbacks:
   - BadAttemptRetrain
   - CallbackTimer
   - MemoryOptimization
+  - SummaryWriter

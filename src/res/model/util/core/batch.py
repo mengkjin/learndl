@@ -435,7 +435,11 @@ class BatchData:
 
             others = {}
             for key , value in self.output.other.items():
-                if not isinstance(value , torch.Tensor) or len(value) != len(row_pos):
+                if (
+                    not isinstance(value , torch.Tensor)
+                    or value.ndim == 0
+                    or value.shape[0] != len(row_pos)
+                ):
                     others[key] = value
                     continue
                 if value.ndim == 2 and value.shape[1] == len(value):

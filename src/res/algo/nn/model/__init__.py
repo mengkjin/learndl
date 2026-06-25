@@ -13,12 +13,13 @@ Sub-modules:
     TRA        — Temporal Routing Adaptor (multi-state)
     FactorVAE  — VAE-based factor model
     PLE        — Progressive Layered Extraction multi-task GRU
+    MoE        — Mixture-of-Experts GRU with market-aware expert
     RiskAttGRU — GRU with risk-factor cross-attention
     TFT        — Temporal Fusion Transformer
     ABCM       — Alpha-Beta Co-Mining GRU
 """
 from . import (
-    CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU ,
+    CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU , MoE ,
     TSMixer , TRA , FactorVAE ,
     Attention , ABCM
 )

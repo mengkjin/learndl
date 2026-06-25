@@ -1,0 +1,40 @@
+model:
+  module        : moe_gru
+  submodels     : [best]
+
+  labels:
+    - std_lag1_10
+
+  special:
+    moe: true
+
+input:
+  type: data
+  data.types: day+market
+  sequence.lens: {day: 30, market: 60}
+  sequence.steps: {day: 1, market: 1}
+
+train:
+  criterion.weight:
+    fit: polar
+  criterion.loss:
+    ccc_hcorr: {alpha: 0.01}
+
+algo:
+  moe_gru:
+    hidden_dim:              [64]
+    num_experts:             [3]
+    num_market_aware_experts: [1]
+    seqlens:                 [{'day': 30, 'market': 60}]
+    dropout:                 [0.1]
+    enc_in:                  [true]
+    enc_att:                 [false]
+    rnn_type:                ['gru']
+    rnn_layers:              [2]
+    gate_rnn_layers:         [1]
+    dec_mlp_layers:          [2]
+    num_output:              [1]
+    which_output:            [null]
+    hidden_as_factor:        [true]
+    load_balance_weight:     [0.01]
+    diversity_weight:        [0.001]

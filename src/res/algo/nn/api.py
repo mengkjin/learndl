@@ -22,7 +22,7 @@ __all__ = [
     'Layer' , 'Model']
 
 # Mapping from registry key to model constructor.
-# 18 registered architectures as of 2026-04.
+# 19 registered architectures as of 2026-06.
 AVAILABLE_NNS = {
     'simple_lstm'       : Model.RNN.simple_lstm,
     'gru'               : Model.RNN.gru, 
@@ -41,6 +41,7 @@ AVAILABLE_NNS = {
     'factor_vae'        : Model.FactorVAE.FactorVAE,
     'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
     'ple_gru'           : Model.PLE.ple_gru,
+    'moe_gru'           : Model.MoE.moe_gru,
     'tft'               : Model.TFT.TemporalFusionTransformer,
     'astgnn'            : Model.ABCM.Astgnn
 }

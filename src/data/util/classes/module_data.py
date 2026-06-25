@@ -292,6 +292,12 @@ class ModuleData(Base.BoundLogger):
         date = self.date_filter(CALENDAR.range(*self.target_start_end()))
         secid = self.secid_filter(self.secid)
         for key , block in self.blocks.items():
+            if (
+                key == 'market' and block.initiated and len(block.secid) == 1
+                and secid is not None and len(secid) > 1
+            ):
+                values = block.values.expand(len(secid) , -1 , -1 , -1).clone()
+                block = block.update(values = values , secid = secid , inplace = True)
             self.blocks[key] = block.align_secid_date(secid , date , inplace = True)
         index_lens = [block.shape[:2] for block in self.blocks.values()]
         if index_lens:
