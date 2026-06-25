@@ -27,10 +27,8 @@ class CarryOutScheduleWorkList(DirectCall):
         schedules = cls.get_schedules(exclude_recent_created = True)
         return ', '.join(schedules)
     @classmethod
-    def update_worklist(cls , finish : str) -> None:
-        content = PATH.read_yaml(PATH.sched_worklist)
-        content['fit'].remove(finish)
-        PATH.dump_yaml(content , PATH.sched_worklist , overwrite = True)
+    def get_schedule_resume_param(cls) -> bool:
+        return bool(PATH.read_yaml(PATH.sched_worklist)['resume'])
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
@@ -74,12 +72,11 @@ class CarryOutScheduleWorkList(DirectCall):
                 main(
                     schedule_name=schedule_name,
                     short_test=None,
-                    resume=False,
+                    resume=self.get_schedule_resume_param(),
                     start=None,
                     end=None,
                     email=True,
                 )
-                self.update_worklist(schedule_name)
         finally:
             self._restore_main_script_file()
         Logger.success('Training schedule model list completed')

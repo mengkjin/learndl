@@ -188,6 +188,7 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
             if retry >= retry_n: 
                 return False
             try:
+                code = None
                 bs.login()
                 if sec_df is None:
                     sec_df = baostock_secdf(end).query('is_sec == 1')
@@ -214,7 +215,7 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
 
             except Exception as e:
                 bs.logout()
-                self.logger.error(f'Baostock 5min download failed at {start} - {end} : {code} , retry {retry} : {e}')
+                self.logger.error(f'Baostock 5min download failed at {start} - {end} , code {code} , retry {retry} : {e}')
                 retry += 1
             else:
                 break
