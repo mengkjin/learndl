@@ -391,7 +391,8 @@ class ModuleData(Base.BoundLogger):
         if factor_names:
             for factor_name in factor_names:
                 dates.append(StockFactorHierarchy.get_factor(factor_name).min_date)
-
+        if len(dates) == 0:
+            return None
         return CALENDAR.td(max(dates), backward=False).as_int()
 
     @classmethod
@@ -411,7 +412,8 @@ class ModuleData(Base.BoundLogger):
         if factor_names:
             for factor_name in factor_names:
                 dates.append(StockFactorHierarchy.get_factor(factor_name).max_date)
-
+        if len(dates) == 0:
+            return None
         return CALENDAR.td(max(dates), backward=True).as_int()
 
 
