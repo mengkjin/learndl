@@ -66,8 +66,9 @@ def get_ev(date: int):
 
 def get_ev_hist(date: int , n_year : int = 1 , date_step : int = 1):
     start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-    mv   = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
-                                              prev = False , pivot = True , date_step = date_step)
+    mv   = DATAVENDOR.TRADE.get_specific_data(
+        start , end , 'val' , 'total_mv' , prev = False , pivot = True , date_step = date_step
+    )
     liab = DATAVENDOR.BS.acc('total_liab'   , date , n_year * 4 + 1 , pivot = True)
     debt = DATAVENDOR.BS.acc('bond_payable' , date , n_year * 4 + 1 , pivot = True)
     cash = DATAVENDOR.BS.acc('money_cap'    , date , n_year * 4 + 1 , pivot = True)
@@ -98,12 +99,14 @@ def get_denominator(denominator : DenominatorType , date : int):
 def get_denominator_hist(denominator : DenominatorType , date : int , n_year = 1 , date_step = 1):
     if denominator == 'mv':
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-        v = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'total_mv' , 
-                                               prev = False , pivot = True , date_step = date_step)
+        v = DATAVENDOR.TRADE.get_specific_data(
+            start , end , 'val' , 'total_mv' , prev = False , pivot = True , date_step = date_step
+        )
     elif denominator == 'cp':
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , n_year , 'y')
-        v = DATAVENDOR.TRADE.get_specific_data(start , end , 'trd' , 'close' , 
-                                               prev = False , pivot = True , date_step = date_step)
+        v = DATAVENDOR.TRADE.get_specific_data(
+            start , end , 'trd' , 'close' , prev = False , pivot = True , date_step = date_step
+        )
     elif denominator == 'ev':
         v = get_ev_hist(date , n_year , date_step)
     else:
@@ -177,7 +180,9 @@ class dtop_rank3y(ValueFactor):
     
     def calc_factor(self, date: int):
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , 3 , 'y')
-        dv_ttm = DATAVENDOR.TRADE.get_specific_data(start , end , 'val' , 'dv_ttm' , prev=False , pivot=True , date_step = 21)
+        dv_ttm = DATAVENDOR.TRADE.get_specific_data(
+            start , end , 'val' , 'dv_ttm' , prev=False , pivot=True , date_step = 21
+        )
         return calc_valuation(dv_ttm , 1 , pct = True)
 
 class ebitev_ttm(ValueFactor):

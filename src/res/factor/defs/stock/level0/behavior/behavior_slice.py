@@ -19,8 +19,8 @@ SlicedBy : TypeAlias = Literal['amplitude' , 'vol' , 'cp']
 
 def get_amplitudes(start , end , pivot = True):
     quotes = DATAVENDOR.TRADE.get_quotes(start , end , ['high' , 'low' , 'preclose'] , adj_price = False)
-    amplitudes = ((quotes['high'] - quotes['low']) / quotes['preclose']).rename('amplitude').\
-        to_frame()
+    amplitudes = ((quotes['high'] - quotes['low']) / quotes['preclose']).\
+        rename('amplitude').to_frame()
     if pivot: 
         amplitudes = amplitudes.pivot_table('amplitude' , 'date' , 'secid').fillna(0)
     return amplitudes
@@ -135,5 +135,7 @@ class ampl_slicecp1m(MomentumFactor):
         start , end = DATAVENDOR.CALENDAR.td_start_end(date , 20 , 'd' , 0)
         ampl = get_amplitudes(start , end , pivot = True)
         high , _ = get_slicing(start , end , 'cp')
+        print(ampl.head())
+        print(high.head())
         ampl = ampl.where(high , np.nan).mean()
         return ampl

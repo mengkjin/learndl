@@ -99,7 +99,7 @@ class TradeDataAccess(DateDataAccess):
         are multiplied by the rolling adjfactor.  Use ``mask=True`` to apply the
         listing-date mask.  Use ``pivot=True`` for a (date × secid) wide frame.
         """
-        field = Base.ensure_name_list(field , [])
+
         qte = self.get_specific_data(start , end , 'trd' , field , prev = False , 
                                      mask = mask , pivot = False , drop_old = drop_old)
         if adj_price:
@@ -109,7 +109,7 @@ class TradeDataAccess(DateDataAccess):
                 for p in prices:
                     qte[p] = qte[p] * adj
         if pivot: 
-            qte = qte.pivot_table(field , 'date' , 'secid')
+            qte = self.pivot_narrow_table(qte , field)
 
         if not qte.index.is_unique:
             raise ValueError('quotes index must be unique, got stop here')

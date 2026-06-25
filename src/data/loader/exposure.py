@@ -56,13 +56,11 @@ class ExposureAccess(DateDataAccess):
         Optionally applies listing-date masking and pivots to wide format.
         The underlying cache is truncated after each call (``drop_old=True``).
         """
-        field = Base.ensure_name_list(field , [])
+        
         qte = self.get_specific_data(
             start , end , 'daily_risk' , field = field , prev = prev , 
-            mask = mask , pivot = False , drop_old = True)
+            mask = mask , pivot = pivot , drop_old = True)
         
-        if pivot:
-            qte = qte.pivot_table(field , 'date' , 'secid')
         return qte
         
 EXPO= ExposureAccess()

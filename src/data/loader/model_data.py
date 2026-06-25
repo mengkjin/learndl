@@ -59,7 +59,8 @@ class RiskModelAccess(DateDataAccess):
         Applies listing-date masking when ``mask=True`` and returns a
         (date × secid) wide frame when ``pivot=True``.
         """
-        return self.get_specific_data(start , end , 'res' , 'resid' , prev = False , 
-                                      mask = mask , pivot = pivot , drop_old = drop_old)
+        return self.get_specific_data(
+            start , end , 'res' , 'resid' , prev = False , 
+            mask = mask , pivot = pivot , drop_old = drop_old)
 
 RISK = RiskModelAccess()

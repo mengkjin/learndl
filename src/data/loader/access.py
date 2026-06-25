@@ -116,6 +116,12 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         collection = self.pl_collections[data_type]
         collection.ensure_dates(dates , lambda d: self.data_loader(d , data_type) , overwrite = overwrite)
         return collection.gets(dates , field , rename_date_key = rename_date_key)
+
+    def pivot_narrow_table(self , df : pd.DataFrame , field : Base.alias.NamesType) -> pd.DataFrame:
+        """pivot the dataframe from long to wide"""
+        field = field if isinstance(field , str) else Base.ensure_name_list(field , [])
+        assert len(field) > 0 , 'field must be a list of at least one field'
+        return df.pivot_table(field , 'date' , 'secid')
     
     def get_specific_data(
         self , start : Base.intDate , end : Base.intDate ,
@@ -148,9 +154,7 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
             Stride for the trading-day range (1 = every day).
         """
         dates = Dates(start , end).slice(step = date_step).offset(-1 if prev else 0 , type = 'td')
-        field = Base.ensure_name_list(field)
-        remain_field = (['secid'] + field) if field else None
-
+        remain_field = (['secid'] + Base.ensure_name_list(field , [])) if field else None
         df = self.gets(dates , data_type , remain_field , rename_date_key = 'date')
         if prev: 
             df = df.reset_index(drop = False)
@@ -161,7 +165,7 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         if mask:  
             df = INFO.mask_list_dt(df)
         if pivot: 
-            df = df.pivot_table(field , 'date' , 'secid')
+            df = self.pivot_narrow_table(df , field)
         if drop_old: 
             self.truncate(data_type)
         

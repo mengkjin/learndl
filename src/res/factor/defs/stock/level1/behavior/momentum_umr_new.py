@@ -59,8 +59,6 @@ def calc_umr_new(date , n_months : int , risk_window : int = 10):
     umrs : dict[str , pd.Series] = {}
     for risk_type in risk_type_list:
         risks = DATAVENDOR.EXPO.get_risks(risk_start_date , end , field = risk_type , pivot = True)
-        if isinstance(risks.columns, pd.MultiIndex):
-            risks.columns = risks.columns.get_level_values(-1)
         special_dates = disclosure_dates.query('date > @risk_start_date & date <= @end').\
             assign(value = 1).pivot_table('value' , 'date' , 'secid').reindex_like(risks)
         special_dates.loc[special_dates.index.isin(market_event_dates)] = 1.

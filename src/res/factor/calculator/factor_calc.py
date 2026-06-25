@@ -296,7 +296,10 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
 
     @abstractmethod
     def calc_factor(self , date : int) -> pd.Series | pd.DataFrame:
-        """calculate factor value , must return a Series or DataFrame that contains at least secid and factor_value / factor_name columns"""
+        """
+        calculate factor value , must return a Series or DataFrame that contains at least secid and factor_value / factor_name columns
+        FactorCalculator will wrap the result and return a DataFrame with secid and factor_value / factor_name columns
+        """
 
     @abstractmethod
     def calc_history(self , date : int) -> pd.DataFrame:
