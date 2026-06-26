@@ -173,12 +173,9 @@ class DataModule(Base.BoundLogger):
             retro_end_date : int | None = None # end date for retrospective data , None means year end of model date
         """
         if self.setup_new_param(stage , param , model_date , **kwargs):
-            with self.logger.timer(f'{self.loader_param} setup_loader_kwargs' , enter_vb = 0):
-                self.setup_loader_kwargs()
-            with self.logger.timer(f'{self.loader_param} setup_loader_inputs' , enter_vb = 0):
-                self.setup_loader_inputs()
-            with self.logger.timer(f'{self.loader_param} setup_loader_static' , enter_vb = 0):
-                self.setup_loader_static()
+            self.setup_loader_kwargs()
+            self.setup_loader_inputs()
+            self.setup_loader_static()
 
     def setup_new_param(
             self , stage : Base.lit.StageAll , 
@@ -278,29 +275,23 @@ class DataModule(Base.BoundLogger):
             self.emptry_dataloader()
             return
 
-        with self.logger.timer(f'{self.loader_param} setup_loader_static 1' , enter_vb = 0):
+        x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
+        self.y_std = self.labels[:,self.d0:self.d1]
 
-            x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-            self.y_std = self.labels[:,self.d0:self.d1]
+        x_shapes = [x.shape[:2] for x in x_full.values()]
+        assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
-            x_shapes = [x.shape[:2] for x in x_full.values()]
-            assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
+        x_to_check = x_full if self.config.module_type == 'nn' else {}
+        y_to_check = self.y_std if self.is_fitting else None
 
-            x_to_check = x_full if self.config.module_type == 'nn' else {}
-            y_to_check = self.y_std if self.is_fitting else None
-
-        with self.logger.timer(f'{self.loader_param} setup_loader_static 2' , enter_vb = 0):
-            eff_mask = self.data_operator.effective_samples(x_to_check , y_to_check , self.step_idx)
+        eff_mask = self.data_operator.effective_samples(x_to_check , y_to_check , self.step_idx)
         
-        with self.logger.timer(f'{self.loader_param} setup_loader_static 3' , enter_vb = 0):
-            self.display_loader_static_stats(x_full , eff_mask)
+        self.display_loader_static_stats(x_full , eff_mask)
 
-        with self.logger.timer(f'{self.loader_param} setup_loader_static 4' , enter_vb = 0):
-            y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)
-            # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
-            self.y_std[:,self.step_idx] = y_sampled[:]
-        with self.logger.timer(f'{self.loader_param} setup_loader_static 5' , enter_vb = 0):
-            self.static_dataloader(x_full , y_sampled , w_sampled , eff_mask)
+        y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)
+        # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
+        self.y_std[:,self.step_idx] = y_sampled[:]
+        self.static_dataloader(x_full , y_sampled , w_sampled , eff_mask)
         
         if self.config.gc_collect_each_model:
             gc.collect() 

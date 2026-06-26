@@ -254,18 +254,12 @@ class ModuleData(Base.BoundLogger):
         """
         if self.loaded:
             return self
-        with self.logger.timer(f'{self} load' , enter_vb = 0):
-            self._init_data()
-        with self.logger.timer(f'{self} load_blocks' , enter_vb = 0):
-            self._load_blocks()
-        with self.logger.timer(f'{self} align_blocks' , enter_vb = 0):
-            self._align_blocks()
-        with self.logger.timer(f'{self} load_norms' , enter_vb = 0):
-            self._load_norms()
-        with self.logger.timer(f'{self} load_factor' , enter_vb = 0):
-            self._load_factor()
-        with self.logger.timer(f'{self} blocks_ffill' , enter_vb = 0):
-            DataBlock.blocks_ffill(self.blocks, exclude=["y"])
+        self._init_data()
+        self._load_blocks()
+        self._align_blocks()
+        self._load_norms()
+        self._load_factor()
+        DataBlock.blocks_ffill(self.blocks, exclude=["y"])
         self.loaded = True
         return self
 

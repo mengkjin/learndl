@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
-from datetime import datetime
 from functools import cached_property
 from typing import Any , ClassVar , Self , overload , TypeAlias , cast
 
@@ -145,10 +144,8 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
         with Proj.vb.temporary_vb('max'):
             if not hasattr(self , 'data_module'):
-                print(f'{datetime.now()} load data for {self.config.model_name} with use_data: {use_data}')
                 self.data = DataModule(self.config , use_data).load_data() 
             elif self.data.use_data != 'both' and self.data.use_data != use_data:
-                print(f'{datetime.now()} load data for {self.config.model_name} with use_data: both')
                 self.data = DataModule(self.config , 'both').load_data() 
         return self
     
@@ -258,11 +255,8 @@ class ArchivedPredictorModel(Base.BoundLogger):
         start_date , end_date = dates.min , dates.max
         model_param = self.config.model_param[model_num]
         with Proj.silence(silent):
-            print(f'{datetime.now()} start_date: {start_date} , end_date: {end_date}')
             self.load_data(start_date , end_date)
-            print(f'{datetime.now()} self.data.use_data: {self.data.use_data}')
             self.data.setup('retrospective' , model_param , model_date , retro_start_date = start_date , retro_end_date = end_date)
-            print(f'{datetime.now()} self.data.loader_param: {self.data.loader_param}')
             model = self.model.load_model(model_num , model_date , submodel , model_param = model_param , cache_model = True)
             self.dataloader = self.data.retrospective_dataloader()
         with _Grads(require_grad):
