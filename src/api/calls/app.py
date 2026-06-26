@@ -15,7 +15,7 @@ class LaunchApp(DirectCall):
     category = 'App'
     def run(self) -> None:
         from src.proj.util.shell import Shell
-        cmd = 'uv run streamlit run src/api/interactive/launch.py'
+        cmd = 'uv run --frozen streamlit run src/api/interactive/launch.py'
         kwargs = {
             'done_action': 'pause',
             'title': 'Streamlit Server',

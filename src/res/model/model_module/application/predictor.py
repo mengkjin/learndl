@@ -260,10 +260,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
             self.dataloader = self.data.retrospective_dataloader()
         with _Grads(require_grad):
             for batch_input in self.dataloader:
-                batch_data = model.get_batch_data(batch_input)
                 if len(self.data.early_test_dates) == 0 and batch_input.date0 not in dates:
                     # if no early test dates, and the batch date is not in dates, no need to warmup,skip
                     continue
+                print(f'batch_input.device: {batch_input.device}')
                 batch_data = model.get_batch_data(batch_input)
                 if batch_data.batch_date in dates:
                     yield batch_data
@@ -273,7 +273,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         dates : Base.alias.DateType , model_date : int , * , 
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , 
-        load_first = True , silent = True
+        load_first = True , silent = True , print_dates = False
     ) -> pl.DataFrame:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -318,6 +318,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
             raise ValueError(f'date column not found in {hidden_path}')
         existing_dates = saved_hidden_df['date'].unique() if 'date' in saved_hidden_df.columns else np.array([], dtype=int)
         dates = dates.diff(existing_dates , inplace = False)
+        if print_dates and len(dates) > 0:
+            self.logger.stdout(f'Model {self.model_name} Hiddens of Model Date {model_date} has {len(dates)} dates awaiting')
+            self.logger.stdout(f'Dates: {dates}' , idt = 1)
             
         batch_data_iterator = self.iter_batch_data(
             dates , model_date , model_num = model_num , 

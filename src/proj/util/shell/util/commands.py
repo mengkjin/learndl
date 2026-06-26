@@ -62,13 +62,13 @@ def format_python_command(
     exe = py_path or sys.executable
     script_s = str(Path(script).resolve())
     if sys.platform == "win32":
-        if exe == "uv run":
-            parts = ["uv", "run", _win_cmd_token(script_s)]
+        if exe.startswith("uv run"):
+            parts = ["uv", "run", "--frozen", _win_cmd_token(script_s)]
         else:
             parts = [_win_cmd_token(exe), _win_cmd_token(script_s)]
     else:
-        if exe == "uv run":
-            parts = [exe, shlex.quote(script_s)]
+        if exe.startswith("uv run"):
+            parts = ["uv run --frozen", shlex.quote(script_s)]
         else:
             parts = [shlex.quote(exe), shlex.quote(script_s)]
     if args:
@@ -85,7 +85,7 @@ def guess_command_title(command: str) -> str | None:
     extract .py filename from command:
         python3 any/path/name.py
         python.exe any/path/name.py
-        uv run any/path/name.py
+        uv run --frozen any/path/name.py
         python C:\\my folder\\app.py   #support space in path
     return filename (e.g. name.py), return None if not matched
     """

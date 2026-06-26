@@ -17,7 +17,7 @@ class ScriptCmd:
         mode: RunScriptMode = 'shell' , **kwargs
     ):
         self.script = (str(script.absolute()) if isinstance(script , Path) else script)
-        self.py_path = "uv run"
+        self.py_path = "uv run --frozen"
         # from src.proj.env import MACHINE
         # self.py_path = MACHINE.python_path
         self.params = params or {}

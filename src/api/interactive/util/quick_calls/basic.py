@@ -81,7 +81,7 @@ class QuickCallButton(ButtonOperation , metaclass = QuickCallButtonMeta):
         script_strings = self.script_string().strip().split('\n')
         script_string = ';'.join([s.strip() for s in script_strings])
         Shell.open(
-            ["uv" , "run" , "python" , "-c" , script_string], 
+            ["uv" , "run" , "--frozen" , "python" , "-c" , script_string], 
             done_action=self.done_action,  title = self.title , as_from_workspace='QuickCallButtons'
         )
 

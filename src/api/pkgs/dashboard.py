@@ -176,7 +176,7 @@ class TSBoardAPI:
     @classmethod
     def call_tensorboard(cls , log_dir : Base.strPath , * , open_browser : bool = False):
         """
-        Launch TensorBoard via ``uv run tensorboard --logdir`` (blocks until user interrupt).
+        Launch TensorBoard via ``uv run --frozen tensorboard --logdir`` (blocks until user interrupt).
 
         Args:
             log_dir: Directory containing event files.
@@ -189,7 +189,7 @@ class TSBoardAPI:
             if open_browser:
                 import threading
                 threading.Thread(target=open_url, args=("localhost",port)).start()
-            subprocess.run(['uv' , 'run' , 'tensorboard' , '--logdir' , log_dir , '--port' , str(port)]) 
+            subprocess.run(['uv' , 'run' , '--frozen' , 'tensorboard' , '--logdir' , log_dir , '--port' , str(port)]) 
         except KeyboardInterrupt:
             Logger.alert1("TensorBoard stopped.")
         except Exception as e:

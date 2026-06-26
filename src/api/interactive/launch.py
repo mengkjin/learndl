@@ -5,7 +5,7 @@ auto-refresh, and delegates to :func:`page_setup` which assembles navigation
 and renders each page.
 
 Run with::
-    uv run streamlit run src/api/interactive/launch.py
+    uv run --frozen streamlit run src/api/interactive/launch.py
 """
 
 from __future__ import annotations
