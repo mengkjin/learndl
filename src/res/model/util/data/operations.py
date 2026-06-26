@@ -22,7 +22,8 @@ from torch.utils.data import BatchSampler
 
 from src.proj import Logger , Base
 from src.func.tensor import nanmedian , standardize , rank_pct
-from src.data import DataBlockNorm
+from src.data import DataBlockNorm 
+from src.data.preprocess import PrePros
 from src.res.model.util.config import ModelConfig
 
 from .batch_input_loader import DataloaderParam
@@ -135,6 +136,17 @@ class DataOperator:
             assert key in self.seq_lens and key in self.seq_steps , (key , self.seq_lens , self.seq_steps)
             return self.seq_lens[key] , self.seq_steps[key]
 
+    @staticmethod
+    def _index1_date_window(
+        index1 : torch.Tensor , window : int , date_len : int
+    ) -> tuple[int , int , torch.Tensor]:
+        """Return ``[start, end)`` slice bounds and ``index1`` relative to ``start`` for rolling checks."""
+        idx_min = int(index1.min().item())
+        idx_max = int(index1.max().item())
+        start = max(0 , idx_min - window + 1)
+        end = min(date_len , idx_max + 1)
+        return start , end , index1 - start
+
     def standardize_y(
         self , y : torch.Tensor , effective : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
         """standardize y and weight"""
@@ -205,7 +217,7 @@ class DataOperator:
             eff = finites.all(dim=-1) if self.config.module_type == 'nn' else finites.any(dim=-1)
             effs.append(eff)
         if x and self.config.input_data_types:
-            keys = [k for k in x.keys() if k in self.config.input_data_types]
+            keys = [k for k in x.keys() if k in self.config.input_data_types and not PrePros.allow_inactive(k)]
             eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
             effs.append(eff)
         if y is not None:
@@ -222,55 +234,86 @@ class DataOperator:
         endpoint_nonzero = key and (key in DataBlockNorm.DIVLAST)
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
+        window = seqlen * step
         sum_dim = tuple(range(2,data.ndim))
-        if require_all:
-            fin = data.sum(sum_dim).isfinite()
-        else:
-            fin = ~data.isnan().all(sum_dim)
-        if seqlen * step == 1:
-            return fin[:,index1]
-        pad_fin = torch.nn.functional.pad(fin, (seqlen * step - 1,0) , value = False)
-        try:
-            finite = pad_fin.unfold(1,seqlen*step,1)[...,step-1::step][:,index1]
-            finite = finite.all(dim=-1) if require_all else finite.any(dim=-1)
-        except MemoryError:
+        if window == 1:
+            start , end , rel_index1 = self._index1_date_window(index1 , 1 , data.shape[1])
+            data_slice = data[:,start:end]
             if require_all:
-                finite = torch.full((len(data),len(index1)), True).to(dtype = torch.bool , device = data.device)
-                for i in range(seqlen):
-                    finite &= pad_fin[:,index1 + (i + 1) * step - 1]
+                fin = data_slice.sum(sum_dim).isfinite()
             else:
-                finite = torch.full((len(data),len(index1)), False).to(dtype = torch.bool , device = data.device)
-                for i in range(seqlen):
-                    finite |= pad_fin[:,index1 + (i + 1) * step - 1]
-        if endpoint_nonzero: 
-            finite &= data[:,index1].not_equal(0).all(sum_dim)   
+                fin = ~data_slice.isnan().all(sum_dim)
+            finite = fin[:,rel_index1]
+        else:
+            start , end , rel_index1 = self._index1_date_window(index1 , window , data.shape[1])
+            data_slice = data[:,start:end]
+            if require_all:
+                fin = data_slice.sum(sum_dim).isfinite()
+            else:
+                fin = ~data_slice.isnan().all(sum_dim)
+            pad_fin = torch.nn.functional.pad(fin, (window - 1,0) , value = False)
+            try:
+                finite = pad_fin.unfold(1,window,1)[...,step-1::step][:,rel_index1]
+                finite = finite.all(dim=-1) if require_all else finite.any(dim=-1)
+            except MemoryError:
+                abs_index1 = index1
+                if require_all:
+                    finite = torch.full((len(data),len(index1)), True).to(dtype = torch.bool , device = data.device)
+                    for i in range(seqlen):
+                        finite &= pad_fin[:,abs_index1 - start + (i + 1) * step - 1]
+                else:
+                    finite = torch.full((len(data),len(index1)), False).to(dtype = torch.bool , device = data.device)
+                    for i in range(seqlen):
+                        finite |= pad_fin[:,abs_index1 - start + (i + 1) * step - 1]
+        if endpoint_nonzero:
+            finite &= data[:,index1].not_equal(0).all(sum_dim)
         return finite
 
     def active_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
         """return active position (with shape of len(index[0]) * step_len) the first 2 dims"""
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
-        if seqlen * step <= 2:
+        window = seqlen * step
+        if window <= 2:
             return torch.full((len(data),len(index1)) , True).to(dtype = torch.bool , device = data.device)
-        if data.ndim == 3:
-            avg = data
-            pos_std = torch.full(data.shape[:2] , False).to(dtype = torch.bool)
+
+        start , end , rel_index1 = self._index1_date_window(index1 , window , data.shape[1])
+        data_slice = data[:,start:end]
+        reduce_dim = tuple(range(2 , data_slice.ndim - 1))
+        if data_slice.ndim == 3:
+            avg = data_slice
+            pos_std = torch.full(avg.shape[:2] , False).to(dtype = torch.bool , device = data.device)
         else:
-            avg = data.mean(dim = tuple(range(2,data.ndim - 1)))
-            pos_std = (data.std(dim = tuple(range(2,data.ndim - 1)),unbiased = False) > 0).any(-1)
-        pad_avg = torch.nn.functional.pad(avg, (0 , 0 ,seqlen * step - 1,0) , mode = 'replicate')
-        pad_std = torch.nn.functional.pad(pos_std, (seqlen * step - 1,0) , value = 0)
+            avg = data_slice.mean(dim = reduce_dim)
+            pos_std = (data_slice.std(dim = reduce_dim , unbiased = False) > 0).any(-1)
+
+        pad_avg = torch.nn.functional.pad(avg, (0 , 0 , window - 1 , 0) , mode = 'replicate')
+        pad_std = torch.nn.functional.pad(pos_std, (window - 1 , 0) , value = 0)
         try:
-            moving_avg = (pad_avg.unfold(1,seqlen*step,1)[...,step-1::step][:,index1].std(dim = -1 , unbiased = False) > 0).any(-1)
-            moving_std = (pad_std.unfold(1,seqlen*step,1)[...,step-1::step][:,index1] > 0).any(-1)
+            windows = pad_avg.unfold(1 , window , 1)[...,step-1::step][:,rel_index1]
+            moving_avg = self._rolling_feature_activity(windows)
+            moving_std = (pad_std.unfold(1 , window , 1)[...,step-1::step][:,rel_index1] > 0).any(-1)
             active = moving_avg | moving_std
         except MemoryError:
-            active = torch.full((len(pad_avg),len(index1)), False).to(dtype = torch.bool)
-            avg_benchmark = pad_avg[:,index1 + step - 1]
+            active = torch.full((len(data),len(index1)), False).to(dtype = torch.bool , device = data.device)
+            avg_benchmark = pad_avg[:,rel_index1 + step - 1]
             for i in range(seqlen):
-                active |= (pad_avg[:,index1 + (i + 1) * step - 1] - avg_benchmark).to(torch.bool).any(-1)
-                active |= pad_std[:,index1 + (i + 1) * step - 1] > 0
+                active |= (pad_avg[:,rel_index1 + (i + 1) * step - 1] - avg_benchmark).to(torch.bool).any(-1)
+                active |= pad_std[:,rel_index1 + (i + 1) * step - 1] > 0
         return active.nan_to_num_(False)
+
+    @staticmethod
+    def _rolling_feature_activity(windows : torch.Tensor) -> torch.Tensor:
+        """Whether any feature shows cross-sectional dispersion at any step in a rolling window."""
+        feat_dim = windows.shape[-1]
+        if feat_dim <= 1:
+            return (windows.std(dim = -1 , unbiased = False) > 0).any(-1)
+        chunk = 32
+        active = torch.zeros(windows.shape[:-2] , dtype = torch.bool , device = windows.device)
+        for f0 in range(0 , feat_dim , chunk):
+            sub = windows[..., f0:f0 + chunk]
+            active |= (sub.std(dim = -1 , unbiased = False) > 0).any(-1)
+        return active
 
     def split_sample(self , effective : torch.Tensor , index0 : torch.Tensor , index1 : torch.Tensor) -> dict[str,list[torch.Tensor]]:
         """

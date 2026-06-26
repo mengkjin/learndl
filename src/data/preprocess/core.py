@@ -106,10 +106,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
 
     Class Attributes
     ----------------
-    EXTENSION_OVERLAY : int
+    ExtentionOverlay : int
         Number of trading days to overlap when extending an existing dump to prevent
         edge-discontinuities from rolling-window calculations.
-    CALCULATION_WINDOW : int
+    CalculationWindow : int
         Extra trading days to load *before* the requested start date so that
         rolling calculations have sufficient history.
     predict_start : int
@@ -118,14 +118,16 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     fit_start / hist_start / hist_end : int
         Date range used for ``'fit'`` mode and historical normalisation.
     """
-    EXTENSION_OVERLAY  : int = 10
-    CALCULATION_WINDOW : int = 1  # can be set slightly larger than the calculation window of the factor
     key = _PPKey()
     
     predict_start = -100
     fit_start     = 20070101
     hist_start    = fit_start
     hist_end      = 20161231
+
+    ExtentionOverlay  : int = 10
+    CalculationWindow : int = 1  # can be set slightly larger than the calculation window of the factor
+    AllowInactive : bool = True
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
@@ -220,7 +222,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             return DataBlock()
 
         with self.logger.timer(f'{self.key} blocks loading' , vb = 3 , enter_vb = 4):
-            load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
+            load_start = CALENDAR.td(start , -self.CalculationWindow + 1).td
             block_dict = self.load_blocks(load_start, end, secid = secid)
 
         with self.logger.timer(f'{self.key} blocks process' , vb = 3):
@@ -305,11 +307,11 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             if start < block_start:
                 span_tuples.append((start , CALENDAR.td(block_start , -1).td))
             if end > block_end:
-                span_tuples.append((CALENDAR.td(block_end , -self.EXTENSION_OVERLAY + 1).td , end))
+                span_tuples.append((CALENDAR.td(block_end , -self.ExtentionOverlay + 1).td , end))
 
         extentions : list[DataBlock] = []
         for span_start , span_end in span_tuples:
-            span_load_start = CALENDAR.td(span_start , -self.CALCULATION_WINDOW + 1).td
+            span_load_start = CALENDAR.td(span_start , -self.CalculationWindow + 1).td
             ext = self.pre_process(span_load_start , span_end , secid = secid).slice_date(span_start , span_end)
             if not ext.empty:
                 extentions.append(ext) 

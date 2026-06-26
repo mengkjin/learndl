@@ -5,7 +5,7 @@ Module attribute ``DIV_TOL`` is a small denominator tolerance shared with ``func
 from __future__ import annotations
 import torch , sys
 import numpy as np
-from typing import Any , Literal , overload , TypeVar , TypeAlias
+from typing import Any , Literal , overload , TypeVar , TypeAlias , cast
 
 DIV_TOL = 1e-6
 
@@ -239,15 +239,83 @@ def _active_mask_torch(notnan : torch.Tensor , axis : int , backward : bool) -> 
         m = torch.cummax(m , dim = axis).values
     return m.bool()
 
+def _fillna_2d(arr2d , force_value , backward : bool):
+    """Fill NaNs along the last axis of a 2-D array/tensor (one independent series per row)."""
+    if isinstance(arr2d , torch.Tensor):
+        notnan = ~torch.isnan(arr2d)
+        if force_value is not None:
+            active = _active_mask_torch(notnan , 1 , backward)
+            out = arr2d.clone()
+            out[(~notnan) & active] = force_value
+            return out
+        n = arr2d.shape[1]
+        ar = torch.arange(n , device = arr2d.device).unsqueeze(0).expand_as(arr2d)
+        if backward:
+            idx = torch.where(notnan , ar , torch.full_like(ar , n - 1))
+            idx = torch.cummin(idx.flip(1) , dim = 1).values.flip(1)
+        else:
+            idx = torch.where(notnan , ar , torch.zeros_like(ar))
+            idx = torch.cummax(idx , dim = 1).values
+        return torch.gather(arr2d , 1 , idx)
+    elif isinstance(arr2d , np.ndarray):
+        notnan = ~np.isnan(arr2d)
+        if force_value is not None:
+            active = _active_mask_np(notnan , 1 , backward)
+            out = arr2d.copy()
+            out[(~notnan) & active] = force_value
+            return out
+        n = arr2d.shape[1]
+        ar = np.broadcast_to(np.arange(n) , arr2d.shape)
+        if backward:
+            idx = np.where(notnan , ar , n - 1)
+            idx = np.flip(np.minimum.accumulate(np.flip(idx , 1) , axis = 1) , 1)
+        else:
+            idx = np.where(notnan , ar , 0)
+            idx = np.maximum.accumulate(idx , axis = 1)
+        return np.take_along_axis(arr2d , idx , axis = 1)
+    else:
+        raise TypeError(f'Unsupported type: {type(arr2d)}')
+
+def _fillna_via_2d(arr , axis : int , force_value , backward : bool):
+    """Reshape *arr* to ``(-1, T)`` with ``T`` on former ``axis``, fill, then restore shape."""
+    if axis < 0:
+        axis = arr.ndim + axis
+    orig_shape = arr.shape
+    n = orig_shape[axis]
+    if isinstance(arr , torch.Tensor):
+        perm = [i for i in range(arr.ndim) if i != axis] + [axis]
+        inv_perm = [0] * arr.ndim
+        for new_pos , old_pos in enumerate(perm):
+            inv_perm[old_pos] = new_pos
+        flat = arr.permute(*perm).reshape(-1 , n)
+        filled = _fillna_2d(flat , force_value , backward)
+        reshaped = cast(torch.Tensor , filled.reshape([orig_shape[i] for i in perm]))
+        return reshaped.permute(*inv_perm)
+    elif isinstance(arr , np.ndarray):
+        perm = [i for i in range(arr.ndim) if i != axis] + [axis]
+        inv_perm = [0] * arr.ndim
+        for new_pos , old_pos in enumerate(perm):
+            inv_perm[old_pos] = new_pos
+        flat = np.transpose(arr , perm).reshape(-1 , n)
+        filled = _fillna_2d(flat , force_value , backward)
+        return np.transpose(filled.reshape([orig_shape[i] for i in perm]) , inv_perm)
+    else:
+        raise TypeError(f'Unsupported type: {type(arr)}')
+
 def _fillna(arr , axis : int , force_value , backward : bool):
     """Shared engine for forward/backward NaN fill supporting both NumPy arrays and torch tensors.
 
     When ``force_value`` is given, only the cheap active-mask path is used (no carry-forward
     gather): NaNs inside the active span are set to ``force_value`` while leading/trailing NaNs
     outside the span are left untouched. Otherwise the last/next valid value is carried along ``axis``.
+
+    For ``ndim >= 3``, reshapes to 2-D and fills each row independently to avoid materialising
+    full-size N-D ``expand`` / ``gather`` intermediates.
     """
     if axis < 0:
         axis = arr.ndim + axis
+    if arr.ndim >= 3:
+        return _fillna_via_2d(arr , axis , force_value , backward)
 
     if isinstance(arr , torch.Tensor):
         notnan = ~torch.isnan(arr)

@@ -63,6 +63,11 @@ class PrePros:
         """Instantiate and return the preprocessor registered under ``key``."""
         return PreProcessor.registry[key](frame , indent = indent , vb_level = vb_level)
 
+    @classmethod
+    def allow_inactive(cls , key : str) -> bool:
+        """Return whether the preprocessor is allowed to be inactive."""
+        return PreProcessor.registry[key].AllowInactive
+
 class PrePro_y(TradePreProcessor):
     """
     Return label preprocessor (key: ``'y'``).
@@ -73,6 +78,7 @@ class PrePro_y(TradePreProcessor):
     version (``std*`` prefix), then applies ``process_factor`` to winsorise
     and rank all labels.
     """
+
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag'], **kwargs) ,
@@ -107,6 +113,7 @@ class PrePro_y(TradePreProcessor):
 
 class PrePro_day(TradePreProcessor):
     """Daily adjusted OHLCV preprocessor (key: ``'day'``).  Applies adjfactor to price columns."""
+    AllowInactive : bool = False
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         final_feat = self.final_feat() or []
         day = BlockLoader('trade_ts', 'day', ['adjfactor', *final_feat], **kwargs)
@@ -124,6 +131,7 @@ class PrePro_15m(TradePreProcessor):
     free-float turnover / daily volume to produce a turnover fraction.
     The ``volume`` feature is renamed to ``turn_fl``.
     """
+    AllowInactive : bool = False
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -142,6 +150,7 @@ class PrePro_15m(TradePreProcessor):
     
 class PrePro_30m(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
+    AllowInactive : bool = False
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -160,6 +169,7 @@ class PrePro_30m(TradePreProcessor):
     
 class PrePro_60m(TradePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
+    AllowInactive : bool = False
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -184,8 +194,8 @@ class PrePro_week(TradePreProcessor):
     the inday dimension holds the trailing 5 days.  Prices are normalised by
     the Monday (inday=0) pre-close so the window is stationary across weeks.
     """
-    WEEKDAYS = 5
-
+    Weekdays = 5
+    AllowInactive : bool = False
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         final_feat = self.final_feat() or []
         day = BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *final_feat], **kwargs)
@@ -195,7 +205,7 @@ class PrePro_week(TradePreProcessor):
         if start is not None and start < 0: 
             start = 2 * start
         elif start is not None and start > 0:
-            start = CALENDAR.td(start , -self.WEEKDAYS + 1).td
+            start = CALENDAR.td(start , -self.Weekdays + 1).td
         blocks : dict[str,DataBlock] = {}
         date = CALENDAR.range(start , end)
         block_loaders = self.block_loaders(indent = self.indent + 1 , vb_level = self.vb_level + 3)
@@ -207,9 +217,9 @@ class PrePro_week(TradePreProcessor):
     def process(self , blocks): 
         data_block = blocks['day'].adjust_price(ffill = True).adjust_volume(ffill = True)
 
-        new_values = np.full(np.multiply(data_block.shape,(1, 1, self.WEEKDAYS, 1)),np.nan)
-        for i in range(self.WEEKDAYS): 
-            new_values[:,self.WEEKDAYS-1-i:,i] = data_block.values[:,:len(data_block.date)-self.WEEKDAYS+1+i,0]
+        new_values = np.full(np.multiply(data_block.shape,(1, 1, self.Weekdays, 1)),np.nan)
+        for i in range(self.Weekdays): 
+            new_values[:,self.Weekdays-1-i:,i] = data_block.values[:,:len(data_block.date)-self.Weekdays+1+i,0]
         new_block = DataBlock(values = new_values , secid = data_block.secid , date = data_block.date , feature = data_block.feature)
         new_block = new_block.adjust_price(adjfactor = False , divide=new_block.loc(inday = 0,feature = 'preclose'))
         return new_block
@@ -300,7 +310,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
     """
     Calculate the rolling z-score of the features partitioned over secid
     """
-    CALCULATION_WINDOW = 250
+    CalculationWindow = 250
     MIN_SAMPLES = 90
     FEATURE_CHUNK_SIZE = 20
     def pre_process(
@@ -311,7 +321,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
         Load Dongfang L2 chars and apply per-secid rolling z-score normalisation.
 
         Features are processed in chunks of ``FEATURE_CHUNK_SIZE`` to limit peak
-        memory.  The rolling window is ``CALCULATION_WINDOW`` bars with a minimum
+        memory.  The rolling window is ``CalculationWindow`` bars with a minimum
         of ``MIN_SAMPLES`` effective observations.
 
         Note: the Polars expression currently has a parenthesisation bug —
@@ -321,7 +331,7 @@ class PrePro_dfl2(MicellaneousPreProcessor):
         """
         # 1. load data into pl.DataFrame
         start = start or self.load_start
-        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CalculationWindow + 1).td , end = end , key_column = None , vb_level = vb_level)
         if len(df) == 0:
             return DataBlock()
         secid = Base.ensure_secid(secid)
@@ -336,8 +346,8 @@ class PrePro_dfl2(MicellaneousPreProcessor):
         for i in range(0, len(feature), self.FEATURE_CHUNK_SIZE):
             sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
             sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
-                ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid")) /
-                (pl.col(feat).rolling_std(window_size=self.CALCULATION_WINDOW, min_samples=self.MIN_SAMPLES).over("secid") + 1e-6)).alias(feat)
+                ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid")) /
+                (pl.col(feat).rolling_std(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid") + 1e-6)).alias(feat)
                 for feat in sub_feature
             ]).collect()
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
@@ -367,7 +377,7 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
         """
         # 1. load data into pl.DataFrame
         start = start or self.load_start
-        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td , end = end , key_column = None , vb_level = vb_level)
+        df = DB.loads_pl('sellside', 'dongfang.l2_chars', start = CALENDAR.td(start , -self.CalculationWindow + 1).td , end = end , key_column = None , vb_level = vb_level)
         if len(df) == 0:
             return DataBlock()
         secid = Base.ensure_secid(secid)
@@ -399,7 +409,7 @@ class PrePro_market(MicellaneousPreProcessor):
     Stored with a single placeholder ``secid`` and broadcast to the stock universe
     during ``ModuleData._align_blocks``.
     """
-    CALCULATION_WINDOW = 120
+    CalculationWindow = 120
     MIN_SAMPLES = 60
     MARKET_SECID = 0
 
@@ -455,7 +465,7 @@ class PrePro_market(MicellaneousPreProcessor):
             cls.logger.warning(f'market risk missing columns: {sorted(missing)}')
         if not risk_cols:
             return pd.DataFrame()
-        roll = df[risk_cols].rolling(cls.CALCULATION_WINDOW , min_periods = cls.MIN_SAMPLES)
+        roll = df[risk_cols].rolling(cls.CalculationWindow , min_periods = cls.MIN_SAMPLES)
         z = (df[risk_cols] - roll.mean()) / (roll.std() + 1e-6)
         z = z.loc[z.index >= start]
         return z.loc[:end] if end else z
@@ -470,7 +480,7 @@ class PrePro_market(MicellaneousPreProcessor):
         if start > end:
             return DataBlock()
 
-        load_start = CALENDAR.td(start , -self.CALCULATION_WINDOW + 1).td
+        load_start = CALENDAR.td(start , -self.CalculationWindow + 1).td
         frames : list[pd.DataFrame] = []
 
         risk_df = self._load_risk_frame(load_start , end)
