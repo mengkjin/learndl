@@ -218,8 +218,9 @@ class DataOperator:
             effs.append(eff)
         if x and self.config.input_data_types:
             keys = [k for k in x.keys() if k in self.config.input_data_types and not PrePros.allow_inactive(k)]
-            eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
-            effs.append(eff)
+            if keys:
+                eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
+                effs.append(eff)
         if y is not None:
             eff = self.finite_position(None , y, index1)
             effs.append(eff)
