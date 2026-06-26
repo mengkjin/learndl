@@ -766,7 +766,7 @@ class DataBlock:
         if self.empty:
             return self
         if if_fill:
-            self.values = forward_fillna(self.values , axis = 1)
+            forward_fillna(self.values , axis = 1 , inplace = True)
         return self
 
     def fillna(self , value : Any = 0) -> DataBlock:
@@ -836,7 +836,7 @@ class DataBlock:
         if divide    is not None: 
             v_price /= divide
         if ffill:
-            v_price = forward_fillna(v_price , axis = 1)
+            forward_fillna(v_price , axis = 1 , inplace = True)
         self.values[...,i_price] = v_price 
 
         if 'vwap' in self.feature:
@@ -879,7 +879,7 @@ class DataBlock:
         if divide   is not None: 
             v_vol /= divide
         if ffill:
-            v_vol = forward_fillna(v_vol , axis = 1 , force_value = 0)
+            forward_fillna(v_vol , axis = 1 , force_value = 0 , inplace = True)
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True
         return self
@@ -1054,7 +1054,7 @@ class DataBlock:
     def blocks_ffill(
         cls , blocks : dict[str,DataBlock] , * ,
         fillna : FillNanOption = 'guess' , 
-        exclude : Base.alias.NamesType = None
+        exclude : Base.alias.NamesType = None 
     ) -> dict[str,DataBlock]:
         """Apply forward-fill to each block in the dict, optionally excluding specific keys."""
         exclude = Base.ensure_name_list(exclude , [])

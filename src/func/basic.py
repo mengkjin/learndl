@@ -14,6 +14,7 @@ T = TypeVar('T')
 ArrayAny : TypeAlias = np.ndarray | Any
 ArrayTensorAny : TypeAlias = np.ndarray | torch.Tensor | Any
 IndexMergeMethod : TypeAlias = Literal['union' , 'intersect' , 'check' , 'stack']
+FillNaMethod : TypeAlias = Literal['auto' , 'loop' , 'vector']
 
 
 def alert_message(message : str , color : str = 'yellow'):
@@ -239,164 +240,242 @@ def _active_mask_torch(notnan : torch.Tensor , axis : int , backward : bool) -> 
         m = torch.cummax(m , dim = axis).values
     return m.bool()
 
-def _fillna_2d(arr2d , force_value , backward : bool):
-    """Fill NaNs along the last axis of a 2-D array/tensor (one independent series per row)."""
-    if isinstance(arr2d , torch.Tensor):
-        notnan = ~torch.isnan(arr2d)
-        if force_value is not None:
-            active = _active_mask_torch(notnan , 1 , backward)
-            out = arr2d.clone()
-            out[(~notnan) & active] = force_value
-            return out
-        n = arr2d.shape[1]
-        ar = torch.arange(n , device = arr2d.device).unsqueeze(0).expand_as(arr2d)
-        if backward:
-            idx = torch.where(notnan , ar , torch.full_like(ar , n - 1))
-            idx = torch.cummin(idx.flip(1) , dim = 1).values.flip(1)
-        else:
-            idx = torch.where(notnan , ar , torch.zeros_like(ar))
-            idx = torch.cummax(idx , dim = 1).values
-        return torch.gather(arr2d , 1 , idx)
-    elif isinstance(arr2d , np.ndarray):
-        notnan = ~np.isnan(arr2d)
-        if force_value is not None:
-            active = _active_mask_np(notnan , 1 , backward)
-            out = arr2d.copy()
-            out[(~notnan) & active] = force_value
-            return out
-        n = arr2d.shape[1]
-        ar = np.broadcast_to(np.arange(n) , arr2d.shape)
-        if backward:
-            idx = np.where(notnan , ar , n - 1)
-            idx = np.flip(np.minimum.accumulate(np.flip(idx , 1) , axis = 1) , 1)
-        else:
-            idx = np.where(notnan , ar , 0)
-            idx = np.maximum.accumulate(idx , axis = 1)
-        return np.take_along_axis(arr2d , idx , axis = 1)
-    else:
-        raise TypeError(f'Unsupported type: {type(arr2d)}')
-
-def _fillna_via_2d(arr , axis : int , force_value , backward : bool):
-    """Reshape *arr* to ``(-1, T)`` with ``T`` on former ``axis``, fill, then restore shape."""
+def _normalize_axis(arr , axis : int) -> int:
     if axis < 0:
         axis = arr.ndim + axis
-    orig_shape = arr.shape
-    n = orig_shape[axis]
-    if isinstance(arr , torch.Tensor):
-        perm = [i for i in range(arr.ndim) if i != axis] + [axis]
-        inv_perm = [0] * arr.ndim
-        for new_pos , old_pos in enumerate(perm):
-            inv_perm[old_pos] = new_pos
-        flat = arr.permute(*perm).reshape(-1 , n)
-        filled = _fillna_2d(flat , force_value , backward)
-        reshaped = cast(torch.Tensor , filled.reshape([orig_shape[i] for i in perm]))
-        return reshaped.permute(*inv_perm)
-    elif isinstance(arr , np.ndarray):
-        perm = [i for i in range(arr.ndim) if i != axis] + [axis]
-        inv_perm = [0] * arr.ndim
-        for new_pos , old_pos in enumerate(perm):
-            inv_perm[old_pos] = new_pos
-        flat = np.transpose(arr , perm).reshape(-1 , n)
-        filled = _fillna_2d(flat , force_value , backward)
-        return np.transpose(filled.reshape([orig_shape[i] for i in perm]) , inv_perm)
-    else:
-        raise TypeError(f'Unsupported type: {type(arr)}')
+    return axis
 
-def _fillna(arr , axis : int , force_value , backward : bool):
-    """Shared engine for forward/backward NaN fill supporting both NumPy arrays and torch tensors.
-
-    When ``force_value`` is given, only the cheap active-mask path is used (no carry-forward
-    gather): NaNs inside the active span are set to ``force_value`` while leading/trailing NaNs
-    outside the span are left untouched. Otherwise the last/next valid value is carried along ``axis``.
-
-    For ``ndim >= 3``, reshapes to 2-D and fills each row independently to avoid materialising
-    full-size N-D ``expand`` / ``gather`` intermediates.
-    """
-    if axis < 0:
-        axis = arr.ndim + axis
+def _resolve_fill_method(arr , axis : int , method : FillNaMethod) -> FillNaMethod:
+    """Pick ``loop`` for short fill axes (typical date dim) and ``vector`` otherwise."""
+    if method != 'auto':
+        return method
+    n_axis = arr.shape[axis]
+    if n_axis <= 1:
+        return 'vector'
     if arr.ndim >= 3:
-        return _fillna_via_2d(arr , axis , force_value , backward)
+        return 'loop'
+    other = (arr.numel() if isinstance(arr , torch.Tensor) else arr.size) // n_axis
+    return 'loop' if n_axis <= other else 'vector'
 
+def _fillna_working_copy(arr , inplace : bool):
+    if inplace:
+        return arr
+    return arr.clone() if isinstance(arr , torch.Tensor) else arr.copy()
+
+def _fillna_loop_torch(out : torch.Tensor , axis : int , backward : bool) -> torch.Tensor:
+    """In-place carry-forward / carry-backward along ``axis`` (one date slice per step)."""
+    n = out.shape[axis]
+    if backward:
+        for d in range(n - 2 , -1 , -1):
+            cur = out.select(axis , d)
+            nxt = out.select(axis , d + 1)
+            cur.copy_(torch.where(torch.isnan(cur) , nxt , cur))
+    else:
+        for d in range(1 , n):
+            cur = out.select(axis , d)
+            prev = out.select(axis , d - 1)
+            cur.copy_(torch.where(torch.isnan(cur) , prev , cur))
+    return out
+
+def _fillna_loop_numpy(out : np.ndarray , axis : int , backward : bool) -> np.ndarray:
+    """In-place carry-forward / carry-backward along ``axis`` (one date slice per step)."""
+    n = out.shape[axis]
+    if backward:
+        for d in range(n - 2 , -1 , -1):
+            sl_cur: list[Any] = [slice(None)] * out.ndim
+            sl_nxt: list[Any] = [slice(None)] * out.ndim
+            sl_cur[axis] = d
+            sl_nxt[axis] = d + 1
+            cur = out[tuple(sl_cur)]
+            nxt = out[tuple(sl_nxt)]
+            mask = np.isnan(cur)
+            cur[mask] = nxt[mask]
+    else:
+        for d in range(1 , n):
+            sl_cur = [slice(None)] * out.ndim
+            sl_prev: list[Any] = [slice(None)] * out.ndim
+            sl_cur[axis] = d
+            sl_prev[axis] = d - 1
+            cur = out[tuple(sl_cur)]
+            prev = out[tuple(sl_prev)]
+            mask = np.isnan(cur)
+            cur[mask] = prev[mask]
+    return out
+
+def _fillna_vector_2d_torch(flat : torch.Tensor , backward : bool , *, inplace : bool) -> torch.Tensor:
+    """Vectorised carry along the last axis of a 2-D torch tensor."""
+    notnan = ~torch.isnan(flat)
+    n = flat.shape[1]
+    ar = torch.arange(n , device = flat.device).unsqueeze(0).expand_as(flat)
+    if backward:
+        idx = torch.where(notnan , ar , torch.full_like(ar , n - 1))
+        idx = torch.cummin(idx.flip(1) , dim = 1).values.flip(1)
+    else:
+        idx = torch.where(notnan , ar , torch.zeros_like(ar))
+        idx = torch.cummax(idx , dim = 1).values
+    filled = torch.gather(flat , 1 , idx)
+    if inplace:
+        flat.copy_(filled)
+        return flat
+    return filled
+
+def _fillna_vector_2d_numpy(flat : np.ndarray , backward : bool , *, inplace : bool) -> np.ndarray:
+    """Vectorised carry along the last axis of a 2-D numpy array."""
+    notnan = ~np.isnan(flat)
+    n = flat.shape[1]
+    ar = np.broadcast_to(np.arange(n) , flat.shape)
+    if backward:
+        idx = np.where(notnan , ar , n - 1)
+        idx = np.flip(np.minimum.accumulate(np.flip(idx , 1) , axis = 1) , 1)
+    else:
+        idx = np.where(notnan , ar , 0)
+        idx = np.maximum.accumulate(idx , axis = 1)
+    if inplace:
+        flat[:] = np.take_along_axis(flat , idx , axis = 1)
+        return flat
+    return np.take_along_axis(flat , idx , axis = 1)
+
+def _fillna_vector_2d(flat , backward : bool , *, inplace : bool):
+    if isinstance(flat , torch.Tensor):
+        return _fillna_vector_2d_torch(flat , backward , inplace = inplace)
+    elif isinstance(flat , np.ndarray):
+        return _fillna_vector_2d_numpy(flat , backward , inplace = inplace)
+    else:
+        raise TypeError(f'Unsupported type: {type(flat)}')
+
+def _fillna_vector(arr , axis : int , backward : bool , *, inplace : bool):
+    """Vectorised ``cummax``/``gather`` fill via a 2-D flattening of all other axes."""
+    axis = _normalize_axis(arr , axis)
+    perm = [i for i in range(arr.ndim) if i != axis] + [axis]
+    inv_perm = [0] * arr.ndim
+    for new_pos , old_pos in enumerate(perm):
+        inv_perm[old_pos] = new_pos
+    n = arr.shape[axis]
+    if arr.ndim == 1:
+        if inplace:
+            flat = arr.reshape(1 , -1)
+            _fillna_vector_2d(flat , backward , inplace = True)
+            return arr
+        flat = arr.reshape(1 , -1).clone() if isinstance(arr , torch.Tensor) else arr.reshape(1 , -1).copy()
+        return _fillna_vector_2d(flat , backward , inplace = False).reshape(arr.shape)
+    if inplace:
+        flat = arr.permute(*perm).reshape(-1 , n) if isinstance(arr , torch.Tensor) \
+            else np.transpose(arr , perm).reshape(-1 , n)
+        _fillna_vector_2d(flat , backward , inplace = True)
+        return arr
+    if isinstance(arr , torch.Tensor):
+        flat = arr.permute(*perm).reshape(-1 , n).clone()
+        filled = _fillna_vector_2d(flat , backward , inplace = False)
+        return cast(torch.Tensor , filled.reshape([arr.shape[i] for i in perm])).permute(*inv_perm)
+    flat = np.transpose(arr , perm).reshape(-1 , n).copy()
+    filled = _fillna_vector_2d(flat , backward , inplace = False)
+    return np.transpose(filled.reshape([arr.shape[i] for i in perm]) , inv_perm)
+
+def _fillna_force(arr , axis : int , force_value , backward : bool , *, inplace : bool):
+    """Set NaNs inside the active span to ``force_value`` (no carry-forward)."""
+    axis = _normalize_axis(arr , axis)
     if isinstance(arr , torch.Tensor):
         notnan = ~torch.isnan(arr)
-        if force_value is not None:
-            active = _active_mask_torch(notnan , axis , backward)
-            out = arr.clone()
-            out[(~notnan) & active] = force_value
-            return out
-        n = arr.shape[axis]
-        view = [1] * arr.ndim
-        view[axis] = n
-        ar = torch.arange(n , device = arr.device).reshape(view).expand(arr.shape)
-        if backward:
-            idx = torch.where(notnan , ar , torch.full_like(ar , n - 1))
-            idx = torch.cummin(idx.flip(axis) , dim = axis).values.flip(axis)
-        else:
-            idx = torch.where(notnan , ar , torch.zeros_like(ar))
-            idx = torch.cummax(idx , dim = axis).values
-        return torch.gather(arr , axis , idx)
+        active = _active_mask_torch(notnan , axis , backward)
+        out = _fillna_working_copy(arr , inplace)
+        out[(~notnan) & active] = force_value
+        return out
     elif isinstance(arr , np.ndarray):
         notnan = ~np.isnan(arr)
-        if force_value is not None:
-            active = _active_mask_np(notnan , axis , backward)
-            out = arr.copy()
-            out[(~notnan) & active] = force_value
-            return out
-        n = arr.shape[axis]
-        view = [1] * arr.ndim
-        view[axis] = n
-        ar = np.broadcast_to(np.arange(n).reshape(view) , arr.shape)
-        if backward:
-            idx = np.where(notnan , ar , n - 1)
-            idx = np.flip(np.minimum.accumulate(np.flip(idx , axis) , axis = axis) , axis)
-        else:
-            idx = np.where(notnan , ar , 0)
-            idx = np.maximum.accumulate(idx , axis = axis)
-        return np.take_along_axis(arr , idx , axis = axis)
+        active = _active_mask_np(notnan , axis , backward)
+        out = cast(np.ndarray , _fillna_working_copy(arr , inplace))
+        np.putmask(out , (~notnan) & active , force_value)
+        return out
     else:
         raise TypeError(f'Unsupported type: {type(arr)}')
 
-@overload
-def forward_fillna(arr : torch.Tensor , axis : int = 0 , * , force_value = None) -> torch.Tensor: ...
-@overload
-def forward_fillna(arr : np.ndarray , axis : int = 0 , * , force_value = None) -> np.ndarray: ...
-def forward_fillna(arr , axis = 0 , * , force_value = None):
-    """Last-observation-carried-forward along one axis (NumPy array or torch tensor).
+def _fillna(
+    arr , axis : int , force_value , backward : bool , *,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+):
+    """Shared engine for forward/backward NaN fill (torch tensor or NumPy array).
 
-    Accepts ``np.ndarray`` or ``torch.Tensor`` and returns the same type, preserving the tensor's
-    device and dtype (no NumPy round-trip required for tensors).
+    ``method``:
+        ``'auto'`` — ``loop`` when the fill axis is the shorter dimension (typical date axis),
+        else ``vector``.
+        ``'loop'`` — O(n_axis) in-place slices; best for large panels; true ``inplace`` savings.
+        ``'vector'`` — 2-D ``cummax`` + ``gather``; best for small / wide 2-D blocks.
+
+    ``inplace``:
+        When True, mutate *arr* where possible. Most effective with ``method='loop'`` on
+        large tensors (avoids a full clone). The vector path still uses a temporary index
+        buffer but writes back into *arr*.
+    """
+    if arr.ndim == 0:
+        return arr
+    axis = _normalize_axis(arr , axis)
+    if force_value is not None:
+        return _fillna_force(arr , axis , force_value , backward , inplace = inplace)
+    resolved = _resolve_fill_method(arr , axis , method)
+    if resolved == 'loop':
+        out = _fillna_working_copy(arr , inplace)
+        if isinstance(out , torch.Tensor):
+            _fillna_loop_torch(out , axis , backward)
+        else:
+            _fillna_loop_numpy(out , axis , backward)
+        return out
+    return _fillna_vector(arr , axis , backward , inplace = inplace)
+
+@overload
+def forward_fillna(
+    arr : torch.Tensor , axis : int = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+) -> torch.Tensor: ...
+@overload
+def forward_fillna(
+    arr : np.ndarray , axis : int = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+) -> np.ndarray: ...
+def forward_fillna(
+    arr , axis = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+):
+    """Last-observation-carried-forward along one axis (NumPy array or torch tensor).
 
     Args:
         arr: Input array/tensor (any shape).
         axis: Axis along which to propagate last valid values forward.
-        force_value: If given, take the fast path: NaNs at/after the first valid observation are
-            set to this value (leading NaNs before any valid observation stay NaN); no carry-forward.
+        force_value: If given, NaNs inside the active span are set to this value (no carry-forward).
+        method: ``'auto'`` | ``'loop'`` | ``'vector'``. See :func:`_fillna`.
+        inplace: Mutate *arr* in place when safe (most effective with ``method='loop'``).
 
     Returns:
-        Array/tensor of the same shape with NaNs filled from the left along the chosen axis.
+        Filled array/tensor (same object as *arr* when ``inplace=True``).
     """
-    return _fillna(arr , axis , force_value , backward = False)
+    return _fillna(arr , axis , force_value , backward = False , method = method , inplace = inplace)
 
 @overload
-def backward_fillna(arr : torch.Tensor , axis : int = 0 , * , force_value = None) -> torch.Tensor: ...
+def backward_fillna(
+    arr : torch.Tensor , axis : int = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+) -> torch.Tensor: ...
 @overload
-def backward_fillna(arr : np.ndarray , axis : int = 0 , * , force_value = None) -> np.ndarray: ...
-def backward_fillna(arr , axis = 0 , * , force_value = None):
+def backward_fillna(
+    arr : np.ndarray , axis : int = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+) -> np.ndarray: ...
+def backward_fillna(
+    arr , axis = 0 , * , force_value = None ,
+    method : FillNaMethod = 'auto' , inplace : bool = False ,
+):
     """Next-observation-carried-backward along one axis (NumPy array or torch tensor).
-
-    Accepts ``np.ndarray`` or ``torch.Tensor`` and returns the same type, preserving the tensor's
-    device and dtype (no NumPy round-trip required for tensors).
 
     Args:
         arr: Input array/tensor (any shape).
         axis: Axis along which to propagate next valid values backward.
-        force_value: If given, take the fast path: NaNs at/before the last valid observation are
-            set to this value (trailing NaNs after the last valid observation stay NaN); no carry-backward.
+        force_value: If given, NaNs inside the active span are set to this value (no carry-backward).
+        method: ``'auto'`` | ``'loop'`` | ``'vector'``. See :func:`_fillna`.
+        inplace: Mutate *arr* in place when safe (most effective with ``method='loop'``).
 
     Returns:
-        Array/tensor of the same shape with NaNs filled from the right along the chosen axis.
+        Filled array/tensor (same object as *arr* when ``inplace=True``).
     """
-    return _fillna(arr , axis , force_value , backward = True)
+    return _fillna(arr , axis , force_value , backward = True , method = method , inplace = inplace)
 
 def trim_index(index : ArrayAny , min_value = None , max_value = None) -> np.ndarray:
     """Clip a 1-D index array by inclusive bounds.
