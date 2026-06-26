@@ -138,6 +138,7 @@ class DataModule(Base.BoundLogger):
         if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
             return
         from src.res.model.model_module.application import ArchivedPredictorModel
+        self.logger.stdout(f'Ensuring hidden values for {self.input_keys_hidden}')
         for hd_key in self.input_keys_hidden:
             hd_model = ArchivedPredictorModel.from_model_str(hd_key)
             assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
@@ -159,7 +160,9 @@ class DataModule(Base.BoundLogger):
                 hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
                 
             for hd_model_date , hd_dates in hd_model_hd_dates.items():
-                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date , silent = False , print_dates = True , async_save = False)
+                with self.logger.timer(f'{hd_model} hidden_values at {hd_model_date}' , idt = 1 , enter_vb = 0):
+                    hd_dates = np.unique(hd_dates)
+                    hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
 
     def setup(
         self, stage : Base.lit.StageAll , 
