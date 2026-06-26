@@ -45,6 +45,7 @@ class DataloaderParam:
         else:
             match_attrs.append('model_date')
         return all([getattr(self , attr) == getattr(other , attr) for attr in match_attrs])
+        
 class BatchInputLoader:
     """wrap loader to impletement DataModule Callbacks"""
     def __init__(

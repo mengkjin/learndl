@@ -143,10 +143,13 @@ class ArchivedPredictorModel(Base.BoundLogger):
         else:
             use_data = 'both'
 
-        if not hasattr(self , 'data_module'):
-            self.data = DataModule(self.config , use_data).load_data() 
-        elif self.data.use_data != 'both' and self.data.use_data != use_data:
-            self.data = DataModule(self.config , 'both').load_data() 
+        with Proj.vb.temporary_vb('max'):
+            if not hasattr(self , 'data_module'):
+                print(f'{datetime.now()} load data for {self.config.model_name} with use_data: {use_data}')
+                self.data = DataModule(self.config , use_data).load_data() 
+            elif self.data.use_data != 'both' and self.data.use_data != use_data:
+                print(f'{datetime.now()} load data for {self.config.model_name} with use_data: both')
+                self.data = DataModule(self.config , 'both').load_data() 
         return self
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None) -> Base.UpdateFlag:
@@ -258,17 +261,14 @@ class ArchivedPredictorModel(Base.BoundLogger):
             print(f'{datetime.now()} start_date: {start_date} , end_date: {end_date}')
             self.load_data(start_date , end_date)
             print(f'{datetime.now()} self.data.use_data: {self.data.use_data}')
-            self.data.setup('retrospective' , model_param , start_date , retro_start_date = start_date , retro_end_date = end_date)
+            self.data.setup('retrospective' , model_param , model_date , retro_start_date = start_date , retro_end_date = end_date)
             print(f'{datetime.now()} self.data.loader_param: {self.data.loader_param}')
             model = self.model.load_model(model_num , model_date , submodel , model_param = model_param , cache_model = True)
-            print(f'{datetime.now()} model.device: {model.device}')
             self.dataloader = self.data.retrospective_dataloader()
-        print(f'{datetime.now()} self.dataloader.device: {self.dataloader.device}')
         with _Grads(require_grad):
             for batch_input in self.dataloader:
                 if len(self.data.early_test_dates) == 0 and batch_input.date0 not in dates:
                     # if no early test dates, and the batch date is not in dates, no need to warmup,skip
-                    print(f'skip batch_input.date0: {batch_input.date0}')
                     continue
                 batch_data = model.get_batch_data(batch_input)
                 if batch_data.batch_date in dates:
@@ -279,7 +279,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         dates : Base.alias.DateType , model_date : int , * , 
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , 
-        load_first = True , silent = True , print_dates = False
+        load_first = True , silent = True , print_dates = False , async_save = True , 
     ) -> pl.DataFrame:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -340,7 +340,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         if df.height > 0 and dates:
             Save.df(
                 df.sort(['date','secid']) , hidden_path , 
-                async_save = True , overwrite = True , 
+                async_save = async_save , overwrite = True , 
                 prefix = f'{self.pred_name} Hidden Values' , 
                 indent = self.indent + 1 , vb_level = self.vb_level + 1
             )
@@ -352,7 +352,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : Base.alias.SecidType = None , align_date : Base.alias.DateType = None ,
-        load_first = True , silent = True
+        load_first = True , silent = True , async_save = True , 
     ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -373,7 +373,8 @@ class ArchivedPredictorModel(Base.BoundLogger):
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
         df = self.hidden_values(
             dates , model_date , start = start , end = end , step = step , 
-            model_num = model_num , submodel = submodel , silent = silent , load_first = load_first , 
+            model_num = model_num , submodel = submodel , silent = silent , 
+            load_first = load_first , async_save = async_save , 
         )
         if df.height == 0:
             return DataBlock()

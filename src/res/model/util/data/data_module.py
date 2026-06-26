@@ -159,7 +159,7 @@ class DataModule(Base.BoundLogger):
                 hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
                 
             for hd_model_date , hd_dates in hd_model_hd_dates.items():
-                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date , silent = False , print_dates = True)
+                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date , silent = False , print_dates = True , async_save = False)
 
     def setup(
         self, stage : Base.lit.StageAll , 
@@ -291,8 +291,9 @@ class DataModule(Base.BoundLogger):
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
-        self.static_dataloader(x_full , y_sampled , w_sampled , eff_mask)
-
+        with self.logger.timer(f'{self.loader_param} static_dataloader' , enter_vb = 0):
+            self.static_dataloader(x_full , y_sampled , w_sampled , eff_mask)
+        
         if self.config.gc_collect_each_model:
             gc.collect() 
             torch.cuda.empty_cache()
