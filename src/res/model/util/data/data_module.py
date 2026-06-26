@@ -159,11 +159,13 @@ class DataModule(Base.BoundLogger):
                 hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
                 
             for hd_model_date , hd_dates in hd_model_hd_dates.items():
-                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date , print_dates = True)
+                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date , silent = False , print_dates = True)
 
-    def setup(self, stage : Base.lit.StageAll , 
-              param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
-              model_date = -1 , **kwargs) -> None:
+    def setup(
+        self, stage : Base.lit.StageAll , 
+        param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
+        model_date = -1 , **kwargs
+    ) -> None:
         """
         setup data module for a given stage
         other kwargs:
