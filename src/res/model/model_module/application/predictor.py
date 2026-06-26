@@ -135,13 +135,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
         return self.path.model_submodels
 
     def load_data(self , min_date : int | None = None , max_date : int | None = None):
-        updated = CALENDAR.updated()
+        """load data for predictor's DataModule, depending on the min_date to determine the use_data is 'predict' or 'both'"""
         min_date = min_date or 20170101
-        max_date = max_date or min_date + 20000 # 2 years
         if min_date > CALENDAR.update_to(-100):
             use_data = 'predict'
-        elif max_date < updated:
-            use_data = 'fit'
         else:
             use_data = 'both'
 
@@ -271,6 +268,75 @@ class ArchivedPredictorModel(Base.BoundLogger):
                 if batch_data.batch_date in dates:
                     yield batch_data
 
+    def hidden_values(
+        self , 
+        dates : Base.alias.DateType , model_date : int , * , 
+        start = None , end = None , step : int = 1 ,
+        model_num : int | None = None , submodel : str | None = None , 
+        load_first = True , silent = True
+    ) -> pl.DataFrame:
+        """
+        Iterate hidden block of a given model number, model date, start date, and end date
+        Args:
+            dates : Base.alias.DateType , the dates to iterate
+            model_date : int, the model date of the archived model
+            start : int | None = None, the start date, if given, iterate dates from start to end with step
+            end : int | None = None, the end date, if given, iterate dates from start to end with step
+            step : int = 1, the step size
+            model_num : int | None = None, the model number of the model archive, None use default model number
+            submodel : str | None = None, the model submodel, None use default model submodel
+            feature_prefix : bool = True, whether to add feature prefix to the column names
+            load_first : bool = True, whether to load the first batch data to get the hidden block
+            silent : bool = True, whether to silence the warning
+        Returns:
+            pl.DataFrame of hiddens
+        """
+        model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
+        dates = self._get_dates(dates , start , end , step)
+        if dates.empty:
+            return pl.DataFrame()
+
+        hidden_path = self.hidden_values_path(model_num , model_date , submodel)
+        hidden_dfs : list[pl.DataFrame] = []
+
+        saved_hidden_df = Load.polars(hidden_path)
+        required_cols = {'date' , 'secid'}
+        if saved_hidden_df.height > 0 and not required_cols.issubset(set(saved_hidden_df.columns)):
+            self.logger.warning(
+                f'Ignore malformed hidden values at {hidden_path}: '
+                f'missing {sorted(required_cols - set(saved_hidden_df.columns))}'
+            )
+            saved_hidden_df = pl.DataFrame()
+
+        if not load_first and saved_hidden_df.height > 0:
+            saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates.dates))
+        if saved_hidden_df.height > 0:
+            hidden_dfs.append(saved_hidden_df)
+        if saved_hidden_df.height > 0 and 'date' not in saved_hidden_df.columns:
+            self.logger.error(f'date column not found in {hidden_path}')
+            self.logger.display(saved_hidden_df)
+            raise ValueError(f'date column not found in {hidden_path}')
+        existing_dates = saved_hidden_df['date'].unique() if 'date' in saved_hidden_df.columns else np.array([], dtype=int)
+        dates = dates.diff(existing_dates , inplace = False)
+            
+        batch_data_iterator = self.iter_batch_data(
+            dates , model_date , model_num = model_num , 
+            submodel = submodel , require_grad = False , silent = silent)
+        for batch_data in batch_data_iterator:
+            if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
+                continue
+            assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
+            hidden_dfs.append(batch_data.hidden_df_pl())
+        df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
+        if df.height > 0 and dates:
+            Save.df(
+                df.sort(['date','secid']) , hidden_path , 
+                async_save = True , overwrite = True , 
+                prefix = f'{self.pred_name} Hidden Values' , 
+                indent = self.indent + 1 , vb_level = self.vb_level + 1
+            )
+        return df
+
     def hidden_block(
         self , 
         dates : Base.alias.DateType , model_date : int , * , 
@@ -296,48 +362,13 @@ class ArchivedPredictorModel(Base.BoundLogger):
             DataBlock of hiddens
         """
         model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
-        dates = self._get_dates(dates , start , end , step)
-        if dates.empty:
+        df = self.hidden_values(
+            dates , model_date , start = start , end = end , step = step , 
+            model_num = model_num , submodel = submodel , silent = silent , load_first = load_first , 
+        )
+        if df.height == 0:
             return DataBlock()
 
-        hidden_path = self.hidden_values_path(model_num , model_date , submodel)
-        hidden_dfs : list[pl.DataFrame] = []
-
-        saved_hidden_df = Load.polars(hidden_path)
-        required_cols = {'date' , 'secid'}
-        if saved_hidden_df.height > 0 and not required_cols.issubset(set(saved_hidden_df.columns)):
-            self.logger.warning(
-                f'Ignore malformed hidden values at {hidden_path}: '
-                f'missing {sorted(required_cols - set(saved_hidden_df.columns))}'
-            )
-            saved_hidden_df = pl.DataFrame()
-
-        if not load_first and saved_hidden_df.height > 0:
-            saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates))
-        if saved_hidden_df.height > 0:
-            hidden_dfs.append(saved_hidden_df)
-        if saved_hidden_df.height > 0 and 'date' not in saved_hidden_df.columns:
-            self.logger.error(f'date column not found in {hidden_path}')
-            self.logger.display(saved_hidden_df)
-            raise ValueError(f'date column not found in {hidden_path}')
-        existing_dates = saved_hidden_df['date'].unique() if 'date' in saved_hidden_df.columns else np.array([], dtype=int)
-        dates = dates.diff(existing_dates , inplace = False)
-            
-        batch_data_iterator = self.iter_batch_data(
-            dates , model_date , model_num = model_num , 
-            submodel = submodel , require_grad = False , silent = silent)
-        for batch_data in batch_data_iterator:
-            if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
-                continue
-            assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
-            hidden_dfs.append(batch_data.hidden_df_pl())
-        df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
-        if df.height > 0 and dates:
-            Save.df(
-                df , hidden_path , async_save = True , overwrite = True , 
-                prefix = f'{self.pred_name} Hidden Values' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 1)
-            
         if (align_secid := Base.ensure_secid(align_secid)) is not None:
             df = df.filter(pl.col('secid').is_in(align_secid))
         if (align_date := Base.ensure_date(align_date)) is not None:

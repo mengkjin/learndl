@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import gc , torch
 
+from collections import defaultdict
 from functools import cached_property
 from typing import Any , Callable
 
@@ -88,6 +89,7 @@ class DataModule(Base.BoundLogger):
         self.config.update_data_param(self.datas.x)
         
         self.set_critical_dates()
+        self.ensure_hidden_values()
         
         self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2).clone() , no_weight = True)[0]
 
@@ -126,6 +128,38 @@ class DataModule(Base.BoundLogger):
                 self.model_date_list = dates[:1]
             else:
                 self.model_date_list = dates[::self.config.interval]
+
+    def ensure_hidden_values(self):
+        """
+        ensure the hidden block dates of the current model date are loaded
+        this includes all fit dates (assume seqlen == 1) and test dates
+        if current hidden block dates are insufficient, complete them in advance
+        """
+        if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
+            return
+        from src.res.model.model_module.application import ArchivedPredictorModel
+        for hd_key in self.input_keys_hidden:
+            hd_model = ArchivedPredictorModel.from_model_str(hd_key)
+            assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
+            hd_model_hd_dates : dict[int,list[int]] = defaultdict(list)
+
+            for model_date in self.model_date_list:
+                assert hd_model.model_dates[0] <= model_date , \
+                    f'hidden model {hd_key} has no model date before {model_date}'
+                hd_model_date = hd_model.model_dates[hd_model.model_dates <= model_date][-1]
+
+                # fit dates
+                model_date_col = (self.datas.date < model_date).sum()
+                d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - 1)
+                d1 = max(0 , model_date_col - self.config.skip_horizon)
+                hd_model_hd_dates[hd_model_date].extend(self.datas.date[d0:d1][::self.config.interval].tolist())
+                
+                # test dates
+                next_model_date = self.next_model_date(model_date)
+                hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
+                
+            for hd_model_date , hd_dates in hd_model_hd_dates.items():
+                hd_model.hidden_values(np.unique(hd_dates) , hd_model_date)
 
     def setup(self, stage : Base.lit.StageAll , 
               param : dict[str,Any] = {'seqlens' : {'day': 30 , '30m': 30 , 'style': 30}} , 
@@ -344,7 +378,7 @@ class DataModule(Base.BoundLogger):
             label = self.label_of_date(date)
             if label.size > 0:
                 labels.append(pd.DataFrame({
-                    'secid' : self.datas.y.secid, 'date' : date,
+                    'secid' : self.datas.secid, 'date' : date,
                     'label' : label.flatten()
                 }).dropna())
         return pd.concat(labels)
@@ -354,7 +388,7 @@ class DataModule(Base.BoundLogger):
         return self.labels.cpu().numpy()
 
     def label_of_date(self , date : int) -> np.ndarray:
-        return self.labels_np[:,self.datas.y.date == date][...,0].squeeze()
+        return self.labels_np[:,self.datas.date == date][...,0].squeeze()
 
     def get_batch_input_of_date(self , date : int) -> BatchInput:
         assert self.stage in ['predict' , 'test' , 'retrospective'] , f'stage should be predict , test or retrospective, but got {self.stage}'
@@ -501,11 +535,11 @@ class DataModule(Base.BoundLogger):
 
     @property
     def y_secid(self) -> np.ndarray:
-        return self.datas.y.secid
+        return self.datas.secid
 
     @property
     def y_date(self) -> np.ndarray:
-        return self.datas.y.date[self.d0:self.d1]
+        return self.datas.date[self.d0:self.d1]
 
     @property
     def day_len(self) -> int:

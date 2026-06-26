@@ -192,12 +192,12 @@ class ModuleData(Base.BoundLogger):
     @property
     def secid(self) -> np.ndarray:
         """Security universe from the ``'y'`` block."""
-        return self.blocks["y"].secid
+        return self.y.secid
 
     @property
     def date(self) -> np.ndarray:
         """Date range from the ``'y'`` block."""
-        return self.blocks["y"].date
+        return self.y.date
 
     @cached_property
     def loaded(self) -> bool:
