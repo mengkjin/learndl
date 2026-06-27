@@ -338,9 +338,11 @@ class DataOperator:
         sample_index = {}
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
+            assert sep > 0 and sep < l1 , (sep , l1 , train_ratio)
             if sample_method == 'total_shuffle':
                 pool = torch.Tensor(permutation(np.arange(effective.sum().item())))
                 sep = int(len(pool) * train_ratio)
+                assert sep > 0 and sep < len(pool) , (sep , len(pool) , train_ratio)
                 sample_index['train'] = _shuffle(pos[effective][pool[:sep]])
                 sample_index['valid'] = _shuffle(pos[effective][pool[sep:]])
             elif sample_method == 'both_shuffle':

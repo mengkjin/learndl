@@ -26,7 +26,7 @@ input:
 
 train:
   criterion.boost:
-    objective: mse # null , mse , mae , rank
+    objective: rank # null , mse , mae , rank
 
   dataloader.shuffle_option: static
   dataloader.train_ratio: 0.92
