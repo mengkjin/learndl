@@ -146,6 +146,8 @@ class ArchivedPredictorModel(Base.BoundLogger):
             if not hasattr(self , 'data_module'):
                 self.data = DataModule(self.config , use_data).load_data() 
             elif self.data.use_data != 'both' and self.data.use_data != use_data:
+                self.logger.stdout(f'self.data.use_data: {self.data.use_data} , use_data: {use_data}')
+                self.logger.stdout(f'load data for {self.config.model_name} with use_data: both')
                 self.data = DataModule(self.config , 'both').load_data() 
         return self
     
