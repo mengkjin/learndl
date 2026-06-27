@@ -74,6 +74,8 @@ class CatBoost(BasicBoostModel):
         num_class       = self.fit_train_param.pop('n_bins' , None)
         if 'eval_metric' in self.fit_train_param and self.fit_train_param['eval_metric'] is None: 
             self.fit_train_param.pop('eval_metric')
+        if self.valid_metric is not None:
+            self.fit_train_param['eval_metric'] = self.valid_metric.build_catboost_metric()
 
         self.fit_train_param.update({
             'random_seed':          self.seed , 

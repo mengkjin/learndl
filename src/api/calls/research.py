@@ -80,4 +80,3 @@ class CarryOutScheduleWorkList(DirectCall):
         finally:
             self._restore_main_script_file()
         Logger.success('Training schedule model list completed')
-

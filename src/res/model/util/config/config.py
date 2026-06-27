@@ -37,7 +37,8 @@ def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -
     """
     def keep_nested(k: str) -> bool:
         exclude_keys = ('input.sequence.lens' , 'input.sequence.steps' , 'input.factor.types' ,
-                        'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses')
+                        'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses' ,
+                        'train.boost.param' , 'train.boost.weight' , 'train.boost.valid_metric')
         return (k.endswith(exclude_keys) or not k.islower())
     if isinstance(input, Base.FlattenDict):
         return input
@@ -605,8 +606,25 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return kwargs
 
     @property
-    def criterion_boost(self) -> dict[str, dict[str, Any]]:
-        return self.Param.get("train.criterion.boost", {})
+    def boost_param(self) -> dict[str, Any]:
+        return self.Param.get("train.boost.param", {})
+
+    @property
+    def boost_weight(self) -> dict[str, Any]:
+        return self.Param.get("train.boost.weight", {})
+
+    @property
+    def boost_valid_metric(self) -> dict[str, Any]:
+        return self.Param.get("train.boost.valid_metric", {})
+
+    @property
+    def train_boost(self) -> dict[str, Any]:
+        """Boost training config: ``param``, ``weight``, ``valid_metric`` groups."""
+        return {
+            "param": self.boost_param,
+            "weight": self.boost_weight,
+            "valid_metric": self.boost_valid_metric,
+        }
 
     @property
     def trainer_optimizer(self) -> dict[str, Any]:
@@ -1176,8 +1194,14 @@ class ModelConfig(BaseModelConfig):
             info_strs.append((0, "Period", f"{self.beg_date} ~ {self.end_date}"))
         else:
             if self.module_type == "boost":
-                if self.criterion_boost.get('objective', None):
-                    info_strs.append((0, "Boost Objective", f"{self.criterion_boost['objective']}"))
+                if self.boost_param.get('objective'):
+                    info_strs.append((0, "Boost Objective", f"{self.boost_param['objective']}"))
+                if self.boost_weight:
+                    info_strs.append((0, "Boost Weight", ""))
+                    for k, v in self.boost_weight.items():
+                        info_strs.append((1, k, f"{v}"))
+                if self.boost_valid_metric:
+                    info_strs.append((0, "Boost Valid Metric", f"{self.boost_valid_metric['name']}"))
                 if self.boost_optuna:
                     info_strs.append((0, "Boost Params", f"Optuna for {self.boost_optuna_trials} trials"))
                 else:

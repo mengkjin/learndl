@@ -29,10 +29,11 @@ class GeneralBoostModel:
     """Unified wrapper around LGBM / XGBoost / CatBoost / AdaBoost back-ends.
 
     Parameter splitting:
-        * Keys present in :attr:`BoostWeightMethod.__slots__` go to
-          ``weight_param`` and are forwarded to :class:`BoostWeightMethod`.
+        * Algo hyper-parameters in ``params`` go to ``train_param`` for the underlying booster.
+        * ``boost_config`` (from ``train.boost``) supplies ``param``, ``weight``, and
+          ``valid_metric`` groups for objective, :class:`BoostWeightMethod`, and
+          :class:`BoostValidMetric` respectively.
         * The key ``'verbosity'`` controls :attr:`fit_verbosity` (log frequency).
-        * Everything else goes to ``train_param`` for the underlying booster.
 
     Calling the instance (``model(x)``) is equivalent to :meth:`forward`.
     """
@@ -44,14 +45,15 @@ class GeneralBoostModel:
         cuda = True , seed = None , 
         given_name : str | None = None , 
         sub_name : str | None = None ,
-        override_criterion : dict | None = None , 
+        override_boost : dict | None = None ,
+        override_criterion : dict | None = None ,
         **kwargs
     ):
         assert boost_type in AVAILABLE_BOOSTS , f'{boost_type} is not a valid boost type'
         self.boost_type = BoostModuleType(boost_type)
         self.given_name = given_name or self.boost.__class__.__name__
         self.sub_name = sub_name or datetime.now().strftime('%Y%m%d-%H%M%S')
-        self.override_criterion = override_criterion or {}
+        self.override_boost = override_boost if override_boost is not None else (override_criterion or {})
         self.cuda = cuda
         self.seed = seed
         self.update_param(params , **kwargs)
@@ -62,7 +64,7 @@ class GeneralBoostModel:
 
     def update_param(self , params : dict[str, Any] | None = None , **kwargs):
         self.fit_verbosity = params.get('verbosity' , 10) if params else 10
-        self.boost.set_params(params , overrides = self.override_criterion, cuda = self.cuda, seed = self.seed, **kwargs)
+        self.boost.set_params(params , boost_config = self.override_boost, cuda = self.cuda, seed = self.seed, **kwargs)
         return self
 
     def import_data(self , train : Any = None , valid : Any = None , test  : Any = None):

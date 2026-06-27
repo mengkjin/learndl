@@ -54,7 +54,8 @@ class OptunaBoostModel(GeneralBoostModel):
 
     @property
     def force_objective(self) -> str | None:
-        return self.override_criterion.get('objective' , None)
+        param = (self.override_boost.get('param') or {})
+        return param.get('objective')
     
     def update_param(self , params : dict[str, Any] | None = None , **kwargs):
         super().update_param(params , **kwargs)
@@ -141,6 +142,8 @@ class OptunaBoostModel(GeneralBoostModel):
         params = self.trial_suggest_params(trial)
         boost = self.update_param(params).boost
         output = boost.fit(silent=True).predict('valid')
+        if boost.valid_metric is not None:
+            return boost.valid_metric.score_output(output)
         result = output.top5pct() if self.force_objective == 'rank' else output.rankic()
         return result.nanmean().item()
 

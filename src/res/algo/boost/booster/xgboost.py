@@ -80,6 +80,7 @@ class XgBoost(BasicBoostModel):
         num_boost_round = self.fit_train_param.pop('num_boost_round')
         early_stopping  = self.fit_train_param.pop('early_stopping')
         verbose_eval    = self.fit_train_param['verbosity']
+        custom_metric = self.valid_metric.xgb_feval if self.valid_metric is not None else None
 
         self.evals_result = dict()
         self.model : xgboost.Booster = xgboost.train(
@@ -89,6 +90,7 @@ class XgBoost(BasicBoostModel):
             early_stopping_rounds = early_stopping,
             evals=[(valid_set, 'eval')] , 
             evals_result=self.evals_result , 
+            custom_metric=custom_metric,
             verbose_eval = verbose_eval)
 
         return self

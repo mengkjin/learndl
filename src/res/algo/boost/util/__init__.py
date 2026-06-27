@@ -7,4 +7,5 @@ Re-exports:
 from .weight import *
 from .dataset import *
 from .basic_model import *
+from .valid_metric import *
 

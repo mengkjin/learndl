@@ -87,14 +87,16 @@ class AlgoModule:
         cls , model_module : str , model_param : dict | None = None , 
         cuda = None , seed = None , model_dict : dict | None = None , 
         given_name : str | None = None , sub_name : str | None = None , 
+        override_boost : dict | None = None ,
         override_criterion : dict | None = None , 
         optuna : bool = False , **kwargs
     ):
         boost_class = OptunaBoostModel if optuna else GeneralBoostModel
+        boost_cfg = override_boost if override_boost is not None else override_criterion
         boost = boost_class(
             model_module , model_param , cuda = bool(cuda) , seed = seed , 
             given_name = given_name , sub_name = sub_name , 
-            override_criterion = override_criterion, **kwargs)
+            override_boost = boost_cfg, **kwargs)
 
         if model_dict is not None: 
             boost.load_dict(model_dict , cuda = bool(cuda) , seed = seed)

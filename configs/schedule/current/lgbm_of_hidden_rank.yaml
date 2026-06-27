@@ -25,8 +25,9 @@ input:
     - gru@gru_dfl2cs_new@0@best
 
 train:
-  criterion.boost:
-    objective: rank # null , mse , mae , rank
+  boost:
+    param:
+      objective: rank # null , mse , mae , rank
 
   dataloader.shuffle_option: static
   dataloader.train_ratio: 0.92

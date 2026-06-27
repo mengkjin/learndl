@@ -49,7 +49,7 @@ class NNBoost(PredictorModel):
             boost_module , boost_param, cuda , seed , 
             given_name = f'{self.config.base_path.full_name}@{self.config.start_time.strftime("%Y%m%d%H%M%S")}' ,
             sub_name = f'{self.config.model_clean_name}/{self.model_num}/{self.model_date}/{self.model_submodel}' ,
-            override_criterion = self.config.criterion_boost)
+            override_boost = self.config.train_boost)
 
         self.model_dict.reset()
         self.complete_model_param = nn_param | boost_param

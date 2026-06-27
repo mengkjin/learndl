@@ -27,12 +27,11 @@ class Lgbm(BasicBoostModel):
     """LightGBM wrapper conforming to the :class:`BasicBoostModel` interface.
 
     Key ``fit()`` behaviour:
-        * ``num_boost_round`` and ``n_bins`` are popped from ``train_param``
-          before being passed to ``lightgbm.train``.
-        * When ``objective == 'softmax'`` the ``num_class`` parameter is set
-          to ``n_bins`` automatically.
-        * GPU training is activated when ``use_gpu`` is ``True`` by setting
-          ``device_type='gpu'``.
+        * ``num_boost_round``, ``early_stopping``, and ``n_bins`` are popped from
+          ``train_param`` before being passed to ``lightgbm.train``.
+        * Early stopping monitors the valid set only (same as XGB/CatBoost).
+        * When a custom :class:`BoostValidMetric` is configured, it drives early
+          stopping via ``feval`` and native ``metric`` is set to ``'None'``.
     """
     DEFAULT_TRAIN_PARAM = {
         'objective': 'mse', # 'mae' , 'lambdarank'
@@ -88,19 +87,29 @@ class Lgbm(BasicBoostModel):
         valid_set = self.fit_valid_ds.to_lgbm_dataset(rank=self.is_rankor , reference=train_set)
         
         num_boost_round = self.fit_train_param.pop('num_boost_round')
+        early_stopping = self.fit_train_param.pop('early_stopping', None)
+        if self.valid_metric is not None:
+            self.fit_train_param['metric'] = 'None'
         self.fit_train_param.update({
             'seed':                 self.seed , 
             'device_type':          'gpu' if self.use_gpu else 'cpu' , 
             'verbosity':            -1 if silent else 1 ,
             'monotone_constraints': self.mono_constr(self.fit_train_param , self.fit_train_ds.nfeat)}) 
         self.evals_result = dict()
+        callbacks : list[Any] = [lightgbm.record_evaluation(self.evals_result)]
+        if early_stopping and early_stopping > 0:
+            callbacks.append(
+                lightgbm.early_stopping(stopping_rounds=early_stopping, first_metric_only=True)
+            )
+        feval = self.valid_metric.lgbm_feval if self.valid_metric is not None else None
         self.model : lightgbm.Booster = lightgbm.train(
             params = self.fit_train_param ,
             train_set = train_set, 
-            valid_sets= [train_set, valid_set], 
-            valid_names=['train', 'valid'] , 
+            valid_sets= [valid_set], 
+            valid_names=['valid'] , 
             num_boost_round=num_boost_round , 
-            callbacks=[lightgbm.record_evaluation(self.evals_result)],
+            feval=feval,
+            callbacks=callbacks,
         )
         return self
         
@@ -151,9 +160,15 @@ class LgbmPlot(Base.BoundLogger):
 
     def training(self , show_plot = True , xlim = None , ylim = None , yscale = None):
         fig = plt.figure()
-        ax = lightgbm.plot_metric(self.lgbm.evals_result, metric='l2')
-        plt.scatter(self.lgbm.model.best_iteration,list(self.lgbm.evals_result['valid'].values())\
-                    [0][self.lgbm.model.best_iteration],label='best iteration')
+        valid_metrics = self.lgbm.evals_result.get('valid', {})
+        metric_key = next(iter(valid_metrics), 'l2')
+        ax = lightgbm.plot_metric(self.lgbm.evals_result, metric=metric_key)
+        if valid_metrics:
+            metric_vals = list(valid_metrics.values())[0]
+            best_iter = min(self.lgbm.model.best_iteration, len(metric_vals) - 1)
+            plt.scatter(
+                best_iter, metric_vals[best_iter], label='best iteration',
+            )
         plt.legend()
         if xlim is not None: 
             plt.xlim(xlim)

@@ -12,6 +12,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Literal , TypeAlias
 
+from src.func.tensor import rank_pct
+
 __all__ = ['BoostWeightMethod']
 
 TimeSeriesWeight : TypeAlias = Literal['lin', 'exp'] | None
@@ -33,13 +35,13 @@ class BoostWeightMethod:
                            ``ts_half_life_rate * n_date``.
         cs_type:           Cross-sectional weighting scheme.
                            ``'ones'`` — doubles weight on positive-label samples.
-                           ``'top'`` — exponential rank-based upweighting.
+                           ``'top'`` — upweight top half (polar-style, min 0.25).
         bm_type:           Benchmark membership weighting.
                            ``'in'`` — doubles weight for securities in
                            ``bm_secid``.
         ts_lin_rate:       Start value of linear time-series weights (default 0.5).
         ts_half_life_rate: Half-life as a fraction of ``n_date`` (default 0.5).
-        cs_top_tau:        Decay exponent for the ``'top'`` cross-sectional scheme.
+        cs_top_tau:        Deprecated; no longer used by ``'top'`` scheme.
         cs_ones_rate:      Multiplier applied to positive-label rows (default 2.0).
         bm_rate:           Multiplier applied to benchmark members (default 2.0).
         bm_secid:          Security IDs that constitute the benchmark universe.
@@ -74,18 +76,21 @@ class BoostWeightMethod:
 
         ``'ones'``: samples with label ``== 1`` get weight ``cs_ones_rate``
         (default * 2).
-        ``'top'``: exponential rank-based decay so top-ranked securities receive
-        higher weight.  ``None``: uniform ones.
+        ``'top'``: bottom/middle weight 0.25; top half ramps smoothly to 1.0.
+        ``None``: uniform ones.
         """
         w = y * 0 + 1.
         if self.cs_type is None: 
             return w
         elif self.cs_type == 'ones':
-            w[y == 1.] = w[y == 1.] * 2
+            w[y == 1.] = w[y == 1.] * self.cs_ones_rate
         elif self.cs_type == 'top':
-            for j in range(w.shape[1]):
-                v = y[:,j].argsort() + y[:,j] * 0
-                w[:,j] = np.exp((1 - v / np.nanmax(v).astype(float))*np.log(0.5) / self.cs_top_tau)
+            y_t = y if isinstance(y, torch.Tensor) else torch.from_numpy(y)
+            y_rank = rank_pct(y_t, dim=0)
+            top_frac = (2 * y_rank - 1).clamp(min=0)
+            w = 0.25 + 0.75 * top_frac.square()
+            if isinstance(y, np.ndarray):
+                w = w.numpy()
         else:
             raise KeyError(self.cs_type)
         return w

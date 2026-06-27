@@ -23,6 +23,7 @@ from src.func.metric import ic_2d , rankic_2d
 
 from .dataset import BoostInput , BoostOutput
 from .weight import BoostWeightMethod
+from .valid_metric import BoostValidMetric
 
 __all__ = ['BasicBoostModel' , 'load_xingye_data']
 
@@ -44,6 +45,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
     """
     DEFAULT_TRAIN_PARAM = {}
     DEFAULT_WEIGHT_PARAM = {}
+    DEFAULT_VALID_METRIC_PARAM : dict[str, Any] = {}
     MASK_PARAM : tuple[str, ...] = ('rank_target_size',)
     DEFAULT_CATEGORICAL_N_BINS = 3
     DEFAULT_CATEGORICAL_MAX_BINS = 10
@@ -60,16 +62,27 @@ class BasicBoostModel(ABC, Base.BoundLogger):
 
     def set_params(
         self , params : dict[str, Any] | None = None , cuda = True , seed = None , * , 
-        overrides : dict[str, Any] | None = None , **kwargs
+        boost_config : dict[str, Any] | None = None , overrides : dict[str, Any] | None = None , **kwargs
     ):
         params = params or {}
-        overrides = overrides or {}
+        boost_config = boost_config if boost_config is not None else (overrides or {})
+        param_cfg = boost_config.get('param') or {}
+        weight_cfg = boost_config.get('weight') or {}
+        valid_metric_cfg = boost_config.get('valid_metric') or {}
+
         self.train_param : dict[str,Any] = deepcopy(self.DEFAULT_TRAIN_PARAM) | {k:v for k,v in params.items() if k in self.train_param_keys}
-        self.train_param.update({k:v for k,v in overrides.items() if k in self.train_param_keys and v is not None})
-        self.weight_param : dict[str,Any] = deepcopy(self.DEFAULT_WEIGHT_PARAM) | {k:v for k,v in params.items() if k in self.weight_keys}
+        self.train_param.update({
+            k: v for k, v in param_cfg.items()
+            if k in self.train_param_keys and v is not None
+        })
+        self.weight_param : dict[str,Any] = deepcopy(self.DEFAULT_WEIGHT_PARAM) | {
+            k: v for k, v in weight_cfg.items() if k in self.weight_keys
+        }
+        self.valid_metric_param : dict[str,Any] = dict(valid_metric_cfg) if valid_metric_cfg else deepcopy(self.DEFAULT_VALID_METRIC_PARAM)
 
         self.cuda = cuda
         self.seed = seed
+        self.valid_metric : BoostValidMetric | None = None
         self.assert_param(**kwargs)
         return self
     
@@ -146,8 +159,25 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         self.fit_train_ds = train.set_data_param(n_bins = n_bins).Dataset()
         self.fit_valid_ds = valid.set_data_param(n_bins = n_bins).Dataset()
         self.fit_train_param = train_param
+        self.valid_metric = self.build_valid_metric(valid)
 
         return self
+
+    def build_valid_metric(self , valid : BoostInput | None = None) -> BoostValidMetric | None:
+        if not self.valid_metric_param:
+            return None
+        if valid is None:
+            valid = self.data.get('valid')
+        if valid is None or valid.y is None:
+            return None
+        raw_label = valid._flatten_by_date(valid.y)
+        if raw_label is None:
+            return None
+        return BoostValidMetric.from_spec(
+            self.valid_metric_param,
+            raw_label=raw_label,
+            date=self.fit_valid_ds.date,
+        )
     
     @abstractmethod
     def predict(self , x : BoostInput | Any = 'test') -> BoostOutput:
@@ -158,7 +188,8 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         model_dict = {
             'class_name' : self.__class__.__name__ ,
             'train_param' : self.train_param ,
-            'weight_param' : self.weight_param
+            'weight_param' : self.weight_param ,
+            'valid_metric_param' : self.valid_metric_param ,
         }
         return model_dict
 
@@ -170,6 +201,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         self.seed = seed
         self.train_param = model_dict['train_param']
         self.weight_param = model_dict['weight_param']
+        self.valid_metric_param = model_dict.get('valid_metric_param', {})
 
         return self
     

@@ -18,26 +18,22 @@ input:
   type: hidden # [data , hidden , factor] , specify below
 
   hidden.types: # list of hidden states , use if input_type is hidden
-    - gru@gru_day_new@0@best
-    - resnet_gru@gru_30m_new@0@best
-    - resnet_gru@gru_week_new@0@best
-    - gru@gru_dfl2_new@0@best
-    - gru@gru_dfl2cs_new@0@best
+    - gru@gru_avg@0@best
 
 train:
   boost:
     param:
-      objective: mse # null , mse , mae , rank
-    weight:
-      cs_type: top
+      objective: mae # null , mse , mae , rank
     valid_metric:
       name: global2top
       glb_multiplier: 5.0
       top_quantile: 0.05
-
+    weight:
+      cs_type: top
   dataloader.shuffle_option: static
   dataloader.train_ratio: 0.92
 
 algo:
   lgbm:
     seqlens:        [{day: 1}]
+    cs_type: top
