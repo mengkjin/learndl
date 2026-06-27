@@ -37,7 +37,7 @@ class DataModule(Base.BoundLogger):
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self.config   : ModelConfig = config or ModelConfig(stage=0)
+        self.config    : ModelConfig = config or ModelConfig(stage=0)
         self._use_data : Base.lit.DataBlockTimeFrames = use_data
 
     @classmethod
@@ -71,11 +71,29 @@ class DataModule(Base.BoundLogger):
             keys_str = str(keys)
         return f'{self.__class__.__name__}(model_name={self.config.model_name},use_data={self.use_data},datas={keys_str})'    
     
-    def load_data(self):
+    def no_need_to_load_data(self , use_data : Base.lit.DataBlockTimeFrames | None = None) -> bool:
+        use_data = use_data or self._use_data
+        if not hasattr(self , 'datas'):
+            return False
+        if self.datas.use_data == 'both' or self.datas.use_data == use_data:
+            return True
+        return False
+
+    def target_use_data(self , use_data : Base.lit.DataBlockTimeFrames | None = None) -> Base.lit.DataBlockTimeFrames:
+        use_data = use_data or self._use_data
+        if not hasattr(self , 'datas'):
+            return use_data
+        if self.datas.use_data == 'both' or self.datas.use_data == use_data:
+            return self.datas.use_data
+        return 'both'
+
+    def load_data(self , use_data : Base.lit.DataBlockTimeFrames | None = None):
         """load prepared data at training begin , only load data once in a fitting"""
+        if self.no_need_to_load_data(use_data):
+            return self
         self.datas = ModuleData.initialize(
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
-            use_data = self._use_data ,
+            use_data = self.target_use_data(use_data) ,
             factor_names = self.config.input_factor_names , 
             factor_start_dt = self.factor_start_dt , 
             factor_end_dt = self.factor_end_dt , 
@@ -160,9 +178,8 @@ class DataModule(Base.BoundLogger):
                 hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
                 
             for hd_model_date , hd_dates in hd_model_hd_dates.items():
-                with self.logger.timer(f'{hd_model} hidden_values at {hd_model_date}' , idt = 1 , enter_vb = 0):
-                    hd_dates = np.unique(hd_dates)
-                    hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
+                hd_dates = np.unique(hd_dates)
+                hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
 
     def setup(
         self, stage : Base.lit.StageAll , 
