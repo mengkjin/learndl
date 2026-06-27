@@ -144,11 +144,14 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
         with Proj.vb.temporary_vb('max'):
             if not hasattr(self , 'data_module'):
+                self.logger.stdout(f'load data for {self.config.model_name} with use_data: {use_data}')
                 self.data = DataModule(self.config , use_data).load_data() 
             elif self.data.use_data != 'both' and self.data.use_data != use_data:
                 self.logger.stdout(f'self.data.use_data: {self.data.use_data} , use_data: {use_data}')
                 self.logger.stdout(f'load data for {self.config.model_name} with use_data: both')
                 self.data = DataModule(self.config , 'both').load_data() 
+            else:
+                self.logger.stdout(f'no need to load data for {self.config.model_name}')
         return self
     
     def update_preds(self , update = True , overwrite = False , start = None , end = None) -> Base.UpdateFlag:
