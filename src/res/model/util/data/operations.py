@@ -106,6 +106,8 @@ class PrenormOperator:
 
 class DataOperator:
     """operations for data module datas"""
+    FeatureSuffixes : tuple[str,...] = ('_is_available' , '_is_missing')
+
     def __init__(self, config: ModelConfig , loader_param: DataloaderParam | None = None):
         self.config = config
         self.loader_param = loader_param or DataloaderParam()
@@ -130,7 +132,7 @@ class DataOperator:
 
     def get_seqlen_step(self , key : str | None) -> tuple[int,int]:
         """get seqlen and step for a given key"""
-        if not key:
+        if not key or key.endswith(self.FeatureSuffixes):
             return 1 , 1
         else:
             assert key in self.seq_lens and key in self.seq_steps , (key , self.seq_lens , self.seq_steps)
@@ -246,7 +248,7 @@ class DataOperator:
             elif self.config.module_type == 'boost':
                 finites : list[torch.Tensor] = []
                 for k , v in x.items():
-                    if k.endswith('_is_available'):
+                    if k.endswith(self.FeatureSuffixes):
                         continue
                     if f'{k}_is_available' in x:
                         available_tensor = x[f'{k}_is_available'][:,index1]
