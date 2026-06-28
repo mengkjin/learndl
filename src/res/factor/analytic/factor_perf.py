@@ -241,7 +241,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
     TEST_TYPE = test_type
     TASK_LIST : list[type[FactorPerfCalc]] = [
         FrontFace ,
-        # Coverage ,
+        Coverage ,
         IC_Curve , 
         # IC_Decay ,
         IC_Indus ,
@@ -250,7 +250,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         IC_Monotony ,
         Group_Return ,
         # PnL_Curve ,
-        # Style_Corr ,
+        Style_Corr ,
         # Style_Corr_Distrib ,
         # Group_Curve ,
         # Group_Decay ,
