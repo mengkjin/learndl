@@ -44,7 +44,23 @@ class BoostValidMetric:
 
     def score(self, pred: torch.Tensor | np.ndarray) -> float:
         pred_arr = self._as_numpy(pred)
+        if len(pred_arr) != len(self.raw_label):
+            raise ValueError(
+                f'pred length {len(pred_arr)} != label length {len(self.raw_label)}; '
+                'predictions must align with finite-valid rows used in BoostDataset',
+            )
         return aggregate_score(pred_arr, self.raw_label, self.date, self.spec)
+
+    @staticmethod
+    def _flat_pred_from_output(output) -> torch.Tensor | np.ndarray:
+        """Extract finite-aligned flat preds matching :class:`BoostDataset` rows."""
+        raw_pred = getattr(output, '_raw_pred', None)
+        if raw_pred is not None and int(raw_pred.numel()) == int(output.finite.sum()):
+            return raw_pred
+        pred = output.pred
+        if pred.ndim == 2:
+            return pred[output.finite]
+        return pred.reshape(-1)
 
     @property
     def metric_name(self) -> str:
@@ -62,7 +78,7 @@ class BoostValidMetric:
 
     def score_output(self, output) -> float:
         """Score from a :class:`BoostOutput` (post-fit / Optuna)."""
-        return self.score(output.pred.cpu().numpy().reshape(-1))
+        return self.score(self._flat_pred_from_output(output))
 
     def build_catboost_metric(self):
         metric = self
