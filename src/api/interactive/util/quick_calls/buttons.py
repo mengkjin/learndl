@@ -8,7 +8,7 @@ from src.api.interactive.util.quick_calls.basic import QuickCallButton
 __all__ = [
     'Reboot' , 'TestCode' , 'CheckCodeIssues' , 
     'ProjectAutoFix' ,
-    'CarryOutScheduleWorkList' , 'RebuildPreprocessedData' , 
+    'CarryOutScheduleWorkList' , 'ScheduleModel' , 'RebuildPreprocessedData' , 
     'ModelArchiveOperations' ,
     'Tensorboard' , 'OptunaDashboard' , 
 ]
@@ -94,6 +94,21 @@ class CarryOutScheduleWorkList(QuickCallButton):
         return """
             from src.api.calls.research import CarryOutScheduleWorkList
             CarryOutScheduleWorkList.go()
+        """
+
+class ScheduleModel(QuickCallButton):
+    """Button that trains a single schedule model."""
+    key = "schedule-model"
+    button_title = "▶️ Schedule"
+    icon = ":material/model_training:"
+    default_help = 'Train a single schedule model. Choose schedule and optional resume/short_test overrides.'
+    color = 'purple'
+    research = True
+
+    def script_string(self) -> str:
+        return """
+            from src.api.calls.research import ScheduleModel
+            ScheduleModel.go()
         """
 
 class RebuildPreprocessedData(QuickCallButton):

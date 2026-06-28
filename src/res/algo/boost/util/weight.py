@@ -87,8 +87,8 @@ class BoostWeightMethod:
         elif self.cs_type == 'top':
             y_t = y if isinstance(y, torch.Tensor) else torch.from_numpy(y)
             y_rank = rank_pct(y_t, dim=0)
-            top_frac = (2 * y_rank - 1).clamp(min=0)
-            w = 0.25 + 0.75 * top_frac.square()
+            top_frac = (y_rank - 0.8).clamp(min=0) / (1 - 0.8)
+            w = 0.1 + 0.9 * top_frac.square()
             if isinstance(y, np.ndarray):
                 w = w.numpy()
         else:

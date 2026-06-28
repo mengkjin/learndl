@@ -22,18 +22,19 @@ input:
     - resnet_gru@gru_30m_new@0@best
     - resnet_gru@gru_week_new@0@best
     - gru@gru_dfl2_new@0@best
-    - gru@gru_dfl2cs_new@0@best
 
 train:
   boost:
     param:
-      objective: null # null , mse , mae , rank
+      objective: mse # null , mse , mae , rank
     weight:
       cs_type: top
+      ts_type: lin
+      bm_type: null
     valid_metric:
       name: global2top
       glb_multiplier: 2.0
-      top_quantile: 0.05
+      top_quantile: 0.1
 
   dataloader.shuffle_option: static
   dataloader.train_ratio: 0.92

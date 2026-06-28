@@ -64,10 +64,10 @@ class OptionsCache:
             self.cache.update(PATH.read_json(self.cache_path))
             self._loaded = True
 
-    def get(self , key : str) -> list[str]:
+    def get(self , key : str , refresh : bool = False) -> list[str]:
         """Get the options from the cache"""
         self.ensure_load_cache()
-        if key not in self.cache:
+        if key not in self.cache or refresh:
             self.cache[key] = getattr(OptionsDefinition , key)()
             PATH.dump_json(self.cache, self.cache_path , overwrite = True)
         return self.cache[key]
@@ -97,31 +97,31 @@ class Options:
         cls.cache.update()
     
     @classmethod
-    def available_models(cls) -> list[str]:
+    def available_models(cls , refresh : bool = False) -> list[str]:
         """Get the available nn/boost models from the cache"""
-        return cls.cache.get('available_models')
+        return cls.cache.get('available_models' , refresh)
 
     @classmethod
-    def available_modules(cls) -> list[str]:
+    def available_modules(cls , refresh : bool = False) -> list[str]:
         """Get the available nn/boost modules from the cache"""
-        return cls.cache.get('available_modules')
+        return cls.cache.get('available_modules' , refresh)
 
     @classmethod
-    def available_schedules(cls) -> list[str]:
+    def available_schedules(cls , refresh : bool = False) -> list[str]:
         """Get the available schedules from the cache"""
-        return cls.cache.get('available_schedules')
+        return cls.cache.get('available_schedules' , refresh)
 
     @classmethod
-    def available_trackingports(cls) -> list[str]:
+    def available_trackingports(cls , refresh : bool = False) -> list[str]:
         """Get the available trade ports from the cache"""
-        return cls.cache.get('available_trackingports')
+        return cls.cache.get('available_trackingports' , refresh)
 
     @classmethod
-    def available_backtestports(cls) -> list[str]:
+    def available_backtestports(cls , refresh : bool = False) -> list[str]:
         """Get the available backtest ports from the cache"""
-        return cls.cache.get('available_backtestports')
+        return cls.cache.get('available_backtestports' , refresh)
 
     @classmethod
-    def available_factors(cls) -> list[str]:
+    def available_factors(cls , refresh : bool = False) -> list[str]:
         """Get the available factors from the cache"""
-        return cls.cache.get('available_factors')
+        return cls.cache.get('available_factors' , refresh)
