@@ -15,7 +15,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
-from src.proj import Base
+from src.proj import Base , Proj
 from src.func.basic import match_values
 from ..util import BasicBoostModel , BoostInput
 
@@ -99,7 +99,7 @@ class Lgbm(BasicBoostModel):
         callbacks : list[Any] = [lightgbm.record_evaluation(self.evals_result)]
         if early_stopping and early_stopping > 0:
             callbacks.append(
-                lightgbm.early_stopping(stopping_rounds=early_stopping, first_metric_only=True)
+                lightgbm.early_stopping(stopping_rounds=early_stopping, first_metric_only=True, verbose=Proj.vb.is_max_level)
             )
         feval = self.valid_metric.lgbm_feval if self.valid_metric is not None else None
         self.model : lightgbm.Booster = lightgbm.train(

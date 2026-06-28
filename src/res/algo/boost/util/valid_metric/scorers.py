@@ -92,7 +92,6 @@ def global2top_score(glb: float, top: float, spec: BoostValidMetricSpec) -> floa
         return top + glb * spec.glb_multiplier
     return top - max(0.0, spec.glb_climax - glb) * spec.glb_multiplier
 
-
 def aggregate_score(
     pred: np.ndarray,
     label: np.ndarray,
