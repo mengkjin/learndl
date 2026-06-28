@@ -19,9 +19,16 @@ def _finite_pairs(pred: np.ndarray, label: np.ndarray) -> tuple[np.ndarray, np.n
     return pred[mask], label[mask]
 
 
+def _has_variance(arr: np.ndarray) -> bool:
+    """True when ``arr`` has at least two distinct finite values."""
+    if len(arr) < 2:
+        return False
+    return bool(np.nanstd(arr) > 0)
+
+
 def rankic_group(pred: np.ndarray, label: np.ndarray) -> float:
     p, y = _finite_pairs(pred, label)
-    if len(p) < 2:
+    if len(p) < 2 or not _has_variance(p) or not _has_variance(y):
         return float('nan')
     result = spearmanr(p, y)
     corr = float(result[0])  # type: ignore[index]
@@ -30,7 +37,7 @@ def rankic_group(pred: np.ndarray, label: np.ndarray) -> float:
 
 def ic_group(pred: np.ndarray, label: np.ndarray) -> float:
     p, y = _finite_pairs(pred, label)
-    if len(p) < 2:
+    if len(p) < 2 or not _has_variance(p) or not _has_variance(y):
         return float('nan')
     result = pearsonr(p, y)
     corr = float(result[0])  # type: ignore[index]
