@@ -202,6 +202,32 @@ class DataOperator:
             new_x = new_x.squeeze(-2)
         return new_x
 
+    def model_x_input(self , x : dict[str,torch.Tensor]) -> dict[str,torch.Tensor]:
+        """
+        return model x input, the raw x for nn / factor, and add is_missing flag for each x for boost
+        """
+        if self.config.module_type == 'nn':
+            return x
+        elif self.config.module_type == 'boost':
+            available_tensors : dict[str,torch.Tensor] = {}
+            for key ,value in x.items():
+                sum_dim = tuple(range(2,value.ndim))
+                available_tensors[key] = (~value.sum(dim = sum_dim).isnan()).to(dtype = torch.float32)
+
+            available = torch.stack([v for v in available_tensors.values()], dim = -1).any(dim = -1)
+
+            for key , available_tensor in available_tensors.items():
+                available_tensor[~available] = torch.nan
+
+            new_x : dict[str,torch.Tensor] = {}
+            for key , raw_x in x.items():
+                new_x[key] = raw_x
+                new_x[f'{key}_is_available'] = available_tensors[key][:,:,None,None]
+
+            return new_x
+        else:
+            return x
+
     def effective_samples(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor ) -> torch.Tensor | None:
         """
         return effective sample position (with shape of len(index[0]) * step_len) the first 2 dims
@@ -213,14 +239,29 @@ class DataOperator:
         """
         effs : list[torch.Tensor] = []
         if x:
-            finites = torch.stack([self.finite_position(k , v , index1) for k , v in x.items()] , dim = -1)
-            eff = finites.all(dim=-1) if self.config.module_type == 'nn' else finites.any(dim=-1)
-            effs.append(eff)
-        if x and self.config.input_data_types:
-            keys = [k for k in x.keys() if k in self.config.input_data_types and not PrePros.allow_inactive(k)]
-            if keys:
-                eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
+            if self.config.module_type == 'nn':
+                finites = [self.finite_position(k , v , index1) for k , v in x.items()]
+                eff = torch.stack(finites , dim = -1).all(dim=-1)
                 effs.append(eff)
+            elif self.config.module_type == 'boost':
+                finites : list[torch.Tensor] = []
+                for k , v in x.items():
+                    if k.endswith('_is_available'):
+                        continue
+                    if f'{k}_is_available' in x:
+                        available_tensor = x[f'{k}_is_available'][:,index1]
+                        finites.append(available_tensor.eq(1).squeeze())
+                    else:
+                        finites.append(self.finite_position(k , v , index1))
+                eff = torch.stack(finites , dim = -1).any(dim=-1)
+                effs.append(eff)
+            else:
+                pass
+            if self.config.input_data_types:
+                keys = [k for k in x.keys() if k in self.config.input_data_types and not PrePros.allow_inactive(k)]
+                if keys:
+                    eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
+                    effs.append(eff)
         if y is not None:
             eff = self.finite_position(None , y, index1)
             effs.append(eff)

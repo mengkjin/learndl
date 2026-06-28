@@ -6,7 +6,7 @@ import torch
 
 from src.res.algo import AlgoModule
 from src.res.model.util import PredictorModel , BatchInput
-from src.res.model.model_module.util.data_transform import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
+from src.res.model.util.core import batch_data_to_boost_input , batch_loader_concat , batch_data_flatten_x
 
 __all__ = ['BoostPredictor']
 

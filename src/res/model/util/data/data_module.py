@@ -301,17 +301,17 @@ class DataModule(Base.BoundLogger):
         x_shapes = [x.shape[:2] for x in x_full.values()]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
-        x_to_check = x_full if self.config.module_type == 'nn' else {}
+        x_input = self.data_operator.model_x_input(x_full)
         y_to_check = self.y_std if self.is_fitting else None
 
-        eff_mask = self.data_operator.effective_samples(x_to_check , y_to_check , self.step_idx)
+        eff_mask = self.data_operator.effective_samples(x_input , y_to_check , self.step_idx)
         
-        self.display_loader_static_stats(x_full , eff_mask)
+        self.display_loader_static_stats(x_input , eff_mask)
 
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
-        self.static_dataloader(x_full , y_sampled , w_sampled , eff_mask)
+        self.static_dataloader(x_input , y_sampled , w_sampled , eff_mask)
         
         if self.config.gc_collect_each_model:
             gc.collect() 
@@ -423,6 +423,8 @@ class DataModule(Base.BoundLogger):
         """update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them"""   
         if effective is None: 
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
+        for key , value in x.items():
+            print(f'{key}: {value.shape}')
         index0, index1 = torch.arange(len(effective)) , self.step_idx
         sample_index = self.data_operator.split_sample(effective , index0 , index1)
         self.storage.del_group(self.stage)
@@ -465,11 +467,10 @@ class DataModule(Base.BoundLogger):
     ) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
-            if data[index0,index1].isnan().all():
-                self.logger.error(f'x meaningful_dates: {self.datas.x[model_data_type].meaningful_dates}')
+            if self.config.module_type == 'nn' and data[index0,index1].isnan().all():
+                self.logger.error(f'{model_data_type} meaningful_dates: {self.datas.x[model_data_type].meaningful_dates}')
                 self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
                 self.logger.error(f'seq_lens: {self.seq_lens} , seq_steps: {self.seq_steps}')
-                self.logger.error(f'early_test_dates: {self.early_test_dates}')
                 raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data)

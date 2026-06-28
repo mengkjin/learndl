@@ -209,7 +209,8 @@ class BoostInput:
     def __init__(
         self , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
         secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , feature : np.ndarray | None = None ,
-        weight_param : dict[str, Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | None = None):
+        weight_param : dict[str, Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | None = None
+    ):
         self._x = x
         self._y = y
         self._w = w

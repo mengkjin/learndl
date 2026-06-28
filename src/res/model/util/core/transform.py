@@ -9,14 +9,13 @@ import numpy as np
 from collections.abc import Iterable
 
 from src.proj import Base
-from src.res.algo.boost import BoostInput
-from src.res.model.util import BatchInput , BatchOutput
+from .batch import BatchInput , BatchOutput
 
 __all__ = [
-    'tensor_refiller' , 'batch_data_flatten_x' , 'batch_data_to_boost_input' , 'batch_x' ,
+    'batch_data_flatten_x' , 'batch_data_to_boost_input' , 
     'batch_loader_concat' , 'batch_loader_to_boost_input']
 
-def tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , target_shape : tuple):
+def _tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , target_shape : tuple):
     if values is None: 
         return None
     assert len(target_shape) in [2,3] , target_shape
@@ -26,6 +25,16 @@ def tensor_refiller(values : torch.Tensor | None , target_i0 , target_i1 , targe
     else:
         new_values[target_i0 , target_i1] = values[:]
     return new_values
+
+def _batch_x(batch_input : BatchInput , nn_to_calculate_hidden : nn.Module | None = None):
+    if nn_to_calculate_hidden is not None:
+        nn_to_calculate_hidden.eval()
+        with torch.no_grad():
+            hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
+            assert hidden is not None , f'hidden must not be none when using BoostModel'
+        return hidden.detach()
+    else:
+        return batch_input.x
 
 def batch_data_flatten_x(batch_input : BatchInput):
     if isinstance(batch_input.x , torch.Tensor):
@@ -40,6 +49,7 @@ def batch_data_to_boost_input(
     date : Base.alias.DateType = None , 
     nn_to_calculate_hidden : nn.Module | None = None
 ):
+    from src.res.algo.boost import BoostInput 
     if nn_to_calculate_hidden is not None:
         hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
         assert hidden is not None , f'hidden must not be none when using BoostModel'
@@ -51,30 +61,20 @@ def batch_data_to_boost_input(
     secid_i , secid_j = np.unique(ii[:,0].numpy() , return_inverse=True)
     date_i  , date_j  = np.unique(ii[:,1].numpy() , return_inverse=True)
 
-    xx_values = tensor_refiller(xx , secid_j , date_j , (len(secid_i) , len(date_i) , xx.shape[-1]))
-    yy_values = tensor_refiller(batch_input.y , secid_j , date_j , (len(secid_i) , len(date_i)))
-    ww_values = tensor_refiller(batch_input.w , secid_j , date_j , (len(secid_i) , len(date_i)))
+    xx_values = _tensor_refiller(xx , secid_j , date_j , (len(secid_i) , len(date_i) , xx.shape[-1]))
+    yy_values = _tensor_refiller(batch_input.y , secid_j , date_j , (len(secid_i) , len(date_i)))
+    ww_values = _tensor_refiller(batch_input.w , secid_j , date_j , (len(secid_i) , len(date_i)))
 
     assert xx_values is not None , f'xx_values must not be none'
     secid = Base.ensure_secid(secid,[])[secid_i] if secid is not None else None
     date  = Base.ensure_date(date,[])[date_i]   if date  is not None else None
 
     return BoostInput.from_tensor(xx_values , yy_values , ww_values , secid , date)
-
-def batch_x(batch_input : BatchInput , nn_to_calculate_hidden : nn.Module | None = None):
-    if nn_to_calculate_hidden is not None:
-        nn_to_calculate_hidden.eval()
-        with torch.no_grad():
-            hidden : torch.Tensor = BatchOutput(nn_to_calculate_hidden(batch_input.x)).other['hidden']
-            assert hidden is not None , f'hidden must not be none when using BoostModel'
-        return hidden.detach()
-    else:
-        return batch_input.x
     
 def batch_loader_concat(batch_loader : Iterable[BatchInput] , nn_to_calculate_hidden : nn.Module | None = None):
     new_batchs : list[BatchInput] = []
     for b in batch_loader:
-        new_batch_data = BatchInput(batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.eff , b.y_date , b.y_secid)
+        new_batch_data = BatchInput(_batch_x(b , nn_to_calculate_hidden) , b.y , b.w , b.i , b.eff , b.y_date , b.y_secid)
         new_batchs.append(new_batch_data.cpu())
     return BatchInput.concat(*new_batchs)
 
