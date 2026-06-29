@@ -32,15 +32,14 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
     START_DATE = 20050101
     DB_SRC = 'labels_ts'
 
-    LABEL_TYPES : tuple[tuple[int,bool,PriceType],...] = (
-        (5 , False , 'close') , 
-        (10 , False , 'close') , 
-        (20 , False , 'close') , 
-        (5 , True , 'close') , 
-        (10 , True , 'close') , 
-        (20 , True , 'close') , 
-        (3 , True , 'open') , 
-        (3 , True , 'vwap')
+    LABEL_TYPES : tuple[tuple[int,bool],...] = (
+        (5 , False) , 
+        (10 , False) , 
+        (20 , False) , 
+        (5 , True) , 
+        (10 , True) , 
+        (20 , True) , 
+        (3 , True) , 
     )
 
     @classmethod
@@ -49,7 +48,7 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
         start = max(start or cls.START_DATE , cls.START_DATE)
         end = end or CALENDAR.updated()
         flags = Base.UpdateFlagList()
-        for days , lag1 , price_type in cls.LABEL_TYPES:
+        for days , lag1 in cls.LABEL_TYPES:
             label_name = f'ret{days}' + ('_lag' if lag1 else '')
             sub_start = CALENDAR.td(start , - days - lag1 + 1).as_int()
             sub_end = CALENDAR.td(CALENDAR.updated() , - days - lag1).as_int()
@@ -62,19 +61,31 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
                 continue
 
             for date in target_dates:
-                cls.update_one(date , days , lag1 , price_type , label_name)
+                cls.update_one(date , days , lag1 , label_name)
 
             cls.logger.success(f'Update {cls.DB_SRC}/{label_name} at {Dates(target_dates)}' , idt = 1 , vb = 1)
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 
     @classmethod
-    def update_one(cls , date : int , days : int , lag1 : bool , price_type : PriceType , label_name : str):
+    def update_one(cls , date : int , days : int , lag1 : bool , label_name : str):
         """Compute and save labels for a single ``date``."""
-        DB.save(calc_classic_labels(date , days , lag1 , price_type) , cls.DB_SRC , label_name , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
+        DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
+def get_period_ret(d0 : int , d1 : int , price_type : PriceType = 'close') -> pd.DataFrame | None:
+    """Get the period return for a single date."""
+    q1 = TRADE.get_trd(d1)
+    if q1.empty: 
+        return
+    q1 = q1.rename(columns={'adjfactor':'adj1' , price_type:'p1'})[['secid','adj1','p1']]
+    q0 = TRADE.get_trd(d0).rename(columns={'adjfactor':'adj0' , price_type:'p0'})[['secid','adj0','p0']]
+    ret = q1.merge(q0 , how = 'left' , on = 'secid').set_index('secid')
+    label_ret = (ret['p1'] * ret['adj1'].fillna(1) / ret['p0'] / ret['adj0'].fillna(1) - 1).rename(f'ret').to_frame()
+    return label_ret
 
-def calc_classic_labels(date : int , days : int , lag1 : bool , price_type : PriceType = 'close') -> pd.DataFrame | None:
+def calc_classic_labels(
+    date : int , days : int , lag1 : bool
+) -> pd.DataFrame | None:
     """
     Compute forward return labels for a single date.
 
@@ -95,21 +106,28 @@ def calc_classic_labels(date : int , days : int , lag1 : bool , price_type : Pri
         DataFrame with columns ``secid``, ``rtn_lag{lag1}_{days}``,
         ``res_lag{lag1}_{days}``.  Returns None if data is unavailable.
     """
-    assert price_type == 'close' or lag1 , f'vwap and open price type require lag1'
-    d0 = CALENDAR.td(date) + lag1
-    d1 = CALENDAR.td(d0 , days)
+    assert days >=5 and lag1, f'for short term labels ({days} days) , lag1 must be True'
+    
+    d0 = (CALENDAR.td(date) + lag1).as_int()
+    d1 = CALENDAR.td(d0 , days).as_int()
 
-    q1 = TRADE.get_trd(d1)
-    res1 = RISK.get_res(d1)
-    if q1.empty or res1.empty: 
-        return
-
-    q1 = q1.rename(columns={'adjfactor':'adj1' , price_type:'cp1'})[['secid','adj1','cp1']]
-    q0 = TRADE.get_trd(d0).rename(columns={'adjfactor':'adj0' , price_type:'cp0'})[['secid','adj0','cp0']]
-
-    ret = q1.merge(q0 , how = 'left' , on = 'secid').set_index('secid')
-    label_ret = (ret['cp1'] * ret['adj1'].fillna(1) / ret['cp0'] / ret['adj0'].fillna(1) - 1).rename(f'rtn_lag{int(lag1)}_{days}')
-    label_res = RISK.get_exret(d0 , int(d1)).sum().rename(f'res_lag{int(lag1)}_{days}')
-
-    label = pd.merge(label_ret , label_res , on = 'secid').reset_index()
+    if days >= 5:
+        label_ret = get_period_ret(d0 , d1 , 'close')
+        if label_ret is None: 
+            return
+        label_ret = label_ret.rename(columns={'ret':f'rtn_lag{int(lag1)}_{days}'})
+        res1 = RISK.get_res(d1)
+        if res1.empty: 
+            return
+        label_res = RISK.get_exret(d0 , d1).sum().rename(f'res_lag{int(lag1)}_{days}')
+        label = pd.merge(label_ret , label_res , on = 'secid').reset_index()
+    else:
+        label_close = get_period_ret(d0 , d1 , 'close')
+        label_open = get_period_ret(d0 , d1 , 'open')
+        label_vwap = get_period_ret(d0 , d1 , 'vwap')
+        if label_close is None or label_open is None or label_vwap is None: 
+            return
+        label = label_close.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}'}).\
+            merge(label_open.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}_open'}) , on = 'secid').\
+            merge(label_vwap.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}_vwap'}) , on = 'secid').reset_index()
     return label

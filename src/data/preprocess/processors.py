@@ -81,7 +81,7 @@ class PrePro_y(TradePreProcessor):
 
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
-            'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag' , 'ret5_lag' , 'ret3_open'], **kwargs) ,
+            'y' : BlockLoader('labels_ts', ['ret10_lag', 'ret20_lag' , 'ret5_lag' , 'ret3_lag'], **kwargs) ,
             'risk' : BlockLoader('models', 'tushare_cne5_exp', [*Const.Factor.RISK.indus, 'size'], **kwargs)}
     def final_feat(self):
         """All features are kept (return labels + neutralised variants)."""
@@ -95,7 +95,7 @@ class PrePro_y(TradePreProcessor):
         indus_size = model_exp.values[...,:]
         x = torch.Tensor(indus_size).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
-            if lb_name.startswith(('rtn10' , 'rtn20' , 'rtn5')):
+            if lb_name.startswith('rtn') and not lb_name.endswith(('_3' , '_open' , '_vwap')):
                 y_raw = data_block.values[...,i_feat].squeeze(2)
                 y_std = neutralize_2d(y_raw , x , dim = 0)
                 assert y_std is not None , 'y_std is None'
