@@ -106,7 +106,7 @@ def calc_classic_labels(
         DataFrame with columns ``secid``, ``rtn_lag{lag1}_{days}``,
         ``res_lag{lag1}_{days}``.  Returns None if data is unavailable.
     """
-    assert days >=5 and lag1, f'for short term labels ({days} days) , lag1 must be True'
+    assert days >= 5 or lag1, f'for short term labels ({days} days) , lag1 must be True'
     
     d0 = (CALENDAR.td(date) + lag1).as_int()
     d1 = CALENDAR.td(d0 , days).as_int()
