@@ -21,6 +21,9 @@ local function wezterm_binary()
   return wezterm.executable_dir .. "/wezterm"
 end
 
+-- Pane titles set from Lua (WezTerm has no pane:set_user_var API).
+local custom_pane_titles = {}
+
 local function build_merge_tab_choices(mux_window)
   local choices = {}
   for _, info in ipairs(mux_window:tabs_with_info()) do
@@ -92,51 +95,67 @@ config.default_workspace = "main"
 config.use_fancy_tab_bar = true
 config.tab_bar_at_bottom = false
 config.status_update_interval = 200
+
+local function basename(s)
+  return string.gsub(s, "(.*[/\\])(.*)", "%2")
+end
+
+local function build_right_status(window, pane)
+  local cwd = pane:get_current_working_dir()
+  if cwd then
+    if type(cwd) == "userdata" then
+      cwd = basename(cwd.file_path)
+    else
+      cwd = basename(cwd)
+    end
+  else
+    cwd = ""
+  end
+
+  local cmd = pane:get_foreground_process_name()
+  cmd = cmd and basename(cmd) or ""
+
+  local status = {}
+
+  if window:leader_is_active() then
+    table.insert(status, { Attribute = { Intensity = "Bold" } })
+    table.insert(status, { Background = { Color = "#e0af68" } })
+    table.insert(status, { Foreground = { Color = "#1a1b26" } })
+    table.insert(status, { Text = " ⚡ LEADER WAITING " })
+    table.insert(status, "ResetAttributes")
+    table.insert(status, { Text = " | " })
+  end
+
+  table.insert(status, { Text = wezterm.nerdfonts.md_folder .. "  " .. cwd })
+  table.insert(status, { Text = " | " })
+  table.insert(status, { Foreground = { Color = "#e0af68" } })
+  table.insert(status, { Text = wezterm.nerdfonts.fa_code .. "  " .. cmd })
+  table.insert(status, "ResetAttributes")
+  table.insert(status, { Text = "  " })
+
+  return wezterm.format(status)
+end
+
 wezterm.on("update-status", function(window, pane)
-	local basename = function(s)
-		return string.gsub(s, "(.*[/\\])(.*)", "%2")
-	end
+	window:set_right_status(build_right_status(window, pane))
+end)
 
-	-- Current working directory
-	local cwd = pane:get_current_working_dir()
-	if cwd then
-		if type(cwd) == "userdata" then
-			cwd = basename(cwd.file_path)
-		else
-			cwd = basename(cwd)
-		end
-	else
-		cwd = ""
-	end
+wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_width)
+  local pane_id = tab.active_pane.pane_id
+  local pane_title = tab.active_pane.title
 
-	-- Current command
-	local cmd = pane:get_foreground_process_name()
-	cmd = cmd and basename(cmd) or ""
+  local user_title = custom_pane_titles[pane_id]
+    or tab.active_pane.user_vars.custom_pane_title
+  if user_title ~= nil and #user_title > 0 then
+    pane_title = user_title
+  end
 
-	-- Time
-	local time = wezterm.strftime("%H:%M")
+  local tab_title = tab.tab_title
+  if tab_title ~= nil and #tab_title > 0 then
+    pane_title = tab_title
+  end
 
-	local status = {}
-
-	if window:leader_is_active() then
-		table.insert(status, { Attribute = { Intensity = "Bold" } })
-		table.insert(status, { Background = { Color = "#e0af68" } })
-		table.insert(status, { Foreground = { Color = "#1a1b26" } })
-		table.insert(status, { Text = " ⚡ LEADER WAITING " })
-		table.insert(status, "ResetAttributes")
-		table.insert(status, { Text = " | " })
-	end
-
-	table.insert(status, { Text = wezterm.nerdfonts.md_folder .. "  " .. cwd })
-	table.insert(status, { Text = " | " })
-	table.insert(status, { Foreground = { Color = "#e0af68" } })
-	table.insert(status, { Text = wezterm.nerdfonts.fa_code .. "  " .. cmd })
-	table.insert(status, "ResetAttributes")
-	-- table.insert(status, { Text = " | " })
-	-- table.insert(status, { Text = wezterm.nerdfonts.md_clock .. "  " .. time })
-	table.insert(status, { Text = "  " })
-
-	window:set_right_status(wezterm.format(status))
+  return string.format(" [%d] %s ", pane_id, pane_title)
 end)
 
 config.keys = {
@@ -289,6 +308,19 @@ config.keys = {
           end
         end
       ),
+    },
+  },
+  {
+    key = 'r',
+    mods = 'LEADER',
+    action = wezterm.action.PromptInputLine {
+      description = 'Enter new pane title:',
+      action = wezterm.action_callback(function(window, pane, line)
+        if line then
+          custom_pane_titles[pane:pane_id()] = line
+          window:set_right_status(build_right_status(window, pane))
+        end
+      end),
     },
   },
 }

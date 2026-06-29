@@ -157,29 +157,31 @@ class DataModule(Base.BoundLogger):
             return
         from src.res.model.model_module.application import ArchivedPredictorModel
         self.logger.stdout(f'Ensuring hidden values for {self.input_keys_hidden}')
-        for hd_key in self.input_keys_hidden:
-            hd_model = ArchivedPredictorModel.from_model_str(hd_key)
-            assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
-            hd_model_hd_dates : dict[int,list[int]] = defaultdict(list)
 
-            for model_date in self.model_date_list:
-                assert hd_model.model_dates[0] <= model_date , \
-                    f'hidden model {hd_key} has no model date before {model_date}'
-                hd_model_date = hd_model.model_dates[hd_model.model_dates <= model_date][-1]
+        with Proj.vb.temporary_vb('max'):
+            for hd_key in self.input_keys_hidden:
+                hd_model = ArchivedPredictorModel.from_model_str(hd_key)
+                assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
+                hd_model_hd_dates : dict[int,list[int]] = defaultdict(list)
 
-                # fit dates
-                model_date_col = (self.datas.date < model_date).sum()
-                d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - 1)
-                d1 = max(0 , model_date_col - self.config.skip_horizon)
-                hd_model_hd_dates[hd_model_date].extend(self.datas.date[d0:d1][::self.config.interval].tolist())
-                
-                # test dates
-                next_model_date = self.next_model_date(model_date)
-                hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
-                
-            for hd_model_date , hd_dates in hd_model_hd_dates.items():
-                hd_dates = np.unique(hd_dates)
-                hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
+                for model_date in self.model_date_list:
+                    assert hd_model.model_dates[0] <= model_date , \
+                        f'hidden model {hd_key} has no model date before {model_date}'
+                    hd_model_date = hd_model.model_dates[hd_model.model_dates <= model_date][-1]
+
+                    # fit dates
+                    model_date_col = (self.datas.date < model_date).sum()
+                    d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - 1)
+                    d1 = max(0 , model_date_col - self.config.skip_horizon)
+                    hd_model_hd_dates[hd_model_date].extend(self.datas.date[d0:d1][::self.config.interval].tolist())
+                    
+                    # test dates
+                    next_model_date = self.next_model_date(model_date)
+                    hd_model_hd_dates[hd_model_date].extend(self.test_full_dates[(self.test_full_dates <= next_model_date) & (self.test_full_dates >= model_date)].tolist())
+                    
+                for hd_model_date , hd_dates in hd_model_hd_dates.items():
+                    hd_dates = np.unique(hd_dates)
+                    hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
 
     def setup(
         self, stage : Base.lit.StageAll , 
