@@ -14,13 +14,11 @@ from __future__ import annotations
 
 import torch
 import numpy as np
-from dataclasses import dataclass
-from functools import cached_property
 from typing import Any
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
-from src.proj import Logger , Base
+from src.proj import Base
 from src.func.tensor import nanmedian , standardize , rank_pct
 from src.data import DataBlockNorm 
 from src.data.preprocess import PrePros
@@ -28,81 +26,7 @@ from src.res.model.util.config import ModelConfig
 
 from .batch_input_loader import DataloaderParam
 
-__all__ = ['PrenormOperator' , 'DataOperator']
-
-@dataclass(slots=True)
-class SingleDataPrenorm:
-    name : str
-    divlast  : bool = False
-    histnorm : bool = False
-    channelnorm : bool = False
-            
-    def __bool__(self):
-        return self.divlast or self.histnorm or self.channelnorm
-
-    def __call__(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None) -> torch.Tensor:
-        return self.prenorm(x , histnorm)
-
-    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None) -> torch.Tensor:
-        """
-        return panel-normalized x
-        1.divlast: divide by the last value, get seq-mormalized x
-        2.histnorm: normalized by history avg and std
-        3.channelnorm: normalized by channel avg
-        """
-        assert not ((self.histnorm and histnorm is not None) and (self.channelnorm and x.ndim > 2)) , f'histnorm and channelnorm cannot be used together'
-        if self.divlast and x.shape[-2] > 1:
-            x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if self.histnorm and histnorm is not None:
-            x = x - histnorm.avg[-x.shape[-2]:]
-            x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
-            if self.divlast and x.shape[-2] > 1:
-                x[:,-1] = 0
-        if self.channelnorm and x.ndim > 2:
-            norm_dim = tuple(range(1 , x.ndim - 1))
-            x = x / (x.mean(dim = norm_dim, keepdim = True).abs() + 1e-6) - 1
-        return x
-
-    @classmethod
-    def from_input(cls, name : str , prenorm_method: dict[str, Any] | None = None):
-        prenorm_method = prenorm_method or {}
-        return cls(
-            name = name ,
-            divlast = prenorm_method.get('divlast'  , False) and (name in DataBlockNorm.DIVLAST) ,
-            histnorm = prenorm_method.get('histnorm' , False) and (name in DataBlockNorm.HISTNORM) ,
-            channelnorm = prenorm_method.get('channelnorm' , False)
-        )
-
-class PrenormOperator:
-    """prenorm operator for data module datas"""
-    def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
-        self.config = config
-        self.histnorms = histnorms or {}
-        
-        self.prenorms = {name: SingleDataPrenorm.from_input(name, self.config.input_data_prenorm.get(name)) for name in self.input_keys}
-        [Logger.success(f'{name} {prenorm} initialized' , vb_level = 'max') for name , prenorm in self.prenorms.items() if prenorm]
-
-    def __repr__(self):
-        return f'{self.__class__.__name__}(prenorms={self.prenorms})'
-
-    def __getitem__(self , key : str) -> SingleDataPrenorm:
-        return self.prenorms.get(key , self.empty_prenormer)
-
-    @cached_property
-    def empty_prenormer(self) -> SingleDataPrenorm:
-        return SingleDataPrenorm(name = 'empty')
-
-    @property
-    def input_keys(self) -> list[str]:
-        return self.config.input_data_types
-
-    def prenorm(self , key : str , x : torch.Tensor) -> torch.Tensor:
-        """
-        return panel_normalized x
-        1.divlast: divide by the last value, get seq-mormalized x
-        2.histnorm: normalized by history avg and std
-        """
-        return self[key](x , self.histnorms.get(key , None))
+__all__ = ['DataOperator']
 
 class DataOperator:
     """operations for data module datas"""

@@ -166,6 +166,25 @@ class PrePro_30m(TradePreProcessor):
                                               vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
+
+class PrePro_30mcont(TradePreProcessor):
+    """30-minute bar preprocessor (key: ``'30m'``).  only normalize volume."""
+    AllowInactive : bool = False
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
+            'day' : BlockLoader('trade_ts', 'day', ['volume', 'turn_fl'], **kwargs)}
+
+    def process(self , blocks): 
+        data_block = blocks['30m']
+        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
+        
+        data_block = data_block.adjust_volume(
+            multiply = db_day.loc(feature = 'turn_fl') , 
+            divide = db_day.loc(feature = 'volume') + 1e-6, 
+            vol_feat = 'volume')
+        data_block = data_block.rename_feature({'volume':'turn_fl'})
+        return data_block
     
 class PrePro_60m(TradePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""

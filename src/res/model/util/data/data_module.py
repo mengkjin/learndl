@@ -22,7 +22,8 @@ from src.res.model.util.trainer import BaseTrainer
 from .dynamic_buffer import DynamicDataBuffer
 from .batch_input_loader import DataloaderParam , BatchInputLoader
 from .data_callback import DataCallbacks
-from .operations import PrenormOperator , DataOperator
+from .operations import DataOperator
+from .prenorm import PrenormOperator
 
 __all__ = ['DataModule']
 
@@ -474,8 +475,9 @@ class DataModule(Base.BoundLogger):
                 self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
                 self.logger.error(f'seq_lens: {self.seq_lens} , seq_steps: {self.seq_steps}')
                 raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
+            features = self.datas.x[model_data_type].feature if model_data_type in self.datas.x else None
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
-            data = self.prenorm_operator.prenorm(model_data_type , data)
+            data = self.prenorm_operator.prenorm(model_data_type , data , features)
             datas.append(data)
         return datas
 
