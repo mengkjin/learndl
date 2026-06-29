@@ -169,8 +169,6 @@ class DataOperator:
                 finites = [self.finite_position(k , v , index1) for k , v in x.items()]
                 eff = torch.stack(finites , dim = -1).all(dim=-1)
                 effs.append(eff)
-                print(eff.shape)
-                print(eff[:5])
             elif self.config.module_type == 'boost':
                 finites : list[torch.Tensor] = []
                 for k , v in x.items():
@@ -193,8 +191,6 @@ class DataOperator:
         if y is not None:
             eff = self.finite_position(None , y, index1)
             effs.append(eff)
-            print(eff.shape)
-            print(eff[:5])
         if effs:
             return torch.stack(effs , dim = -1).all(dim = -1)
         else:

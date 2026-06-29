@@ -390,7 +390,7 @@ class Logger:
             Proj.log_writer.write(' '.join([str(s) for s in args]) + '\n')
 
     @classmethod
-    def divider(cls , width : int = 140 , char : SeperatorChar = '-' , msg : str | None = None , 
+    def divider(cls , width : int = 132 , char : SeperatorChar = '-' , msg : str | None = None , 
                 color : str | None = None , bold : bool = True , vb_level : VerbosityLevel = 0 , **kwargs):
         """Divider mesge , use stdout"""
         if msg is None:

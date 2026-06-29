@@ -81,7 +81,6 @@ class SpecialDataPrenorm:
         price_idx = torch.tensor([idx for idx , feat in enumerate(features) if feat in ('close' , 'high' , 'low' , 'open' , 'vwap')])
         open_idx = torch.tensor([idx for idx , feat in enumerate(features) if feat == 'open'])
         x[...,price_idx] = x[...,price_idx] / (x[...,open_idx][:,:1] + 1e-6)
-        print(x.shape)
         return x
 
 class PrenormOperator:

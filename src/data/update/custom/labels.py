@@ -127,7 +127,7 @@ def calc_classic_labels(
         label_vwap = get_period_ret(d0 , d1 , 'vwap')
         if label_close is None or label_open is None or label_vwap is None: 
             return
-        label = label_close.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}'}).\
-            merge(label_open.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}_open'}) , on = 'secid').\
-            merge(label_vwap.rename(columns={'ret':f'ret_lag{int(lag1)}_{days}_vwap'}) , on = 'secid').reset_index()
+        label = label_close.rename(columns={'ret':f'rtn_lag{int(lag1)}_{days}'}).\
+            merge(label_open.rename(columns={'ret':f'rtn_lag{int(lag1)}_{days}_open'}) , on = 'secid').\
+            merge(label_vwap.rename(columns={'ret':f'rtn_lag{int(lag1)}_{days}_vwap'}) , on = 'secid').reset_index()
     return label
