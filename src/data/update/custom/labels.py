@@ -39,8 +39,6 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
         (5 , True , 'close') , 
         (10 , True , 'close') , 
         (20 , True , 'close') , 
-        (3 , False , 'open') , 
-        (3 , False , 'vwap') , 
         (3 , True , 'open') , 
         (3 , True , 'vwap')
     )
