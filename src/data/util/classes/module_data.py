@@ -177,6 +177,9 @@ class ModuleData(Base.BoundLogger):
     @cached_property
     def y(self) -> DataBlock:
         """The label block, feature-aligned to ``y_labels``."""
+        if self.y_labels is not None:
+            assert all(label in self.blocks["y"].feature for label in self.y_labels) , \
+                f'{self.y_labels} is not in {self.blocks["y"].feature}'
         return self.blocks["y"].align_feature(self.y_labels)
 
     @property
