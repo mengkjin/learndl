@@ -260,6 +260,8 @@ class ModuleData(Base.BoundLogger):
         self._load_norms()
         self._load_factor()
         DataBlock.blocks_ffill(self.blocks, exclude=["y"])
+        print(self.y.values.shape)
+        print(self.y.values[0,-100:-95,0])
         self.loaded = True
         return self
 
