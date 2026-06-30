@@ -13,7 +13,7 @@ from typing import cast
 from collections.abc import Callable
 
 from src.proj import MACHINE , PATH , Logger , Base
-from src.proj.util.functional.ask import AskFor
+from src.proj.util.cli import AskFor
 from src.api.util.direct_call import DirectCall
 
 __all__ = [
@@ -247,10 +247,25 @@ class CheckCodeIssues(DirectCall):
         options = [
             'All checks in one' , 
             'Run ruff pyright check' , 
-            *[checkers.__doc__ for checkers in checkers] ,
+            *[checker.__doc__ for checker in checkers] ,
             'Non Checker: Dependency Version Matching'
         ]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What code issues to check?')
+        option_help = {
+            'All checks in one': 'Run every _check_* scanner plus ruff/pyright.',
+            'Run ruff pyright check': 'Lint and type-check src/ and scripts/ only.',
+            'Non Checker: Dependency Version Matching': 'Compare pyproject pins with installed package versions.',
+        }
+        option_help.update({
+            checker.__doc__: checker.__doc__
+            for checker in checkers
+            if checker.__doc__
+        })
+        flag = AskFor.Options(
+            options , confirm = False , multiple = False ,
+            title = f'What code issues to check?',
+            help_description='Static scans for style, typing, and project-specific code hygiene.',
+            option_help=option_help,
+        )
         if flag.result is None:
             return flag
         selection = options.index(flag.result)

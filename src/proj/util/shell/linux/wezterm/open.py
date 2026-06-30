@@ -165,6 +165,7 @@ class WezTermOpener(BasicOpener):
 
         Discovers the live GUI socket via ``discover_wezterm_gui_socket``; uses ``wezterm start``
         for a cold start when no socket is found. ``new_on="tab"`` spawns in the current window;
+        ``"pane"`` splits the current pane to the right;
         ``"window"`` / ``"workspace"`` opens a new WezTerm window.
         """
         assert self._available, f"{self.__class__.__name__} is not available"
@@ -194,6 +195,12 @@ class WezTermOpener(BasicOpener):
         match new_on:
             case "window" | "workspace":
                 args = ["wezterm", "cli", "spawn", "--new-window"]
+            case "pane":
+                activate_wezterm()
+                args = ["wezterm", "cli", "split-pane", "--right"]
+            case "pane_vertical":
+                activate_wezterm()
+                args = ["wezterm", "cli", "split-pane", "--bottom"]
             case "tab":
                 activate_wezterm()
                 args = ["wezterm", "cli", "spawn"]
@@ -203,5 +210,5 @@ class WezTermOpener(BasicOpener):
             args.extend(["--cwd", cwd])
         args.extend(["--", "bash", "-lc", command])
         process.popen_detached(args, env=spawn_env)
-        if new_on == "tab":
+        if new_on in ("tab", "pane", "pane_vertical"):
             bring_wezterm_to_foreground_soon()

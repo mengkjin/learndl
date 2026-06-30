@@ -426,8 +426,6 @@ class DataModule(Base.BoundLogger):
         """update loader_dict , save batch_input to f'PATH.batch.joinpath(f'{set_key}.{bnum}.pt')' and later load them"""   
         if effective is None: 
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
-        for key , value in x.items():
-            print(f'{key}: {value.shape}')
         index0, index1 = torch.arange(len(effective)) , self.step_idx
         sample_index = self.data_operator.split_sample(effective , index0 , index1)
         self.storage.del_group(self.stage)

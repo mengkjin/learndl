@@ -14,6 +14,9 @@ local wezterm = require("wezterm")
 local act = wezterm.action
 local config = {}
 
+-- CMD on macOS, CTRL on Linux / Windows
+local PRIMARY_MOD = wezterm.target_triple:find("darwin") and "CMD" or "CTRL"
+
 local function wezterm_binary()
   if wezterm.target_triple:find("windows") then
     return wezterm.executable_dir .. "\\wezterm.exe"
@@ -39,6 +42,98 @@ local function build_merge_tab_choices(mux_window)
   end
   return choices
 end
+
+local function merge_tab_as_vertical_split(window, pane)
+  local mux_window = window:mux_window()
+  if not mux_window then
+    return
+  end
+
+  local choices = build_merge_tab_choices(mux_window)
+  if #choices == 0 then
+    window:toast_notification('merge tab', 'No other tabs to merge', nil, 3000)
+    return
+  end
+
+  window:perform_action(
+    act.InputSelector {
+      title = "Select Tab to Convert into a Split Pane",
+      fuzzy = true,
+      choices = choices,
+      action = wezterm.action_callback(function(_, inner_pane, id, _)
+        if id then
+          wezterm.run_child_process {
+            wezterm_binary(),
+            'cli', 'split-pane',
+            '--move-pane-id', id,
+            '--pane-id', tostring(inner_pane:pane_id()),
+          }
+        end
+      end),
+    },
+    pane
+  )
+end
+
+local function merge_tab_as_horizontal_split(window, pane)
+  local mux_window = window:mux_window()
+  if not mux_window then
+    return
+  end
+
+  local choices = build_merge_tab_choices(mux_window)
+  if #choices == 0 then
+    window:toast_notification('merge tab', 'No other tabs to merge', nil, 3000)
+    return
+  end
+
+  window:perform_action(
+    act.InputSelector {
+      title = "Select Tab to Convert into a Split Pane",
+      fuzzy = true,
+      choices = choices,
+      action = wezterm.action_callback(function(_, inner_pane, id, _)
+        if id then
+          wezterm.run_child_process {
+            wezterm_binary(),
+            'cli', 'split-pane', '--horizontal',
+            '--move-pane-id', id,
+            '--pane-id', tostring(inner_pane:pane_id()),
+          }
+        end
+      end),
+    },
+    pane
+  )
+end
+
+local LEADER_HINT = 'Ctrl+A, then'
+local PRIMARY_LABEL = PRIMARY_MOD == 'CMD' and 'Cmd' or 'Ctrl'
+
+local action_close_pane = act.CloseCurrentPane { confirm = true }
+local action_split_right = act.SplitVertical { domain = 'CurrentPaneDomain' }
+local action_split_down = act.SplitHorizontal { domain = 'CurrentPaneDomain' }
+local action_spawn_tab = act.SpawnTab 'CurrentPaneDomain'
+local action_swap_pane = act.PaneSelect { mode = 'SwapWithActive' }
+local action_rename_tab = act.PromptInputLine {
+  description = 'Enter new name for tab',
+  action = wezterm.action_callback(
+    function(window, _, line)
+      if line then
+        window:active_tab():set_title(line)
+      end
+    end
+  ),
+}
+local action_rename_pane = act.PromptInputLine {
+  description = 'Enter new pane title:',
+  action = wezterm.action_callback(function(window, pane, line)
+    if line then
+      custom_pane_titles[pane:pane_id()] = line
+      window:set_right_status(build_right_status(window, pane))
+    end
+  end),
+}
 
 -- Use config builder object if possible
 if wezterm.config_builder then
@@ -158,172 +253,187 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
   return string.format(" [%d] %s ", pane_id, pane_title)
 end)
 
-config.keys = {
-  -- Windows / Linux
-  -- Move cursor word-by-word (Left / Right)
-  { key = 'LeftArrow', mods = 'CTRL', action = act.SendString '\x1bb' },
-  { key = 'RightArrow', mods = 'CTRL', action = act.SendString '\x1bf' },
-  -- Move to the START / END of the line (Maps Alt + LeftArrow to send Escape + b)
-  { key = 'a', mods = 'ALT', action = act.SendString '\x1bb' },
-  { key = 'e', mods = 'ALT', action = act.SendString '\x1bf' },
-  -- Delete a WORD backwards (Maps Alt + Backspace to send Escape + Backspace)
-  { key = 'w', mods = 'ALT', action = act.SendString '\x1b\x7f' },
-  -- Clear screen and discard the scrollback buffer 
-  { key = 'k', mods = 'CTRL', action = act.ClearScrollback 'ScrollbackAndViewport' },
-  
-  -- MacOS
-  -- Move cursor word-by-word (Left / Right)
-  { key = 'LeftArrow', mods = 'OPT', action = act.SendKey { key = 'b', mods = 'ALT' } },
-  { key = 'RightArrow', mods = 'OPT', action = act.SendKey { key = 'f', mods = 'ALT' } },
-  -- Clear screen and scrollback buffer using Command + K
-  { key = 'k', mods = 'CMD', action = act.ClearScrollback 'ScrollbackAndViewport' },
+local keys = {}
 
-  -- Spawn a new tab
-  {
-    key = 't',
-    mods = 'LEADER',
-    action = wezterm.action.SpawnTab 'CurrentPaneDomain',
-  },
-  -- Split pane horizontally
-  {
-    key = '"',
-    mods = 'LEADER|SHIFT',
-    action = wezterm.action.SplitHorizontal { domain = 'CurrentPaneDomain' },
-  },
-  -- Split pane vertically
-  {
-    key = '%',
-    mods = 'LEADER|SHIFT',
-    action = wezterm.action.SplitVertical { domain = 'CurrentPaneDomain' },
-  },
-  -- Navigate between panes
-  {
-    key = 'j',
-    mods = 'LEADER',
-    action = wezterm.action.ActivatePaneDirection 'Left',
-  },
-  {
-    key = 'l',
-    mods = 'LEADER',
-    action = wezterm.action.ActivatePaneDirection 'Right',
-  },
-  {
-    key = 'i',
-    mods = 'LEADER',
-    action = wezterm.action.ActivatePaneDirection 'Up',
-  },
-  {
-    key = 'k',
-    mods = 'LEADER',
-    action = wezterm.action.ActivatePaneDirection 'Down',
-  },
-  -- Press LEADER then 'v' or 'h' to pull another tab's pane into the current tab as a split vertically or horizontally
-  {
-    key = 'v',
-    mods = 'LEADER',
-    action = wezterm.action_callback(function(window, pane)
-      local mux_window = window:mux_window()
-      if not mux_window then
-        return
-      end
+local function disable_default(key, mods)
+  table.insert(keys, { key = key, mods = mods, action = act.DisableDefaultAssignment })
+end
 
-      local choices = build_merge_tab_choices(mux_window)
-      if #choices == 0 then
-        window:toast_notification('merge tab', 'No other tabs to merge', nil, 3000)
-        return
-      end
+-- Clear stale default bindings so Ctrl+Shift+P shows our custom shortcuts.
+-- disable_default('t', 'SUPER')
+-- disable_default('t', 'CTRL|SHIFT')
+-- disable_default('w', 'SUPER')
+-- disable_default('w', 'CTRL|SHIFT')
+-- disable_default('"', 'CTRL|SHIFT|ALT')
+-- disable_default('%', 'CTRL|SHIFT|ALT')
+-- disable_default("'", 'CTRL|SHIFT|ALT')
+-- disable_default('5', 'CTRL|SHIFT|ALT')
+-- disable_default('"', 'ALT|CTRL')
+-- disable_default('%', 'ALT|CTRL')
+-- disable_default("'", 'ALT|CTRL')
+-- disable_default('5', 'ALT|CTRL')
 
-      window:perform_action(
-        act.InputSelector {
-          title = "Select Tab to Convert into a Split Pane",
-          fuzzy = true,
-          choices = choices,
-          action = wezterm.action_callback(function(_, inner_pane, id, _)
-            if id then
-              wezterm.run_child_process {
-                wezterm_binary(),
-                'cli', 'split-pane',
-                '--move-pane-id', id,
-                '--pane-id', tostring(inner_pane:pane_id()),
-              }
-            end
-          end),
-        },
-        pane
-      )
-    end),
-  },
-  {
-    key = 'h',
-    mods = 'LEADER',
-    action = wezterm.action_callback(function(window, pane)
-      local mux_window = window:mux_window()
-      if not mux_window then
-        return
-      end
+local function bind(key, mods, action)
+  table.insert(keys, { key = key, mods = mods, action = action })
+end
 
-      local choices = build_merge_tab_choices(mux_window)
-      if #choices == 0 then
-        window:toast_notification('merge tab', 'No other tabs to merge', nil, 3000)
-        return
-      end
+-- Windows / Linux
+-- Move cursor word-by-word (Left / Right)
+bind('LeftArrow', 'CTRL', act.SendString '\x1bb')
+bind('RightArrow', 'CTRL', act.SendString '\x1bf')
+-- Move to the START / END of the line
+bind('a', 'ALT', act.SendString '\x1bb')
+bind('e', 'ALT', act.SendString '\x1bf')
+-- Delete a WORD backwards
+bind('w', 'ALT', act.SendString '\x1b\x7f')
+-- Clear screen and discard the scrollback buffer
+bind('k', 'CTRL', act.ClearScrollback 'ScrollbackAndViewport')
 
-      window:perform_action(
-        act.InputSelector {
-          title = "Select Tab to Convert into a Split Pane",
-          fuzzy = true,
-          choices = choices,
-          action = wezterm.action_callback(function(_, inner_pane, id, _)
-            if id then
-              wezterm.run_child_process {
-                wezterm_binary(),
-                'cli', 'split-pane', '--horizontal',
-                '--move-pane-id', id,
-                '--pane-id', tostring(inner_pane:pane_id()),
-              }
-            end
-          end),
-        },
-        pane
-      )
-    end),
-  },
-  
-  -- Close the current pane
-  {
-    key = 'x',
-    mods = 'LEADER',
-    action = wezterm.action.CloseCurrentPane { confirm = true },
-  },
-  -- Change the title of the current tab
-  {
-    key = 'e',
-    mods = 'LEADER',
-    action = act.PromptInputLine {
-      description = 'Enter new name for tab',
-      action = wezterm.action_callback(
-        function(window, _, line)
-          if line then
-            window:active_tab():set_title(line)
-          end
-        end
-      ),
+-- MacOS
+-- Move cursor word-by-word (Left / Right)
+bind('LeftArrow', 'OPT', act.SendKey { key = 'b', mods = 'ALT' })
+bind('RightArrow', 'OPT', act.SendKey { key = 'f', mods = 'ALT' })
+-- Clear screen and scrollback buffer using Command + K
+bind('k', 'CMD', act.ClearScrollback 'ScrollbackAndViewport')
+
+-- Pane management (primary modifier: CMD on macOS, CTRL on Linux / Windows)
+bind('w', PRIMARY_MOD .. '|SHIFT', action_close_pane)
+bind('d', PRIMARY_MOD, action_split_right)
+bind('d', PRIMARY_MOD .. '|SHIFT', action_split_down)
+
+-- Spawn a new tab
+bind('t', 'LEADER', action_spawn_tab)
+-- Swap active pane with a selected pane
+bind('s', 'LEADER', action_swap_pane)
+-- Press LEADER then 'v' or 'h' to pull another tab's pane into the current tab as a split
+bind('v', 'LEADER', wezterm.action_callback(merge_tab_as_vertical_split))
+bind('h', 'LEADER', wezterm.action_callback(merge_tab_as_horizontal_split))
+-- Close the current pane
+bind('x', 'LEADER', action_close_pane)
+-- Change the title of the current tab
+bind('e', 'LEADER', action_rename_tab)
+bind('r', 'LEADER', action_rename_pane)
+
+wezterm.on('augment-command-palette', function(_window, _pane)
+  return {
+    {
+      brief = 'Pane: Close current',
+      doc = PRIMARY_LABEL .. '+Shift+W, or ' .. LEADER_HINT .. ' x',
+      icon = 'md_close',
+      action = action_close_pane,
     },
-  },
-  {
-    key = 'r',
-    mods = 'LEADER',
-    action = wezterm.action.PromptInputLine {
-      description = 'Enter new pane title:',
-      action = wezterm.action_callback(function(window, pane, line)
-        if line then
-          custom_pane_titles[pane:pane_id()] = line
-          window:set_right_status(build_right_status(window, pane))
-        end
-      end),
+    {
+      brief = 'Pane: Split to the right',
+      doc = PRIMARY_LABEL .. '+D, or ' .. LEADER_HINT .. ' Shift+%',
+      icon = 'md_view_column',
+      action = action_split_right,
     },
-  },
-}
+    {
+      brief = 'Pane: Split downward',
+      doc = PRIMARY_LABEL .. '+Shift+D, or ' .. LEADER_HINT .. ' Shift+"',
+      icon = 'md_view_agenda',
+      action = action_split_down,
+    },
+    {
+      brief = 'Pane: Swap with selected pane',
+      doc = LEADER_HINT .. ' s',
+      icon = 'md_swap_horizontal',
+      action = action_swap_pane,
+    },
+    {
+      brief = 'Pane: Focus left',
+      doc = LEADER_HINT .. ' j',
+      icon = 'md_arrow_left',
+      action = act.ActivatePaneDirection 'Left',
+    },
+    {
+      brief = 'Pane: Focus right',
+      doc = LEADER_HINT .. ' l',
+      icon = 'md_arrow_right',
+      action = act.ActivatePaneDirection 'Right',
+    },
+    {
+      brief = 'Pane: Focus up',
+      doc = LEADER_HINT .. ' i',
+      icon = 'md_arrow_up',
+      action = act.ActivatePaneDirection 'Up',
+    },
+    {
+      brief = 'Pane: Focus down',
+      doc = LEADER_HINT .. ' k',
+      icon = 'md_arrow_down',
+      action = act.ActivatePaneDirection 'Down',
+    },
+    {
+      brief = 'Tab: Merge into vertical split',
+      doc = LEADER_HINT .. ' v',
+      icon = 'md_view_column',
+      action = wezterm.action_callback(merge_tab_as_vertical_split),
+    },
+    {
+      brief = 'Tab: Merge into horizontal split',
+      doc = LEADER_HINT .. ' h',
+      icon = 'md_view_agenda',
+      action = wezterm.action_callback(merge_tab_as_horizontal_split),
+    },
+    {
+      brief = 'Tab: Spawn new',
+      doc = LEADER_HINT .. ' t',
+      icon = 'md_tab_plus',
+      action = action_spawn_tab,
+    },
+    {
+      brief = 'Tab: Rename',
+      doc = LEADER_HINT .. ' e',
+      icon = 'md_rename_box',
+      action = action_rename_tab,
+    },
+    {
+      brief = 'Pane: Rename title',
+      doc = LEADER_HINT .. ' r',
+      icon = 'md_form_textbox',
+      action = action_rename_pane,
+    },
+    {
+      brief = 'Shell: Move cursor word left',
+      doc = 'Ctrl+Left (Linux/Windows), Option+Left (macOS)',
+      icon = 'md_keyboard',
+      action = act.SendString '\x1bb',
+    },
+    {
+      brief = 'Shell: Move cursor word right',
+      doc = 'Ctrl+Right (Linux/Windows), Option+Right (macOS)',
+      icon = 'md_keyboard',
+      action = act.SendString '\x1bf',
+    },
+    {
+      brief = 'Shell: Move cursor to line start',
+      doc = 'Alt+A',
+      icon = 'md_keyboard',
+      action = act.SendString '\x1bb',
+    },
+    {
+      brief = 'Shell: Move cursor to line end',
+      doc = 'Alt+E',
+      icon = 'md_keyboard',
+      action = act.SendString '\x1bf',
+    },
+    {
+      brief = 'Shell: Delete word backward',
+      doc = 'Alt+W',
+      icon = 'md_backspace',
+      action = act.SendString '\x1b\x7f',
+    },
+    {
+      brief = 'Shell: Clear scrollback and screen',
+      doc = PRIMARY_LABEL .. '+K (macOS), Ctrl+K (Linux/Windows)',
+      icon = 'md_broom',
+      action = act.ClearScrollback 'ScrollbackAndViewport',
+    },
+  }
+end)
+
+config.keys = keys
 
 -- Return the configuration to wezterm
 return config

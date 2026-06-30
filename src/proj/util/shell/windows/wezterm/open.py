@@ -233,8 +233,9 @@ class WezTermOpener(BasicOpener):
         Launch ``command`` in WezTerm on Windows.
 
         For ``new_on="tab"``: uses ``wezterm cli spawn`` when a GUI socket exists (or when inside
-        a pane), else falls back to ``wezterm start``. For ``"window"``/``"workspace"``: always
-        calls ``wezterm start --always-new-process``.
+        a pane), else falls back to ``wezterm start``. For ``"pane"``: uses ``split-pane --right``
+        with the same socket/pane guards, else falls back to tab behavior. For ``"window"``/``"workspace"``:
+        always calls ``wezterm start --always-new-process``.
         The inner shell is ``cmd.exe /k`` so the window stays open after the command exits.
         """
         assert self._available, f"{self.__class__.__name__} is not available"
@@ -247,14 +248,19 @@ class WezTermOpener(BasicOpener):
         spawn_env: dict[str, str] | None = None
 
         match new_on:
-            case "tab":
-                # Inside a pane: env already has context for ``cli spawn``.
+            case "tab" | "pane" | "pane_vertical":
+                # Inside a pane: env already has context for ``cli spawn`` / ``split-pane``.
                 # Outside: discover ``wezterm-gui-sock-*`` in TEMP and set ``WEZTERM_UNIX_SOCKET``.
                 # Otherwise ``start --new-tab`` often opens another window (no session binding).
                 in_pane = bool(os.environ.get("WEZTERM_PANE"))
                 sock = None if in_pane else discover_wezterm_gui_socket()
                 if in_pane or sock:
-                    head = ["wezterm", "cli", "spawn"]
+                    cli_cmd = "split-pane" if new_on in ["pane", "pane_vertical"] else "spawn"
+                    head = ["wezterm", "cli", cli_cmd]
+                    if new_on == "pane":
+                        head.append("--right")
+                    elif new_on == "pane_vertical":
+                        head.append("--bottom")
                     if sock:
                         spawn_env = {**os.environ, "WEZTERM_UNIX_SOCKET": sock}
                 else:

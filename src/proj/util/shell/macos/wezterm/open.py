@@ -57,6 +57,8 @@ class WezTermOpener(BasicOpener):
         Launch ``command`` in WezTerm on macOS.
 
         ``new_on="tab"`` spawns in the current window (activating WezTerm first);
+        ``"pane"`` splits the current pane to the right;
+        ``"pane_vertical"`` splits the current pane to the bottom;
         ``"window"`` / ``"workspace"`` opens a new WezTerm window.
         The shell line is wrapped as ``bash -lc`` so login-profile variables are available.
         """
@@ -71,6 +73,12 @@ class WezTermOpener(BasicOpener):
         match new_on:
             case "window" | "workspace":
                 args: list[str] = ["wezterm", "cli", "spawn", "--new-window"]
+            case "pane":
+                activate_wezterm()
+                args = ["wezterm", "cli", "split-pane", "--right"]
+            case "pane_vertical":
+                activate_wezterm()
+                args = ["wezterm", "cli", "split-pane", "--bottom"]
             case "tab":
                 activate_wezterm()
                 args = ["wezterm", "cli", "spawn"]

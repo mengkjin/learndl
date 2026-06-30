@@ -26,7 +26,7 @@ from dataclasses import dataclass , asdict , field
 from src.proj import PATH , MACHINE , Base , Options # noqa
 from .task import TaskItem , TaskQueue , runs_page_url
 
-__all__ = ['PathItem' , 'ScriptHeader' , 'ScriptParamInput' , 'ScriptRunner']
+__all__ = ['PathItem' , 'ScriptHeader' , 'ScriptParamInput' , 'ScriptRunner' , 'iter_runnable_scripts']
 
 ReadyStatus : TypeAlias = Literal[0, 1, 2, 3]
 ScriptParamType : TypeAlias = Literal['str', 'int', 'float', 'bool', 'list', 'tuple', 'enum'] | Sequence[str]
@@ -450,3 +450,19 @@ class ScriptRunner:
             The formatted command string.
         """
         return TaskItem.preview_cmd(self.script , 'app' , mode , **kwargs)
+
+
+def iter_runnable_scripts() -> list[ScriptRunner]:
+    """Return pipeline scripts runnable on this machine (same filters as the interactive app)."""
+    runners: list[ScriptRunner] = []
+    for item in PathItem.iter_folder(PATH.scpt, min_level=0, max_level=2):
+        if not item.is_file or item.level == 0:
+            continue
+        if item.path.suffix != '.py':
+            continue
+        runner = item.script_runner()
+        if runner.ready == 0:
+            continue
+        runners.append(runner)
+    runners.sort(key=lambda runner: runner.script_key)
+    return runners

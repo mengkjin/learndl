@@ -6,7 +6,7 @@ from __future__ import annotations
 import os , shutil , subprocess , webbrowser , time , socket
 from pathlib import Path
 from src.proj import PATH , Logger , Base
-from src.proj.util.functional.ask import AskFor
+from src.proj.util.cli import AskFor
 
 __all__ = ['DashboardAPI' , 'OptunaDBAPI' , 'TSBoardAPI']
 
@@ -119,7 +119,9 @@ class OptunaDBAPI:
         flag = AskFor.Selections([
             cand.relative_to(PATH.optuna) for cand in candidates] , 
             confirm=False , multiple=False , 
-            title = f'Choose from available Optuna Dashboard databases:')
+            title = f'Choose from available Optuna Dashboard databases:',
+            help_description='SQLite study logs under PATH.optuna; sorted by modification time elsewhere.',
+        )
         if flag.result is None:
             return
         cls.call_optuna_dashboard(candidates[flag.result - 1] , open_browser = open_browser)
@@ -137,7 +139,9 @@ class OptunaDBAPI:
             flag = AskFor.Options(
                 [db_path.relative_to(PATH.optuna) for db_path in candidates] , 
                 multiple=True , confirm=True ,
-                title = f'Choose from available Optuna Dashboard databases to delete:')
+                title = f'Choose from available Optuna Dashboard databases to delete:',
+                help_description='Permanently removes selected .sqlite3 study files from PATH.optuna.',
+            )
             if loop.set_flag(flag):
                 for db_path in flag.results:
                     PATH.optuna.joinpath(db_path).resolve().unlink()
@@ -155,9 +159,16 @@ class OptunaDBAPI:
             "Select Saved Optuna Dashboard database" : cls.run_saved_optuna_dashboard ,
             "Clear Optuna Dashboard database" : cls.choose_to_delete_optuna_record ,
         }
+        option_help = {
+            "Latest Run Optuna Dashboard database": 'Open the most recently modified study SQLite file.',
+            "Select Saved Optuna Dashboard database": 'Pick any saved study database interactively.',
+            "Clear Optuna Dashboard database": 'Delete one or more study SQLite files.',
+        }
         flag = AskFor.Options(
             list(options.keys()) , multiple=False , confirm=False , 
-            title = f'What do you want to do with Optuna Dashboard?'
+            title = f'What do you want to do with Optuna Dashboard?',
+            help_description='Local Optuna Dashboard launcher; requires optuna-dashboard in the environment.',
+            option_help=option_help,
         )
         if flag.result:
             options[flag.result](open_browser = open_browser)
@@ -232,7 +243,9 @@ class TSBoardAPI:
         flag = AskFor.Options(
             [model.full_name for model in candidates] , 
             multiple=False , confirm=False ,
-            title = f'Which model to launch TensorBoard?')
+            title = f'Which model to launch TensorBoard?',
+            help_description='Models with snapshot/tensorboard subfolders containing event files.',
+        )
         if flag.result is None:
             return
         cls.call_tensorboard(ModelPath(flag.result).snapshot('tensorboard') , open_browser = open_browser)
@@ -249,7 +262,9 @@ class TSBoardAPI:
         flag = AskFor.Options(
             [packed_tar.name for packed_tar in packed_tars] , 
             multiple=False , confirm=False ,
-            title = f'Choose from available packed Tensorboard tar files:')
+            title = f'Choose from available packed Tensorboard tar files:',
+            help_description='Archived TensorBoard exports under PATH.tsboard; unpacked to temp before launch.',
+        )
         if flag.result is None:
             return
 
@@ -272,7 +287,9 @@ class TSBoardAPI:
             flag = AskFor.Options(
                 [log_dir.relative_to(PATH.tsboard) for log_dir in candidates] , 
                 multiple=True , confirm=True ,
-                title = f'Choose from available TensorBoard logs to delete:')
+                title = f'Choose from available TensorBoard logs to delete:',
+                help_description='Delete packed .tar TensorBoard archives from PATH.tsboard.',
+            )
             if loop.set_flag(flag):
                 for log_dir in flag.results:
                     PATH.tsboard.joinpath(log_dir).resolve().unlink()
@@ -292,7 +309,18 @@ class TSBoardAPI:
             "Packed Tensorboard tar files (all past trainings)" : cls.run_packed_tensorboard ,
             "Delete TensorBoard logs" : cls.choose_to_delete_tensorboard_record ,
         }
-        flag = AskFor.Options(list(options.keys()) , multiple=False , confirm=False , title = f'What do you want to do with TensorBoard?')
+        option_help = {
+            "Latest Tensorboard logs in run folder": 'Serve PATH.tensorboard/run (current training session).',
+            "Trained Models Tensorboard logs": 'Pick a model checkpoint tree with saved TB snapshots.',
+            "Packed Tensorboard tar files (all past trainings)": 'Unpack a historical .tar archive then serve.',
+            "Delete TensorBoard logs": 'Remove packed .tar archives from PATH.tsboard.',
+        }
+        flag = AskFor.Options(
+            list(options.keys()) , multiple=False , confirm=False ,
+            title = f'What do you want to do with TensorBoard?',
+            help_description='Launch TensorBoard via uv; blocks until Ctrl+C in the serving pane.',
+            option_help=option_help,
+        )
         if flag.result:
             options[flag.result](open_browser = open_browser)
         return flag

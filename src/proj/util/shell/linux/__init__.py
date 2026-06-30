@@ -3,6 +3,7 @@
 from .gnome import GnomeTerminalOpener
 from .wezterm import WezTermOpener
 from ..preference import LINUX_OPTIONS
+from ..util.basic import normalize_new_on
 
 __all__ = ["open_in_linux"]
 
@@ -33,4 +34,5 @@ def open_in_linux(
         opener = get_opener(opt)
         if opener:
             break
+    new_on = normalize_new_on(new_on, opt)
     opener.run(command, cwd=cwd, title=title, new_on=new_on, **kwargs)

@@ -16,6 +16,12 @@ import re
 from dataclasses import dataclass
 from src.proj import Logger , Base , Options  # noqa
 from src.api.util.backend import ScriptRunner , ScriptParamInput , TaskItem
+from src.proj.util.script.param_codec import (
+    option_to_value as codec_option_to_value,
+    remove_extra_prefix,
+    resolve_param_type,
+    value_to_option as codec_value_to_option,
+)
 
 __all__ = ['WidgetParamInput' , 'ParamInputsForm' , 'ParamCache']
 
@@ -124,30 +130,7 @@ class WidgetParamInput:
     @property
     def ptype(self) -> type | list[str]:
         """Resolve ``type`` to a Python type object or list of valid string options."""
-        if isinstance(self.type, str):
-            if self.type == 'str':
-                ptype = str
-            elif self.type == 'int':
-                ptype = int
-            elif self.type == 'float':
-                ptype = float
-            elif self.type == 'bool':
-                ptype = bool
-            elif self.type in ['list', 'tuple' , 'enum']:
-                assert self.enum , f'enum is required for {self.type}'
-                ptype = list(self.enum)
-            else:
-                try:
-                    ptype = eval(self.type)
-                except Exception as e:
-                    Logger.warning(e)
-                    Logger.warning(f'Invalid type: {self.type} , using str as default')
-                    ptype = str
-        elif isinstance(self.type, (list, tuple)):
-            ptype = list(self.type)
-        else:
-            raise ValueError(f'Invalid type: {self.type}')
-        return ptype
+        return resolve_param_type(self.type, enum=self.enum)
 
     @property
     def title(self) -> str:
@@ -191,71 +174,20 @@ class WidgetParamInput:
     
     def option_to_value_transformer(self) -> Callable:
         """Build a callable that converts a raw widget option to its typed Python value."""
-        ptype = self.ptype
-        if isinstance(ptype, list):
-            options = ['Choose an option'] + [f'{self.prefix}{e}' for e in ptype]
-            values = [None] + ptype
-            def wrapper(option : Any):
-                """get index of value in options"""
-                if option is None or option == '' or option == 'Choose an option': 
-                    option = 'Choose an option'
-                if option not in options:
-                    option = self.remove_extra_prefix_regex(option, self.prefix, remain_prefix = False)
-                assert option in options , f"Invalid option '{option}' in list {options}"
-                value = values[options.index(option)]
-                return value
-            return wrapper
-        elif ptype is str:
-            return lambda x: (x.strip() if x is not None else None)
-        elif ptype is bool:
-            return lambda x: None if x is None or x == 'Choose an option' else bool(x)
-        elif ptype is int:
-            return lambda x: None if x is None else int(x)
-        elif ptype is float:
-            return lambda x: None if x is None else float(x)
-        else:
-            raise ValueError(f"Unsupported param type: {ptype}")
+        def wrapper(option: Any) -> Any:
+            return codec_option_to_value(self, option)
+        return wrapper
 
     def value_to_option_transformer(self) -> Callable:
         """Build a callable that converts a typed Python value back to its widget option string."""
-        ptype = self.ptype
-        if isinstance(ptype, list):
-            options = ['Choose an option'] + [f'{self.prefix}{e}' for e in ptype]
-            values = [None] + [str(ptype_e) for ptype_e in ptype]
-            def wrapper(value : Any):
-                """get index of value in options"""
-                if value is None or value == '' or value == 'Choose an option': 
-                    value = None
-                if value not in values:
-                    value = self.remove_extra_prefix_regex(value, self.prefix , remain_prefix = False)
-                assert value in values , f"Invalid value '{value}' in list {values}"
-                option = options[values.index(value)]
-                return option
-            return wrapper
-        elif ptype is str:
-            return lambda x: (None if x is None or x == '' else x.strip())
-        elif ptype is bool:
-            return lambda x: 'Choose an option' if x is None or x == 'Choose an option' else bool(x)
-        elif ptype is int:
-            return lambda x: None if x is None else int(x)
-        elif ptype is float:
-            return lambda x: None if x is None else float(x)
-        else:
-            raise ValueError(f"Unsupported param type: {ptype}")
+        def wrapper(value: Any) -> Any:
+            return codec_value_to_option(self, value)
+        return wrapper
 
     @classmethod
     def remove_extra_prefix_regex(cls , s : str | Any, prefix : str , remain_prefix : bool = True) -> str:
         """Strip repeated occurrences of *prefix* from *s*, optionally re-adding it once."""
-        s = str(s)
-        if not prefix:
-            return s
-        while s.startswith(prefix):
-            s = s.removeprefix(prefix)
-        if remain_prefix:
-            return f'{prefix}{s}'
-        else:    
-            return s
-    
+        return remove_extra_prefix(s, prefix, remain_prefix=remain_prefix)
     def on_change(self , cache : ParamCache) -> None:
         """Persist current option, value, and validity into *cache* when the widget changes."""
         cache.set(self.option, self.runner_key, 'option', self.name)

@@ -152,8 +152,8 @@ class Tensorboard(QuickCallButton):
 
     def script_string(self) -> str:
         return """
-            from src.api.pkgs.dashboard import DashboardAPI
-            DashboardAPI.tensorboard()
+            from src.api.calls.dashboard import Tensorboard
+            Tensorboard.go()
         """
 
 class OptunaDashboard(QuickCallButton):
@@ -167,6 +167,6 @@ class OptunaDashboard(QuickCallButton):
 
     def script_string(self) -> str:
         return """
-            from src.api.pkgs.dashboard import DashboardAPI
-            DashboardAPI.optuna_dashboard()
+            from src.api.calls.dashboard import OptunaDashboard
+            OptunaDashboard.go()
         """

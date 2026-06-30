@@ -172,6 +172,22 @@ class CmuxTree:
             surface = tree.new_workspace(title=from_workspace , as_workspace=from_workspace).rename(title=title, where="surface")
         return surface.rename(title=title, where="surface").focus(surface=focus, window=True)
 
+    @classmethod
+    def new_pane(
+        cls,
+        title: str | None = None,
+        focus: bool = True,
+        from_workspace: str | None = None,
+        direction: str = 'right',
+    ) -> CmuxSurface:
+        """Split the current workspace and return the new pane's surface."""
+        tree = cls.from_cmux()
+        workspace = tree.get_workspace(from_workspace=from_workspace)
+        if workspace is None:
+            return cls.new_surface(title=title, from_workspace=from_workspace)
+        surface = workspace.new_pane(direction=direction, title=title)
+        return surface.rename(title=title, where="surface").focus(surface=focus, window=True)
+
 class CmuxWindow:
     """Represents a single cmux OS window containing one or more workspaces."""
 
@@ -231,6 +247,16 @@ class CmuxWorkspace:
             CmuxCli.cmux('rename-tab', '--surface', ret['surface_ref'], '--workspace', self.ref, title)
         panes = CmuxCli.cmux_json("tree" , "--workspace" , self.ref)['windows'][-1]['workspaces'][-1]['panes']
         surface = [surface for pane in panes for surface in pane['surfaces'] if surface['ref'] == ret['surface_ref']][-1]
+        return self.add_child(surface)
+
+    def new_pane(self, direction: str = 'right', title: str | None = None, vertical: bool = False) -> CmuxSurface:
+        """Split this workspace and return the new pane's surface."""
+        ret = CmuxCli.cmux_json('new-split', direction, '--workspace', self.ref, '--focus', 'true')
+        surface_ref = ret['surface_ref']
+        if title:
+            CmuxCli.cmux('rename-tab', '--surface', surface_ref, '--workspace', self.ref, title)
+        panes = CmuxCli.cmux_json("tree", "--workspace", self.ref)['windows'][-1]['workspaces'][-1]['panes']
+        surface = [s for pane in panes for s in pane['surfaces'] if s['ref'] == surface_ref][-1]
         return self.add_child(surface)
 
 class CmuxSurface:
@@ -342,6 +368,18 @@ def run_in_new_surface(command: str , * , cwd: str | None = None, title : str | 
     surface = CmuxTree.new_surface(title=title, from_workspace=from_workspace)
     surface.send(command , cwd=cwd)
 
+def run_in_new_pane(
+    command: str,
+    *,
+    cwd: str | None = None,
+    title: str | None = None,
+    from_workspace: str | None = None,
+    vertical: bool = False,
+):
+    """Split the current workspace and send ``command`` to the new pane."""
+    surface = CmuxTree.new_pane(title=title, from_workspace=from_workspace, direction='down' if vertical else 'right')
+    surface.send(command, cwd=cwd)
+
 def cmux_run(
     command: str, * ,
     cwd: str | None = None,
@@ -369,6 +407,10 @@ def cmux_run(
             run_in_new_workspace(**kwargs, as_workspace=as_workspace)
         case "tab":
             run_in_new_surface(**kwargs, from_workspace=from_workspace)
+        case "pane":
+            run_in_new_pane(**kwargs, from_workspace=from_workspace)
+        case "pane_vertical":
+            run_in_new_pane(**kwargs, vertical=True, from_workspace=from_workspace)
         case _:
             raise ValueError(f"Invalid new_on: {new_on}")
     popup_cmux()

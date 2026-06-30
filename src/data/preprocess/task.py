@@ -63,7 +63,7 @@ class PreProcessorTask(Base.BasicUpdater):
             If True, skip the "already updated" check.
         """
         if confirm: 
-            from src.proj.util.functional.ask import AskFor
+            from src.proj.util.cli import AskFor
             flag = AskFor.Confirmation(title = 'Are you sure to update the preprocessed data?')
             if not flag.valid:
                 return Base.UpdateFlag.FAILED

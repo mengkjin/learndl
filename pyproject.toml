@@ -63,6 +63,7 @@ dependencies = [
     "cryptography>=49.0.0",
     "rqsdk==1.7.2",
     "setuptools>=41.0.0,<82",
+    "questionary>=2.1.1",
 ]
 
 [build-system]

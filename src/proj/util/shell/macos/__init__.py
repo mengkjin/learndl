@@ -7,6 +7,7 @@ from .ghostty import GhosttyOpener
 from .terminal_app import TerminalAppOpener
 from .wezterm import WezTermOpener
 from ..preference import MACOS_OPTIONS
+from ..util.basic import normalize_new_on
 
 __all__ = ["open_in_macos"]
 
@@ -50,4 +51,5 @@ def open_in_macos(
         if opener:
             break
 
+    new_on = normalize_new_on(new_on, opt)
     opener.run(command, cwd=cwd, title=title, new_on=new_on , as_workspace=as_workspace, from_workspace=from_workspace, **kwargs)

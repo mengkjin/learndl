@@ -10,10 +10,11 @@ from datetime import datetime , timedelta
 from pathlib import Path
 
 from src.proj import MACHINE , PATH , Logger , Proj
-from src.proj.util.functional.ask import AskFor
+from src.proj.util.cli import AskFor
 from src.api.util.direct_call import DirectCall
 
 __all__ = [
+    'ModelArchiveOperations',
     'ClearOutdatedCatcherLogs',
     'ReplaceWeztermConfig' ,
     'ProjectAutoFix' ,
@@ -47,9 +48,12 @@ class ModelArchiveOperations(DirectCall):
         paths = cls._iter_current_models(parents = ('nn' , 'boost' , 'factor'))
         if not paths:
             return AskFor.flag('invalid')
-        elif flag := AskFor.Options(paths , confirm = False , multiple=True , title = title , print_options = False):
+        elif flag := AskFor.Options(
+            paths , confirm = False , multiple=True , title = title , print_options = False , use_checkbox = False,
+            help_description='Select one or more model directories to move into PATH.model_archive.',
+        ):
             [ModelPath(path).move_to_archive() for path in flag.results]
-        return flag
+        return AskFor.flag()
 
     @classmethod
     def resume_archived_models(cls):
@@ -57,7 +61,10 @@ class ModelArchiveOperations(DirectCall):
         title = f'Which model to resume from archive?'
         paths = cls._iter_current_models(parents = ('archive' ,))
         if paths:
-            flag = AskFor.Options(paths , confirm = False , multiple=True , title = title , print_options = False)
+            flag = AskFor.Options(
+                paths , confirm = False , multiple=True , title = title , print_options = False , use_checkbox = False,
+                help_description='Select archived model folder(s) to restore into active model directories.',
+            )
             if flag.results:
                 [ModelPath.resume_from_archive(path.name) for path in flag.results]
         return AskFor.flag()
@@ -83,9 +90,16 @@ class ModelArchiveOperations(DirectCall):
         title = f'Which model to rename?'
         paths = cls._iter_current_models(parents = ('nn' , 'boost'))
         if paths:
-            flag = AskFor.Options(paths , confirm = False , multiple=False , title = title , print_options = False)
-            assert flag.result is not None , 'No model selected'
-            name_flag = AskFor.string(title = f'Enter the new name for {flag.result}?')
+            flag = AskFor.Options(
+                paths , confirm = False , multiple=False , title = title , print_options = False , use_checkbox = False,
+                help_description='Pick a model directory to rename; you will be asked for the new name next.',
+            )
+            if flag.result is None:
+                return AskFor.flag()
+            name_flag = AskFor.String(
+                title = f'Enter the new name for {flag.result}?',
+                help_description='New folder name under the same parent directory. Must be unique among current models.',
+            )
             if name_flag and name_flag.result:
                 ModelPath(flag.result).rename(name_flag.result)
         return AskFor.flag()
@@ -102,29 +116,29 @@ class ModelArchiveOperations(DirectCall):
 
     @classmethod
     def _menu_for_operations(cls):
-        options = [
-            'Archive current models' , 
-            'Resume archived models' , 
-            'Reindex all current models' , 
-            'Rename current models' ,
-            'Show model creation time' ,
-        ]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What model archive operations to conduct?')
+        options = {
+            'Archive current models' : cls.archive_current_models,
+            'Resume archived models' : cls.resume_archived_models,
+            'Reindex all current models' : cls.reindex_all_current_models,
+            'Rename current models' : cls.rename_current_models,
+            'Show model creation time' : cls.show_model_creation_time,
+        }
+        option_help = {
+            'Archive current models': 'Move selected nn/boost/factor models to the archive tree.',
+            'Resume archived models': 'Restore archived models back to active model folders.',
+            'Reindex all current models': 'Auto-renumber model run folders under nn and boost.',
+            'Rename current models': 'Rename one model directory interactively.',
+            'Show model creation time': 'Print latest checkpoint timestamps without changing files.',
+        }
+        flag = AskFor.Options(
+            list(options.keys()) , confirm = False , multiple = False ,
+            title = f'What model archive operations to conduct?',
+            help_description='Maintenance tools for trained model directories under PATH.model_*.',
+            option_help=option_help,
+        )
         if flag.result is None:
             return flag
-        selection = options.index(flag.result)
-        if selection == 0:
-            flag = cls.archive_current_models()
-        elif selection == 1:
-            flag = cls.resume_archived_models()
-        elif selection == 2:
-            flag = cls.reindex_all_current_models()
-        elif selection == 3:
-            flag = cls.rename_current_models()
-        elif selection == 4:
-            flag = cls.show_model_creation_time()
-        else:
-            raise ValueError(f'Invalid operation: {flag.result}')
+        flag = options[flag.result]()
         return flag
 
     def run(self) -> None:
@@ -233,6 +247,12 @@ class ProjectAutoFix(DirectCall):
     """Apply the project patches."""
     category = 'Files'
     @classmethod
+    def _check_all_auto_fixes(cls):
+        CheckFixAllConfigFiles.go()
+        ReplaceWeztermConfig.go()
+        ClearOutdatedCatcherLogs.go()
+        return AskFor.flag()
+    @classmethod
     def _check_all_config_files(cls):
         CheckFixAllConfigFiles.go()
         return AskFor.flag()
@@ -246,29 +266,27 @@ class ProjectAutoFix(DirectCall):
         return AskFor.flag()
     @classmethod
     def _menu_for_operations(cls):
-        options = [
-            'All AutoFixes' , 
-            'Check & Fix all config files' , 
-            'Replace wezterm config' , 
-            'Clear outdated catcher logs' ,
-        ]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What project auto fixes to conduct?')
+        options = {
+            'All AutoFixes' : cls._check_all_auto_fixes,
+            'Replace wezterm config' : cls._replace_wezterm_config,
+            'Check & Fix all config files' : cls._check_all_config_files,
+            'Clear outdated catcher logs' : cls._clear_outdated_catcher_logs,
+        }
+        option_help = {
+            'All AutoFixes': 'Run config fix, WezTerm sync, and log cleanup in sequence.',
+            'Replace wezterm config': 'Copy templates/lua/wezterm.lua to ~/.config/wezterm with platform font size.',
+            'Check & Fix all config files': 'Batch validate and patch model YAML configs via ModelConfigsBatchModifier.',
+            'Clear outdated catcher logs': 'Delete catcher log files older than the configured retention window.',
+        }
+        flag = AskFor.Options(
+            list(options.keys()) , confirm = False , multiple = False ,
+            title = f'What project auto fixes to conduct?',
+            help_description='One-off housekeeping tasks for configs, terminal setup, and logs.',
+            option_help=option_help,
+        )
         if flag.result is None:
             return flag
-        selection = options.index(flag.result)
-        if selection == 0:
-            cls._check_all_config_files()
-            cls._replace_wezterm_config()
-            cls._clear_outdated_catcher_logs()
-            flag = AskFor.flag('exit')
-        elif selection == 1:
-            flag = cls._check_all_config_files()
-        elif selection == 2:
-            flag = cls._replace_wezterm_config()
-        elif selection == 3:
-            flag = cls._clear_outdated_catcher_logs()
-        else:
-            raise ValueError(f'Invalid operation: {flag.result}')
+        flag = options[flag.result]()
         return flag
 
     def run(self) -> None:

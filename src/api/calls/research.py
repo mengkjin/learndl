@@ -1,13 +1,13 @@
 """Direct calls related to research of this project."""
 
 from __future__ import annotations
-import sys
 from collections.abc import Callable
 from datetime import datetime , timedelta
 from typing import Any
 
 from src.proj import MACHINE , PATH , Logger
 from src.api.util.direct_call import DirectCall
+from src.proj.util.cli.script_session import as_script_main
 
 __all__ = ['CarryOutScheduleWorkList' , 'ScheduleModel']
 
@@ -33,17 +33,6 @@ class CarryOutScheduleWorkList(DirectCall):
     def get_description(cls , **kwargs) -> str:
         return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
     @classmethod
-    def _ensure_main_script_file(cls) -> None:
-        """Let BackendTaskRecorder resolve script when launched via ``python -c``."""
-        main_module = sys.modules['__main__']
-        cls.current_file = getattr(main_module, '__file__', None)
-        main_module.__file__ = str(cls.SCHEDULE_SCRIPT.resolve())
-    @classmethod
-    def _restore_main_script_file(cls) -> None:
-        """Restore the main script file."""
-        main_module = sys.modules['__main__']
-        main_module.__file__ = cls.current_file
-    @classmethod
     def _load_schedule_main(cls) -> Callable[..., Any]:
         from src.proj.util.filesys.dynamic_import import dynamic_modules
         for module in dynamic_modules(cls.SCHEDULE_SCRIPT):
@@ -63,9 +52,8 @@ class CarryOutScheduleWorkList(DirectCall):
         return max_creation_time > datetime.now() - timedelta(days = days)
 
     def run(self) -> None:
-        self._ensure_main_script_file()
         Logger.critical(f'Training schedule model list {self.schedule_names()} started')
-        try:
+        with as_script_main(self.SCHEDULE_SCRIPT):
             for schedule_name in self.get_schedules():
                 Logger.note(f'Training schedule model: {schedule_name}')
                 main = self._load_schedule_main()
@@ -77,8 +65,6 @@ class CarryOutScheduleWorkList(DirectCall):
                     end=None,
                     email=True,
                 )
-        finally:
-            self._restore_main_script_file()
         Logger.success('Training schedule model list completed')
 
 class ScheduleModel(DirectCall):
@@ -86,51 +72,30 @@ class ScheduleModel(DirectCall):
     category = 'Research'
     SCHEDULE_SCRIPT = CarryOutScheduleWorkList.SCHEDULE_SCRIPT
 
-    @classmethod
-    def _parse_resume_short_test(cls , raw : str) -> tuple[bool , bool | None] | None:
-        """Parse ``resume,short_test`` input; return ``None`` when invalid."""
-        raw = raw.strip()
-        if not raw:
-            return False , None
-        if ',' not in raw:
-            return None
-
-        resume_s , short_test_s = (part.strip() for part in raw.split(',' , 1))
-
-        def _parse_bool_or_empty(part : str , default : bool | None) -> tuple[bool | None , bool]:
-            if not part:
-                return default , True
-            lowered = part.lower()
-            if lowered in ('true' , 'yes' , 'y' , '1'):
-                return True , True
-            if lowered in ('false' , 'no' , 'n' , '0'):
-                return False , True
-            return default , False
-
-        resume , resume_ok = _parse_bool_or_empty(resume_s , False)
-        if not resume_ok or not isinstance(resume , bool):
-            return None
-        short_test , short_test_ok = _parse_bool_or_empty(short_test_s , None)
-        if not short_test_ok:
-            return None
-        return resume , short_test
-
     def run(self) -> None:
         from src.proj import Options
-        from src.proj.util.functional.ask import AskFor
+        from src.proj.util.cli import AskFor
+        from src.proj.util.script.param_schema import ScriptParamSchema
 
         schedules = Options.available_schedules(refresh = True)
         if not schedules:
             Logger.note('No schedule configs found.')
             return
 
-        CarryOutScheduleWorkList._ensure_main_script_file()
-        try:
+        with as_script_main(self.SCHEDULE_SCRIPT):
             main = CarryOutScheduleWorkList._load_schedule_main()
+            schema = ScriptParamSchema.from_script(self.SCHEDULE_SCRIPT, main=main)
             for loop in AskFor.LoopTillExit(message = 'Do you want to train another schedule model?'):
                 flag_schedule = AskFor.Options(
                     schedules , confirm = False , multiple = False ,
                     title = 'Which schedule model to train?',
+                    help_description=(
+                        'Schedule configs live under configs/model/schedule/. '
+                        'Each name maps to a training plan (modules, dates, algo).'
+                    ),
+                    extra_help_lines=(
+                        'Type /help for this prompt; /ls_magic lists session commands.',
+                    ),
                 )
                 if not loop.set_flag(flag_schedule) or flag_schedule.result is None:
                     continue
@@ -138,32 +103,20 @@ class ScheduleModel(DirectCall):
                 schedule_name = flag_schedule.result
                 Logger.note(f'Selected schedule [{schedule_name}]')
 
-                flag_params = AskFor.string(
-                    title = (
-                        'Override resume,short_test? '
-                        '(default False,None; empty for defaults; '
-                        'format: a,b where a/b empty or True/False)'
+                flag_kwargs = AskFor.ScriptKwargs(
+                    schema,
+                    preset={'schedule_name': schedule_name},
+                    help_description=(
+                        f'Train schedule [{schedule_name}]. '
+                        'resume: continue checkpoints; short_test: truncated run; start/end: date ints.'
+                    ),
+                    extra_help_lines=(
+                        'Choose defaults to use YAML/resume settings, or customize each parameter.',
                     ),
                 )
-                if not loop.set_flag(flag_params):
-                    continue
-                assert flag_params.result is not None
-
-                parsed = self._parse_resume_short_test(flag_params.result)
-                if parsed is None:
-                    Logger.error(f'Invalid resume,short_test input: {flag_params.result!r}')
-                    loop.set_flag(AskFor.flag('invalid'))
+                if not loop.set_flag(flag_kwargs) or flag_kwargs.result is None:
                     continue
 
-                resume , short_test = parsed
-                Logger.note(f'Training schedule [{schedule_name}] with resume={resume}, short_test={short_test}')
-                main(
-                    schedule_name = schedule_name,
-                    short_test = short_test,
-                    resume = resume,
-                    start = None,
-                    end = None,
-                    email = True,
-                )
-        finally:
-            CarryOutScheduleWorkList._restore_main_script_file()
+                kwargs = flag_kwargs.result
+                Logger.note(f'Training schedule [{schedule_name}] with {kwargs}')
+                main(**kwargs)

@@ -1,6 +1,7 @@
 """Windows terminal backends: WezTerm and cmd.exe, selected by ``WINDOWS_OPTIONS`` preference."""
 
 from ..preference import WINDOWS_OPTIONS
+from ..util.basic import normalize_new_on
 from .cmd_terminal import CmdTerminalOpener
 from .wezterm import WezTermOpener
 
@@ -38,4 +39,5 @@ def open_for_windows(
         opener = get_opener(opt)
         if opener:
             break
+    new_on = normalize_new_on(new_on, opt)
     opener.run(command, cwd=cwd, title=title, new_on=new_on)

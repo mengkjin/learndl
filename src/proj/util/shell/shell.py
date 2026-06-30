@@ -84,7 +84,7 @@ class Shell:
             cwd: The working directory to run the command in.
             option: The option to use to open the terminal.
             title: The title of the terminal.
-            new_on: The new on to use to open the terminal. (window, workspace, tab)
+            new_on: The new on to use to open the terminal. (window, workspace, tab, pane)
             as_workspace: The workspace to use to open the terminal.
             from_workspace: The workspace to use to open the terminal.
         """

@@ -3,7 +3,7 @@ Direct calls related to testing if code is working as expected.
 """
 
 from src.api.util.direct_call import DirectCall
-from src.proj.util.functional.ask import AskFor
+from src.proj.util.cli import AskFor
 
 class TestCode(DirectCall):
     """Running tests for the project code."""
@@ -26,8 +26,16 @@ class TestCode(DirectCall):
     @classmethod
     def _menu_for_operations(cls):
         testors = [getattr(cls, name) for name in dir(cls) if name.startswith('_test_')]
-        options = [testors.__doc__ for testors in testors]
-        flag = AskFor.Options(options , confirm = False , multiple = False , title = f'What project tests to conduct?')
+        options = [testor.__doc__ for testor in testors]
+        option_help = {
+            doc: doc for doc in options if doc
+        }
+        flag = AskFor.Options(
+            options , confirm = False , multiple = False ,
+            title = f'What project tests to conduct?',
+            help_description='Smoke tests for logging, quick training, and parallel factor calculation.',
+            option_help=option_help,
+        )
         if flag.result is None:
             return flag
         selection = options.index(flag.result)
