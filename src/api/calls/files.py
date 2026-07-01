@@ -132,6 +132,7 @@ class ModelArchiveOperations(DirectCall):
         }
         flag = AskFor.Options(
             list(options.keys()) , confirm = False , multiple = False ,
+            allow_back = False ,
             title = f'What model archive operations to conduct?',
             help_description='Maintenance tools for trained model directories under PATH.model_*.',
             option_help=option_help,
@@ -280,6 +281,7 @@ class ProjectAutoFix(DirectCall):
         }
         flag = AskFor.Options(
             list(options.keys()) , confirm = False , multiple = False ,
+            allow_back = False ,
             title = f'What project auto fixes to conduct?',
             help_description='One-off housekeeping tasks for configs, terminal setup, and logs.',
             option_help=option_help,

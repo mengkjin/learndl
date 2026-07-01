@@ -17,6 +17,7 @@ __all__ = [
     'MAGIC_INPUT_CATALOG',
     'MAGIC_INPUT_HINT',
     'MAGIC_MENU_VALUE',
+    'MAGIC_EXIT_VALUE',
     'MAGIC_CHOICE_PREFIX',
     'MagicInputResult',
     'magic_autocomplete_tokens',
@@ -24,6 +25,7 @@ __all__ = [
     'magic_questionary_choices',
     'append_magic_menu_choice',
     'is_magic_menu_value',
+    'is_magic_exit_value',
     'is_magic_choice_value',
     'resolve_magic_choice',
     'run_magic_submenu',
@@ -37,6 +39,8 @@ MagicAction = Literal['ls_magic', 'help', 'restart', 'spawn', 'spawn_down', 'qui
 
 MAGIC_CHOICE_PREFIX = '__magic__:cmd:'
 MAGIC_MENU_VALUE = '__magic__:menu'
+MAGIC_EXIT_VALUE = '__magic__:exit'
+MAGIC_EXIT_LABEL = '« Back (Esc) »'
 
 _magic_spawn_handler: Callable[[bool], None] | None = None
 
@@ -84,8 +88,12 @@ def magic_autocomplete_meta() -> dict[str, str]:
 def magic_questionary_choices() -> list[questionary.Choice]:
     """Build questionary choices for the magic command submenu."""
     return [
-        questionary.Choice(f'{command.token} — {command.description}', value=f'{MAGIC_CHOICE_PREFIX}{command.token}')
-        for command in MAGIC_COMMANDS
+        questionary.Choice(MAGIC_EXIT_LABEL, value=MAGIC_EXIT_VALUE),
+        questionary.Separator(),
+        *[
+            questionary.Choice(f'{command.token} — {command.description}', value=f'{MAGIC_CHOICE_PREFIX}{command.token}')
+            for command in MAGIC_COMMANDS
+        ],
     ]
 
 
@@ -100,6 +108,10 @@ def append_magic_menu_choice(choices: list[questionary.Choice]) -> list[Any]:
 
 def is_magic_menu_value(value: Any) -> bool:
     return value == MAGIC_MENU_VALUE
+
+
+def is_magic_exit_value(value: Any) -> bool:
+    return value == MAGIC_EXIT_VALUE
 
 
 def is_magic_choice_value(value: Any) -> bool:
@@ -118,7 +130,7 @@ def run_magic_submenu() -> Literal['hint', 'cancelled']:
     """Second-level picker for magic commands."""
     while True:
         value = questionary.select('Magic commands', choices=magic_questionary_choices()).ask()
-        if value is None:
+        if value is None or is_magic_exit_value(value):
             return 'cancelled'
         if resolve_magic_choice(value) == 'hint':
             return 'hint'

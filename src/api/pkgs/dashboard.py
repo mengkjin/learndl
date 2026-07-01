@@ -165,7 +165,7 @@ class OptunaDBAPI:
             "Clear Optuna Dashboard database": 'Delete one or more study SQLite files.',
         }
         flag = AskFor.Options(
-            list(options.keys()) , multiple=False , confirm=False , 
+            list(options.keys()) , multiple=False , confirm=False , allow_back=False ,
             title = f'What do you want to do with Optuna Dashboard?',
             help_description='Local Optuna Dashboard launcher; requires optuna-dashboard in the environment.',
             option_help=option_help,
@@ -316,7 +316,7 @@ class TSBoardAPI:
             "Delete TensorBoard logs": 'Remove packed .tar archives from PATH.tsboard.',
         }
         flag = AskFor.Options(
-            list(options.keys()) , multiple=False , confirm=False ,
+            list(options.keys()) , multiple=False , confirm=False , allow_back=False ,
             title = f'What do you want to do with TensorBoard?',
             help_description='Launch TensorBoard via uv; blocks until Ctrl+C in the serving pane.',
             option_help=option_help,

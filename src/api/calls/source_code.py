@@ -262,6 +262,7 @@ class CheckCodeIssues(DirectCall):
         })
         flag = AskFor.Options(
             options , confirm = False , multiple = False ,
+            allow_back = False ,
             title = f'What code issues to check?',
             help_description='Static scans for style, typing, and project-specific code hygiene.',
             option_help=option_help,

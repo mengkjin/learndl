@@ -7,8 +7,8 @@ if __name__ == '__main__':
     cmd = 'uv run --frozen python -c "from src.api.calls.launcher import DirectCallHub; DirectCallHub.go()"'
     kwargs = {
         'done_action': 'pause',
-        'title': 'Streamlit Server',
-        'as_from_workspace': 'Streamlit Server',
+        'title': 'DirectCall',
+        'as_from_workspace': 'DirectCall',
         'new_on': 'tab',
     }
     Shell.open(cmd , cwd=os.getcwd(), **kwargs)

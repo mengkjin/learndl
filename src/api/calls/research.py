@@ -87,7 +87,7 @@ class ScheduleModel(DirectCall):
             schema = ScriptParamSchema.from_script(self.SCHEDULE_SCRIPT, main=main)
             for loop in AskFor.LoopTillExit(message = 'Do you want to train another schedule model?'):
                 flag_schedule = AskFor.Options(
-                    schedules , confirm = False , multiple = False ,
+                    schedules , confirm = False , multiple = False , allow_back = False ,
                     title = 'Which schedule model to train?',
                     help_description=(
                         'Schedule configs live under configs/model/schedule/. '

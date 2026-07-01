@@ -14,10 +14,12 @@ from src.proj.util.cli.prompts import prompt_checkbox, prompt_confirm, prompt_se
 from src.proj.util.cli.session import GitHeadWatcher, ProcessReload
 from src.proj.log import Logger
 
-__all__ = ['AskFlag', 'AskFlagType', 'AskFor', 'AskHelpContext', 'LoopFlag']
+__all__ = ['AskFlag', 'AskFlagType', 'AskFor', 'AskHelpContext', 'LoopFlag', 'ExitFlags', 'EXIT_MENU_VALUE']
 
 AskFlagType: TypeAlias = Literal['valid', 'invalid', 'exit']
 ExitFlags: frozenset[str] = frozenset(['q'])
+EXIT_MENU_VALUE = '__ask__:exit'
+EXIT_MENU_LABEL = '« Back (q) »'
 T = TypeVar('T')
 
 
@@ -111,6 +113,24 @@ class AskFor:
     """Interactive prompts backed by questionary."""
 
     USE_CHECKBOX_THRESHOLD = 10
+
+    @classmethod
+    def _append_exit_choice(
+        cls,
+        choices: list[questionary.Choice],
+        *,
+        allow_back: bool,
+    ) -> list[questionary.Choice]:
+        if not allow_back:
+            return choices
+        return [
+            *choices,
+            questionary.Choice(title=EXIT_MENU_LABEL, value=EXIT_MENU_VALUE),
+        ]
+
+    @classmethod
+    def _is_exit_menu_value(cls, value: Any) -> bool:
+        return value == EXIT_MENU_VALUE
 
     @classmethod
     def _resolve_use_checkbox(cls, option_count: int, use_checkbox: bool | None) -> bool:
@@ -264,18 +284,24 @@ class AskFor:
         start_index: int,
         choices: list[questionary.Choice],
         option_strs: list[str],
+        allow_back: bool = True,
     ) -> AskFlag[int]:
+        menu_choices = cls._append_exit_choice(choices, allow_back=allow_back)
         if multiple:
-            selected = prompt_checkbox('Choose one or more options', choices=choices)
+            selected = prompt_checkbox('Choose one or more options', choices=menu_choices)
             if selected is None:
+                return AskFlag('exit')
+            if any(cls._is_exit_menu_value(value) for value in selected):
                 return AskFlag('exit')
             if not selected:
                 Logger.error('No options selected')
                 return AskFlag('invalid')
             selected_indices = sorted(int(i) for i in selected)
         else:
-            selected_index = prompt_select('Choose an option', choices=choices)
+            selected_index = prompt_select('Choose an option', choices=menu_choices)
             if selected_index is None:
+                return AskFlag('exit')
+            if cls._is_exit_menu_value(selected_index):
                 return AskFlag('exit')
             selected_indices = [int(selected_index)]
         min_index, max_index = start_index, start_index + len(choices) - 1
@@ -352,6 +378,7 @@ class AskFor:
         start_index: int = 1,
         use_checkbox: bool | None = None,
         *,
+        allow_back: bool = True,
         help_description: str = '',
         option_help: Mapping[Any, str] | Sequence[str] | None = None,
         extra_help_lines: Sequence[str] = (),
@@ -380,6 +407,7 @@ class AskFor:
                     start_index=start_index,
                     choices=choices,
                     option_strs=option_strs,
+                    allow_back=allow_back,
                 )
             return cls._selections_from_text(
                 confirm=confirm,
@@ -418,6 +446,7 @@ class AskFor:
         title: str = '',
         print_options: bool = True,
         use_checkbox: bool | None = None,
+        allow_back: bool = True,
         *,
         help_description: str = '',
         option_help: Mapping[Any, str] | Sequence[str] | None = None,
@@ -443,6 +472,7 @@ class AskFor:
                 confirm=confirm,
                 multiple=multiple,
                 use_checkbox=use_menu,
+                allow_back=allow_back,
             )
         new_flag = AskFlag(flag._flag)
         if flag.valid:

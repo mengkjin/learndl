@@ -23,7 +23,7 @@ class ReconstructPreprocessedData(DirectCall):
         with Proj.vb.temporary_vb('max'):
             for loop in AskFor.LoopTillExit(message = f'Do you want to reconstruct more data?'):
                 flag_key = AskFor.Options(
-                    data_keys , confirm = False , multiple = False ,
+                    data_keys , confirm = False , multiple = False , allow_back = False ,
                     title = f'Which data preprocessor to reconstruct?',
                     help_description='Pick a registered PrePros processor key; rebuilds feather/parquet under data/.',
                 )

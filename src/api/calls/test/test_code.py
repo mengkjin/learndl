@@ -32,6 +32,7 @@ class TestCode(DirectCall):
         }
         flag = AskFor.Options(
             options , confirm = False , multiple = False ,
+            allow_back = False ,
             title = f'What project tests to conduct?',
             help_description='Smoke tests for logging, quick training, and parallel factor calculation.',
             option_help=option_help,
