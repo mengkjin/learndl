@@ -1,6 +1,6 @@
 """Decorator to expose callables as named Streamlit tasks with locking and default kwargs."""
 from __future__ import annotations
-import inspect , os
+import inspect , os , sys
 from pathlib import Path
 
 from functools import wraps , cached_property
@@ -40,6 +40,20 @@ def _get_caller_path(depth : int = 2):
     finally:
         del frame
     return path
+
+
+def _resolve_script_header_path(depth: int = 2) -> Path | None:
+    """Resolve pipeline script path for YAML header metadata (email, mode, …)."""
+    main_file = getattr(sys.modules.get('__main__'), '__file__', None)
+    if main_file:
+        try:
+            path = Path(main_file).resolve()
+            if path.suffix == '.py' and path.is_relative_to(PATH.scpt.resolve()):
+                return path
+        except (ValueError, OSError):
+            pass
+    caller = _get_caller_path(depth)
+    return caller if caller is not None else None
 
 class ScriptTool:
     """
@@ -129,6 +143,8 @@ class ScriptTool:
             if not is_main_process():
                 return inner(*args , **kwargs)
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
+            if 'email' in kwargs:
+                self.autorun_task.kwargs['email'] = bool(kwargs['email'])
             if self.source_mode == 'api':
                 data = self.interaction
                 if data is None:
@@ -139,7 +155,7 @@ class ScriptTool:
                 elif 'email' not in self.autorun_task.kwargs:
                     self.autorun_task.kwargs['email'] = False
             else:
-                if 'email' not in self.autorun_task.kwargs and (caller_path := _get_caller_path()) is not None:
+                if 'email' not in self.autorun_task.kwargs and (caller_path := _resolve_script_header_path()) is not None:
                     from src.api.util.backend import ScriptHeader
                     self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
             new_func = self.backend_recorder(self.script_lock(self.autorun_task(inner)))

@@ -12,8 +12,10 @@ __all__ = [
     'ParamCodec',
     'resolve_param_type',
     'resolve_options',
+    'is_options_type_spec',
     'default_value',
     'coerce_value',
+    'coerce_cli_input',
     'format_default',
     'remove_extra_prefix',
     'option_to_value',
@@ -72,8 +74,35 @@ def resolve_param_type(type_spec: ScriptParamType, *, enum: list[str] | None = N
     raise ValueError(f'Invalid type: {type_spec}')
 
 
+def _options_method_name(type_spec: str) -> str | None:
+    """Parse ``Options.available_schedules()`` → ``available_schedules``."""
+    stripped = type_spec.strip()
+    if not stripped.startswith('Options.'):
+        return None
+    tail = stripped.removeprefix('Options.').strip()
+    if tail.endswith('()'):
+        tail = tail[:-2].strip()
+    if not tail or '(' in tail:
+        return None
+    return tail
+
+
+def _is_options_type_spec(type_spec: ScriptParamType) -> bool:
+    return isinstance(type_spec, str) and type_spec.strip().startswith('Options.')
+
+
+def is_options_type_spec(type_spec: ScriptParamType) -> bool:
+    """Return True when YAML ``type`` is an ``Options.available_*()`` provider."""
+    return _is_options_type_spec(type_spec)
+
+
 def resolve_options(param: ParamCodec, *, refresh: bool = True) -> list[Any]:
     """Return selectable options for enum-like parameters."""
+    if _is_options_type_spec(param.type):
+        assert isinstance(param.type, str)
+        dynamic = _call_options_provider(param.type, refresh=refresh)
+        if dynamic is not None:
+            return dynamic
     ptype = resolve_param_type(param.type, enum=param.enum)
     if isinstance(ptype, list):
         return ptype
@@ -87,9 +116,20 @@ def resolve_options(param: ParamCodec, *, refresh: bool = True) -> list[Any]:
 
 
 def _call_options_provider(type_spec: str, *, refresh: bool) -> list[Any] | None:
-    """Evaluate ``Options.available_*()`` and invoke with ``refresh`` when supported."""
-    if not isinstance(type_spec, str) or not type_spec.startswith('Options.'):
+    """Evaluate ``Options.available_*()``; when *refresh*, read from :class:`OptionsDefinition`."""
+    method_name = _options_method_name(type_spec)
+    if method_name is None:
         return None
+    if refresh:
+        from src.proj.env.options import OptionsDefinition
+
+        definition_provider = getattr(OptionsDefinition, method_name, None)
+        if callable(definition_provider):
+            try:
+                return list(cast(Sequence[Any], definition_provider()))
+            except Exception as exc:
+                Logger.warning(f'Failed to resolve options from OptionsDefinition.{method_name}: {exc}')
+                return None
     try:
         provider = eval(type_spec)
     except Exception:
@@ -188,6 +228,27 @@ def value_to_option(param: ParamCodec, value: Any) -> Any:
     if ptype is float:
         return None if value is None else float(value)
     raise ValueError(f'Unsupported param type for {param.name}: {ptype}')
+
+
+def coerce_cli_input(
+    param: ParamCodec,
+    raw: str,
+    *,
+    sig_default: Any = inspect.Parameter.empty,
+    force_input: bool = False,
+) -> Any:
+    """Coerce CLI text input; empty means default unless *force_input*."""
+    stripped = raw.strip()
+    if not stripped:
+        if force_input:
+            raise ValueError('A value is required')
+        return default_value(param, sig_default)
+    lowered = stripped.lower()
+    if lowered in ('null', 'none'):
+        return None
+    if stripped in ('""', "''"):
+        return ''
+    return coerce_value(param, stripped, sig_default=sig_default)
 
 
 def coerce_value(

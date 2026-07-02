@@ -1245,8 +1245,10 @@ class DataBlockNorm:
     dtype : Any = None
 
     # calculation method for histnorm, do not change for training. Instead, change the prenorm method in configs/model/input.yaml
-    DIVLAST  : ClassVar[list[str]] = ['day']
-    HISTNORM : ClassVar[list[str]] = ['day','15m','min','30m','60m']
+    DIVLAST  : ClassVar[frozenset[str]] = frozenset(['day'])
+    HISTNORM : ClassVar[frozenset[str]] = frozenset(['day'])
+    MAXDAYS : ClassVar[dict[str,int]] = {'day': 60 , 'week': 60 , '30m': 60}
+    STEPDAYS : ClassVar[dict[str,int]] = {'week': 5}
 
     def __post_init__(self):
         """Cast avg and std to self.dtype after construction."""
@@ -1257,7 +1259,7 @@ class DataBlockNorm:
     def calculate(
         cls , block : DataBlock , key : str ,
         start : int | None = None , end : int | None  = 20161231 ,
-        step_day = 5 , **kwargs
+        data_step = 5 , **kwargs
     ) -> DataBlockNorm | None:
         """
         Compute and persist historical normalisation statistics for a DataBlock.
@@ -1274,8 +1276,8 @@ class DataBlockNorm:
         if (key not in cls.HISTNORM): 
             return None
 
-        default_maxday = {'day' : 60 , 'week' : 60}
-        maxday = default_maxday.get(key , 1)
+        maxday = cls.MAXDAYS.get(key , 1)
+        stepday = cls.STEPDAYS.get(key , 1)
 
         date_slice = np.repeat(True , len(block.date))
         if start is not None: 
@@ -1285,7 +1287,7 @@ class DataBlockNorm:
 
         secid , date , inday , feat = block.secid , block.date , block.shape[2] , block.feature
 
-        len_step = len(date[date_slice]) // step_day
+        len_step = len(date[date_slice]) // data_step
         len_bars = maxday * inday
 
         x = torch.Tensor(block.values[:,date_slice])
@@ -1294,7 +1296,7 @@ class DataBlockNorm:
         
         avg_x , std_x = torch.zeros(len_bars , len(feat)) , torch.zeros(len_bars , len(feat))
 
-        x_endpoint = x.shape[1]-1 + step_day * np.arange(-len_step + 1 , 1)
+        x_endpoint = x.shape[1]-1 + data_step * np.arange(-len_step + 1 , 1)
         x_div = torch.ones(len(secid) , len_step , 1 , len(feat)).to(x)
         re_shape = (*x_div.shape[:2] , -1)
         if key in cls.DIVLAST: # divide by endpoint , day dataset only
@@ -1303,10 +1305,10 @@ class DataBlockNorm:
         nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
         nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
         for i in range(maxday):
-            nan_sample += x[:,x_endpoint-i].reshape(*re_shape).isnan().any(dim=-1)
+            nan_sample += x[:,x_endpoint-i*stepday].reshape(*re_shape).isnan().any(dim=-1)
 
         for i in range(maxday):
-            vijs = ((x[:,x_endpoint - maxday+1 + i]) / (x_div + 1e-6))[nan_sample == 0]
+            vijs = ((x[:,x_endpoint - (-maxday + 1 + i)*stepday]) / (x_div + 1e-6))[nan_sample == 0]
             avg_x[i*inday:(i+1)*inday] = vijs.mean(dim = 0)
             std_x[i*inday:(i+1)*inday] = vijs.std(dim = 0)
 

@@ -9,9 +9,10 @@ from src.proj.log import Logger
 from src.proj.util.cli.ask import AskFlag, AskFor
 from src.proj.util.cli.prompts import prompt_confirm
 from src.proj.util.script.param_codec import (
-    coerce_value,
+    coerce_cli_input,
     default_value,
     format_default,
+    is_options_type_spec,
     resolve_options,
     resolve_param_type,
 )
@@ -34,10 +35,17 @@ def _print_param_summary(
             )
             continue
         sig_default = schema.sig_default(param.name)
+        required_note = ' (required)' if param.required else ''
         Logger.stdout(
-            f'{param.name}: {param.desc or param.name} — default {format_default(param, sig_default)}',
+            f'{param.name}{required_note}: {param.desc or param.name} — default {format_default(param, sig_default)}',
             indent=1,
         )
+
+
+def _is_missing_required_default(param: Any, schema: ScriptParamSchema) -> bool:
+    if not param.required:
+        return False
+    return default_value(param, schema.sig_default(param.name)) in (None, '')
 
 
 def _build_default_kwargs(
@@ -59,46 +67,66 @@ def _build_default_kwargs(
 def _prompt_param_value(
     schema: ScriptParamSchema,
     param_name: str,
+    *,
+    force_input: bool = False,
 ) -> AskFlag[Any]:
     param = next(p for p in schema.params if p.name == param_name)
     sig_default = schema.sig_default(param.name)
     ptype = resolve_param_type(param.type, enum=param.enum)
     title = param.desc or param.name.replace('_', ' ').title()
+    default_display = format_default(param, sig_default)
 
     if isinstance(ptype, list) or ptype is bool:
         options = resolve_options(param, refresh=True)
         if not options:
             options = [True, False] if ptype is bool else list(ptype)
         flag = AskFor.Options(
-            options, confirm=False, multiple=False, title=title, print_options=False,
+            options,
+            confirm=False,
+            multiple=False,
+            use_checkbox=True if is_options_type_spec(param.type) else None,
+            title=title,
+            print_options=False,
             help_description=param.desc or f'Value for script parameter [{param.name}].',
         )
         if not flag.valid:
             return flag
+        if flag.result is None:
+            return AskFlag('invalid')
         return AskFlag('valid').set_result([flag.result])
 
+    empty_hint = 'empty for default' if not force_input else 'required'
+    extra_hint = (
+        ''
+        if force_input
+        else '; null/none → None; "" or \'\' → empty string'
+    )
     while True:
         flag = AskFor.String(
-            title=(
-                f'{title} (default: {format_default(param, sig_default)}; empty for default)'
-            ),
-            help_description=param.desc or f'Enter a value for [{param.name}]; leave empty to keep the default.',
+            title=f'{title} (default: {default_display}; {empty_hint}{extra_hint})',
+            help_description=param.desc or f'Enter a value for [{param.name}].',
         )
         if not flag.valid:
             return flag
         assert flag.result is not None
         raw = flag.result
-        if not raw.strip():
-            return AskFlag('valid').set_result([default_value(param, sig_default)])
         try:
-            value = coerce_value(param, raw, sig_default=sig_default)
+            value = coerce_cli_input(
+                param,
+                raw,
+                sig_default=sig_default,
+                force_input=force_input,
+            )
         except (TypeError, ValueError) as exc:
             Logger.error(f'Invalid value for [{param.name}]: {exc}')
+            continue
+        if force_input and value in (None, ''):
+            Logger.error(f'[{param.name}] is required')
             continue
         return AskFlag('valid').set_result([value])
 
 
-def _prompt_custom_kwargs(
+def _prompt_required_params(
     schema: ScriptParamSchema,
     *,
     preset: dict[str, Any],
@@ -106,33 +134,29 @@ def _prompt_custom_kwargs(
 ) -> AskFlag[dict[str, Any]]:
     kwargs = dict(preset)
     for param in schema.params:
-        if param.name in preset or param.name in skip:
+        if param.name in kwargs or param.name in skip:
             continue
-        sig_default = schema.sig_default(param.name)
-        default_display = format_default(param, sig_default)
-        modify = prompt_confirm(
-            f'Modify {param.name}? (default: {default_display})',
-            default=False,
-        )
-        if modify is None:
-            return AskFlag('exit')
-        if not modify:
-            kwargs[param.name] = default_value(param, sig_default)
+        if not _is_missing_required_default(param, schema):
             continue
+        flag = _prompt_param_value(schema, param.name, force_input=True)
+        if not flag.valid:
+            return flag
+        kwargs[param.name] = flag.result
+    return AskFlag('valid').set_result([kwargs])
 
-        if param.required and default_value(param, sig_default) in (None, ''):
-            while True:
-                flag = _prompt_param_value(schema, param.name)
-                if not flag.valid:
-                    return flag
-                value = flag.result
-                if value not in (None, ''):
-                    kwargs[param.name] = value
-                    break
-                Logger.error(f'[{param.name}] is required')
-            continue
 
-        flag = _prompt_param_value(schema, param.name)
+def _prompt_sequential_kwargs(
+    schema: ScriptParamSchema,
+    *,
+    preset: dict[str, Any],
+    skip: frozenset[str],
+) -> AskFlag[dict[str, Any]]:
+    kwargs = dict(preset)
+    for param in schema.params:
+        if param.name in kwargs or param.name in skip:
+            continue
+        force_input = _is_missing_required_default(param, schema)
+        flag = _prompt_param_value(schema, param.name, force_input=force_input)
         if not flag.valid:
             return flag
         kwargs[param.name] = flag.result
@@ -176,7 +200,20 @@ def prompt_script_kwargs(
     ):
         _print_param_summary(schema, preset=preset_values)
 
-        use_defaults = prompt_confirm('Use default parameters?', default=True)
+        required_flag = _prompt_required_params(schema, preset=preset_values, skip=skip)
+        if not required_flag.valid or required_flag.result is None:
+            return required_flag
+        preset_values = required_flag.result
+
+        remaining = [
+            param.name
+            for param in schema.params
+            if param.name not in preset_values and param.name not in skip
+        ]
+        if not remaining:
+            return AskFlag('valid').set_result([preset_values])
+
+        use_defaults = prompt_confirm('Use default parameters for the remaining fields?', default=True)
         if use_defaults is None:
             return AskFlag('exit')
         if use_defaults:
@@ -187,7 +224,7 @@ def prompt_script_kwargs(
                 return AskFlag('invalid')
             return AskFlag('valid').set_result([kwargs])
 
-        return _prompt_custom_kwargs(schema, preset=preset_values, skip=skip)
+        return _prompt_sequential_kwargs(schema, preset=preset_values, skip=skip)
 
 
 def run_script_interactive(

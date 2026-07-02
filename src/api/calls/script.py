@@ -79,13 +79,15 @@ class RunPipelineScript(DirectCall):
                     schema,
                     help_description=(
                         f'Configure parameters for [{runner.script_key}] before execution. '
-                        'Accept defaults or customize individual fields.'
+                        'Required fields are prompted first; then accept defaults or enter each remaining field in order.'
                     ),
                 )
                 if not loop.set_flag(flag_kwargs) or flag_kwargs.result is None:
                     continue
 
                 kwargs = flag_kwargs.result
+                if runner.header.email:
+                    kwargs = {**kwargs, 'email': True}
                 Logger.note(f'Running [{runner.script_key}] with {kwargs}')
                 main(**kwargs)
 

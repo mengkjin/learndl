@@ -82,6 +82,7 @@ class OptunaBoostModel(GeneralBoostModel):
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
                 'subsample':        trial.suggest_float('subsample', 0.5, 1.0, step=0.1),
                 'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 1.0, step=0.1),
+                'gamma':            trial.suggest_float('gamma', 0.0, 5.0, step=0.1),
                 'reg_alpha':        trial.suggest_float('reg_alpha', 1e-7, 100, log=True),
                 'reg_lambda':       trial.suggest_float('reg_lambda', 1e-6, 100, log=True),
             }

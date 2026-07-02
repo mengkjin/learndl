@@ -43,8 +43,6 @@ class SingleDataPrenorm:
         2.histnorm: normalized by history avg and std
         3.channelnorm: normalized by channel avg
         """
-        if self.name == '30mcont':
-            assert hasattr(SpecialDataPrenorm, f'sp_{self.name}') , f'sp_{self.name} is not supported for 30mcont'
         if hasattr(SpecialDataPrenorm, f'sp_{self.name}'):
             return getattr(SpecialDataPrenorm, f'sp_{self.name}')(x , features)
         assert not ((self.histnorm and histnorm is not None) and (self.channelnorm and x.ndim > 2)) , f'histnorm and channelnorm cannot be used together'
