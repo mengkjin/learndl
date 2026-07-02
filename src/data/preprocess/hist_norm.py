@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.proj import PATH , Base , Save , Load
+from src.proj import PATH , Base , Save , Load , Logger
 from src.data.util import DataBlock
 
 __all__ = ['PreProHistNorm']
@@ -59,9 +59,12 @@ class PreProHistNorm:
 
     @classmethod
     def recalculate_all(cls) -> None:
+        Logger.alert1('Recalculating all historical normalisation statistics...')
         for key in HistNormTasks:
-            block = DataBlock.load_preprocess(key , frame = 'fit')
-            cls.calculate(block , key)
+            with Logger.Timer(f'Recalculating {key}...' , enter_vb_level=1):
+                block = DataBlock.load_preprocess(key , frame = 'fit')
+                Logger.stdout(f'{key} data block loaded with {block.shape} shape' , indent = 1)
+                cls.calculate(block , key)
 
     @classmethod
     def calculate(
