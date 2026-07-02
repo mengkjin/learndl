@@ -17,7 +17,7 @@ from src.data.util import DataBlock
 
 __all__ = ['PreProHistNorm']
 
-HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , 'min' , '15m' , '30m')
+HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , '15m' , '30m')
 HistNorm : tuple[str,...] = ('day' , '30mcont')
 DivLast : tuple[str,...] = ('day' , '30mcont')
 SequenceLens : dict[str,int] = defaultdict(lambda: 1) | {'day': 60 , '30mcont': 30}
@@ -64,7 +64,11 @@ class PreProHistNorm:
             with Logger.Timer(f'Recalculating {key}...' , enter_vb_level=1):
                 block = DataBlock.load_preprocess(key , frame = 'fit')
                 Logger.stdout(f'{key} data block loaded with {block.shape} shape' , indent = 1)
-                cls.calculate(block , key)
+                data = cls.calculate(block , key)
+                if data is None:
+                    Logger.stdout(f'{key} historical normalisation statistics calculation failed' , indent = 1)
+                    continue
+                Logger.stdout(f'{key} historical normalisation statistics calculated and saved , shape: {data.avg.shape}' , indent = 1)
 
     @classmethod
     def calculate(
