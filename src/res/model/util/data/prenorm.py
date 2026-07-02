@@ -18,7 +18,7 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Logger , Base
-from src.data import DataBlockNorm 
+from src.data.preprocess import PreProHistNorm 
 from src.res.model.util.config import ModelConfig
 
 __all__ = ['PrenormOperator']
@@ -33,10 +33,10 @@ class SingleDataPrenorm:
     def __bool__(self):
         return self.divlast or self.histnorm or self.channelnorm
 
-    def __call__(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
+    def __call__(self , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
         return self.prenorm(x , histnorm , features)
 
-    def prenorm(self , x : torch.Tensor , histnorm : DataBlockNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
+    def prenorm(self , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
         """
         return panel-normalized x
         1.divlast: divide by the last value, get seq-mormalized x
@@ -44,7 +44,7 @@ class SingleDataPrenorm:
         3.channelnorm: normalized by channel avg
         """
         if hasattr(SpecialDataPrenorm, f'sp_{self.name}'):
-            return getattr(SpecialDataPrenorm, f'sp_{self.name}')(x , features)
+            return getattr(SpecialDataPrenorm, f'sp_{self.name}')(x , histnorm = histnorm , features = features)
         assert not ((self.histnorm and histnorm is not None) and (self.channelnorm and x.ndim > 2)) , f'histnorm and channelnorm cannot be used together'
         if self.divlast and x.shape[-2] > 1:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
@@ -63,27 +63,37 @@ class SingleDataPrenorm:
         prenorm_method = prenorm_method or {}
         return cls(
             name = name ,
-            divlast = prenorm_method.get('divlast'  , False) and (name in DataBlockNorm.DIVLAST) ,
-            histnorm = prenorm_method.get('histnorm' , False) and (name in DataBlockNorm.HISTNORM) ,
+            divlast = prenorm_method.get('divlast'  , False) and PreProHistNorm.is_divlast(name) ,
+            histnorm = prenorm_method.get('histnorm' , False) and PreProHistNorm.has_histnorm(name) ,
             channelnorm = prenorm_method.get('channelnorm' , False)
         )
 
 class SpecialDataPrenorm:
+    """special prenorm for special data types, if defined will override other prenorm methods"""
     @classmethod
-    def sp_30mcont(cls , x : torch.Tensor , features : Base.alias.NamesType = None) -> torch.Tensor:
+    def sp_30mcont(cls , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
         assert features is not None , 'features is required for 30mcont'
-        features = Base.ensure_name_list(features , [])
-        assert 'open' in features , 'open is required for 30mcont'
         assert x.ndim == 4 , f'x must be 4-dimensional for 30mcont, but got {x.shape}'
         x = x.reshape(x.shape[0], -1, x.shape[-1])
-        price_idx = torch.tensor([idx for idx , feat in enumerate(features) if feat in ('close' , 'high' , 'low' , 'open' , 'vwap')])
-        open_idx = torch.tensor([idx for idx , feat in enumerate(features) if feat == 'open'])
-        x[...,price_idx] = x[...,price_idx] / (x[...,open_idx][:,:1] + 1e-6)
+        price_idx = torch.tensor([feat in ('close' , 'high' , 'low' , 'open' , 'vwap') for feat in Base.ensure_name_list(features , [])])
+
+        # divlast
+        if x.shape[-2] > 1:
+            x_div = x[:,-1:]
+            x_div[...,~price_idx] = x[...,~price_idx].sum(dim = -2, keepdim = True)
+            x = x / (x_div + 1e-6)
+
+        # histnorm
+        if histnorm is not None:
+            x = x - histnorm.avg[-x.shape[-2]:]
+            x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
+            if x.shape[-2] > 1:
+                x[:,-1] = 0
         return x
 
 class PrenormOperator:
     """prenorm operator for data module datas"""
-    def __init__(self, config: ModelConfig , histnorms : dict[str, DataBlockNorm] | None = None):
+    def __init__(self, config: ModelConfig , histnorms : dict[str, PreProHistNorm] | None = None):
         self.config = config
         self.histnorms = histnorms or {}
         

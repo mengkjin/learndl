@@ -20,8 +20,7 @@ from torch.utils.data import BatchSampler
 
 from src.proj import Base
 from src.func.tensor import nanmedian , standardize , rank_pct
-from src.data import DataBlockNorm 
-from src.data.preprocess import PrePros
+from src.data.preprocess import PrePros , PreProHistNorm
 from src.res.model.util.config import ModelConfig
 
 from .batch_input_loader import DataloaderParam
@@ -199,7 +198,7 @@ class DataOperator:
     def finite_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
         """return finite position (with shape of len(index[0]) * step_len) the first 2 dims"""
         require_all = self.config.module_type == 'nn'
-        endpoint_nonzero = key and (key in DataBlockNorm.DIVLAST)
+        endpoint_nonzero = PreProHistNorm.is_divlast(key)
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
         window = seqlen * step

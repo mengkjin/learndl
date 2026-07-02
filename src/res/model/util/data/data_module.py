@@ -12,13 +12,13 @@ from functools import cached_property
 from typing import Any , Callable
 
 from src.proj import CALENDAR , Const, MACHINE , Base , Proj , Dates
-from src.data import ModuleData
 
 from src.func.basic import match_values
 from src.res.model.util.core import BatchInput
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.storage import TorchFileStorage , StoredTorchFileLoader
 from src.res.model.util.trainer import BaseTrainer
+from .module_data import ModuleData
 from .dynamic_buffer import DynamicDataBuffer
 from .batch_input_loader import DataloaderParam , BatchInputLoader
 from .data_callback import DataCallbacks

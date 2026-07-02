@@ -61,7 +61,9 @@ class _PPKey:
     def __get__(self , instance , owner : type[PreProcessor]) -> str:
         """Return the cached value, computing it on first access per owner class."""
         if owner not in self.cache_values:
-            self.cache_values[owner] = str(owner.__qualname__).removeprefix('PrePro_').lower()
+            key = str(owner.__qualname__).removeprefix('PrePro_').lower()
+            assert '+' not in key , f'{owner.__qualname__} is not a valid preprocessor key , remove the _ in the class name'
+            self.cache_values[owner] = key
         return self.cache_values[owner]
 
 class _FactorPPCategory0:
@@ -263,8 +265,9 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         """Compute and save historical normalisation statistics for this key (fit mode only)."""
         if self.frame != 'fit' or not self.enable_saving:
             return
+        from src.data.preprocess.hist_norm import PreProHistNorm
         with self.logger.timer(f'{self.key} blocks norming' , vb = 3):
-            block.hist_norm(self.key , self.hist_start , self.hist_end)
+            PreProHistNorm.calculate(block , self.key , self.hist_start , self.hist_end)
 
     def load_with_extension(
         self , dates_for_query : Base.alias.DateType = None, * , 

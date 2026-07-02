@@ -14,13 +14,13 @@ from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Any , ClassVar , Literal , TypeAlias , get_args
+from typing import Any , Literal , TypeAlias , get_args
 from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
 from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice , IndexMergeMethod
 
-__all__ = ['DataBlock' , 'DataBlockNorm']
+__all__ = ['DataBlock']
 
 INDAY_MARK_COLUMNS : tuple[str,...] = ('inday' , 'minute')
 FREQUENT_DBS : tuple[str,...] = ('trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp')
@@ -921,14 +921,6 @@ class DataBlock:
         assert (~mask_pos).sum() > 0 , 'all values are masked'
         self.values[mask_pos] = torch.nan
         return self
-    
-    def hist_norm(
-        self , key : str , 
-        start : int | None = None , end : int | None  = 20161231 , 
-        step_day = 5 , **kwargs
-    ) -> DataBlockNorm | None:
-        """Calculate the historical normalisation stats for the data block"""
-        return DataBlockNorm.calculate(self , key , start , end , step_day , **kwargs)
 
     def extend_to(
         self , db_src : str , db_key : str , start : int | None = None , end : int | None = None , * ,
@@ -975,12 +967,6 @@ class DataBlock:
         if find_if_not_exists:
             return cls.find_existing_dump_path(path)
         return path
-        
-    @staticmethod
-    def path_norm(key : str , frame : Base.lit.DataBlockTimeFrame = 'fit') -> Path:
-        """Return the path to the normalisation stats for ``key`` / ``frame``."""
-        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        return DataBlockNorm.norm_path(key , frame)
 
     @classmethod
     def path_raw(
@@ -1064,15 +1050,6 @@ class DataBlock:
                 continue
             blk.ffill(fillnas[key])
         return blocks
-
-    @classmethod
-    def load_preprocess_norms(
-        cls , keys : Base.alias.NamesType , 
-        frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None
-    ) -> dict[str,DataBlockNorm]:
-        """Load the normalisation stats for the data block"""
-        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        return DataBlockNorm.load_keys(keys, frame , dtype = dtype)
 
     @classmethod
     def load_from_db(
@@ -1222,133 +1199,3 @@ class DataBlock:
                 block = cls.load_from_db(db_src , db_key , 20070101 , 20241231)
                 block.save_dump()
                 Logger.success(f'{category}.{path.name} changed to {new_path}')
-
-@dataclass(slots=True)
-class DataBlockNorm:
-    """
-    Historical normalisation statistics for a single DataBlock data frame.
-
-    Stores ``avg`` (mean) and ``std`` (standard deviation) tensors of shape
-    ``(N_inday * maxday, N_feature)`` computed by :meth:`DataBlock.hist_norm`.
-    During model training the block values are divided by the endpoint value
-    (for ``'day'``-frame data) and then standardised using these statistics.
-
-    Class Attributes
-    ----------------
-    DIVLAST : list[str]
-        Data types whose values are divided by the last bar before normalising.
-    HISTNORM : list[str]
-        Data types for which historical normalisation is applied at all.
-    """
-    avg : torch.Tensor
-    std : torch.Tensor
-    dtype : Any = None
-
-    # calculation method for histnorm, do not change for training. Instead, change the prenorm method in configs/model/input.yaml
-    DIVLAST  : ClassVar[frozenset[str]] = frozenset(['day'])
-    HISTNORM : ClassVar[frozenset[str]] = frozenset(['day'])
-    MAXDAYS : ClassVar[dict[str,int]] = {'day': 60 , 'week': 60 , '30m': 60}
-    STEPDAYS : ClassVar[dict[str,int]] = {'week': 5}
-
-    def __post_init__(self):
-        """Cast avg and std to self.dtype after construction."""
-        self.avg = self.avg.to(self.dtype)
-        self.std = self.std.to(self.dtype)
-
-    @classmethod
-    def calculate(
-        cls , block : DataBlock , key : str ,
-        start : int | None = None , end : int | None  = 20161231 ,
-        data_step = 5 , **kwargs
-    ) -> DataBlockNorm | None:
-        """
-        Compute and persist historical normalisation statistics for a DataBlock.
-
-        Samples the block at ``step_day`` intervals over the ``[start, end]``
-        date range, building rolling windows of ``maxday`` days.  For ``DIVLAST``
-        types, values are divided by the window endpoint before computing
-        mean and std.  Saves the result to the norm path and returns it.
-
-        Returns None for data types not in ``HISTNORM``.
-        """
-        
-        key = data_type_abbr(key)
-        if (key not in cls.HISTNORM): 
-            return None
-
-        maxday = cls.MAXDAYS.get(key , 1)
-        stepday = cls.STEPDAYS.get(key , 1)
-
-        date_slice = np.repeat(True , len(block.date))
-        if start is not None: 
-            date_slice[block.date < start] = False
-        if end   is not None: 
-            date_slice[block.date > end]   = False
-
-        secid , date , inday , feat = block.secid , block.date , block.shape[2] , block.feature
-
-        len_step = len(date[date_slice]) // data_step
-        len_bars = maxday * inday
-
-        x = torch.Tensor(block.values[:,date_slice])
-        pad_array = (0,0,0,0,maxday,0,0,0)
-        x = torch.nn.functional.pad(x , pad_array , value = torch.nan)
-        
-        avg_x , std_x = torch.zeros(len_bars , len(feat)) , torch.zeros(len_bars , len(feat))
-
-        x_endpoint = x.shape[1]-1 + data_step * np.arange(-len_step + 1 , 1)
-        x_div = torch.ones(len(secid) , len_step , 1 , len(feat)).to(x)
-        re_shape = (*x_div.shape[:2] , -1)
-        if key in cls.DIVLAST: # divide by endpoint , day dataset only
-            x_div.copy_(x[:,x_endpoint,-1:])
-            
-        nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
-        nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
-        for i in range(maxday):
-            nan_sample += x[:,x_endpoint-i*stepday].reshape(*re_shape).isnan().any(dim=-1)
-
-        for i in range(maxday):
-            vijs = ((x[:,x_endpoint - (-maxday + 1 + i)*stepday]) / (x_div + 1e-6))[nan_sample == 0]
-            avg_x[i*inday:(i+1)*inday] = vijs.mean(dim = 0)
-            std_x[i*inday:(i+1)*inday] = vijs.std(dim = 0)
-
-        assert avg_x.isnan().sum() + std_x.isnan().sum() == 0 , ((nan_sample == 0).sum())
-        
-        data = cls(avg_x , std_x)
-        data.save(key)
-        return data
-
-    def save(self , key : str) -> None:
-        """Save avg and std tensors to the norm path for ``key``."""
-        path = self.norm_path(key)
-        path.parent.mkdir(exist_ok=True)
-        save_dict({'avg' : self.avg , 'std' : self.std} , self.norm_path(key))
-
-    @classmethod
-    def load_keys(cls , keys : Base.alias.NamesType , frame : Base.lit.DataBlockTimeFrame = 'fit' , dtype = None) -> dict[str,DataBlockNorm]:
-        """Load normalisation stats for multiple keys from disk; skips missing keys silently."""
-        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        keys = Base.ensure_name_list(keys , [])
-        norms : dict[str,DataBlockNorm] = {}
-        for key in keys:
-            path = cls.norm_path(key , frame)
-            if not path.exists(): 
-                continue
-            data = load_dict(path)
-            norms[key] = cls(data['avg'] , data['std'] , dtype)
-        return norms
-    
-    @classmethod
-    def norm_path(cls , key : str , frame : Base.lit.DataBlockTimeFrame = 'fit') -> Path:
-        """Return the path to the normalisation stats for ``key`` / ``frame``."""
-        assert frame == 'fit' , 'only fit frame is supported for normalisation stats'
-        if key.lower() == 'y':
-            return PATH.histnorm.joinpath(frame , 'Y.pt')
-        alias_list = data_type_alias(key)
-        path = None
-        for new_key in alias_list:
-            path = PATH.histnorm.joinpath(frame , f'X_{new_key}.pt')
-            if path.exists():
-                break
-        assert path , f'path not found for {key}'
-        return path

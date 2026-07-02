@@ -10,7 +10,7 @@ from __future__ import annotations
 import torch
 
 from src.proj import Base , Dates
-from .data_block import DataBlock
+from src.data.util import DataBlock
 
 __all__ = ['SpecialDataSet']
 

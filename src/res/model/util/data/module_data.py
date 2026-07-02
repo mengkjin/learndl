@@ -9,7 +9,7 @@ training or prediction session.  It handles:
 - Alignment: all blocks are brought to a common (secid, date) grid.
 - Caching: fully-aligned blocks are saved to disk via ``DataCache`` and
   reloaded on subsequent calls (only if the cache is up-to-date).
-- Normalisation: ``DataBlockNorm`` objects are loaded alongside the data.
+- Normalisation: ``PreProHistNorm`` objects are loaded alongside the data.
 - Filtering: optional ``SecidFilter`` and ``DateFilter`` can restrict the
   universe and date range during training.
 
@@ -30,8 +30,8 @@ from functools import partial, cached_property
 
 from src.proj import CALENDAR , Base , Logger
 
-from .data_block import DataBlock, DataBlockNorm, data_type_abbr
-from .special_dataset import SpecialDataSet
+from src.data import DataBlock
+from src.data.preprocess import PreProHistNorm , SpecialDataSet
 
 __all__ = ["ModuleData"]
 @dataclass
@@ -158,7 +158,7 @@ class ModuleData(Base.BoundLogger):
         return {}
 
     @cached_property
-    def norms(self) -> dict[str, DataBlockNorm]:
+    def norms(self) -> dict[str, PreProHistNorm]:
         return {}
 
     @cached_property
@@ -354,12 +354,11 @@ class ModuleData(Base.BoundLogger):
         return block
 
     def _load_norms(self) -> None:
-        """Load ``DataBlockNorm`` objects for all X block types from disk (no-op if already loaded)."""
+        """Load ``PreProHistNorm`` objects for all X block types from disk (no-op if already loaded)."""
         if self.norms:
             return
-        self.norms.update(
-            DataBlock.load_preprocess_norms(self.data_type_list, dtype=self.config.dtype)
-        )
+        norms = PreProHistNorm.load_keys(self.data_type_list, dtype = self.config.dtype)
+        self.norms.update(norms)
 
     def _load_factor(self) -> ModuleData:
         """load factor data"""
@@ -381,7 +380,7 @@ class ModuleData(Base.BoundLogger):
     @staticmethod
     def abbr(data_type: str) -> str:
         """Normalise a data-type key via ``data_type_abbr``."""
-        return data_type_abbr(data_type)
+        return DataBlock.data_type_abbr(data_type)
 
     @classmethod
     def min_data_date(

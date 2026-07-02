@@ -71,7 +71,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def _research_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
         from src.api.calls.dashboard import OptunaDashboard, Tensorboard
-        from src.api.calls.data import ReconstructPreprocessedData
+        from src.api.calls.data import ReconstructPreprocessedData, RecalculateHistNorm
         from src.api.calls.files import ModelArchiveOperations
         from src.api.calls.research import CarryOutScheduleWorkList
 
@@ -80,6 +80,11 @@ class DirectCallHub(DirectCall):
                 'Reconstruct Preprocessed Data',
                 ReconstructPreprocessedData,
                 'Rebuild fit/predict data frames for a registered PrePros key.',
+            ),
+            (
+                'Recalculate HistNorm',
+                RecalculateHistNorm,
+                'Recalculate the historical normalisation statistics.',
             ),
             (
                 'Model Archive Operations',
