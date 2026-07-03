@@ -12,7 +12,7 @@ __all__ = ['DirectCallHub']
 
 _TOP_LEVEL_LABELS = (
     'Launch Streamlit App',
-    'Source Code Operations',
+    'Non-Research Operations',
     'Research Operations',
     'Run Pipeline Script',
 )
@@ -26,7 +26,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def get_description(cls, **kwargs) -> str:
         return (
-            'CLI launcher with four top-level groups: Streamlit app, source-code tools, '
+            'CLI launcher with four top-level groups: Streamlit app, non-research tools, '
             'research workflows, and pipeline scripts. Submenus spawn the selected action in a new pane.'
         )
 
@@ -34,7 +34,7 @@ class DirectCallHub(DirectCall):
     def _top_level_help(cls) -> dict[str, str]:
         return {
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
-            'Source Code Operations': 'Submenu: git pull, tests, lint, and project auto-fix.',
+            'Non-Research Operations': 'Submenu: git pull, tests, lint, preview, and project auto-fix.',
             'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
@@ -42,6 +42,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def _source_code_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
         from src.api.calls.files import ProjectAutoFix
+        from src.api.calls.preview import PreviewProjectFile
         from src.api.calls.source_code import CheckCodeIssues, GitClearPull
         from src.api.calls.test import TestCode
 
@@ -55,6 +56,11 @@ class DirectCallHub(DirectCall):
                 'Test Code',
                 TestCode,
                 'Smoke tests for logging, quick training, and parallel factor calculation.',
+            ),
+            (
+                'Preview Project File',
+                PreviewProjectFile,
+                PreviewProjectFile.get_description(),
             ),
             (
                 'Check Code Issues',
@@ -186,10 +192,10 @@ class DirectCallHub(DirectCall):
             LaunchApp.spawn_in_pane()
             return
 
-        if choice == 'Source Code Operations':
+        if choice == 'Non-Research Operations':
             selected_cls = self._pick_direct_call(
                 self._source_code_entries(),
-                title='Which source-code operation to launch?',
+                title='Which non-research operation to launch?',
                 help_description=(
                     'Each choice spawns a DirectCall in a split pane. '
                     'Select « Back (q) » in the menu to return to the hub. '

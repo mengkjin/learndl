@@ -40,7 +40,7 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : AggType , wind
 
 class inday_smart_money(HfLiquidityFactor):
     init_date = 20110101
-    description = '聪明钱因子'
+    description = '20日日内聪明钱因子,下一分钟收益大于日内分钟收益率90%分位数的成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -58,7 +58,7 @@ class inday_smart_money(HfLiquidityFactor):
     
 class inday_stupid_money(HfLiquidityFactor):
     init_date = 20110101
-    description = '傻钱因子'
+    description = '20日日内傻钱因子,下一分钟收益小于日内分钟收益率10%分位数的成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -98,7 +98,7 @@ class inday_vol_coefvar(HfLiquidityFactor):
     
 class inday_vol_end15min(HfLiquidityFactor):
     init_date = 20110101
-    description = '尾盘成交占比'
+    description = '20日日内尾盘成交占比,尾盘15分钟成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -113,7 +113,7 @@ class inday_vol_end15min(HfLiquidityFactor):
     
 class inday_vol_st5min(HfLiquidityFactor):
     init_date = 20110101
-    description = '开盘成交占比'
+    description = '20日日内开盘成交占比,开盘5分钟成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -128,7 +128,7 @@ class inday_vol_st5min(HfLiquidityFactor):
     
 class inday_volpct_phigh(HfLiquidityFactor):
     init_date = 20110101
-    description = '高价格成交占比'
+    description = '20日日内高价格成交占比,高价格成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -144,7 +144,7 @@ class inday_volpct_phigh(HfLiquidityFactor):
     
 class inday_volpct_plow(HfLiquidityFactor):
     init_date = 20110101
-    description = '低价格成交占比'
+    description = '20日日内低价格成交占比,低价格成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -160,7 +160,7 @@ class inday_volpct_plow(HfLiquidityFactor):
     
 class inday_volpct_devhigh(HfLiquidityFactor):
     init_date = 20110101
-    description = '高价格波动成交占比'
+    description = '20日日内高价格波动成交占比,高价格波动成交量占比'
 
     def calc_factor(self, date: int):
         def inday_pct(date : int):
@@ -178,7 +178,7 @@ class inday_volpct_devhigh(HfLiquidityFactor):
     
 class vol_high_std(HfLiquidityFactor):
     init_date = 20110101
-    description = '高波动交易日成交量占比'
+    description = '20日高波动交易日成交量占比,高波动交易日成交量占比'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')

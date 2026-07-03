@@ -34,13 +34,28 @@ class Reboot(QuickCallButton):
             KillAndRebootApp.go(running_pid={self.current_pid})
         """
 
+class CLILaunch(QuickCallButton):
+    """Button that launches the CLI."""
+    key = "cli-launch"
+    button_title = "CLI Launch"
+    icon = ":material/terminal:"
+    default_help = 'Launch the CLI. You can choose which option to launch.'
+    color = 'purple'
+    done_action = 'close'
+    
+    def script_string(self) -> str:
+        return """
+            from src.api.calls.cli import CLILaunch
+            CLILaunch.go()
+        """
+
 class TestCode(QuickCallButton):
     """Button that tests the project code."""
     key = "test-project-code"
     button_title = ".🩺 Test Code"
     icon = ":material/developer_mode_tv:"
     default_help = 'Running tests for the project code, including logger , quick train , parallel factor calculation.'
-    color = 'orange'
+    color = 'blue'
     
     def script_string(self) -> str:
         return """
@@ -54,7 +69,7 @@ class CheckCodeIssues(QuickCallButton):
     button_title = "🔎 Code Issues"
     icon = ":material/troubleshoot:"
     default_help = 'Check the code issues in the project code.'
-    color = 'cyan'
+    color = 'blue'
     
     def script_string(self) -> str:
         return """
@@ -102,7 +117,7 @@ class ScheduleModel(QuickCallButton):
     button_title = "▶️ Schedule"
     icon = ":material/model_training:"
     default_help = 'Train a single schedule model. Choose schedule and optional resume/short_test overrides.'
-    color = 'purple'
+    color = 'orange'
     research = True
 
     def script_string(self) -> str:
@@ -117,7 +132,7 @@ class RebuildPreprocessedData(QuickCallButton):
     button_title = f"🧱 PreProcess"
     icon = ":material/calculate:"
     default_help = 'Rebuild the preprocessed data, you can choose which data and which type to rebuild.'
-    color = 'purple'
+    color = 'cyan'
     research = True
     
     def script_string(self) -> str:

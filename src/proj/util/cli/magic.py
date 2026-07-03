@@ -1,14 +1,17 @@
 """Magic stdin commands for interactive CLI sessions."""
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import questionary
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.document import Document
 
 from src.proj.log import Logger
 from src.proj.util.cli.help_context import print_ask_help
+from src.proj.util.cli.questionary_style import CLI_SELECT_STYLE
 from src.proj.util.cli.session import ProcessQuit, ProcessReload, ProcessSpawn, ProcessSpawnDown
 
 __all__ = [
@@ -22,6 +25,7 @@ __all__ = [
     'MagicInputResult',
     'magic_autocomplete_tokens',
     'magic_autocomplete_meta',
+    'MagicCommandCompleter',
     'magic_questionary_choices',
     'append_magic_menu_choice',
     'is_magic_menu_value',
@@ -35,7 +39,7 @@ __all__ = [
 ]
 
 MagicInputResult = Literal['hint', 'none', 'not_magic']
-MagicAction = Literal['ls_magic', 'help', 'restart', 'spawn', 'spawn_down', 'quit']
+MagicAction = Literal['ls_magic', 'help', 'restart', 'spawn', 'spawn_down', 'quit', 'history']
 
 MAGIC_CHOICE_PREFIX = '__magic__:cmd:'
 MAGIC_MENU_VALUE = '__magic__:menu'
@@ -67,12 +71,13 @@ MAGIC_COMMANDS: tuple[MagicCommand, ...] = (
     MagicCommand('/quit', 'Exit the current process', 'quit'),
     MagicCommand('/ls_magic', 'List all magic commands and re-prompt', 'ls_magic'),
     MagicCommand('/help', 'Show detailed help for the current prompt and re-prompt', 'help'),
+    MagicCommand('/history', 'Pick from the 10 most recent inputs for this prompt', 'history'),
 )
 
 MAGIC_INPUT_CATALOG: tuple[tuple[str, str], ...] = tuple(
     (cmd.token, cmd.description) for cmd in MAGIC_COMMANDS
 )
-MAGIC_INPUT_HINT = ' (/ls_magic for commands, /help for this prompt)'
+MAGIC_INPUT_HINT = ' (q to go-back, / for magic calls)'
 
 
 def magic_autocomplete_tokens() -> list[str]:
@@ -83,6 +88,29 @@ def magic_autocomplete_tokens() -> list[str]:
 def magic_autocomplete_meta() -> dict[str, str]:
     """Description metadata shown beside autocomplete suggestions."""
     return {command.token: command.description for command in MAGIC_COMMANDS}
+
+
+class MagicCommandCompleter(Completer):
+    """Magic-command completer that replaces the typed prefix (fixes WordCompleter overlap)."""
+
+    def get_completions(
+        self,
+        document: Document,
+        complete_event: CompleteEvent,
+    ) -> Iterable[Completion]:
+        prefix = document.text_before_cursor
+        prefix_lower = prefix.lower()
+        meta = magic_autocomplete_meta()
+        for token in magic_autocomplete_tokens():
+            token_lower = token.lower()
+            if prefix_lower:
+                if not token_lower.startswith(prefix_lower):
+                    continue
+            yield Completion(
+                token,
+                start_position=-len(prefix),
+                display_meta=meta.get(token, ''),
+            )
 
 
 def magic_questionary_choices() -> list[questionary.Choice]:
@@ -118,7 +146,7 @@ def is_magic_choice_value(value: Any) -> bool:
     return isinstance(value, str) and value.startswith(MAGIC_CHOICE_PREFIX)
 
 
-def resolve_magic_choice(value: Any) -> MagicInputResult:
+def resolve_magic_choice(value: Any) -> MagicInputResult | str:
     """Handle a magic submenu selection; return ``'not_magic'`` for normal values."""
     if not is_magic_choice_value(value):
         return 'not_magic'
@@ -129,7 +157,11 @@ def resolve_magic_choice(value: Any) -> MagicInputResult:
 def run_magic_submenu() -> Literal['hint', 'cancelled']:
     """Second-level picker for magic commands."""
     while True:
-        value = questionary.select('Magic commands', choices=magic_questionary_choices()).ask()
+        value = questionary.select(
+            'Magic commands',
+            choices=magic_questionary_choices(),
+            style=CLI_SELECT_STYLE,
+        ).ask()
         if value is None or is_magic_exit_value(value):
             return 'cancelled'
         if resolve_magic_choice(value) == 'hint':
@@ -143,16 +175,33 @@ def print_magic_input_help() -> None:
         Logger.stdout(f'{command}: {description}', indent=1)
 
 
-def resolve_magic_input(raw: str) -> MagicInputResult:
+def resolve_magic_input(raw: str) -> MagicInputResult | str:
     """Handle magic stdin commands in text prompts.
 
-    Returns ``'hint'`` after printing help or after inline spawn (caller should re-prompt).
-    Raises :class:`ProcessReload`, :class:`ProcessQuit`, or :class:`ProcessSpawn` when no handler applies.
+    Returns ``'hint'`` to re-prompt (including after ``/history`` prefill),
+    ``'none'`` when *raw* is not a magic command.
+    Raises :class:`ProcessReload`, :class:`ProcessQuit`, or spawn exceptions when applicable.
     """
     token = raw.strip().lower()
     for command in MAGIC_COMMANDS:
         if token != command.token:
             continue
+        if command.action == 'history':
+            from src.proj.util.cli.input_history import (
+                get_active_input_history,
+                pick_history_entry,
+                stage_input_prefill,
+            )
+
+            history = get_active_input_history()
+            if history is None:
+                Logger.note('/history is only available during path or expression prompts.')
+                return 'hint'
+            picked = pick_history_entry(history)
+            if picked is None:
+                return 'hint'
+            stage_input_prefill(picked)
+            return 'hint'
         if command.action == 'ls_magic':
             print_magic_input_help()
             return 'hint'

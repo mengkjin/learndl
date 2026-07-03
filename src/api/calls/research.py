@@ -94,7 +94,7 @@ class ScheduleModel(DirectCall):
                         'Each name maps to a training plan (modules, dates, algo).'
                     ),
                     extra_help_lines=(
-                        'Type /help for this prompt; /ls_magic lists session commands.',
+                        'Type / for magic commands (e.g. /help, /history).',
                     ),
                 )
                 if not loop.set_flag(flag_schedule) or flag_schedule.result is None:

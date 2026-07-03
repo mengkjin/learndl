@@ -40,7 +40,7 @@ def trailing(date , func : Callable[[int] , pl.DataFrame] , agg : AggType , wind
 
 class inday_err_ret(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内极端收益'
+    description = '20日日内极端收益,日内收益率前5%分位数与后5%分位数之差'
 
     def calc_factor(self, date: int):
         def err_ret(date : int):
@@ -57,7 +57,7 @@ class inday_err_ret(HfVolatilityFactor):
     
 class inday_maxdd(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内最大回撤'
+    description = '20日日内最大回撤'
 
     def calc_factor(self, date: int):
         def maxdd(date : int):
@@ -75,7 +75,7 @@ class inday_maxdd(HfVolatilityFactor):
     
 class inday_std_1min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内1分钟标准差'
+    description = '20日日内1分钟标准差'
 
     def calc_factor(self, date: int):
         def std(date : int):
@@ -88,7 +88,7 @@ class inday_std_1min(HfVolatilityFactor):
     
 class inday_std_5min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内5分钟标准差'
+    description = '20日日内5分钟标准差'
 
     def calc_factor(self, date: int):
         def std(date : int):
@@ -101,7 +101,7 @@ class inday_std_5min(HfVolatilityFactor):
 
 class inday_skewness_1min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内1分钟偏度'
+    description = '20日日内1分钟偏度'
 
     def calc_factor(self, date: int):
         def skewness(date : int):
@@ -114,7 +114,7 @@ class inday_skewness_1min(HfVolatilityFactor):
     
 class inday_skewness_5min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内5分钟偏度'
+    description = '20日日内5分钟偏度'
 
     def calc_factor(self, date: int):   
         def skewness(date : int):
@@ -127,7 +127,7 @@ class inday_skewness_5min(HfVolatilityFactor):
     
 class inday_kurt_1min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内1分钟峰度'
+    description = '20日日内1分钟峰度'
 
     def calc_factor(self, date: int):
         def kurt(date : int):
@@ -140,7 +140,7 @@ class inday_kurt_1min(HfVolatilityFactor):
     
 class inday_kurt_5min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内5分钟峰度'
+    description = '20日日内5分钟峰度'
 
     def calc_factor(self, date: int):   
         def kurt(date : int):
@@ -153,7 +153,7 @@ class inday_kurt_5min(HfVolatilityFactor):
     
 class inday_vardown_1min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内1分钟下行波动占比'
+    description = '20日日内1分钟下行波动占比'
 
     def calc_factor(self, date: int):
         def vardown(date : int):
@@ -171,7 +171,7 @@ class inday_vardown_1min(HfVolatilityFactor):
     
 class vardown_intra5min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内5分钟下行波动占比'
+    description = '20日日内5分钟下行波动占比'
 
     def calc_factor(self, date: int):
         def vardown(date : int):
@@ -189,7 +189,7 @@ class vardown_intra5min(HfVolatilityFactor):
 
 class inday_vol_std_1min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内1分钟成交量波动率'
+    description = '20日日内1分钟成交量波动率'
 
     def calc_factor(self, date: int):
         def std(date : int):
@@ -202,7 +202,7 @@ class inday_vol_std_1min(HfVolatilityFactor):
     
 class inday_vol_std_5min(HfVolatilityFactor):
     init_date = 20110101
-    description = '日内5分钟成交量波动率'
+    description = '20日日内5分钟成交量波动率'
 
     def calc_factor(self, date: int):
         def std(date : int):

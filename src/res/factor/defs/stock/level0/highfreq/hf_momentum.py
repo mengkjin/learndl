@@ -31,7 +31,7 @@ def neutral_resid_pl(df : pl.DataFrame , x : str , y : str , over = 'secid'):
 
 class inday_amap_orig(HfMomentumFactor):
     init_date = 20110101
-    description = 'APM原始值,上下午价格行为差异'
+    description = '20日APM因子,上下午超额收益比的标准化均值,剔除市场与20日动量'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -72,7 +72,7 @@ class inday_amap_orig(HfMomentumFactor):
     
 class inday_conf_persist(HfMomentumFactor):
     init_date = 20110101
-    description = '过度自信因子'
+    description = '20日过度自信因子,极端下跌与极端上涨分钟时刻中位数之差,均值排名减波动排名'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -107,7 +107,7 @@ class inday_conf_persist(HfMomentumFactor):
     
 class inday_regain_conf_persist(HfMomentumFactor):
     init_date = 20110101
-    description = '重拾自信因子'
+    description = '20日重拾自信因子,过度自信指标剔除日收益后的残差,均值排名减波动排名'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -144,7 +144,7 @@ class inday_regain_conf_persist(HfMomentumFactor):
     
 class inday_high_time(HfMomentumFactor):
     init_date = 20110101
-    description = '日内高点位置'
+    description = '20日日内最高价出现时刻,取价格前5高分钟的中位时刻后求均值'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -166,7 +166,7 @@ class inday_high_time(HfMomentumFactor):
     
 class inday_incvol_mom(HfMomentumFactor):
     init_date = 20110101
-    description = '量升累计收益'
+    description = '20日成交量递增分钟的分钟收益率累计和'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -186,7 +186,7 @@ class inday_incvol_mom(HfMomentumFactor):
     
 class inday_trend_avg(HfMomentumFactor):
     init_date = 20110101
-    description = '日内价格变化路径'
+    description = '20日VWAP对交易时刻回归斜率均值,剔除20日累计收益'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -207,7 +207,7 @@ class inday_trend_avg(HfMomentumFactor):
     
 class inday_trend_std(HfMomentumFactor):
     init_date = 20110101
-    description = '日内价格变化路径'
+    description = '20日VWAP对交易时刻回归斜率标准差,剔除20日收益波动'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -230,7 +230,7 @@ class inday_trend_std(HfMomentumFactor):
     
 class inday_vwap_diff_hlvol(HfMomentumFactor):
     init_date = 20110101
-    description = '日内高低成交量vwap差'
+    description = '20日按成交量中位数划分高低组,高低成交量分钟VWAP相对差值'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -259,7 +259,7 @@ class inday_vwap_diff_hlvol(HfMomentumFactor):
     
 class mom_high_volcv(HfMomentumFactor):
     init_date = 20110101
-    description = '分钟成交量波动最大区间的动量因子'
+    description = '20日成交量变异系数排名前5交易日的日收益率均值'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')
@@ -283,7 +283,7 @@ class mom_high_volcv(HfMomentumFactor):
     
 class mom_high_pstd(HfMomentumFactor):
     init_date = 20110101
-    description = '日内高波动累计动量'
+    description = '20日分钟收益率波动率排名前5交易日的日收益率均值'
 
     def calc_factor(self, date: int):
         dates = DATAVENDOR.CALENDAR.trailing(date , 20 , 'td')

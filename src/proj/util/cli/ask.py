@@ -232,7 +232,7 @@ class AskFor:
         if multiple:
             while True:
                 selection = prompt_text(
-                    f'Choose from {min_index} to {max_index}, (sep by "," or range by "-" , q to quit)',
+                    f'Choose from {min_index} to {max_index} (sep by "," or range "-")',
                 )
                 if selection is None:
                     return AskFlag('exit')
@@ -252,7 +252,7 @@ class AskFor:
             choices = [int(i) for i in choices]
         else:
             while True:
-                selection = prompt_text(f'Choose from {min_index} to {max_index} (q to quit)')
+                selection = prompt_text(f'Choose from {min_index} to {max_index}')
                 if selection is None:
                     return AskFlag('exit')
                 if selection.lower() in ExitFlags:
@@ -260,7 +260,7 @@ class AskFor:
                 break
             if not selection.isdigit():
                 Logger.error(
-                    f'Invalid input: {selection} , please choose from {min_index} to {max_index} or q to quit',
+                    f'Invalid input: {selection} , please choose from {min_index} to {max_index} or q to go-back',
                 )
                 return AskFlag('invalid')
             choices = [int(selection)]
@@ -332,11 +332,36 @@ class AskFor:
             extra_lines=extra_help_lines,
         ):
             cls.print_title(title)
-            selection = prompt_text('Please input (q to quit)')
+            selection = prompt_text('Please input')
         if selection is None:
             return AskFlag('exit')
         if selection.lower() in ExitFlags:
             return AskFlag('invalid')
+        return AskFlag('valid').set_result([selection])
+
+    @classmethod
+    def ProjectPath(
+        cls,
+        title: str = '',
+        *,
+        help_description: str = '',
+        extra_help_lines: Sequence[str] = (),
+    ) -> AskFlag[str]:
+        from src.proj.util.cli.prompts import prompt_project_path
+
+        if not cls.check_interactive():
+            return AskFlag('exit')
+        with cls._help_scope(
+            title=title,
+            help_description=help_description,
+            extra_lines=extra_help_lines,
+        ):
+            cls.print_title(title)
+            selection = prompt_project_path('Project path')
+        if selection is None:
+            return AskFlag('exit')
+        if selection.lower() in ExitFlags:
+            return AskFlag('exit')
         return AskFlag('valid').set_result([selection])
 
     @classmethod
