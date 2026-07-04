@@ -156,6 +156,7 @@ class DataModule(Base.BoundLogger):
         """
         if self.input_type not in ['hidden' , 'combo'] or not self.input_keys_hidden: 
             return
+        import gc
         from src.res.model.model_module.application import ArchivedPredictorModel
         self.logger.stdout(f'Ensuring hidden values for {self.input_keys_hidden}')
 
@@ -183,6 +184,10 @@ class DataModule(Base.BoundLogger):
                 for hd_model_date , hd_dates in hd_model_hd_dates.items():
                     hd_dates = np.unique(hd_dates)
                     hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
+                    hd_model.data.storage.del_all()
+                    gc.collect()
+                    torch.cuda.empty_cache()
+
 
     def setup(
         self, stage : Base.lit.StageAll , 

@@ -3,7 +3,7 @@ Torch file storage for trainer
 """
 from __future__ import annotations
 
-import gc , torch
+import torch
 import numpy as np
 import pandas as pd
 
@@ -69,13 +69,12 @@ class TorchFileStorage:
         self.records = self.records.query('key != @key')
         
     def del_group(self , group : str):
-        for key in self.records.query('group != @group')['key']:
+        for key in self.records.query('group == @group')['key']:
             self.del_one(key)
 
     def del_all(self):
         for key in self.records['key']:
             self.del_one(key)
-        gc.collect()
 
 class StoredTorchFileLoader(Sequence):
     """'retrieve batch_input from a Storage"""

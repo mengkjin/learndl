@@ -327,10 +327,12 @@ class ArchivedPredictorModel(Base.BoundLogger):
                 continue
             assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
             hidden_dfs.append(batch_data.hidden_df_pl())
+        self.data.storage.del_group('retrospective')
         df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
         if df.height > 0 and dates:
+            df = df.sort(['date','secid'])
             Save.df(
-                df.sort(['date','secid']) , hidden_path , 
+                df , hidden_path , 
                 async_save = async_save , overwrite = True , 
                 prefix = f'{self.pred_name} Hidden Values' , 
                 indent = self.indent + 1 , vb_level = self.vb_level + 1
