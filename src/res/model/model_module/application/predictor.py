@@ -134,6 +134,10 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def model_submodels(self) -> np.ndarray:
         return self.path.model_submodels
 
+    @cached_property
+    def data(self) -> DataModule:
+        return DataModule(self.config , 'predict')
+
     def load_data(self , min_date : int | None = None , max_date : int | None = None):
         """load data for predictor's DataModule, depending on the min_date to determine the use_data is 'predict' or 'both'"""
         min_date = min_date or 20170101
@@ -141,8 +145,6 @@ class ArchivedPredictorModel(Base.BoundLogger):
             use_data = 'predict'
         else:
             use_data = 'both'
-        if not hasattr(self , 'data'):
-            self.data = DataModule(self.config , use_data)
         self.data.load_data(use_data) 
         return self
     
