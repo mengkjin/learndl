@@ -30,6 +30,8 @@ class Plotter:
         self.plot_iter.set_args(data , show , title_prefix , 'Coverage Ratio' , ['factor_name'])
         for df , fig in self.plot_iter.iter():
             df = df.reset_index().set_index('date')
+            if df.empty:
+                continue
             ax = sns_lineplot(df , x='date' , y='coverage' , hue='benchmark')
 
             set_xaxis(ax , df.index.unique() , title = 'Trade Date')
