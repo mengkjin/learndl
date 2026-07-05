@@ -116,7 +116,7 @@ class OptunaDBAPI:
         if not candidates:
             Logger.alert1("No available Optuna Dashboard databases found")
             return
-        flag = AskFor.Selections([
+        flag = AskFor.Options([
             cand.relative_to(PATH.optuna) for cand in candidates] , 
             confirm=False , multiple=False , 
             title = f'Choose from available Optuna Dashboard databases:',
@@ -124,7 +124,7 @@ class OptunaDBAPI:
         )
         if flag.result is None:
             return
-        cls.call_optuna_dashboard(candidates[flag.result - 1] , open_browser = open_browser)
+        cls.call_optuna_dashboard(PATH.optuna / flag.result , open_browser = open_browser)
 
     @classmethod
     def choose_to_delete_optuna_record(cls , **kwargs):

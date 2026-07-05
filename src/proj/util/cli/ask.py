@@ -1,7 +1,7 @@
 """Interactive terminal prompts for DirectCall and CLI workflows."""
 from __future__ import annotations
 
-import sys
+import sys , re
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any, Generic, Literal, Self, TypeAlias, TypeVar
@@ -139,23 +139,37 @@ class AskFor:
         return option_count < cls.USE_CHECKBOX_THRESHOLD
 
     @classmethod
-    def flag(cls, flag: AskFlagType = 'valid') -> AskFlag:
-        return AskFlag(flag=flag)
+    def _normalize_grouped_options(
+        cls,
+        options: list[T] | Mapping[str, list[T]],
+    ) -> tuple[list[T], dict[str, list[T]] | None]:
+        if isinstance(options, Mapping):
+            groups = {name: list(items) for name, items in options.items()}
+            flat = [item for group in groups.values() for item in group]
+            return flat, groups
+        return list(options), None
 
     @classmethod
-    def check_interactive(cls) -> bool:
-        """Check if the current environment is interactive."""
-        if sys.stdin.isatty():
-            return True
-        try:
-            shell = get_ipython().__class__.__name__
-            return shell in {'ZMQInteractiveShell', 'TerminalInteractiveShell'}
-        except NameError:
-            Logger.error('Not interactive mode, return!')
-            return False
+    def _print_options(
+        cls,
+        options: list[T],
+        *,
+        option_groups: Mapping[str, list[T]] | None = None,
+    ) -> None:
+        Logger.stdout(f'There are {len(options)} options available...')
+        if option_groups is None:
+            for index, option in enumerate(options, start=1):
+                Logger.stdout(f'{index:02d}. {option}', indent=1)
+            return
+        index = 1
+        for group_name, group_items in option_groups.items():
+            Logger.stdout(f'{group_name.upper()}:')
+            for item in group_items:
+                Logger.stdout(f'{index:02d}. {item}', indent=1)
+                index += 1
 
     @classmethod
-    def print_title(cls, title: str) -> None:
+    def _print_title(cls, title: str) -> None:
         """Print the ask title."""
         if title:
             Logger.stdout(f'{title}', color='lightpurple')
@@ -168,18 +182,25 @@ class AskFor:
         title: str = '',
         help_description: str = '',
         options: Sequence[Any] | None = None,
+        option_groups: Mapping[str, Sequence[Any]] | None = None,
         option_help: Mapping[Any, str] | Sequence[str] | None = None,
         extra_lines: Sequence[str] = (),
     ):
         if not help_description and not option_help and not extra_lines:
             yield
             return
-        option_list = list(options or [])
+        if option_groups is not None:
+            groups = {name: list(items) for name, items in option_groups.items()}
+            option_list = [item for group in groups.values() for item in group]
+        else:
+            groups = None
+            option_list = list(options or [])
         set_ask_help_context(
             AskHelpContext(
                 prompt_title=title,
                 description=help_description,
                 options=option_list,
+                option_groups=groups,
                 option_help=build_option_help_map(option_list, option_help),
                 extra_lines=tuple(extra_lines),
             ),
@@ -239,17 +260,17 @@ class AskFor:
                 if selection.lower() in ExitFlags:
                     return AskFlag('exit')
                 break
-            if not selection.strip().replace('-', '').replace(',', '').replace(' ', '').isdigit():
+            if not re.sub(r'[\s\-,]', '', selection.strip()).isdigit():
                 Logger.error(f'Contains non-digit characters: {selection}')
                 return AskFlag('invalid')
-            if '-' in selection:
-                start, end = selection.split('-', 1)
-                choices = list(range(int(start.strip()), int(end.strip()) + 1))
-            elif ',' in selection:
-                choices = [int(s.strip()) for s in selection.split(',') if s.strip()]
-            else:
-                choices = [int(selection.strip())]
-            choices = [int(i) for i in choices]
+            choices : list[int] = []
+            segs = [s.strip() for s in selection.split(',') if s.strip()]
+            for seg in segs:
+                if '-' in seg:
+                    start, end = seg.split('-', 1)
+                    choices.extend(range(int(start.strip()), int(end.strip()) + 1))
+                else:
+                    choices.append(int(seg.strip()))
         else:
             while True:
                 selection = prompt_text(f'Choose from {min_index} to {max_index}')
@@ -317,6 +338,22 @@ class AskFor:
         return AskFlag('valid').set_result(selected_indices)
 
     @classmethod
+    def flag(cls, flag: AskFlagType = 'valid') -> AskFlag:
+        return AskFlag(flag=flag)
+
+    @classmethod
+    def check_interactive(cls) -> bool:
+        """Check if the current environment is interactive."""
+        if sys.stdin.isatty():
+            return True
+        try:
+            shell = get_ipython().__class__.__name__
+            return shell in {'ZMQInteractiveShell', 'TerminalInteractiveShell'}
+        except NameError:
+            Logger.error('Not interactive mode, return!')
+            return False
+
+    @classmethod
     def String(
         cls,
         title: str = '',
@@ -331,7 +368,7 @@ class AskFor:
             help_description=help_description,
             extra_lines=extra_help_lines,
         ):
-            cls.print_title(title)
+            cls._print_title(title)
             selection = prompt_text('Please input')
         if selection is None:
             return AskFlag('exit')
@@ -356,7 +393,7 @@ class AskFor:
             help_description=help_description,
             extra_lines=extra_help_lines,
         ):
-            cls.print_title(title)
+            cls._print_title(title)
             selection = prompt_project_path('Project path')
         if selection is None:
             return AskFlag('exit')
@@ -380,7 +417,7 @@ class AskFor:
             help_description=help_description,
             extra_lines=extra_help_lines,
         ):
-            cls.print_title(title)
+            cls._print_title(title)
             for i in range(ask_times):
                 message = 'Please confirm'
                 if ask_times > 1:
@@ -421,7 +458,7 @@ class AskFor:
             option_help=option_help,
             extra_lines=extra_help_lines,
         ):
-            cls.print_title(title)
+            cls._print_title(title)
             option_strs, num = cls._build_option_labels(options, start_index=start_index)
             use_menu = cls._resolve_use_checkbox(num, use_checkbox)
             if use_menu:
@@ -446,7 +483,7 @@ class AskFor:
     def Retry(cls, title: str = '') -> AskFlag:
         if not cls.check_interactive():
             return AskFlag('exit')
-        cls.print_title(title)
+        cls._print_title(title)
         choices = [
             questionary.Choice('Yes', value='y'),
             questionary.Choice('No', value='n'),
@@ -465,7 +502,7 @@ class AskFor:
     @classmethod
     def Options(
         cls,
-        options: list[T],
+        options: list[T] | Mapping[str, list[T]],
         confirm: bool = True,
         multiple: bool = False,
         title: str = '',
@@ -479,21 +516,21 @@ class AskFor:
     ) -> AskFlag[T]:
         if not cls.check_interactive():
             return AskFlag('exit')
+        flat_options, option_groups = cls._normalize_grouped_options(options)
         with cls._help_scope(
             title=title,
             help_description=help_description,
-            options=options,
+            options=flat_options,
+            option_groups=option_groups,
             option_help=option_help,
             extra_lines=extra_help_lines,
         ):
-            cls.print_title(title)
-            use_menu = cls._resolve_use_checkbox(len(options), use_checkbox)
+            cls._print_title(title)
+            use_menu = cls._resolve_use_checkbox(len(flat_options), use_checkbox)
             if print_options and not use_menu:
-                Logger.stdout(f'There are {len(options)} options available...')
-                for i, option in enumerate(options):
-                    Logger.stdout(f'{i + 1:02d}. {option}', indent=1)
+                cls._print_options(flat_options, option_groups=option_groups)
             flag = cls.Selections(
-                options,
+                flat_options,
                 confirm=confirm,
                 multiple=multiple,
                 use_checkbox=use_menu,
@@ -501,7 +538,7 @@ class AskFor:
             )
         new_flag = AskFlag(flag._flag)
         if flag.valid:
-            new_flag.set_result([options[i - 1] for i in flag.results])
+            new_flag.set_result([flat_options[i - 1] for i in flag.results])
         return new_flag
 
     @classmethod

@@ -24,6 +24,7 @@ class AskHelpContext:
     prompt_title: str = ''
     description: str = ''
     options: list[Any] = field(default_factory=list)
+    option_groups: dict[str, list[Any]] | None = None
     option_help: dict[str, str] = field(default_factory=dict)
     extra_lines: tuple[str, ...] = ()
 
@@ -66,10 +67,22 @@ def print_ask_help() -> bool:
         Logger.stdout(line, indent=1)
     if ctx.options:
         Logger.stdout('Options:', indent=1)
-        for index, option in enumerate(ctx.options, start=1):
-            detail = ctx.option_help.get(str(option), '')
-            label = f'{index:02d}. {option}'
-            if detail:
-                label = f'{label} — {detail}'
-            Logger.stdout(label, indent=2)
+        if ctx.option_groups:
+            index = 1
+            for group_name, group_items in ctx.option_groups.items():
+                Logger.stdout(f'{group_name.upper()}:', indent=2)
+                for option in group_items:
+                    detail = ctx.option_help.get(str(option), '')
+                    label = f'{index:02d}. {option}'
+                    if detail:
+                        label = f'{label} — {detail}'
+                    Logger.stdout(label, indent=3)
+                    index += 1
+        else:
+            for index, option in enumerate(ctx.options, start=1):
+                detail = ctx.option_help.get(str(option), '')
+                label = f'{index:02d}. {option}'
+                if detail:
+                    label = f'{label} — {detail}'
+                Logger.stdout(label, indent=2)
     return True
