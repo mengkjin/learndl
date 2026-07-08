@@ -1,5 +1,5 @@
-seqlens:        [{day: 5}] # although not a param for model, but can be different values(dict of SEQLEN) #
+seqlens:        [{day: 1}] # although not a param for model, but can be different values(dict of SEQLEN) #
 learning_rate:  [0.3] 
-max_depth:      [6 , 8 , 10]
+max_depth:      [6]
 l2_leaf_reg:      [1.0e-05]
 random_strength : [1.0]
