@@ -21,7 +21,7 @@ input:  # input specification --------------------------------------------------
 
 train:
   criterion.weight:
-    fit: null #  'polar'
+    fit: 'equal' #  'polar'
 
 algo:
   gru:
