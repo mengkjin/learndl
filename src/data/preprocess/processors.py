@@ -38,6 +38,8 @@ __all__ = [
     'PrePros'
 ]
 
+TRADE_ALLOW_INACTIVE : bool = True
+
 class PrePros:
     """
     Thin registry facade over ``PreProcessorMeta.registry``.
@@ -113,7 +115,7 @@ class PrePro_y(TradePreProcessor):
 
 class PrePro_day(TradePreProcessor):
     """Daily adjusted OHLCV preprocessor (key: ``'day'``).  Applies adjfactor to price columns."""
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         final_feat = self.final_feat() or []
         day = BlockLoader('trade_ts', 'day', ['adjfactor', *final_feat], **kwargs)
@@ -131,7 +133,7 @@ class PrePro_15m(TradePreProcessor):
     free-float turnover / daily volume to produce a turnover fraction.
     The ``volume`` feature is renamed to ``turn_fl``.
     """
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -150,7 +152,7 @@ class PrePro_15m(TradePreProcessor):
     
 class PrePro_30m(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -169,7 +171,7 @@ class PrePro_30m(TradePreProcessor):
 
 class PrePro_30mcont(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  only normalize volume."""
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -188,7 +190,7 @@ class PrePro_30mcont(TradePreProcessor):
     
 class PrePro_60m(TradePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
@@ -214,7 +216,7 @@ class PrePro_week(TradePreProcessor):
     the Monday (inday=0) pre-close so the window is stationary across weeks.
     """
     Weekdays = 5
-    AllowInactive : bool = False
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         final_feat = self.final_feat() or []
         day = BlockLoader('trade_ts', 'day', ['adjfactor', 'preclose', *final_feat], **kwargs)
