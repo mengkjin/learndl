@@ -25,7 +25,7 @@ train:
     param:
       objective: mse # null , mse , mae , rank
     weight:
-      cs_type: top
+      cs_type: null
       ts_type: lin
       bm_type: null
     # valid_metric:
@@ -34,7 +34,7 @@ train:
     #   top_quantile: 0.1
 
   dataloader.shuffle_option: static
-  dataloader.train_ratio: 0.9
+  dataloader.train_ratio: 0.8
 
 algo:
   lgbm:
