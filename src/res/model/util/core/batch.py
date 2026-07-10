@@ -447,7 +447,6 @@ class BatchData:
                     others[key] = value[row_pos][:,row_pos]
                 else:
                     others[key] = value[row_pos]
-
         return {'label':label , 'pred':pred , 'weight':weight , **others}
 
     def _slice_nonnan(self , *args : torch.Tensor | None , print_all_nan = False) -> torch.Tensor | None:

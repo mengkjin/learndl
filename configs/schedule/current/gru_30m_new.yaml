@@ -32,7 +32,7 @@ algo:
     hidden_dim:     [64] #  2**5
     seqlens:        [{'30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in_dim:     [16,32,64]  # the resnet block input dimension
+    enc_in_dim:     [32,64]  # the resnet block input dimension
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]

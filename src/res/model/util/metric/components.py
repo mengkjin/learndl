@@ -40,10 +40,10 @@ def align_shape(pred : Tensor , label : Tensor , weight : Tensor | None = None ,
             weight = weight.unsqueeze(-1)
         assert weight.ndim == 2 , f'weight should have dimensions of 2, got {weight.ndim}'
     if dim is None:
-        if pred.shape[-1] != label.shape[-1]:
-            last_dim = min(pred.shape[-1] , label.shape[-1])
-            label = label[...,:last_dim]
-            pred = pred[...,:last_dim]
+        # if pred.shape[-1] != label.shape[-1]:
+        #     last_dim = min(pred.shape[-1] , label.shape[-1])
+        #     label = label[...,:last_dim]
+        #     pred = pred[...,:last_dim]
         if weight is not None:
             weight = weight[...,:label.shape[-1]]
     else:

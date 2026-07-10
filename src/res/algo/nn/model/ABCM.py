@@ -56,6 +56,8 @@ class Astgnn(nn.Module):
                  alpha_num = 60 , beta_num = 10 , loss_corr_lamb = 0.1,
                  **kwargs):
         super().__init__()
+        if not isinstance(input_dim, int):
+            input_dim = sum(input_dim)
         self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh())
 
         rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
@@ -105,7 +107,7 @@ class Astgnn(nn.Module):
         Args:
             pred:        Scalar predictions ``[bs, 1]``.
             label:       Two-column label ``[bs, 2]`` where ``[...,0]`` is the
-                         return target and ``[...,1]`` is the R² target.
+                         return target and ``[...,1]`` is the R² target. (std and rtn)
             alphas:      Alpha factors ``[bs, alpha_num]``.
             betas:       Current-step beta factors ``[bs, beta_num]``.
             betas_peer:  Previous-step beta factors ``[bs, beta_num]`` for
@@ -116,8 +118,13 @@ class Astgnn(nn.Module):
         rsquare = self.rsquare_loss(alphas , label[...,1])
         corr = self.corr_loss(betas)
         turnover = self.turnover_loss(betas , betas_peer)
-
-        return mse + rsquare + self.loss_corr_lamb * corr + turnover
+        all_losses = {
+            'mse': mse,
+            'rsquare': rsquare,
+            'corr': self.loss_corr_lamb * corr,
+            'turnover': turnover,
+        }
+        return all_losses
 
     def rsquare_loss(self, hiddens : torch.Tensor , label : torch.Tensor , **kwargs):
         """Compute ``1 - R²`` (projection residual fraction)."""

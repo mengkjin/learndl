@@ -329,7 +329,7 @@ class PrePro_trading(FactorPreProcessor):
 
 class PrePro_dfl2(MicellaneousPreProcessor):
     """
-    Calculate the rolling z-score of the features partitioned over secid
+    Calculate the rolling rank (percentage rank) of the features partitioned over secid
     """
     CalculationWindow = 250
     MIN_SAMPLES = 90
@@ -361,16 +361,34 @@ class PrePro_dfl2(MicellaneousPreProcessor):
         # 2. Identify the columns as features (exclude index columns)
         feature = [c for c in df.columns if c not in ['secid', 'date']]
 
-        # 3. Apply rolling z-score partitioned over secid
+        # 3. Apply rolling pct_rank partitioned over secid
         df = df.sort(['secid', 'date'])
         blocks = []
         for i in range(0, len(feature), self.FEATURE_CHUNK_SIZE):
             sub_feature = feature[i:i + self.FEATURE_CHUNK_SIZE]
-            sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
-                ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid")) /
-                (pl.col(feat).rolling_std(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid") + 1e-6)).alias(feat)
-                for feat in sub_feature
-            ]).collect()
+            # sub_df = df.select(['secid', 'date'] + sub_feature).lazy().with_columns([
+            #     ((pl.col(feat) - pl.col(feat).rolling_mean(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid")) /
+            #     (pl.col(feat).rolling_std(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid") + 1e-6)).alias(feat)
+            #     for feat in sub_feature
+            # ]).collect()
+            sub_df = (
+                df.lazy().select(['secid', 'date'] + sub_feature).sort(['secid', 'date'])
+                .with_columns(
+                    pl.lit(1).alias("_one")
+                )
+                .with_columns(
+                    pl.col(feat).rolling_rank(window_size=self.CalculationWindow, min_samples=self.MIN_SAMPLES).over("secid").alias(f"{feat}_rank")
+                    for feat in sub_feature
+                )
+                .with_columns(
+                    pl.col("_one").rolling_sum(window_size=self.CalculationWindow).over("secid").alias("window_n")
+                )
+                .with_columns(
+                    (pl.col(f"{feat}_rank") / pl.col("window_n")).alias(feat) for feat in sub_feature
+                )
+                .drop(["_one", "window_n"] + [f"{feat}_rank" for feat in sub_feature])
+                .collect()
+            )
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
         del df
         return DataBlock.merge(blocks , inplace = True)

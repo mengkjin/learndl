@@ -26,9 +26,9 @@ input:  # input specification --------------------------------------------------
 algo:
   resnet_gru:
     hidden_dim:     [64] #  2**5
-    seqlens:        [{'week': 50 , '30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+    seqlens:        [{'week': 50}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in:         [true]
+    enc_in_dim:     [32,64]  # the resnet block input dimension
     enc_att:        [true] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
@@ -36,6 +36,6 @@ algo:
     dec_mlp_layers: [1] 
     num_output:     [1]
     which_output:   [0]
-    resnet_blocks:  [1 , 2 , 3]
+    resnet_blocks:  [1]
     enc_in_dim   :  [16]
     hidden_as_factor:    [true]

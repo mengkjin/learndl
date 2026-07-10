@@ -25,6 +25,8 @@ from .weight import BoostWeightMethod
 
 __all__ = ['BoostDataset' , 'BoostOutput' , 'BoostInput']
 
+RANKPCT_OF_X : bool = False
+
 @dataclass(slots=True)
 class BoostDataset:
     x : torch.Tensor
@@ -356,8 +358,11 @@ class BoostInput:
         Only the columns in ``use_feature`` are returned; NaN rows are dropped.
         ! important: rank_pct is applied to every date every feature
         """
-        rank_x = rank_pct(self.x[...,self.feat_idx] , dim = 0).clip(0 , 0.9999) * 100
-        x = self._flatten_by_date(rank_x)
+        if RANKPCT_OF_X:
+            x_raw = rank_pct(self.x[...,self.feat_idx] , dim = 0).clip(0 , 0.9999) * 100
+        else:
+            x_raw = self.x[...,self.feat_idx]
+        x = self._flatten_by_date(x_raw)
         assert x is not None , 'x is None'
         return x
 
