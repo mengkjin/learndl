@@ -33,6 +33,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def _top_level_help(cls) -> dict[str, str]:
         return {
+            'Git Pull': 'Pull the latest code from remote. Clear changes before pulling.',
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
             'Non-Research Operations': 'Submenu: git pull, tests, lint, preview, and project auto-fix.',
             'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
@@ -43,15 +44,10 @@ class DirectCallHub(DirectCall):
     def _source_code_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
         from src.api.calls.files import ProjectAutoFix
         from src.api.calls.preview import PreviewProjectFile
-        from src.api.calls.source_code import CheckCodeIssues, GitClearPull
+        from src.api.calls.source_code import CheckCodeIssues
         from src.api.calls.test import TestCode
 
         return [
-            (
-                'Clear Changes and Git Pull',
-                GitClearPull,
-                'Discard local git changes and pull the latest code from remote.',
-            ),
             (
                 'Test Code',
                 TestCode,
@@ -185,11 +181,18 @@ class DirectCallHub(DirectCall):
         return label_to_runner[flag.result]
 
     def _dispatch_top_level(self, choice: str) -> None:
+        if choice == 'Git Pull':
+            from src.api.calls.source_code import GitClearPull
+
+            Logger.note('Spawning [GitClearPull] in new pane')
+            GitClearPull.spawn_in_pane(vertical=True, done_action='close')
+            return
+
         if choice == 'Launch Streamlit App':
             from src.api.calls.app import LaunchApp
 
             Logger.note('Spawning [LaunchApp] in new pane')
-            LaunchApp.spawn_in_pane()
+            LaunchApp.spawn_in_pane(vertical=True, done_action='close')
             return
 
         if choice == 'Non-Research Operations':

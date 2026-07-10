@@ -9,6 +9,7 @@ import sys
 from abc import ABC , abstractmethod
 
 from src.proj.log import Logger
+from src.proj.util.shell.util import DoneActionType
 from src.proj.util.cli.session import (
     ProcessQuit,
     ProcessReload,
@@ -79,7 +80,7 @@ class DirectCall(ABC):
         os.execvp(argv[0], argv)
 
     @classmethod
-    def spawn_in_pane(cls , vertical : bool = False , **kwargs) -> None:
+    def spawn_in_pane(cls , vertical : bool = False , done_action : DoneActionType = 'pause' , **kwargs) -> None:
         """Open the same DirectCall in a new terminal pane; keep this process running."""
         if not can_exec_restart():
             Logger.error('Cannot spawn inside Streamlit; use QuickCall or Reboot button.')
@@ -88,7 +89,7 @@ class DirectCall(ABC):
         script = build_direct_call_script(cls, kwargs)
         Shell.open(
             ['uv', 'run', '--frozen', 'python', '-c', script],
-            done_action='pause',
+            done_action=done_action,
             title=cls.__name__,
             as_from_workspace='DirectCall',
             new_on='pane' if not vertical else 'pane_vertical',

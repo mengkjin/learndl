@@ -25,7 +25,7 @@ from .weight import BoostWeightMethod
 
 __all__ = ['BoostDataset' , 'BoostOutput' , 'BoostInput']
 
-RANKPCT_OF_X : bool = False
+RANKPCT_OF_X : bool = True
 
 @dataclass(slots=True)
 class BoostDataset:
