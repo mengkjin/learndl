@@ -11,6 +11,7 @@ from src.proj import Logger
 __all__ = ['DirectCallHub']
 
 _TOP_LEVEL_LABELS = (
+    'Git Pull',
     'Launch Streamlit App',
     'Non-Research Operations',
     'Research Operations',
