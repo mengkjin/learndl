@@ -612,8 +612,8 @@ class Logger:
             if self.exit_infos:
                 Logger.stdout(','.join(self.exit_infos) , indent = 1 , vb_level = self.vb_level , color = self.color , bold = True)
             self.write(
-                f'{self.key}{self.key_suffix} Finish at' 
-                f'{self._end_time.strftime("%Y-%m-%d %H:%M:%S")},'
+                f'{self.key}{self.key_suffix} Finish at ' 
+                f'{self._end_time.strftime("%Y-%m-%d %H:%M:%S")}, '
                 f'Cost {Elapsed(self._end_time - self._init_time)}' ,
                 vb_level = self.vb_level)
         def add_exit_infos(self , *msgs):

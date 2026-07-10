@@ -32,8 +32,7 @@ algo:
     hidden_dim:     [64] #  2**5
     seqlens:        [{'30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in:         [false]
-    enc_in_dim:     [16]        # the resnet block input dimension
+    enc_in_dim:     [16,32,64]  # the resnet block input dimension
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
@@ -41,6 +40,6 @@ algo:
     dec_mlp_layers: [1] 
     num_output:     [1]
     which_output:   [0]
-    resnet_blocks:  [1 , 2 , 3]
+    resnet_blocks:  [1]
     hidden_as_factor:    [true]
   
