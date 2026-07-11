@@ -11,7 +11,7 @@ model:
     - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
-    global2top: true
+    global2top: false
 
 train:
   criterion.weight:
@@ -36,10 +36,7 @@ algo:
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
-    rnn_layers:     [1]
-    dec_mlp_layers: [1] 
-    num_output:     [1]
+    rnn_layers:     [2]
     which_output:   [0]
     resnet_blocks:  [1]
-    hidden_as_factor:    [true]
   

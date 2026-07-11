@@ -16,7 +16,7 @@ from ..loss import MultiHeadLosses
 
 __all__ = [
     'get_rnn_mod' , 'simple_lstm' , 'mod_lstm' , 'mod_gru' ,
-    'gru' , 'lstm' , 'resnet_lstm' , 'resnet_gru' , 'transformer' , 
+    'gru' , 'lstm' , 'transformer' , 
     'tcn' , 'rnn_ntask' , 'rnn_general' , 'gru_dsize'
 ]
 
@@ -474,30 +474,6 @@ class lstm(rnn_univariate):
     def __init__(self , input_dim , hidden_dim , **kwargs):
         kwargs.update({'rnn_type' : 'lstm' , 'num_output' : 1})
         super().__init__(input_dim , hidden_dim , **kwargs)
-
-class resnet_lstm(lstm):
-    """LSTM with intra-day ResNet-1D encoder.  Registry key: ``'resnet_lstm'``.
-
-    Requires ``inday_dim`` (intra-day bar count) in kwargs.
-    """
-    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs) -> None:
-        kwargs.update({
-            'enc_in' : 'resnet' ,
-            'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 ,
-        })
-        super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
-
-class resnet_gru(gru):
-    """GRU with intra-day ResNet-1D encoder.  Registry key: ``'resnet_gru'``.
-
-    Requires ``inday_dim`` (intra-day bar count) in kwargs.
-    """
-    def __init__(self, input_dim , hidden_dim , inday_dim , **kwargs):
-        kwargs.update({
-            'enc_in' : 'resnet' ,
-            'enc_in_dim' : kwargs.get('enc_in_dim') if kwargs.get('enc_in_dim') else hidden_dim // 4 ,
-        })
-        super().__init__(input_dim , hidden_dim , inday_dim = inday_dim , **kwargs)
 
 class transformer(rnn_univariate):
     """Transformer-encoder-based univariate model.  Registry key: ``'transformer'``."""

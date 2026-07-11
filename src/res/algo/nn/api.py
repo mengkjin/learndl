@@ -27,8 +27,6 @@ AVAILABLE_NNS = {
     'simple_lstm'       : Model.RNN.simple_lstm,
     'gru'               : Model.RNN.gru, 
     'lstm'              : Model.RNN.lstm, 
-    'resnet_lstm'       : Model.RNN.resnet_lstm, 
-    'resnet_gru'        : Model.RNN.resnet_gru,
     'transformer'       : Model.RNN.transformer, 
     'tcn'               : Model.RNN.tcn, 
     'rnn_ntask'         : Model.RNN.rnn_ntask, 
@@ -43,7 +41,8 @@ AVAILABLE_NNS = {
     'ple_gru'           : Model.PLE.ple_gru,
     'moe_gru'           : Model.MoE.moe_gru,
     'tft'               : Model.TFT.TemporalFusionTransformer,
-    'astgnn'            : Model.ABCM.Astgnn
+    'astgnn'            : Model.ABCM.Astgnn,
+    'resnet_gru'        : Model.resnet_gru.resnet_gru,
 }
 
 def get_nn_module(module_name : str) -> nn.Module:

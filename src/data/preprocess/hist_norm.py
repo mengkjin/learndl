@@ -18,7 +18,7 @@ from src.data.util import DataBlock
 __all__ = ['PreProHistNorm']
 
 HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , '15m' , '30m')
-HistNorm : tuple[str,...] = ('day' , '30mcont' , '30m')
+HistNorm : tuple[str,...] = ('day' , '30mcont')
 DivLast : tuple[str,...] = ('day' , '30mcont')
 SequenceLens : dict[str,int] = defaultdict(lambda: 1) | {'day': 60 , '30mcont': 30}
 SequenceSteps : dict[str,int] = defaultdict(lambda: 1) 
