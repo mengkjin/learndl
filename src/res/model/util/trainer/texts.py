@@ -35,12 +35,14 @@ class TrainerTexts(TrainerPipeline):
         best_epoch = self.metrics.attempt_metrics.best_epoch()
         if best_epoch is None:
             return 'Loss{:.4f}, TrainIC{:.4f}, ValidIC{:.4f}, LR{:.1e}'
+        train_losses = f'{{{",".join(f"{k}:{v:.4f}" for k,v in best_epoch.train_losses.items())}}}'
         valid_accuracies = f'{{{",".join(f"{k}:{v:.4f}" for k,v in best_epoch.valid_accuracies.items())}}}'
-        return 'Loss={:.4f}, TrainIC={:.4f}, ValidIC={:.4f}, Best at {:s} with Accu={:s} IC={:.4f}, LR={:.1e}'.format(
+        return 'Loss={:.4f}, TrainIC={:.4f}, ValidIC={:.4f}, Best at {:s} with Loss={:s} Accu={:s} IC={:.4f}, LR={:.1e}'.format(
             self.metrics.attempt_metrics.latest('train' , 'loss') , 
             self.metrics.attempt_metrics.latest('train' , 'rankic') ,
             self.metrics.attempt_metrics.latest('valid' , 'rankic') , 
-            best_epoch.epoch_key , valid_accuracies , best_epoch.valid_rankic , last_lr)
+            best_epoch.epoch_key , train_losses , valid_accuracies , 
+            best_epoch.valid_rankic , last_lr)
     @property
     def model_str(self): 
         return f'{self.config.model_name}.{self.model_num}.{self.model_submodel}.{self.model_date}'

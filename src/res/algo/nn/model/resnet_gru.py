@@ -69,7 +69,7 @@ class resnet_gru(nn.Module):
         o = self.fc_map_out(x)
         return o , {'hidden' : x}
 
-    def loss(self, pred : Tensor , label : Tensor , hidden : Tensor , **kwargs):
+    def loss(self, pred : Tensor , label : Tensor , hidden : Tensor , weight : float = 1.0, **kwargs):
         """Composite ABCM loss: MSE + R² + corr penalty + turnover penalty.
 
         Args:
