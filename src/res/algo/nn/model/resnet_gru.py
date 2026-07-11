@@ -5,7 +5,6 @@ Use resnet to encode the input features, and then use gru to process the feature
 
 from __future__ import annotations
 from torch import nn , Tensor
-from torch.nn import functional as F
 
 from .. import layer as Layer
 from .Attention import TimeWiseAttention
@@ -78,6 +77,7 @@ class resnet_gru(nn.Module):
                          return target and ``[...,1]`` is the R² target. (std and rtn)
             hidden:      Hidden states ``[bs, hidden_dim]``.
         """
+        from torch.nn import functional as F
         mse = F.mse_loss(pred.squeeze() , label.squeeze())
         corr = self.corr_loss(hidden)
         all_losses = {

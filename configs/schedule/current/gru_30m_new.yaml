@@ -35,7 +35,7 @@ algo:
     enc_in_dim:     [16]  # the resnet block input dimension
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
-    rnn_att:        [false]
+    rnn_att:        [true]
     rnn_layers:     [2]
     which_output:   [0]
     resnet_blocks:  [1]
