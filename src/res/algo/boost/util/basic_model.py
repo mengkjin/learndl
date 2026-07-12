@@ -210,6 +210,8 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         return cls().load_dict(model_dict , cuda)
     
     def test_result(self , test : BoostInput | Any = None , plot_path : Path | None = None):
+        from src.proj.util.functional.mpl_config import configure_matplotlib
+        configure_matplotlib()
         import matplotlib.pyplot as plt
         df = self.calc_ic(test)
         plt.figure()

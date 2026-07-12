@@ -269,6 +269,9 @@ class AsyncSaver:
         Returns:
             future: concurrent.futures.Future object
         """
+        # Ensure Agg (or explicit MPLBACKEND) before worker-thread savefig/close.
+        from src.proj.util.functional.mpl_config import configure_matplotlib
+        configure_matplotlib()
         figs = _prepare_data(figs, copy_for_safety = copy_for_safety)
         kwargs = kwargs | {'prefix': async_prefix(prefix) , 'future_group': future_group}
         return cls.submit(figs_to_pdf, figs, path, **kwargs)

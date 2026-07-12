@@ -8,7 +8,6 @@ from __future__ import annotations
 import lightgbm
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from copy import deepcopy
 from functools import cached_property
@@ -16,8 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import Base , Proj
+from src.proj.util.functional.mpl_config import configure_matplotlib
 from src.func.basic import match_values
 from ..util import BasicBoostModel , BoostInput
+
+configure_matplotlib()
+import matplotlib.pyplot as plt  # noqa: E402
 
 __all__ = ['Lgbm' , 'LgbmPlot']
 

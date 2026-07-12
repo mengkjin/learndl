@@ -447,7 +447,10 @@ class Logger:
 
     @classmethod
     def test_logger(cls):
-        import tqdm , pandas as pd , matplotlib.pyplot as plt
+        import tqdm , pandas as pd
+        from src.proj.util.functional.mpl_config import configure_matplotlib
+        configure_matplotlib()
+        import matplotlib.pyplot as plt
         with Proj.vb.temporary_vb('max'):
             with cls.Paragraph('ParagraphI' , 1):
                 cls.stdout('This is a stdout message')

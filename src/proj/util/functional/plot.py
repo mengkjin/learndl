@@ -2,18 +2,21 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from dataclasses import dataclass
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-from matplotlib.ticker import FuncFormatter
-from matplotlib.typing import LegendLocType
-from plottable import Table , ColumnDefinition
 from typing import Any , Literal , TypeAlias
 
 from src.proj import Base
 from src.proj.log import Logger
+from src.proj.util.functional.mpl_config import configure_matplotlib
+
+configure_matplotlib()
+import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.axes import Axes  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
+from matplotlib.ticker import FuncFormatter  # noqa: E402
+from matplotlib.typing import LegendLocType  # noqa: E402
+from plottable import Table , ColumnDefinition  # noqa: E402
 
 __all__ = ['PlotMultipleData' , 'SubPlotData' , 'PlotFactorData' , 'plot_table' , 'get_twin_axes' , 'set_xaxis' , 'set_yaxis' , 'sns_lineplot' , 'sns_barplot']
 

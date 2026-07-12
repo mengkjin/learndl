@@ -4,6 +4,7 @@ import os
 
 from src.proj.log import Logger
 from src.proj.core import strPath , lit
+from src.proj.util.functional.mpl_config import configure_matplotlib
 
 __all__ = ['figs_to_pdf']
 
@@ -27,13 +28,18 @@ def _sanitize_figure_text(fig) -> None:
 
 def figs_to_pdf(
     figs , path : strPath , prefix : str | None = None , 
-    indent : int = 1 , vb_level : lit.VerbosityLevel = 3
+    indent : int = 1 , vb_level : lit.VerbosityLevel = 3 ,
+    close : bool = True ,
 ) -> bool:
-    """Save figures to one PDF and close each figure.
+    """Save figures to one PDF and optionally close each figure.
+
+    Uses the process Agg default so this is safe on ``AsyncSaver`` worker threads.
+    Pass ``close=False`` if the caller must retain live figures (e.g. interactive GUI).
 
     Returns:
-        Output ``path``.
+        True when the PDF was written.
     """
+    configure_matplotlib()
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
     os.makedirs(os.path.dirname(path) , exist_ok=True)
@@ -41,7 +47,8 @@ def figs_to_pdf(
         for key, fig in figs.items():
             _sanitize_figure_text(fig)
             pdf.savefig(fig)
-            plt.close(fig)
+            if close:
+                plt.close(fig)
     if prefix: 
         Logger.footnote(f'{prefix} saved to {path}' , indent = indent , vb_level = vb_level)
     return True

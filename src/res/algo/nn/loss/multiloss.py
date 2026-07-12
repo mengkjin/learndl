@@ -13,10 +13,13 @@ import torch
 from torch import nn , Tensor
 from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 from src.proj import Base
+from src.proj.util.functional.mpl_config import configure_matplotlib
+
+configure_matplotlib()
+import matplotlib.pyplot as plt  # noqa: E402
 
 __all__ = ['MultiHeadLosses']
 
