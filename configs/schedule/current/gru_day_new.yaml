@@ -8,7 +8,7 @@ model:
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - rtn_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
     global2top: true # false
