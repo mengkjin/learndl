@@ -68,26 +68,26 @@ class resnet_gru(nn.Module):
         o = self.fc_map_out(x)
         return o , {'hidden' : x}
 
-    def loss(self, pred : Tensor , label : Tensor , hidden : Tensor , weight : float = 1.0, **kwargs):
-        """Composite ABCM loss: MSE + R² + corr penalty + turnover penalty.
+    # def loss(self, pred : Tensor , label : Tensor , hidden : Tensor , weight : float = 1.0, **kwargs):
+    #     """Composite ABCM loss: MSE + R² + corr penalty + turnover penalty.
 
-        Args:
-            pred:        Scalar predictions ``[bs, 1]``.
-            label:       Two-column label ``[bs, 2]`` where ``[...,0]`` is the
-                         return target and ``[...,1]`` is the R² target. (std and rtn)
-            hidden:      Hidden states ``[bs, hidden_dim]``.
-        """
-        from torch.nn import functional as F
-        mse = F.mse_loss(pred.squeeze() , label.squeeze())
-        corr = self.corr_loss(hidden)
-        all_losses = {
-            'mse': mse,
-            'corr': self.loss_corr_lamb * corr,
-        }
-        return all_losses
+    #     Args:
+    #         pred:        Scalar predictions ``[bs, 1]``.
+    #         label:       Two-column label ``[bs, 2]`` where ``[...,0]`` is the
+    #                      return target and ``[...,1]`` is the R² target. (std and rtn)
+    #         hidden:      Hidden states ``[bs, hidden_dim]``.
+    #     """
+    #     from torch.nn import functional as F
+    #     mse = F.mse_loss(pred.squeeze() , label.squeeze())
+    #     corr = self.corr_loss(hidden)
+    #     all_losses = {
+    #         'mse': mse,
+    #         'corr': self.loss_corr_lamb * corr,
+    #     }
+    #     return all_losses
 
-    def corr_loss(self, hiddens : Tensor , **kwargs):
-        """Frobenius norm of the standardized beta covariance matrix."""
-        h = (hiddens - hiddens.mean(dim=0,keepdim=True)) / (hiddens.std(dim=0,keepdim=True) + 1e-6)
-        pen = h.T.cov().norm()
-        return pen
+    # def corr_loss(self, hiddens : Tensor , **kwargs):
+    #     """Frobenius norm of the standardized beta covariance matrix."""
+    #     h = (hiddens - hiddens.mean(dim=0,keepdim=True)) / (hiddens.std(dim=0,keepdim=True) + 1e-6)
+    #     pen = h.T.cov().norm()
+    #     return pen
