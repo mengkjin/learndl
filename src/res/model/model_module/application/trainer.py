@@ -191,5 +191,5 @@ class ModelTrainer(BaseTrainer):
             root_paths.append(PATH.model_st)
         if include_factors:
             root_paths.append(PATH.model_factor)
-        bases = [f'{root.name}@{model.name}' for root in root_paths for model in root.iterdir() if model.is_dir() and not model.name.startswith('.')]
+        bases = [f'{root.name}@{model.name}' for root in root_paths for model in sorted(root.iterdir()) if model.is_dir() and not model.name.startswith('.')]
         return bases

@@ -8,7 +8,7 @@ model:
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - rtn_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
     global2top: false
@@ -26,7 +26,6 @@ train:
     ccc_hcorr: {alpha : 0.01}
   trainer.learn_rate:
     base: 0.001
-    transfer_multiplier: {encoder: 0.1, decoder: 1.0}
   trainer.scheduler:
     name: cycle
     param: {base_lr: 1.0e-7, step_size_up: 12}
