@@ -90,7 +90,9 @@ class ModelConfigModifier(Base.BoundLogger):
         old_name = 'callbacks.EarlyExitRetrain'
         new_name = 'callbacks.BadAttemptRetrain'
         default_value = {
-            'early_exit': 30,
+            'early_exit': 10,
+            'moderate_early_exit': 20,
+            'moderate_min_ic': 0.1,
             'min_ic': 0.05,
             'max_attempt': 4,
             'max_nan_redo': 4,
@@ -121,7 +123,9 @@ class ModelConfigModifier(Base.BoundLogger):
             config = config()
         new_name = 'callbacks.BadAttemptRetrain'
         default_value = {
-            'early_exit': 30,
+            'early_exit': 10,
+            'moderate_early_exit': 20,
+            'moderate_min_ic': 0.1,
             'min_ic': 0.05,
             'max_attempt': 4,
             'max_nan_redo': 4,
