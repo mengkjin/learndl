@@ -90,11 +90,11 @@ class ModelConfigModifier(Base.BoundLogger):
         old_name = 'callbacks.EarlyExitRetrain'
         new_name = 'callbacks.BadAttemptRetrain'
         default_value = {
-            'early_exit': 10,
+            'early_exit': 30,
             'min_ic': 0.05,
             'max_attempt': 4,
             'max_nan_redo': 4,
-            'lr_multiplier': [1 , 0.1 , 10 , 0.01 , 100 , 1],
+            'lr_multiplier': [1 , 0.3 , 0.1 , 0.03 , 0.01],
         }
         if old_name in config:
             value = config.pop(old_name)
@@ -121,11 +121,11 @@ class ModelConfigModifier(Base.BoundLogger):
             config = config()
         new_name = 'callbacks.BadAttemptRetrain'
         default_value = {
-            'early_exit': 10,
+            'early_exit': 30,
             'min_ic': 0.05,
             'max_attempt': 4,
             'max_nan_redo': 4,
-            'lr_multiplier': [1 , 0.1 , 10 , 0.01 , 100 , 1],
+            'lr_multiplier': [1 , 0.3 , 0.1 , 0.03 , 0.01],
         }
         if new_name in config and not all(key in config[new_name] for key in default_value):
             for key , value in default_value.items():

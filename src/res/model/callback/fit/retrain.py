@@ -13,9 +13,9 @@ class BadAttemptRetrain(BaseCallBack):
     CB_KEY_PARAMS = ['early_exit' , 'min_ic' , 'max_attempt' , 'max_nan_redo']
     def __init__(self, 
         trainer , 
-        early_exit = 10 , min_ic = 0.05 , 
+        early_exit = 30 , min_ic = 0.05 , 
         max_attempt = 4 , max_nan_redo = 4 ,
-        lr_multiplier = [1 , 0.1 , 10 , 0.01 , 100] , **kwargs
+        lr_multiplier = [1 , 0.3 , 0.1 , 0.03 , 0.01] , **kwargs
     ) -> None:
         super().__init__(trainer , **kwargs)
         self.early_exit = early_exit
@@ -26,7 +26,14 @@ class BadAttemptRetrain(BaseCallBack):
 
     @property
     def is_early_exit(self):
-        return bool(self.status.end_attempt_event) and self.status.end_attempt_event.effective_epoch <= self.early_exit
+        if not self.status.end_attempt_event:
+            return False
+        if self.status.end_attempt_event.effective_epoch > self.early_exit:
+            return False
+        best_epoch = self.metrics.attempt_metrics.best_epoch()
+        if not best_epoch:
+            return False
+        return True
 
     @property
     def is_low_ic(self):
@@ -37,7 +44,8 @@ class BadAttemptRetrain(BaseCallBack):
 
     @property
     def next_attempt_lr_multiplier(self):
-        return self.lr_multiplier[:self.status.attempt+1][-1]
+        idx = min(self.status.attempt + 1, len(self.lr_multiplier) - 1)
+        return self.lr_multiplier[idx]
 
     def on_fit_model_start(self):
         self.remain_nan_redo = self.max_nan_redo

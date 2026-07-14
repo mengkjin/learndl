@@ -18,14 +18,20 @@ class CarryOutScheduleWorkList(DirectCall):
     SCHEDULE_SCRIPT = PATH.scpt.joinpath('4_train' , '2_schedule_model.py')
     @classmethod
     def get_schedules(cls , exclude_recent_created: bool = True) -> list[str]:
+        from src.res.model.util.config.config import ScheduleConfig
+
         ret = list(PATH.read_yaml(PATH.sched_worklist)['fit'])
+        missing = [name for name in ret if not ScheduleConfig.check_name_exist(name)]
+        if missing:
+            Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
+            ret = [name for name in ret if name not in set(missing)]
         if exclude_recent_created:
             ret = [schedule for schedule in ret if not cls._is_schedule_created_recently(schedule)]
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
     @classmethod
     def schedule_names(cls) -> str:
         schedules = cls.get_schedules(exclude_recent_created = True)
-        return ', '.join(schedules)
+        return ', '.join(schedules) if schedules else '(none)'
     @classmethod
     def get_schedule_resume_param(cls) -> bool:
         return bool(PATH.read_yaml(PATH.sched_worklist)['resume'])
@@ -41,6 +47,10 @@ class CarryOutScheduleWorkList(DirectCall):
     @classmethod
     def _get_latest_creation_time(cls , schedule_name: str):
         from src.res.model.util import ModelConfig
+        from src.res.model.util.config.config import ScheduleConfig
+
+        if not ScheduleConfig.check_name_exist(schedule_name):
+            return None
         config = ModelConfig(schedule_name = schedule_name , vb_level = 'never')
         return config.base_path.get_creation_time(all_resumables = True)
 

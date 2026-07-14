@@ -83,7 +83,7 @@ train.torch_compile.stage: fit
 callbacks.LearnRateReset: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1.0 , 'speedup2x' : true}
 callbacks.CallbackTimer: {}
 callbacks.EarlyStoppage: {'peak_patience' : 20 , 'converge_patience' : 5 , 'converge_dataset' : 'valid'}
-callbacks.BadAttemptRetrain: {'early_exit' : 10 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.1 , 10 , 0.01 , 100 , 1]}
+callbacks.BadAttemptRetrain: {'early_exit' : 30 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.3 , 0.1 , 0.03 , 0.01]}
 callbacks.StatusDisplay: {}
 callbacks.SummaryWriter: {}
 callbacks.MemoryOptimization: {'batch_interval' : 20}

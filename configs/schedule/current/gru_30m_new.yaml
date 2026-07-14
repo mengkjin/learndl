@@ -13,10 +13,6 @@ model:
   special:
     global2top: false
 
-train:
-  criterion.weight:
-    fit:    'polar'
-
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
   data.types: 30m # ['day+30m' , 30m , day , ...] , use if input_type is data
@@ -24,8 +20,23 @@ input:  # input specification --------------------------------------------------
   sequence.steps: {30m: 1}
 
 train:
+  criterion.weight:
+    fit:    'polar'
   criterion.loss: 
-      ccc_hcorr: {alpha : 0.01}
+    ccc_hcorr: {alpha : 0.01}
+  trainer.learn_rate:
+    base: 0.001
+    transfer_multiplier: {encoder: 0.1, decoder: 1.0}
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
+
+callbacks:
+  LearnRateReset:
+    num_reset: 2
+    trigger: 40
+    recover_level: 0.3
+    speedup2x: true
 
 algo:
   resnet_gru:
@@ -39,4 +50,3 @@ algo:
     rnn_layers:     [2]
     which_output:   [0]
     resnet_blocks:  [1]
-  

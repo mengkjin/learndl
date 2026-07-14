@@ -581,5 +581,11 @@ class AskFor:
             yield loop_flag
             if loop_flag.break_loop:
                 break
-            if ask and AskFor.Retry(message).exit:
+            if not ask:
+                continue
+            # Re-check after long work (e.g. pipeline script) before Retry,
+            # so a server git pull reloads without requiring manual /restart.
+            if watcher is not None and watcher.changed():
+                raise ProcessReload('git HEAD changed')
+            if AskFor.Retry(message).exit:
                 break
