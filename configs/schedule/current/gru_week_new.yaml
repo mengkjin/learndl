@@ -13,29 +13,39 @@ model:
   special:
     global2top: true
 
-train:
-  criterion.weight:
-    fit:    'polar'
-
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
   data.types: week # ['day+30m' , 30m , day , ...] , use if input_type is data
   sequence.lens: {week: 50}
   sequence.steps: {week: 5}
 
+train:
+  criterion.weight:
+    fit:    'polar'
+  criterion.loss: 
+    ccc_hcorr: {alpha : 0.01}
+  trainer.learn_rate:
+    base: 0.001
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
+
+callbacks:
+  LearnRateReset:
+    num_reset: 2
+    trigger: 40
+    recover_level: 0.3
+    speedup2x: true
+
 algo:
   resnet_gru:
     hidden_dim:     [64] #  2**5
     seqlens:        [{'week': 50}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in_dim:     [32,64]  # the resnet block input dimension
-    enc_att:        [true] 
+    enc_in_dim:     [32]  # the resnet block input dimension
+    enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
-    rnn_att:        [false]
+    rnn_att:        [true]
     rnn_layers:     [2]
-    dec_mlp_layers: [1] 
-    num_output:     [1]
     which_output:   [0]
     resnet_blocks:  [1]
-    enc_in_dim   :  [16]
-    hidden_as_factor:    [true]
