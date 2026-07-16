@@ -32,7 +32,7 @@ algo:
     hidden_dim:     [64] #  2**5
     seqlens:        [{'dfl2cs':30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in:         [true]
+    enc_in:         [false]
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [true]
