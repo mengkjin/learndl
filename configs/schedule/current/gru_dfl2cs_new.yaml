@@ -22,6 +22,13 @@ input:  # input specification --------------------------------------------------
 train:
   criterion.weight:
     fit:    'polar'
+  criterion.loss: 
+    ccc_hcorr: {alpha : 0.01}
+  trainer.learn_rate:
+    base: 0.001
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
 
 algo:
   gru:
@@ -31,7 +38,7 @@ algo:
     enc_in:         [true]
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
-    rnn_att:        [false]
+    rnn_att:        [true]
     rnn_layers:     [2]
     dec_mlp_layers: [2] 
     num_output:     [1]
