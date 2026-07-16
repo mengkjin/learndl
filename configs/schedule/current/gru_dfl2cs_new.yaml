@@ -25,10 +25,7 @@ train:
   criterion.loss: 
     ccc_hcorr: {alpha : 0.01}
   trainer.learn_rate:
-    base: 0.001
-  trainer.scheduler:
-    name: cycle
-    param: {base_lr: 1.0e-7, step_size_up: 12}
+    base: 0.01
 
 algo:
   gru:
