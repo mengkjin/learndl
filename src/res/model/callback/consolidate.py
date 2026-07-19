@@ -36,7 +36,7 @@ class ConsolidateCallBack(BaseCallBack):
 
     def print_out(self , vb_level : Base.lit.VerbosityLevel = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]
-        infos_dict = {name:f'({param}), {doc}' if doc else f'({param})' for name , param , doc in infos}
+        infos_dict = {name:param for name , param , _ in infos}
         self.logger.stdout_pairs(infos_dict , title = f'CallBacks Initiated:' , vb_level = vb_level , min_key_len = min_key_len)
 
     def get_implemented_hook_callables(self , hook : str) -> list[Callable]:
@@ -71,7 +71,6 @@ class ConsolidateCallBack(BaseCallBack):
         # resolve conflicts
         module_type = self.config.module_type
         module_name = self.config.model_module
-        callback_available = [True for _ in callbacks]
         for i in range(len(callbacks)):
             if module_type in callbacks[i].ConflictModuleTypes:
                 self.logger.alert2(f'Callback [{callbacks[i].__class__.__name__}] removed, conflicts with module type [{module_type}]')
