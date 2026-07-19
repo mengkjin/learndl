@@ -1,0 +1,53 @@
+model:
+  # main model configs ----------------------------------------------------------------
+  module        : resnet_gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+  submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
+
+  window  : 1200
+
+  # labels specification ------------------------------------------------------------
+  # rtn : raw return | std : standardized return | res : risk model residual
+  # if module is nn , use multiloss combination of the labels
+  # if module is boost , only use the first label
+  labels: 
+    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+
+  special:
+    global2top: true
+
+input:  # input specification ----------------------------------------------------------------
+  type: data # [data , hidden , factor] , specify below
+  data.types: 15m # ['day+30m' , 30m , day , ...] , use if input_type is data
+  sequence.lens: {15m: 30}
+  sequence.steps: {15m: 1}
+
+train:
+  criterion.weight:
+    fit:    'polar'
+  criterion.loss: 
+    ccc_hcorr: {alpha : 0.01}
+  trainer.learn_rate:
+    base: 0.001
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
+
+callbacks:
+  LearnRateReset:
+    num_reset: 2
+    trigger: 40
+    recover_level: 0.3
+    speedup2x: true
+
+algo:
+  resnet_gru:
+    hidden_dim:     [64] #  2**5
+    seqlens:        [{'30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+    dropout:        [0.1]
+    enc_in_dim:     [32]  # the resnet block input dimension
+    enc_att:        [false] 
+    rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+    rnn_att:        [true]
+    rnn_layers:     [2]
+    which_output:   [0]
+    resnet_blocks:  [1]
