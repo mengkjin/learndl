@@ -3,17 +3,17 @@ model:
   module        : resnet_gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
-  window  : 1200
+  window  : 2400
 
   # labels specification ------------------------------------------------------------
   # rtn : raw return | std : standardized return | res : risk model residual
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - rtn_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
-    global2top: true
+    global2top: false
 
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
@@ -25,7 +25,7 @@ train:
   criterion.weight:
     fit:    'polar'
   criterion.loss: 
-    ccc_hcorr: {alpha : 0.01}
+    ccc_hcorr: {alpha : 0.1}
   trainer.learn_rate:
     base: 0.001
   trainer.scheduler:
@@ -42,7 +42,7 @@ callbacks:
 algo:
   resnet_gru:
     hidden_dim:     [64] #  2**5
-    seqlens:        [{'30m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+    seqlens:        [{'15m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
     enc_in_dim:     [32]  # the resnet block input dimension
     enc_att:        [false] 
@@ -50,4 +50,4 @@ algo:
     rnn_att:        [true]
     rnn_layers:     [2]
     which_output:   [0]
-    resnet_blocks:  [1]
+    resnet_blocks:  [1 , 2]
