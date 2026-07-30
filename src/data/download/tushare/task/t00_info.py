@@ -82,14 +82,24 @@ class ChangeName(InfoFetcher):
         df = TS.code_to_secid(df).fillna({'start_date':-1 , 'ann_date':-1 , 'end_date':99991231}).astype({'start_date':int , 'ann_date':int , 'end_date':int})
         df['entry_dt'] = np.where(df['ann_date'] > 0 , np.minimum(df['start_date'] , df['ann_date']) , df['ann_date'])
         df['remove_dt'] = df['end_date']
-        assert df['change_reason'].isin(self._dangerous_type() + self._safe_type()).all , \
-            df['change_reason'][~df['change_reason'].isin(self._dangerous_type() + self._safe_type())]
+        assert df['change_reason'].isin(self.dangerous_type() + self.recover_type() + self.other_type()).all() , \
+            f"Invalid change reason: {df['change_reason'][~df['change_reason'].isin(self.dangerous_type() + self.recover_type() + self.other_type())].unique()}"
         return df
     
     @staticmethod
-    def _dangerous_type():
-        return ['终止上市', 'ST', '*ST', '暂停上市']
+    def dangerous_type():
+        return [
+            '终止上市', 'ST', '*ST', '暂停上市','撤消*ST并实行ST',
+            '退市整理期','从ST变为*ST','叠加ST','撤销叠加*ST', 'PT','高风险警示']
 
     @staticmethod
-    def _safe_type():
-        return ['撤销ST', '撤销*ST', '摘星', '摘星改名', '恢复上市加N', '恢复上市']
+    def recover_type():
+        return [
+            '撤销ST', '撤销*ST', '摘星', '摘星改名', '恢复上市','撤销高风险警示','撤销PT'
+        ]
+
+    @staticmethod
+    def other_type():
+        return [
+            '恢复上市加N', '其他'
+        ]

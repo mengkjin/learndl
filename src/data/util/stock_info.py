@@ -51,10 +51,12 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
         self._cname['entry_dt'] = self._cname['entry_dt'].where(self._cname['entry_dt'] > 0 , self._cname['start_date'])
         self._cname = self._cname.query('secid >= 0').sort_values(['secid', 'ann_dt'])
 
-        self._st_add = self._cname.loc[self._cname['change_reason'].isin(['终止上市', '暂停上市' , 'ST', '*ST'])].\
+        from src.data.download.tushare.task.t00_info import ChangeName
+
+        self._st_add = self._cname.loc[self._cname['change_reason'].isin(ChangeName.dangerous_type())].\
             sort_values(['secid','entry_dt','remove_dt']).\
             drop_duplicates(['secid','change_reason','entry_dt'] , keep = 'last').reset_index(drop=True)
-        self._st_del = self._cname.loc[self._cname['change_reason'].isin(['撤销*ST', '撤销ST'])].\
+        self._st_del = self._cname.loc[self._cname['change_reason'].isin(ChangeName.recover_type())].\
             sort_values(['secid','entry_dt','remove_dt']).\
             drop_duplicates(['secid','change_reason','entry_dt'] , keep = 'first').reset_index(drop=True)
 

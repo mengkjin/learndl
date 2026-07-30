@@ -252,10 +252,11 @@ class SellsideSQLDownloader(Base.BasicUpdater):
                 start = max(self.start_date , CALENDAR.td(stored_dates[-1],1).td)
             else:
                 start = self.start_date
-            start , end = CALENDAR.update_schedule(start , None , key = 'sellside_sql')
+            # Clamp by factor-level end_date (e.g. discontinued dongfang.scores_v* at 20251231)
+            start , end = CALENDAR.update_schedule(start , self.end_date , key = 'sellside_sql')
             dates = Dates(start , end)
         else:
-            dates = Dates(dates).diff(stored_dates)
+            dates = Dates(dates , self.start_date , self.end_date).diff(stored_dates)
         segments = dates.segments(60 , require_consecutive = 'td')
 
         if not segments: 
