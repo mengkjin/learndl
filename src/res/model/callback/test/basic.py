@@ -13,9 +13,10 @@ from src.res.model.util import BaseCallBack
 
 __all__ = ['BasicTestResult']
 class BasicTestResult(BaseCallBack):
-    """Basic Test of RankIC"""
+    """Basic Test of RankIC against unified eval labels (rtn/std_lag1_10)."""
 
-    _stat_cols : tuple[str, ...] = ('rankic' , 'top5pct' , 'mid20pct' , 'bot5pct')
+    EVAL_LABELS : tuple[str, ...] = ('rtn_lag1_10' , 'std_lag1_10')
+    _stat_cols : tuple[str, ...] = ('rankic_rtn' , 'rankic_std' , 'top5pct' , 'mid20pct' , 'bot5pct')
     
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
@@ -45,6 +46,17 @@ class BasicTestResult(BaseCallBack):
     def test_df_cols(self) -> list[str]:
         return ['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]
 
+    def _attach_eval_labels(self , preds : pd.DataFrame) -> pd.DataFrame:
+        """Merge unified eval labels from the full y DataBlock onto preds."""
+        if preds.empty:
+            return preds
+        y_blk = self.data.datas.blocks['y']
+        missing = [c for c in self.EVAL_LABELS if c not in y_blk.feature]
+        assert not missing , f'missing eval labels in y block: {missing}, available={list(y_blk.feature)}'
+        y_df = y_blk.align_feature(list(self.EVAL_LABELS)).to_dataframe().reset_index()
+        preds = preds.drop(columns=[c for c in self.EVAL_LABELS if c in preds.columns] , errors='ignore')
+        return preds.merge(y_df , on=['secid' , 'date'] , how='left')
+
     def complete_test_df(self) -> pd.DataFrame:
         df = Load.df(self.path_test_df).dropna() if self.config.is_resuming else pd.DataFrame()
         if df.empty or not all(col in df.columns for col in self.stat_cols):
@@ -53,31 +65,44 @@ class BasicTestResult(BaseCallBack):
             df = df[['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]]
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
-        preds = self.record.get_preds(target_dates).dropna()
+        preds = self.record.get_preds(target_dates).dropna(subset=['pred'])
+        preds = self._attach_eval_labels(preds).dropna(subset=['pred' , *self.EVAL_LABELS])
 
-        grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
-        def df_rankic(subdf : pd.DataFrame , **kwargs):
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
-                warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
-                return subdf[['pred']].corrwith(subdf['label'], method='spearman')
-        def df_top5pct(subdf : pd.DataFrame , **kwargs):
-            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
-            pred_rank = subdf['pred'].rank(pct=True)
-            return std_label.loc[pred_rank >= 0.95].mean()
-        def mid_20pct(subdf : pd.DataFrame , **kwargs):
-            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
-            pred_rank = subdf['pred'].rank(pct=True)
-            return std_label.loc[(pred_rank >= 0.4) & (pred_rank < 0.6)].mean()
-        def df_bot5pct(subdf : pd.DataFrame , **kwargs):
-            std_label = (subdf[['label']] - subdf['label'].mean()) / (subdf['label'].std() + 1e-6)
-            pred_rank = subdf['pred'].rank(pct=True)
-            return std_label.loc[pred_rank < 0.05].mean()
-        rankic_df = grouped.apply(df_rankic , include_groups = False).rename(columns={'pred':'rankic'})[['rankic']]
-        top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'label':'top5pct'})[['top5pct']]
-        mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'label':'mid20pct'})[['mid20pct']]
-        bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'label':'bot5pct'})[['bot5pct']]
-        new_df = rankic_df.join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
+        if preds.empty:
+            new_df = pd.DataFrame(columns=self.test_df_cols)
+        else:
+            grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
+            def df_rankic_rtn(subdf : pd.DataFrame , **kwargs):
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
+                    warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
+                    return subdf[['pred']].corrwith(subdf['rtn_lag1_10'], method='spearman')
+            def df_rankic_std(subdf : pd.DataFrame , **kwargs):
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
+                    warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
+                    return subdf[['pred']].corrwith(subdf['std_lag1_10'], method='spearman')
+            def df_top5pct(subdf : pd.DataFrame , **kwargs):
+                rtn = subdf['rtn_lag1_10']
+                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
+                pred_rank = subdf['pred'].rank(pct=True)
+                return std_rtn.loc[pred_rank >= 0.95].mean()
+            def mid_20pct(subdf : pd.DataFrame , **kwargs):
+                rtn = subdf['rtn_lag1_10']
+                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
+                pred_rank = subdf['pred'].rank(pct=True)
+                return std_rtn.loc[(pred_rank >= 0.4) & (pred_rank < 0.6)].mean()
+            def df_bot5pct(subdf : pd.DataFrame , **kwargs):
+                rtn = subdf['rtn_lag1_10']
+                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
+                pred_rank = subdf['pred'].rank(pct=True)
+                return std_rtn.loc[pred_rank < 0.05].mean()
+            rankic_rtn_df = grouped.apply(df_rankic_rtn , include_groups = False).rename(columns={'pred':'rankic_rtn'})[['rankic_rtn']]
+            rankic_std_df = grouped.apply(df_rankic_std , include_groups = False).rename(columns={'pred':'rankic_std'})[['rankic_std']]
+            top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'rtn_lag1_10':'top5pct'})[['top5pct']]
+            mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'rtn_lag1_10':'mid20pct'})[['mid20pct']]
+            bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'rtn_lag1_10':'bot5pct'})[['bot5pct']]
+            new_df = rankic_rtn_df.join(rankic_std_df).join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
         if df.empty:
             df = new_df
         elif not new_df.empty:
@@ -152,7 +177,10 @@ class BasicTestResult(BaseCallBack):
             if len(df_display) > 100: 
                 df_display = df_display.loc[['Avg' , 'Sum' , 'Std' , 'T' , 'IR']]          
             criterion_accuracy = list(self.config.criterion_accuracy.keys())[0]
-            caption = f'Table: Test Summary for Models (rankic={criterion_accuracy},pct=zscore):'
+            caption = (
+                f'Table: Test Summary for Models '
+                f'(rankic_rtn/std vs rtn_lag1_10/std_lag1_10, pct=zscore(rtn_lag1_10), train_acc={criterion_accuracy}):'
+            )
             self.logger.display(df_display.round(3) , title = caption)
             
             # export excel
