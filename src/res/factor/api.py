@@ -3,6 +3,8 @@ Factor related API for the project
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
+from typing import Any
 
 from src.proj import Base
 from src.res.factor.util import StockFactor
@@ -19,7 +21,42 @@ __all__ = [
     'RiskModelUpdater' , 'FactorUpdaterAPI' , 'FactorTestAPI' , 'StockFactorHierarchy'
 ]
 
-class RiskModelUpdater:
+class RiskModelUpdater(Base.SelectiveUpdateSupport):
+    SELECTION_PREFIX = 'risk'
+    SELECTION_KEY = 'risk.cne5'
+
+    @classmethod
+    def selection_tree(cls) -> Base.UpdateMenuNode:
+        return Base.UpdateMenuNode(
+            label = 'Risk' ,
+            help = 'Risk model updaters' ,
+            children = [
+                Base.UpdateMenuNode(
+                    label = 'TuShareCNE5' ,
+                    key = cls.SELECTION_KEY ,
+                    help = 'Tushare CNE5 exposure / risk model' ,
+                ) ,
+            ] ,
+        )
+
+    @classmethod
+    def selective_update(
+        cls ,
+        selection : Sequence[str] ,
+        * ,
+        force : bool = False ,
+        start : int | None = None ,
+        end : int | None = None ,
+        **kwargs : Any ,
+    ) -> Base.UpdateFlag:
+        if cls.SELECTION_KEY not in selection:
+            return Base.UpdateFlag.SKIPPED
+        force , start , end = Base.resolve_force_range(force , start , end)
+        if force:
+            assert start is not None and end is not None
+            return TuShareCNE5_Calculator.recalculate(start , end)
+        return TuShareCNE5_Calculator.update()
+
     @classmethod
     def update(cls) -> Base.UpdateFlagList:
         flags = Base.UpdateFlagList()

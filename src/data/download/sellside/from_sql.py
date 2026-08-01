@@ -178,8 +178,11 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         return super().parse_update_input(*args , key='sellside_sql' , **kwargs)
         
     @classmethod
-    def proceed_update(cls , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs) -> Base.UpdateFlag:
-        return cls.update_since(trace = 0)
+    def proceed_update(
+        cls , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 ,
+        keys = None , **kwargs
+    ) -> Base.UpdateFlag:
+        return cls.update_since(trace = 0 , keys = keys)
 
     def __repr__(self):
         return f'{self.__class__.__name__}(factor_src={self.factor_src},factor_set={self.factor_set})'
@@ -243,9 +246,10 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         self , option : DownloadOption , overwrite : bool = False ,
         dates : Base.alias.DateType = None , trace = 1 , 
     ) -> Base.UpdateFlag:
-        assert overwrite is False , 'overwrite is not supported for sellside sql download'
         stored_dates = DB.dates(self.DB_SRC , self.db_key)
         if option == 'since':
+            if overwrite:
+                raise ValueError('overwrite is only supported for sellside sql download option "dates"')
             if trace > 0 and len(stored_dates) > trace: 
                 stored_dates = stored_dates[:-trace]
             if len(stored_dates): 
@@ -256,7 +260,8 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             start , end = CALENDAR.update_schedule(start , self.end_date , key = 'sellside_sql')
             dates = Dates(start , end)
         else:
-            dates = Dates(dates , self.start_date , self.end_date).diff(stored_dates)
+            ranged = Dates(dates , self.start_date , self.end_date)
+            dates = ranged if overwrite else ranged.diff(stored_dates)
         segments = dates.segments(60 , require_consecutive = 'td')
 
         if not segments: 

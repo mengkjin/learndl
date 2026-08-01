@@ -513,14 +513,21 @@ class TuShareCNE5_Calculator(Base.BasicUpdater):
         return Base.UpdateFlag.SUCCESS
 
     @classmethod
-    def parse_update_input(cls , update_type : Base.UpdateType , rollback_date : int | None = None , **kwargs) -> dict[str , Any]:
+    def parse_update_input(
+        cls , update_type : Base.UpdateType , rollback_date : int | None = None ,
+        start : int | None = None , end : int | None = None , **kwargs
+    ) -> dict[str , Any]:
         if update_type == Base.UpdateType.UPDATE:    
             dates = cls.updatable_dates('exposure')
         elif update_type == Base.UpdateType.ROLLBACK:
             assert rollback_date is not None , 'rollback_date is required for rollback'
-            start = CALENDAR.td(rollback_date , 1)
-            end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
-            dates = CALENDAR.range(start , end , 'td')
+            rb_start = CALENDAR.td(rollback_date , 1)
+            rb_end = np.min([DB.max_date('trade_ts' , 'day'), DB.max_date('trade_ts' , 'day_val')])
+            dates = CALENDAR.range(rb_start , rb_end , 'td')
+        elif update_type == Base.UpdateType.RECALC:
+            assert start is not None and end is not None , 'start and end are required for recalculate'
+            recalc_start , recalc_end = CALENDAR.update_schedule(max(start , cls.START_DATE) , end)
+            dates = CALENDAR.range(recalc_start , recalc_end , 'td')
         else:
             raise ValueError(f'Invalid update type: {update_type}')
 

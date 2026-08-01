@@ -348,9 +348,49 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             ldate = min(ldate , self.rollback_date)
         return ldate
 
+    def set_overwrite_range(self , overwrite : bool , start : int | None , end : int | None) -> None:
+        """Enable forced re-download for ``[start, end]`` when ``overwrite`` is True."""
+        self._overwrite = bool(overwrite)
+        self._overwrite_start = start
+        self._overwrite_end = end
+
+    @property
+    def overwrite(self) -> bool:
+        return bool(getattr(self , '_overwrite' , False))
+
+    def overwrite_target_dates(self) -> Dates:
+        """Target dates for forced re-download within an explicit calendar range."""
+        assert self._overwrite_start is not None and self._overwrite_end is not None , \
+            'overwrite start/end are required'
+        start , end = CALENDAR.update_schedule(self._overwrite_start , self._overwrite_end , key = 'tushare')
+        if self.db_by_name:
+            return Dates(end)
+        if self.DB_TYPE == 'rolling':
+            sep = int(getattr(self , 'ROLLING_SEP_DAYS' , 50))
+            d , dates = start , [start]
+            while d < end:
+                d = CALENDAR.cd(d , sep)
+                dates.append(min(d , end))
+            return Dates(dates)
+        if self.DB_TYPE == 'fina':
+            data_freq = getattr(self , 'DATA_FREQ' , 'q')
+            consider_future = bool(getattr(self , 'CONSIDER_FUTURE' , False))
+            dates = CALENDAR.qe_trailing(
+                end , n_past = 20 , n_future = 4 if consider_future else 0 , another_date = start)
+            if data_freq == 'y':
+                dates = [date for date in dates if date % 10000 == 1231]
+            elif data_freq == 'h':
+                dates = [date for date in dates if date % 10000 in [630 , 1231]]
+            return Dates([date for date in dates if start <= date <= end])
+        assert self.UPDATE_FREQ , f'{self.__class__.__name__} UPDATE_FREQ must be set'
+        if self.UPDATE_FREQ == 'd':
+            return Dates(start , end)
+        return TS.dates_to_update(CALENDAR.td(start , -1).td , self.UPDATE_FREQ , end)
+
     @classmethod
     def update(
-        cls , * , rollback_date : int | None = None , 
+        cls , * , rollback_date : int | None = None ,
+        overwrite : bool = False , start : int | None = None , end : int | None = None ,
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ) -> Base.UpdateFlag:
         """update the fetcher"""
@@ -360,10 +400,12 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
                 return Base.UpdateFlag.SKIPPED
             fetcher = cls(indent = indent , vb_level = vb_level)
             fetcher.set_rollback_date(rollback_date)
+            fetcher.set_overwrite_range(overwrite , start , end)
 
             flags = Base.UpdateFlagList()
             flags += fetcher.update_with_retries()
-            flags += fetcher.update_missing()
+            if not overwrite:
+                flags += fetcher.update_missing()
             return flags.summarize()
         except Exception as e:
             cls.logger.error(f'Update failed: {e}' if rollback_date is None else f'Update rollback failed: {e}')
@@ -390,7 +432,7 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
 
     def update_with_retries(self , timeout_wait_seconds = 20 , timeout_max_retries = 10) -> Base.UpdateFlag:
         """update the fetcher with retries"""
-        dates = self.target_dates()
+        dates = self.overwrite_target_dates() if self.overwrite else self.target_dates()
 
         if dates.empty: 
             self.logger.skipping(f'Already fetched up to {CALENDAR.update_to(key = 'tushare')}!')

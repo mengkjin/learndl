@@ -74,11 +74,18 @@ class DirectCallHub(DirectCall):
     @classmethod
     def _research_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
         from src.api.calls.dashboard import OptunaDashboard, Tensorboard
-        from src.api.calls.data import ReconstructPreprocessedData, RecalculateHistNorm
+        from src.api.calls.data import (
+            ReconstructPreprocessedData, RecalculateHistNorm, UpdateProjectData,
+        )
         from src.api.calls.files import ModelArchiveOperations
         from src.api.calls.research import CarryOutScheduleWorkList
 
         return [
+            (
+                'Update Project Data',
+                UpdateProjectData,
+                UpdateProjectData.get_description(),
+            ),
             (
                 'Reconstruct Preprocessed Data',
                 ReconstructPreprocessedData,

@@ -143,17 +143,23 @@ class CustomIndex(metaclass=CustomIndexMeta):
         return target_dates
 
     @classmethod
-    def iter_custom_indices(cls):
+    def iter_custom_indices(cls , names : list[str] | None = None):
+        name_set = set(names) if names is not None else None
         for name , custom_index_cls in cls.registry.items():
+            if name_set is not None and name not in name_set:
+                continue
             yield custom_index_cls()
 
 class CustomIndexUpdater(BasicCustomUpdater):
     START_DATE = START_DATE
 
     @classmethod
-    def proceed_update(cls , start : int | None = None , end : int | None = None , overwrite : bool = False , **kwargs) -> Base.UpdateFlag:
+    def proceed_update(
+        cls , start : int | None = None , end : int | None = None , overwrite : bool = False ,
+        index_names : list[str] | None = None , **kwargs
+    ) -> Base.UpdateFlag:
         total_dates = []
-        custom_indices = list(CustomIndex.iter_custom_indices())
+        custom_indices = list(CustomIndex.iter_custom_indices(index_names))
         for custom_index in custom_indices:
             target_dates = custom_index.target_dates(start = start , end = end , overwrite = overwrite)
             if len(target_dates) == 0:

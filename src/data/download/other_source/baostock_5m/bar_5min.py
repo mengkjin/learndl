@@ -123,20 +123,24 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
 
     @classmethod
     def proceed_update(
-        cls , start : int , end : int , * , first_n : int = -1 , **kwargs
+        cls , start : int , end : int , * ,
+        first_n : int = -1 , overwrite : bool = False , **kwargs
     ) -> Base.UpdateFlag:
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
-        return updater.download_since_last_data(start = start , end = end , first_n = first_n)
+        return updater.download_since_last_data(
+            start = start , end = end , first_n = first_n , overwrite = overwrite ,
+        )
     
     def download_since_last_data(
         self , start : int , end : int , 
-        first_n : int = -1 , retry_n : int = 10
+        first_n : int = -1 , retry_n : int = 10 , * , overwrite : bool = False ,
     ) -> Base.UpdateFlag:
         pending_dt = pending_date()
         prev_dates = updated_dates(5)
-        start = max(start , CALENDAR.td(max(prev_dates) , 1).td)
+        if not overwrite and len(prev_dates):
+            start = max(start , CALENDAR.td(max(prev_dates) , 1).td)
         start , end = CALENDAR.update_schedule(start , end , key = 'baostock_5min')
-        target_dates = Dates(start , end).diff(prev_dates)
+        target_dates = Dates(start , end) if overwrite else Dates(start , end).diff(prev_dates)
         if target_dates.empty:
             self.logger.skipping(f'Other source 5min {start} - {end} already updated')
             return Base.UpdateFlag.SKIPPED

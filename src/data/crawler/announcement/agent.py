@@ -22,15 +22,52 @@ from .util import CrawlerLogger
 
 __all__ = ["AnnouncementAgent"]
 
-class AnnouncementAgent(Base.BasicUpdater):
+class AnnouncementAgent(Base.BasicUpdater , Base.SelectiveUpdateSupport):
     """
     Crawl and incrementally update exchange announcement metadata.
 
     Uses ``FetcherTask`` for per-date HTTP fetches and ``ProxyCallerList``
     for rotating proxy management.
     """
-    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, Base.UpdateType.ROLLBACK)
+    ACCEPTABLE_UPDATE_TYPES = (Base.UpdateType.UPDATE, Base.UpdateType.ROLLBACK, Base.UpdateType.RECALC)
     START_DATE = 20160101 if MACHINE.cuda_server else 20250101
+    SELECTION_PREFIX = 'announcement'
+
+    @classmethod
+    def selection_tree(cls) -> Base.UpdateMenuNode:
+        return Base.UpdateMenuNode(
+            label = 'Announcement' ,
+            help = 'Exchange disclosure announcement crawler' ,
+            children = [
+                Base.UpdateMenuNode(
+                    label = exchange.value.upper() ,
+                    key = f'{cls.SELECTION_PREFIX}.{exchange.value}' ,
+                    help = f'Crawl {exchange.value} announcements' ,
+                )
+                for exchange in ExchangeType
+            ] ,
+        )
+
+    @classmethod
+    def selective_update(
+        cls ,
+        selection ,
+        * ,
+        force : bool = False ,
+        start : int | None = None ,
+        end : int | None = None ,
+        **kwargs ,
+    ) -> Base.UpdateFlag:
+        prefix = f'{cls.SELECTION_PREFIX}.'
+        exchanges = [key[len(prefix):] for key in selection if key.startswith(prefix)]
+        if not exchanges:
+            return Base.UpdateFlag.SKIPPED
+        force , start , end = Base.resolve_force_range(
+            force , start , end , key = 'crawler_announcement')
+        if force:
+            assert start is not None and end is not None
+            return cls.recalculate(start , end , exchanges = exchanges , **kwargs)
+        return cls.update(exchanges = exchanges , **kwargs)
 
     @classmethod
     def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
@@ -38,12 +75,14 @@ class AnnouncementAgent(Base.BasicUpdater):
 
     @classmethod
     def proceed_update(
-        cls , start : int , end : int , overwrite : bool , * , workers: int = 10, force_update: int = 0, **kwargs
+        cls , start : int , end : int , overwrite : bool , * ,
+        workers: int = 10, force_update: int = 0,
+        exchanges : list[str] | None = None , **kwargs
     ) -> Base.UpdateFlag:        
         flag = cls.run_with_proxy_async(
             start, end, redownload = overwrite , 
             force_update = force_update , workers = workers, 
-            fallback_to_raw_ip = False, **kwargs)
+            fallback_to_raw_ip = False, exchanges = exchanges , **kwargs)
         return flag
 
     @classmethod
@@ -74,9 +113,11 @@ class AnnouncementAgent(Base.BasicUpdater):
     @classmethod
     def get_proxy_caller_list(
         cls , start: int, end: int, step: int = 1, redownload: bool = False , * , force_update: int = 0,
-        use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 0 , 
+        use_proxy = True , go_with_cached_proxies = False, ignore_proxy_threshold : int = 0 ,
+        exchanges : list[str] | None = None ,
     ) -> ProxyCallerList:
-        tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
+        tasks = FetcherTask.tasks_flat(
+            start, end, step, redownload , force_update=force_update , exchanges = exchanges)
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
@@ -109,10 +150,12 @@ class AnnouncementAgent(Base.BasicUpdater):
                 race_ratio=race_ratio, min_race_tasks=min_race_tasks,
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+                exchanges=kwargs.get('exchanges'),
             )
         caller_list = cls.get_proxy_caller_list(
             start, end, step, redownload, force_update=force_update, use_proxy = True, 
-            go_with_cached_proxies = go_with_cached_proxies)
+            go_with_cached_proxies = go_with_cached_proxies,
+            exchanges = kwargs.get('exchanges'))
         if caller_list:
             results = caller_list.execute_with_partition(max_workers=min(max(1, workers), 50) , fallback_to_raw_ip=fallback_to_raw_ip)
             if all([result if isinstance(result, bool) else False for result in results]):
@@ -137,9 +180,11 @@ class AnnouncementAgent(Base.BasicUpdater):
         min_race_tasks: int = 2,
         max_replicas_per_task: int = 5,
         max_total_inflight_per_exchange: int = 20,
+        exchanges: list[str] | None = None,
         **kwargs,
     ) -> Base.UpdateFlag:
-        tasks = FetcherTask.tasks_flat(start, end, step, redownload , force_update=force_update)
+        tasks = FetcherTask.tasks_flat(
+            start, end, step, redownload , force_update=force_update , exchanges = exchanges)
         if tasks:
             min_date = min(task.start for task in tasks)
             max_date = max(task.end for task in tasks)
@@ -201,6 +246,7 @@ class AnnouncementAgent(Base.BasicUpdater):
         min_race_tasks: int = 2,
         max_replicas_per_task: int = 5,
         max_total_inflight_per_exchange: int = 20,
+        exchanges: list[str] | None = None,
         **kwargs,
     ) -> Base.UpdateFlag:
         if fallback_to_raw_ip:
@@ -212,6 +258,7 @@ class AnnouncementAgent(Base.BasicUpdater):
                 race_ratio=race_ratio, min_race_tasks=min_race_tasks,
                 max_replicas_per_task=max_replicas_per_task,
                 max_total_inflight_per_exchange=max_total_inflight_per_exchange,
+                exchanges=exchanges,
                 **kwargs,
             )
         )

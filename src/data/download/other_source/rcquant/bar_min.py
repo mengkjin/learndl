@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 
 from typing import Any , Literal , TypeAlias
+from collections.abc import Sequence
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Save , Load
 from src.data.util import secid_adjust , trade_min_reform
@@ -83,22 +84,29 @@ def last_date(data_type : MinDataType , offset : int = 0 , x_min : int = 1) -> i
     last_dt = max(dates) if len(dates) > 0 else 19970101
     return CALENDAR.cd(last_dt , offset)
 
-def target_dates(data_type : MinDataType , start : int , end : int | None = None) -> Dates:
+def target_dates(
+    data_type : MinDataType , start : int , end : int | None = None , * , overwrite : bool = False
+) -> Dates:
     start = max(start , src_start_date(data_type))
     start , end = CALENDAR.update_schedule(start , end , key = 'rcquant_min')
-    dates = Dates(start , end).diff(stored_dates(data_type , 1))
+    dates = Dates(start , end)
+    if not overwrite:
+        dates = dates.diff(stored_dates(data_type , 1))
     return dates
 
-def x_mins_target_dates(data_type : MinDataType , start : int , end : int | None = None) -> Dates:
+def x_mins_target_dates(
+    data_type : MinDataType , start : int , end : int | None = None , * , overwrite : bool = False
+) -> Dates:
     dates = Dates()
     if data_type != 'sec': 
         return dates
     end = CALENDAR.update_to(key = 'rcquant_min') if end is None else end
     for x_min in [5 , 10 , 15 , 30 , 60]:
         source_dates = DB.dates('trade_ts' , src_key(data_type , 1))
-        stored_dates = DB.dates('trade_ts' , src_key(data_type , x_min))
-        target_dates = source_dates.diff(stored_dates).slice(min(start , src_start_date(data_type)) , end)
-        dates += target_dates
+        stored = DB.dates('trade_ts' , src_key(data_type , x_min))
+        sliced = source_dates.slice(min(start , src_start_date(data_type)) , end)
+        target = sliced if overwrite else sliced.diff(stored)
+        dates += target
     return dates
 
 def x_mins_to_update(date : int , data_type : MinDataType) -> list[int]:
@@ -141,26 +149,41 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
 
     @classmethod
     def proceed_update(
-        cls , start : int , end : int , * , first_n : int = -1 , **kwargs
+        cls , start : int , end : int , * ,
+        first_n : int = -1 ,
+        data_types : Sequence[MinDataType | str] | None = None ,
+        overwrite : bool = False ,
+        **kwargs
     ) -> Base.UpdateFlag:
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
-        return updater.download_since_last_data(start = start , end = end , first_n = first_n)
+        return updater.download_since_last_data(
+            start = start , end = end , first_n = first_n ,
+            data_types = data_types , overwrite = overwrite ,
+        )
 
-    def download_since_last_data(self , start : int , end : int , first_n : int = -1) -> Base.UpdateFlag:
+    def download_since_last_data(
+        self , start : int , end : int , first_n : int = -1 ,
+        data_types : Sequence[MinDataType | str] | None = None ,
+        overwrite : bool = False ,
+    ) -> Base.UpdateFlag:
         flags = Base.UpdateFlagList()
-        for data_type in MinDataType:
+        selected = list(MinDataType) if data_types is None else [MinDataType(dt) for dt in data_types]
+        for data_type in selected:
             try:
-                flags += self.download(start , end , data_type , first_n)
+                flags += self.download(start , end , data_type , first_n , overwrite = overwrite)
             except Exception as e:
                 self.logger.error(f'RcQuant {data_type} minbar failed: {e}')
                 flags += Base.UpdateFlag.FAILED
                 continue
         return flags.summarize()
 
-    def download(self , start : int , end : int , data_type : MinDataType | None = None ,  first_n : int = -1) -> Base.UpdateFlag:
+    def download(
+        self , start : int , end : int , data_type : MinDataType | None = None ,
+        first_n : int = -1 , * , overwrite : bool = False ,
+    ) -> Base.UpdateFlag:
         assert data_type is not None , f'data_type is required'
         flags = Base.UpdateFlagList()
-        dates = target_dates(data_type , start , end)
+        dates = target_dates(data_type , start , end , overwrite = overwrite)
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
             flags += Base.UpdateFlag.SKIPPED
@@ -177,7 +200,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             else:
                 flags += Base.UpdateFlag.FAILED
 
-        dates = x_mins_target_dates(data_type , start , end)
+        dates = x_mins_target_dates(data_type , start , end , overwrite = overwrite)
         if dates.empty: 
             flags += Base.UpdateFlag.SKIPPED
         else:

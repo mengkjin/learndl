@@ -149,11 +149,18 @@ class FetcherTask(Base.BoundLogger):
         return result
 
     @classmethod
-    def tasks_flat(cls , start: int, end: int, step: int = 1, redownload: bool = False, force_update: int = 0) -> list[FetcherTask]:
+    def tasks_flat(
+        cls , start: int, end: int, step: int = 1, redownload: bool = False,
+        force_update: int = 0 , exchanges : list[ExchangeType | str] | None = None ,
+    ) -> list[FetcherTask]:
         tasks : list[FetcherTask] = []
         ranges = range_dates(start, end, step)
+        exchange_iter = (
+            list(ExchangeType) if exchanges is None
+            else [ExchangeType(exchange) for exchange in exchanges]
+        )
         for i , (s, e) in enumerate(ranges):
-            for exchange in ExchangeType:
+            for exchange in exchange_iter:
                 task = FetcherTask(exchange, s, e , redownload)
                 if not task.should_be_skipped or (i >= (len(ranges) - force_update)):
                     tasks.append(task)
