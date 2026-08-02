@@ -883,7 +883,7 @@ class TaskItem:
     @property
     def script_key(self) -> str:
         """Unique string key matching :attr:`ScriptRunner.script_key`."""
-        return str(self.relative)
+        return self.relative.as_posix()
 
     @property
     def page_url(self) -> str:

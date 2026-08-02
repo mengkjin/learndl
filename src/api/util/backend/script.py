@@ -106,8 +106,8 @@ class PathItem:
 
     @property
     def script_key(self) -> str:
-        """Unique string key: the path relative to the scripts root as a string."""
-        return str(self.relative)
+        """Unique string key: posix path relative to the scripts root (stable on Windows)."""
+        return self.relative.as_posix()
 
     @property
     def format_path(self) -> str:
@@ -350,8 +350,8 @@ class ScriptRunner:
 
     @property
     def script_key(self) -> str:
-        """Unique string key: the path relative to the scripts root."""
-        return str(self.path.relative)
+        """Unique string key: posix path relative to the scripts root (stable on Windows)."""
+        return self.path.relative.as_posix()
 
     @property
     def page_url(self) -> str:

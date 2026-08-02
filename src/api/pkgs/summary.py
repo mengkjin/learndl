@@ -92,6 +92,10 @@ def model_ic_summary():
     """
     Aggregate per-model IC curves (best submodel) into a multi-model evaluation frame.
 
+    Uses ``rankic_rtn`` (vs ``rtn_lag1_10``) for cross-model comparison; falls back to
+    legacy ``rankic`` when older ``test_by_date.feather`` files have not been rebuilt.
+    When ``rankic_std`` is present, also emits ``{name}@std`` series.
+
     Returns:
         ``eval_period_ic_multi`` dataframe.
     """
@@ -103,9 +107,20 @@ def model_ic_summary():
             paths[model_path.model_name] = path
     ic_tables = {}
     for name , path in paths.items():
-        df = Load.df(path)
-        ic_tables[name] = df.astype({'date' : 'int'}).query('submodel == "best"').groupby('date')['rankic'].mean().\
-            reset_index(drop = False).dropna().rename(columns = {'rankic' : 'ic'})
+        df = Load.df(path).astype({'date' : 'int'}).query('submodel == "best"')
+        if 'rankic_rtn' in df.columns:
+            rtn_col = 'rankic_rtn'
+        elif 'rankic' in df.columns:
+            rtn_col = 'rankic'
+        else:
+            raise KeyError(
+                f'{path} has neither rankic_rtn nor rankic; columns={list(df.columns)}'
+            )
+        ic_tables[name] = df.groupby('date')[rtn_col].mean().\
+            reset_index(drop = False).dropna().rename(columns = {rtn_col : 'ic'})
+        if 'rankic_std' in df.columns:
+            ic_tables[f'{name}@std'] = df.groupby('date')['rankic_std'].mean().\
+                reset_index(drop = False).dropna().rename(columns = {'rankic_std' : 'ic'})
     df = eval_period_ic_multi(ic_tables)
     return df
 

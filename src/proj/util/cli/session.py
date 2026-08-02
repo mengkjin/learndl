@@ -1,6 +1,8 @@
 """Session control signals, git watching, and DirectCall restart helpers."""
 from __future__ import annotations
 
+import base64
+import json
 import os
 import subprocess
 from typing import Any
@@ -75,9 +77,19 @@ def can_exec_restart() -> bool:
 
 
 def build_direct_call_script(cls: type[Any], kwargs: dict[str, Any]) -> str:
-    """Build the ``python -c`` script body for a DirectCall invocation."""
-    kw_repr = ', '.join(f'{key}={value!r}' for key, value in kwargs.items())
-    return f'from {cls.__module__} import {cls.__name__}; {cls.__name__}.go({kw_repr})'
+    """Build the ``python -c`` script body for a DirectCall invocation.
+
+    Kwargs are base64-encoded JSON so the payload survives Windows WezTerm/cmd
+    nested quoting (which rewrites ``'`` → ``"`` and can strip string quotes).
+    """
+    payload = base64.b64encode(
+        json.dumps(kwargs, separators=(',', ':'), ensure_ascii=True).encode('utf-8')
+    ).decode('ascii')
+    return (
+        f'from {cls.__module__} import {cls.__name__};'
+        f'import base64,json;'
+        f'{cls.__name__}.go(**json.loads(base64.b64decode("{payload}")))'
+    )
 
 
 def build_exec_argv(cls: type[Any], kwargs: dict[str, Any]) -> list[str]:
