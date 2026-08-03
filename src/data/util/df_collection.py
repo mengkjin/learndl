@@ -206,7 +206,9 @@ class _df_collection(ABC):
         with self._lock:
             if len(self) > self.max_len > 0:
                 self.dates = sorted(self.dates)[-self.max_len:]
-                [self.data_frames.pop(key) for key in self.data_frames if key not in self.dates]
+                for key in list(self.data_frames):
+                    if key not in self.dates:
+                        self.data_frames.pop(key)
                 if isinstance(self.long_frame , pd.DataFrame) and self.date_key in self.long_frame.columns:
                     self.long_frame = self.long_frame[self.long_frame[self.date_key].isin(self.dates)].copy()
 
