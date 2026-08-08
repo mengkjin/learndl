@@ -17,6 +17,7 @@ __all__ = ['TRADE']
 
 QuoteField = Literal['adjfactor','open','high','low','close','amount','volume', 
 'vwap','status','limit','pctchange','preclose','turn_tt', 'turn_fl','turn_fr'] | str
+AdjPriceField = Literal['open','high','low','close','vwap'] | str
 ValField = Literal['turnover_rate','turnover_rate_f','volume_ratio','pe','pe_ttm','pb',
 'ps','ps_ttm','dv_ratio','dv_ttm','total_share','float_share','free_share','total_mv','circ_mv'] | str
 MfField = Literal['buy_sm_vol','buy_sm_amount','sell_sm_vol','sell_sm_amount','buy_md_vol',
@@ -38,12 +39,19 @@ class TradeDataAccess(DateDataAccess):
     - ``val``   : valuation multiples (PE/PB/PS), market cap, shares outstanding
     - ``mf``    : money flow (large/medium/small buy-sell volumes and amounts)
     - ``limit`` : daily limit-up / limit-down prices
+    - ``adj``   : halt-filled adjfactor-adjusted OHLC/VWAP (``trade_ts/adjprice``)
 
     Access via the module-level ``TRADE`` singleton.
     """
     MAX_LEN = 5000
     DB_SRC = 'trade_ts'
-    DB_KEYS = {'trd' : 'day' , 'val' : 'day_val' , 'mf' : 'day_moneyflow' , 'limit' : 'day_limit'}
+    DB_KEYS = {
+        'trd' : 'day' ,
+        'val' : 'day_val' ,
+        'mf' : 'day_moneyflow' ,
+        'limit' : 'day_limit' ,
+        'adj' : 'adjprice' ,
+    }
     
     def data_loader(self , date , data_type) -> pd.DataFrame:
         """Load a single-date slice for ``data_type`` from the database."""
@@ -86,6 +94,52 @@ class TradeDataAccess(DateDataAccess):
     def get_limit(self , date , field = None) -> pd.DataFrame:
         """Return limit-price data for a single ``date`` (convenience wrapper)."""
         return self.get(date , 'limit' , field)
+
+    def get_adjprice(self , date , field = None) -> pd.DataFrame:
+        """Return halt-filled adjfactor-adjusted OHLC/VWAP for a single ``date``."""
+        return self.get(date , 'adj' , field)
+
+    def period_return(
+        self ,
+        d0 : int ,
+        d1 : int ,
+        price_type : AdjPriceField = 'close' ,
+    ) -> pd.DataFrame | None:
+        """
+        Period return ``p1/p0 - 1`` for names present at ``d0``.
+
+        Prefers ``trade_ts/adjprice`` (halt days already carry last adj price).
+        Falls back to ``day * adjfactor`` when adjprice is missing for either date.
+        """
+        p0 = self._adj_price_col(int(d0) , price_type)
+        p1 = self._adj_price_col(int(d1) , price_type)
+        if p0 is not None and p1 is not None:
+            ret = (p1.reindex(p0.index) / p0.where(p0 != 0) - 1).rename('ret')
+            return ret.to_frame()
+        return self._period_return_from_day(int(d0) , int(d1) , price_type)
+
+    def _adj_price_col(self , date : int , price_type : str) -> pd.Series | None:
+        df = self.get_adjprice(date , ['secid' , price_type])
+        if df is None or df.empty or price_type not in df.columns:
+            return None
+        return df.set_index('secid')[price_type].astype(float)
+
+    def _period_return_from_day(
+        self , d0 : int , d1 : int , price_type : str
+    ) -> pd.DataFrame | None:
+        """Fallback period return from raw ``day`` quotes × ``adjfactor``."""
+        q0 = self.get_trd(d0)
+        if q0 is None or q0.empty:
+            return None
+        q0 = q0.rename(columns = {'adjfactor': 'adj0' , price_type: 'p0'})[['secid' , 'adj0' , 'p0']]
+        q1 = self.get_trd(d1)
+        if q1 is None or q1.empty:
+            return None
+        q1 = q1.rename(columns = {'adjfactor': 'adj1' , price_type: 'p1'})[['secid' , 'adj1' , 'p1']]
+        ret = q0.merge(q1 , how = 'left' , on = 'secid').set_index('secid')
+        ratio = ret['p1'] * ret['adj1'].fillna(1) / ret['p0'] / ret['adj0'].fillna(1) - 1
+        # Keep NaN when d1 is missing — adjprice fill is the correct halt treatment.
+        return ratio.rename('ret').to_frame()
 
     def get_quotes(
         self , start : Base.intDate , end : Base.intDate ,

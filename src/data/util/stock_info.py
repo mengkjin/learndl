@@ -123,12 +123,25 @@ class InfoDataAccess(Base.BoundLogger , metaclass=Base.Singleton):
             desc['list_dt'] = CALENDAR.offset(desc['list_dt'] , offset , 'td')
         return desc.loc[:,keep_columns].reset_index().drop_duplicates(subset='secid').set_index('secid')
 
-    def list_num_by_date(self , dates : Base.intDates , reference_date : Base.intDateNone = None):
+    def list_num_by_date(
+        self ,
+        dates : Base.intDates ,
+        reference_date : Base.intDateNone = None ,
+        offset : int | None = None ,
+    ):
         """
         Return the number of listed stocks on a date.
+
+        ``offset`` defaults to ``Const.Factor.RISK.list_days`` (CNE5 IPO window)
+        so Coverage denominators stay aligned with the risk model universe.
         """
+        from src.proj import Const
         self.ensure_initiation()
-        list_delist_dt = self.get_list_dt(date = reference_date , offset = 30 , keep_columns = ['list_dt' , 'delist_dt'])
+        if offset is None:
+            offset = int(Const.Factor.RISK.list_days)
+        list_delist_dt = self.get_list_dt(
+            date = reference_date , offset = offset , keep_columns = ['list_dt' , 'delist_dt'] ,
+        )
         x = list_delist_dt.to_numpy()[:,None]
         y = CALENDAR.offset(dates , 0 , 'cd')[None,:,None]
         listed = np.all((y - x) * np.array([[[1,-1]]]) > 0 , axis = -1)

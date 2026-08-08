@@ -434,6 +434,24 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return self["input.data.prenorm"]
 
     @property
+    def input_verify_x_max_nan_ratio(self) -> float:
+        """Max NaN ratio in the x lookback window; 0 keeps NN require_all semantics."""
+        if 'input.verify.x.max_nan_ratio' not in self.Param:
+            return 0.0
+        val = self["input.verify.x.max_nan_ratio"]
+        return 0.0 if val is None else float(val)
+
+    @property
+    def input_verify_x_autofill(self) -> dict[str, Any]:
+        """Kwargs for ``DataBlock.autofill`` when ``max_nan_ratio > 0``."""
+        if 'input.verify.x.autofill' not in self.Param:
+            return {'vol_feat': 0 , 'vol_price': 'forward' , 'vol_other': 'forward'}
+        val = self["input.verify.x.autofill"]
+        if not val:
+            return {'vol_feat': 0 , 'vol_price': 'forward' , 'vol_other': 'forward'}
+        return dict(val)
+
+    @property
     def input_hidden_types(self) -> list[str]:
         if self.input_type == "hidden" or (self.input_type == "combo" and "hidden" in self["input.combo.types"]):
             return self.unwrap_inputs(self["input.hidden.types"])

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import numpy as np
 
+from src.proj import DB , Dates , Base
 from src.data.download.tushare.basic import DayFetcher , TS
 
 __all__ = ['DailyQuote' , 'DailyValuation' , 'DailyMoneyFlow' , 'DailyLimit']
@@ -13,6 +14,25 @@ class DailyQuote(DayFetcher):
     def missing_dates(self , **kwargs):
         """get missing dates"""
         return super().missing_dates(updated = False)
+
+    def update_dates(self , dates : Base.intDates , **kwargs) -> Dates:
+        """Save day quotes then immediately rebuild ``trade_ts/adjprice`` for each date."""
+        from src.data.update.custom.adjprice import AdjPriceUpdater
+
+        dates = Dates(dates)
+        if self.check_server_down():
+            return dates
+        for date in dates:
+            DB.save(
+                self.get_data(int(date)) ,
+                self.DB_SRC ,
+                self.DB_KEY ,
+                date = int(date) ,
+                indent = self.indent + 1 ,
+                vb_level = self.vb_level + 1 ,
+            )
+            AdjPriceUpdater.update_one(int(date))
+        return dates
 
     def get_data(self , date : int):
         date_str = str(date)

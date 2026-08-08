@@ -73,15 +73,13 @@ class ClassicLabelsUpdater(BasicCustomUpdater):
         DB.save(calc_classic_labels(date , days , lag1) , cls.DB_SRC , label_name , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
 def get_period_ret(d0 : int , d1 : int , price_type : PriceType = 'close') -> pd.DataFrame | None:
-    """Get the period return for a single date."""
-    q1 = TRADE.get_trd(d1)
-    if q1.empty: 
-        return
-    q1 = q1.rename(columns={'adjfactor':'adj1' , price_type:'p1'})[['secid','adj1','p1']]
-    q0 = TRADE.get_trd(d0).rename(columns={'adjfactor':'adj0' , price_type:'p0'})[['secid','adj0','p0']]
-    ret = q1.merge(q0 , how = 'left' , on = 'secid').set_index('secid')
-    label_ret = (ret['p1'] * ret['adj1'].fillna(1) / ret['p0'] / ret['adj0'].fillna(1) - 1).rename(f'ret').to_frame()
-    return label_ret
+    """
+    Period return from ``d0`` to ``d1``.
+
+    Prefers halt-filled ``trade_ts/adjprice`` via ``TRADE.period_return``;
+    falls back to ``day * adjfactor`` when adjprice is unavailable.
+    """
+    return TRADE.period_return(d0 , d1 , price_type)
 
 def calc_classic_labels(
     date : int , days : int , lag1 : bool

@@ -14,6 +14,12 @@ data.prenorm.30m: {'channelnorm' : False}
 
 data.types: day # ['day+30m' , 30m , day , ...] , use if input_type is data
 
+verify.x.max_nan_ratio: 0.1
+verify.x.autofill:
+  vol_feat: 0
+  vol_price: forward
+  vol_other: forward
+
 hidden.types: # list of hidden states , use if input_type is hidden
   - gru_day_V0.0.best
   - gru_day_V0.1.best

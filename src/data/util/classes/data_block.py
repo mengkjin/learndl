@@ -28,7 +28,11 @@ FREQUENT_MIN_DATES : int = 500
 
 DumpSuffix : TypeAlias = Literal['.mmap' , '.pt' , '.feather']
 FillNanOption : TypeAlias = Literal['guess'] | bool | None
+AutoFillOption : TypeAlias = Literal['forward'] | int | float
 PREFERRED_DUMP_SUFFIX : DumpSuffix = '.mmap'
+
+_AUTOFILL_VOL_FEATURES : tuple[str , ...] = ('volume' , 'amount' , 'turn_tt' , 'turn_fl' , 'turn_fr')
+_AUTOFILL_PRICE_FEATURES : tuple[str , ...] = ('preclose' , 'close' , 'high' , 'low' , 'open' , 'vwap')
 
 def data_type_abbr(key : str) -> str:
     """
@@ -123,7 +127,7 @@ class DataBlock:
     - Alignment : ``align_secid``, ``align_date``, ``align_feature``, ``align_secid_date``
     - Merging   : ``merge(block_list, ...)``  — union/intersect/stack/check per axis
     - Slicing   : ``loc``, ``subset``, ``slice_date``
-    - Transforms: ``adjust_price``, ``adjust_volume``, ``ffill``, ``mask_values``
+    - Transforms: ``adjust_price``, ``adjust_volume``, ``ffill``, ``autofill``, ``mask_values``
     - Persistence: ``save_dump``, ``load_dump``, ``path_preprocess``
     - Normalisation: ``hist_norm``, ``load_preprocess_norms``
     """
@@ -775,7 +779,79 @@ class DataBlock:
             return self
         self.values = self.values.nan_to_num(value)
         return self
-        
+
+    def autofill(
+        self ,
+        vol_feat : AutoFillOption = 0 ,
+        vol_price : AutoFillOption = 'forward' ,
+        vol_other : AutoFillOption = 'forward' ,
+    ) -> DataBlock:
+        """
+        Feature-aware NaN fill along the date axis (axis=1).
+
+        Features are split into three groups with independent fill strategies:
+
+        - volume-like (``volume`` / ``amount`` / ``turn_*``): ``vol_feat``
+        - price-like (OHLC / ``vwap`` / ``preclose``): ``vol_price``
+        - remaining features: ``vol_other``
+
+        Each strategy may be ``'forward'`` (last-observation-carried-forward) or
+        a numeric scalar (fill NaNs in the active span with that value, same as
+        ``forward_fillna(..., force_value=...)``).
+        """
+        if self.empty:
+            return self
+        self.autofill_values(self.values , self.feature , vol_feat , vol_price , vol_other)
+        return self
+
+    @classmethod
+    def autofill_values(
+        cls ,
+        values : Any ,
+        feature : np.ndarray | list[str] | tuple[str , ...] ,
+        vol_feat : AutoFillOption = 0 ,
+        vol_price : AutoFillOption = 'forward' ,
+        vol_other : AutoFillOption = 'forward' ,
+    ) -> Any:
+        """
+        In-place feature-aware autofill on a values tensor/array (date axis=1).
+
+        Same grouping rules as ``autofill``; does not require a ``DataBlock``
+        instance so callers can fill clones without mutating cached blocks.
+        """
+        feat = np.asarray(feature)
+        is_vol = np.isin(feat , _AUTOFILL_VOL_FEATURES)
+        is_price = np.isin(feat , _AUTOFILL_PRICE_FEATURES)
+        is_other = ~(is_vol | is_price)
+        groups = (
+            (is_vol , vol_feat) ,
+            (is_price , vol_price) ,
+            (is_other , vol_other) ,
+        )
+        active = [(mask , strategy) for mask , strategy in groups if mask.any()]
+        if not active:
+            return values
+        first = active[0][1]
+        if len(active) == 1 or all(strategy == first for _ , strategy in active[1:]):
+            cls._apply_autofill(values , first)
+            return values
+        for mask , strategy in active:
+            idx = np.where(mask)[0]
+            sub = values[..., idx]
+            cls._apply_autofill(sub , strategy)
+            values[..., idx] = sub
+        return values
+
+    @staticmethod
+    def _apply_autofill(values : Any , strategy : AutoFillOption | str) -> None:
+        """Apply one autofill strategy in-place along the date axis."""
+        if strategy == 'forward':
+            forward_fillna(values , axis = 1 , inplace = True)
+        elif isinstance(strategy , (int , float)) and not isinstance(strategy , bool):
+            forward_fillna(values , axis = 1 , force_value = strategy , inplace = True)
+        else:
+            raise TypeError(f'Invalid autofill strategy: {strategy!r}')
+
     @staticmethod
     def guess_fillna(
         name : str , fillna : FillNanOption = 'guess' ,
@@ -806,7 +882,7 @@ class DataBlock:
 
     def adjust_price(
         self , adjfactor = True , multiply : Any = 1 , divide : Any = 1 ,
-        price_feat = ['preclose' , 'close', 'high', 'low', 'open', 'vwap'] , ffill = False
+        price_feat : Base.alias.NamesType = _AUTOFILL_PRICE_FEATURES , ffill = False
     ) -> DataBlock:
         """
         Apply price adjustment factors to OHLCV price columns.
@@ -822,8 +898,7 @@ class DataBlock:
         if multiply is None and divide is None and (not adjfactor) and not ffill: 
             return self  
 
-        if isinstance(price_feat , (str,)): 
-            price_feat = [price_feat]
+        price_feat = Base.ensure_name_list(price_feat , [])
         i_price = np.where(np.isin(self.feature , price_feat))[0].astype(int)
         if len(i_price) == 0: 
             return self
@@ -855,7 +930,7 @@ class DataBlock:
     
     def adjust_volume(
         self , multiply = None , divide = None ,
-        vol_feat = ['volume' , 'amount', 'turn_tt', 'turn_fl', 'turn_fr'] , ffill = False
+        vol_feat : Base.alias.NamesType = _AUTOFILL_VOL_FEATURES , ffill = False
     ) -> DataBlock:
         """
         Scale volume/amount/turnover columns by optional multiply/divide factors.
@@ -868,8 +943,7 @@ class DataBlock:
         if multiply is None and divide is None and not ffill: 
             return self
 
-        if isinstance(vol_feat , (str,)): 
-            vol_feat = [vol_feat]
+        vol_feat = Base.ensure_name_list(vol_feat , [])
         i_vol = np.where(np.isin(self.feature , vol_feat))[0]
         if len(i_vol) == 0: 
             return self

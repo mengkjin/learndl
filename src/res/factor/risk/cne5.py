@@ -191,38 +191,45 @@ class TuShareCNE5_Calculator(Base.BasicUpdater):
 
     def calc_estuniv(self , date : int) -> pd.DataFrame:
         """calculate estuniv of a given date"""
-        list_days = 252
+        list_days = int(Const.Factor.RISK.list_days)
         redempt_tmv_pct = 0.8
 
         dates = CALENDAR.trailing(date , 63 , 'td')
 
         new_desc = DATAVENDOR.INFO.get_desc(date)
+        # Duplicate secids in desc break Series boolean alignment (index product).
+        if new_desc.index.has_duplicates:
+            new_desc = new_desc[~new_desc.index.duplicated(keep = 'last')]
+
         st_secid = DATAVENDOR.INFO.get_st(date)['secid'].to_numpy()
         new_list_dt = DATAVENDOR.INFO.get_list_dt(date , list_days)['list_dt']
+        if new_list_dt.index.has_duplicates:
+            new_list_dt = new_list_dt[~new_list_dt.index.duplicated(keep = 'last')]
+        new_list_dt = new_list_dt.reindex(new_desc.index)
 
         trd = DATAVENDOR.TRADE.get_trd(CALENDAR.td(date , -21)).loc[:,['secid','status']]
         trd = DATAVENDOR.TRADE.get_trd(date).loc[:,['secid','status']].merge(trd , on = 'secid' , how = 'left').\
             set_index('secid').reindex(new_desc.index).fillna(0)
-        
+
         val = pd.concat([DATAVENDOR.TRADE.get_val(d , ['secid','circ_mv','total_mv']) for d in dates]).\
             sort_values(['secid','date']).set_index('secid').groupby('secid').ffill().\
             groupby('secid').last().reindex(new_desc.index)
-        
+
         # trading status are 1.0 this day or 1 month ealier
         status : pd.Series | Any = pd.concat([DATAVENDOR.TRADE.get_trd(d , ['secid','status']) for d in dates]).\
             groupby('secid')['status'].sum()
-        rule0 = status.reindex(new_desc.index) > 0
+        rule0 = status.reindex(new_desc.index).fillna(0) > 0
 
         # list date 1 year earlier and not delisted or total mv in the top 20%
-        rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt <= date)) | \
-            (val['total_mv'].rank(pct = True , na_option='bottom') >= redempt_tmv_pct)
-        # not st
-        rule2 = ~new_desc.index.isin(st_secid)
+        rule1 = ((new_desc['delist_dt'] > date) & (new_list_dt <= date).fillna(False)) | \
+            (val['total_mv'].rank(pct = True , na_option = 'bottom') >= redempt_tmv_pct)
+        # not st (Series, not ndarray — keeps index alignment under &)
+        rule2 = pd.Series(~new_desc.index.isin(st_secid) , index = new_desc.index)
+        # total_mv not nan / positive
+        rule3 = val['total_mv'].fillna(0) > 0
 
-        # total_mv not nan
-        rule3 = val['total_mv'] > 0
-
-        new_desc['estuniv'] = 1 * (rule0 & rule1 & rule2 & rule3)
+        new_desc = new_desc.copy()
+        new_desc['estuniv'] = (rule0 & rule1 & rule2 & rule3).astype(int)
         new_desc['weight'] = val['circ_mv'].fillna(0) / 1e8
         new_desc['market'] = 1.0
         self.estuniv.add(new_desc , date)
@@ -401,32 +408,58 @@ class TuShareCNE5_Calculator(Base.BasicUpdater):
         return self.descriptor(v , date , 'leverage' , 'median')
     
     def calc_model(self , date : int) -> tuple[pd.DataFrame , pd.DataFrame]:
-        """calculate model of a given date"""
+        """
+        Estimate CNE5 factor returns and stock residual returns for ``date``.
 
-        exp_date = CALENDAR.td(date , -1).as_int() # DATAVENDOR.CALENDAR.offset(date , -1)
-        exp = self.get_exposure(exp_date , read = True)
-        exp = exp[exp['estuniv'] == 1]
-        ret = DATAVENDOR.TRADE.get_trd(date , ['secid','pctchange']).set_index('secid') / 100
-        ret = ret.reindex(exp.index).fillna(0).rename(columns={'pctchange':'ret'})
+        ``estuniv`` is used **only** as the WLS estimation sample for factor
+        returns (restricted further to names with positive trading volume so
+        halts are not imputed as ``ret=0`` inside the regression).
 
-        wgt : Any = exp['weight'].copy()
-        mkt = (exp.loc[: , 'estuniv'] * exp.loc[: , 'market']).rename('market')
-        rsk = exp.drop(columns=['estuniv','weight','market'])
-        
-        mask : pd.Series | Any = rsk.notna().any(axis = 1)
+        Residual returns are applied to **every** name with previous-day
+        exposure.  Names with no trade row / zero volume use ``ret=0``
+        (flat price) so residual is still ``-X @ f``.
+        """
+        exp_date = CALENDAR.td(date , -1).as_int()
+        exp_all = self.get_exposure(exp_date , read = True)
+        if 'secid' in exp_all.columns:
+            exp_all = exp_all.set_index('secid')
+
+        trd = DATAVENDOR.TRADE.get_trd(date , ['secid' , 'pctchange' , 'volume']).set_index('secid')
+        ret_obs = (trd['pctchange'] / 100.0).rename('ret')
+        # Positive volume ⇒ observed trade; missing row or volume<=0 ⇒ flat return.
+        has_volume = trd['volume'].reindex(exp_all.index).fillna(0) > 0
+        ret_all = ret_obs.reindex(exp_all.index).fillna(0.0)
+
+        # Estimation universe: estuniv flag ∩ positive volume today.
+        est_idx = exp_all.index[(exp_all['estuniv'] == 1) & has_volume.to_numpy()]
+        exp_est = exp_all.loc[est_idx]
+        ret_est = ret_all.loc[est_idx]
+
+        wgt : Any = exp_est['weight'].copy()
+        mkt_est = exp_est['market'].rename('market')
+        rsk_est = exp_est.drop(columns = ['estuniv' , 'weight' , 'market'])
+
+        mask : pd.Series | Any = rsk_est.notna().any(axis = 1)
         wgt.loc[~mask] = 0
-        rsk.loc[~mask , :] = 0
-        rsk = rsk.fillna(rsk.mean())
+        rsk_est.loc[~mask , :] = 0
+        rsk_fill = rsk_est.mean()
+        rsk_est = rsk_est.fillna(rsk_fill)
 
-        mkt_model = sm.WLS(ret[['ret']] , mkt , weights = wgt).fit()
-        rsk_model = sm.WLS(mkt_model.resid , rsk , weights = wgt).fit()
+        mkt_model = sm.WLS(ret_est.to_frame() , mkt_est , weights = wgt).fit()
+        rsk_model = sm.WLS(mkt_model.resid , rsk_est , weights = wgt).fit()
 
         coef : pd.DataFrame = pd.concat([
             pd.concat([getattr(mkt_model , 'params' , pd.Series()) , getattr(rsk_model , 'params' , pd.Series())]) ,
             pd.concat([getattr(mkt_model , 'tvalues' , pd.Series()) , getattr(rsk_model , 'tvalues' , pd.Series())])] , axis = 1)
         coef.index.name = 'factor_name'
-        coef = coef.rename(columns={0:'coef',1:'tvalue'}).reset_index(drop = False)
-        resid = rsk_model.resid.rename('resid').to_frame()
+        coef = coef.rename(columns = {0: 'coef' , 1: 'tvalue'}).reset_index(drop = False)
+
+        # Residuals for the full exposure universe (incl. zero-volume / halted).
+        mkt_all = exp_all['market'].rename('market')
+        rsk_all = exp_all.drop(columns = ['estuniv' , 'weight' , 'market']).fillna(rsk_fill)
+        mkt_hat = mkt_all * float(mkt_model.params['market'])
+        rsk_hat = rsk_all.mul(rsk_model.params.reindex(rsk_all.columns).fillna(0) , axis = 1).sum(axis = 1)
+        resid = (ret_all - mkt_hat - rsk_hat).rename('resid').to_frame()
 
         self.coef.add(coef , date)
         self.resid.add(resid , date)

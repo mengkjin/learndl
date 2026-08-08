@@ -50,7 +50,13 @@ class RiskModelConfig(metaclass=SingletonMeta):
     - style: style factors
     - indus: industry factors
     - common: common factors
+    - list_days: post-IPO trading days required for CNE5 estuniv / coverage denom
     """
+
+    @property
+    def list_days(self) -> int:
+        """Post-IPO trading-day offset shared by CNE5 estuniv and coverage listed_num."""
+        return 252
 
     @property
     def market(self) -> list[str]:

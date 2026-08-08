@@ -12,13 +12,14 @@ Includes:
 
 from __future__ import annotations
 
+import re
 import torch
 import numpy as np
 from typing import Any
 from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
-from src.proj import Base
+from src.proj import Base , CALENDAR
 from src.func.tensor import nanmedian , standardize , rank_pct
 from src.data.preprocess import PrePros , PreProHistNorm
 from src.res.model.util.config import ModelConfig
@@ -26,6 +27,9 @@ from src.res.model.util.config import ModelConfig
 from .batch_input_loader import DataloaderParam
 
 __all__ = ['DataOperator']
+
+_LABEL_HORIZON_RE = re.compile(r'^(?:std|rtn|res)_lag(\d+)_(\d+)(?:_.*)?$')
+
 
 class DataOperator:
     """operations for data module datas"""
@@ -71,6 +75,14 @@ class DataOperator:
         start = max(0 , idx_min - window + 1)
         end = min(date_len , idx_max + 1)
         return start , end , index1 - start
+
+    @staticmethod
+    def parse_label_horizon(label : str) -> tuple[int , int] | None:
+        """Parse ``(lag, days)`` from classic label names like ``std_lag1_10``."""
+        m = _LABEL_HORIZON_RE.fullmatch(label)
+        if m is None:
+            return None
+        return int(m.group(1)) , int(m.group(2))
 
     def standardize_y(
         self , y : torch.Tensor , effective : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
@@ -153,19 +165,88 @@ class DataOperator:
         else:
             return x
 
-    def effective_samples(self , x : dict[str,torch.Tensor] , y : torch.Tensor | None , index1 : torch.Tensor ) -> torch.Tensor | None:
+    def fill_y_zero_no_trade(
+        self ,
+        y : torch.Tensor ,
+        dates : np.ndarray ,
+        secids : np.ndarray ,
+        label_names : list[str] ,
+    ) -> torch.Tensor:
+        """
+        Fill y NaN with 0 when the name is in the risk residual universe at label end date.
+
+        Distinguishes ``no forward trade ≈ 0 return`` (keep) from ``not in risk
+        residual universe`` (leave NaN / discard).  Does not require labels dump
+        recalculation.
+        """
+        if y.ndim != 3:
+            raise ValueError(f'Expected y shape (secid, date, label), got {tuple(y.shape)}')
+        assert y.shape[0] == len(secids) and y.shape[1] == len(dates) and y.shape[2] == len(label_names) , (
+            y.shape , len(secids) , len(dates) , len(label_names) ,
+        )
+        y = y.clone()
+        nan_any = ~torch.isfinite(y)
+        if not bool(nan_any.any().item()):
+            return y
+
+        from src.data.loader import RISK
+
+        secids_arr = np.asarray(secids)
+        dates_arr = np.asarray(dates).astype(int)
+        res_univ_cache : dict[int , np.ndarray] = {}
+
+        for li , name in enumerate(label_names):
+            parsed = self.parse_label_horizon(name)
+            if parsed is None:
+                continue
+            lag , days = parsed
+            col_nan = nan_any[: , : , li]
+            if not bool(col_nan.any().item()):
+                continue
+            for ti in torch.where(col_nan.any(dim = 0))[0].tolist():
+                date = int(dates_arr[ti])
+                d0 = (CALENDAR.td(date) + lag).as_int()
+                d1 = CALENDAR.td(d0 , days).as_int()
+                if d1 not in res_univ_cache:
+                    res = RISK.get_res(d1)
+                    if res is None or getattr(res , 'empty' , False):
+                        res_univ_cache[d1] = np.array([] , dtype = secids_arr.dtype)
+                    elif 'secid' in res.columns:
+                        res_univ_cache[d1] = res['secid'].to_numpy()
+                    else:
+                        res_univ_cache[d1] = res.index.to_numpy()
+                in_univ = np.isin(secids_arr , res_univ_cache[d1])
+                fill = col_nan[: , ti].cpu().numpy() & in_univ
+                if fill.any():
+                    y[torch.as_tensor(fill , device = y.device) , ti , li] = 0
+        return y
+
+    def effective_samples(
+        self ,
+        x : dict[str,torch.Tensor] ,
+        y : torch.Tensor | None ,
+        index1 : torch.Tensor ,
+        x_finite : dict[str , torch.Tensor] | None = None ,
+    ) -> torch.Tensor | None:
         """
         return effective sample position (with shape of len(index[0]) * step_len) the first 2 dims
         effective sample:
             1. x should be non-nan, all for nn, any for others
             2. x should be active, that is for any channel, block of seq_len * inday should be chaning any
-        x : rolling window (seqlen * step) non-nan , end non-zero if in k is divlast
+        x : filled (or raw) panel used for DivLast / active checks and for training
         y : endpoint non-nan if y is not None
+        x_finite : pre-fill finite masks (same shape as raw x); NN nan_ratio is computed from these
         """
         effs : list[torch.Tensor] = []
         if x:
             if self.config.module_type == 'nn':
-                finites = [self.finite_position(k , v , index1) for k , v in x.items()]
+                finites = [
+                    self.finite_position(
+                        k , v , index1 ,
+                        finite_mask = None if x_finite is None else x_finite.get(k) ,
+                    )
+                    for k , v in x.items()
+                ]
                 eff = torch.stack(finites , dim = -1).all(dim=-1)
                 effs.append(eff)
             elif self.config.module_type == 'boost':
@@ -188,22 +269,84 @@ class DataOperator:
                     eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
                     effs.append(eff)
         if y is not None:
-            eff = self.finite_position(None , y, index1)
+            y_check = y.unsqueeze(-1) if y.ndim == 2 else y
+            eff = self.finite_position(None , y_check , index1)
             effs.append(eff)
         if effs:
             return torch.stack(effs , dim = -1).all(dim = -1)
         else:
             return None
 
-    def finite_position(self , key : str | None , data : torch.Tensor , index1 : torch.Tensor) -> torch.Tensor:
-        """return finite position (with shape of len(index[0]) * step_len) the first 2 dims"""
+    def nan_ratio_from_finite(
+        self , key : str | None , finite_mask : torch.Tensor , index1 : torch.Tensor
+    ) -> torch.Tensor:
+        """
+        Per-sample NaN ratio from a bool finite mask (True = finite).
+
+        Ratio = (~finite).sum / (seqlen * per_day_numel) on the same stepped
+        lookback window used by ``finite_position`` / ``rolling_rotation``.
+        """
+        seqlen , step = self.get_seqlen_step(key)
+        assert finite_mask.ndim > 2 , finite_mask.ndim
+        assert finite_mask.dtype == torch.bool , finite_mask.dtype
+        window = seqlen * step
+        per_day = int(np.prod(finite_mask.shape[2:]))
+        denom = float(seqlen * per_day)
+        if window == 1:
+            start , end , rel_index1 = self._index1_date_window(index1 , 1 , finite_mask.shape[1])
+            day_nan = (~finite_mask[:,start:end]).sum(dim = tuple(range(2 , finite_mask.ndim)))
+            return day_nan[:,rel_index1].to(dtype = torch.float32) / denom
+
+        start , end , rel_index1 = self._index1_date_window(index1 , window , finite_mask.shape[1])
+        day_nan = (~finite_mask[:,start:end]).sum(dim = tuple(range(2 , finite_mask.ndim)))
+        pad_nan = torch.nn.functional.pad(day_nan , (window - 1 , 0) , value = per_day)
+        try:
+            win = pad_nan.unfold(1 , window , 1)[..., step - 1::step][:,rel_index1]
+            return win.sum(dim = -1).to(dtype = torch.float32) / denom
+        except MemoryError:
+            abs_index1 = index1
+            total = torch.zeros((len(finite_mask) , len(index1)) , dtype = torch.float32 , device = finite_mask.device)
+            for i in range(seqlen):
+                total += pad_nan[:,abs_index1 - start + (i + 1) * step - 1].to(dtype = torch.float32)
+            return total / denom
+
+    def finite_position(
+        self ,
+        key : str | None ,
+        data : torch.Tensor ,
+        index1 : torch.Tensor ,
+        finite_mask : torch.Tensor | None = None ,
+    ) -> torch.Tensor:
+        """
+        Return finite/valid position (shape: n_sec × len(index1)).
+
+        For NN x keys: ``nan_ratio(finite_mask) <= max_nan_ratio`` (default 0 ≡
+        require_all). When ``max_nan_ratio > 0`` and a pre-fill ``finite_mask`` is
+        provided, also require the filled ``data`` window to be fully finite
+        (forward autofill cannot fix leading NaNs). Then DivLast endpoint check
+        on ``data``. For y / boost: legacy any/all finite on ``data``.
+        """
         require_all = self.config.module_type == 'nn'
         endpoint_nonzero = PreProHistNorm.is_divlast(key)
         seqlen , step = self.get_seqlen_step(key)
         assert data.ndim > 2 , data.ndim
         window = seqlen * step
         sum_dim = tuple(range(2,data.ndim))
-        if window == 1:
+
+        if require_all and key is not None:
+            max_nan = self.config.input_verify_x_max_nan_ratio
+            mask = finite_mask if finite_mask is not None else ~torch.isnan(data)
+            # Pre-fill mask: admit short-halt holes up to max_nan_ratio.
+            finite = self.nan_ratio_from_finite(key , mask , index1) <= max_nan
+            if max_nan > 0 and finite_mask is not None:
+                # Autofill is forward-only; leading (e.g. IPO) NaNs remain.
+                # Training window on the filled panel must be fully finite,
+                # else residual NaNs poison NN forward (esp. MPS train mode).
+                filled_ok = self.nan_ratio_from_finite(
+                    key , ~torch.isnan(data) , index1 ,
+                ) <= 0
+                finite = finite & filled_ok
+        elif window == 1:
             start , end , rel_index1 = self._index1_date_window(index1 , 1 , data.shape[1])
             data_slice = data[:,start:end]
             if require_all:

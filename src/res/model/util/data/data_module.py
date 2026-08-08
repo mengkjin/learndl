@@ -303,8 +303,27 @@ class DataModule(Base.BoundLogger):
             self.emptry_dataloader()
             return
 
-        x_full = {k:v.values[:,self.d0:self.d1] for k,v in self.datas.x.items()}
-        self.y_std = self.labels[:,self.d0:self.d1]
+        from src.data.util import DataBlock
+
+        # Clone panel; x_finite is always measured on the unfilled clone.
+        x_full = {k: v.values[:,self.d0:self.d1].clone() for k , v in self.datas.x.items()}
+        x_finite = {k: ~torch.isnan(v) for k , v in x_full.items()}
+
+        max_nan = self.config.input_verify_x_max_nan_ratio
+        if max_nan > 0:
+            autofill_kw = self.config.input_verify_x_autofill
+            for key in self.input_keys_data:
+                if key in x_full:
+                    DataBlock.autofill_values(
+                        x_full[key] , self.datas.x[key].feature , **autofill_kw ,
+                    )
+
+        self.y_std = self.data_operator.fill_y_zero_no_trade(
+            self.labels[:,self.d0:self.d1] ,
+            self.y_date ,
+            self.y_secid ,
+            self.config.labels ,
+        )
 
         x_shapes = [x.shape[:2] for x in x_full.values()]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
@@ -312,7 +331,9 @@ class DataModule(Base.BoundLogger):
         x_input = self.data_operator.model_x_input(x_full)
         y_to_check = self.y_std if self.is_fitting else None
 
-        eff_mask = self.data_operator.effective_samples(x_input , y_to_check , self.step_idx)
+        eff_mask = self.data_operator.effective_samples(
+            x_input , y_to_check , self.step_idx , x_finite = x_finite ,
+        )
         
         self.display_loader_static_stats(x_input , eff_mask)
 

@@ -42,7 +42,13 @@ input.data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
   week: {'channelnorm' : True}
   30m: {'channelnorm' : False}
-  
+# x sample verify: max_nan_ratio=0 keeps NN require_all; >0 allows short-halt autofill
+input.verify.x.max_nan_ratio: 0.1
+input.verify.x.autofill:
+  vol_feat: 0
+  vol_price: forward
+  vol_other: forward
+
 train.dataloader.sample_method: sequential
 train.dataloader.shuffle_option: epoch
 train.dataloader.train_ratio: 0.8
@@ -90,12 +96,12 @@ callbacks.MemoryOptimization: {'batch_interval' : 20}
 callbacks.DetailedAlphaAnalysis: {}
 
 conditional.short_test:
-  model.beg_date: 20241101
-  model.end_date: 20250331
+  model.beg_date: 20170101 #20241101
+  model.end_date: 20170331 #20250331
   model.window: 240
   train.max_epoch: 3
   input.filter.secid: null
-  input.filter.date: 20230101-20250331
+  input.filter.date: 20140101-20170331 #20230101-20250331
   callbacks.DetailedAlphaAnalysis.tasks:  ['factor']
   callbacks.BadAttemptRetrain.max_attempt: 2
 conditional.transformer:

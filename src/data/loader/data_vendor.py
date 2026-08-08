@@ -276,8 +276,15 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         return self.blocks_cache.get('daily_ret' , DataBlock())
     
     def day_quote(self , date : Base.intDate , price : Base.lit.TradePrice = 'close') -> pd.DataFrame:
-        """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied."""
-        df = self.TRADE.get_trd(int(date) , ['secid' , 'adjfactor' , price])
+        """Return a ``(secid, price)`` DataFrame for a single date, with adjfactor applied.
+
+        Prefers halt-filled ``trade_ts/adjprice``; falls back to ``day * adjfactor``.
+        """
+        date = int(date)
+        adj = self.TRADE.get_adjprice(date , ['secid' , price])
+        if adj is not None and not adj.empty and price in adj.columns:
+            return adj.rename(columns = {price: 'price'}).loc[: , ['secid' , 'price']]
+        df = self.TRADE.get_trd(date , ['secid' , 'adjfactor' , price])
         if not df.empty:
             df['price'] = df[price] * df['adjfactor'].fillna(1)
             return df.loc[:,['secid' , 'price']]
@@ -292,7 +299,17 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         get ret of single date0 and date1
         using DataFrame method is much faster than DataBlock method
         slicing of smaller df is much faster than slicing of larger array
+
+        When ``price0 == price1``, uses ``TRADE.period_return`` (adjprice-first).
         """
+        if price0 == price1:
+            q = self.TRADE.period_return(int(date0) , int(date1) , price0)
+            if q is None:
+                return pd.DataFrame(columns = ['secid' , 'ret']).set_index('secid')
+            secid = Base.ensure_secid(secid)
+            if secid is not None:
+                q = q.reindex(secid).fillna(0)
+            return q
         q0 = self.day_quote(date0 , price0)
         q1 = self.day_quote(date1 , price1)
         if q0.empty or q1.empty: 
@@ -329,17 +346,29 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
         ``df`` must contain ``'secid'``, ``'start'``, and ``'end'`` columns.
         Returns the same DataFrame with an added ``'ret'`` column.
+
+        Prefers ``trade_ts/adjprice``; falls back to ``day * adjfactor``.
         """
-        """get ret of miscel secids and dates, df must contain 'secid' , 'start' , 'end' columns"""
         assert 'secid' in df.columns and 'start' in df.columns and 'end' in df.columns , \
             f'df must contain "secid" , "start" , "end" columns : {df.columns}'
         df['prev'] = CALENDAR.offset(df['start'] , -1 , 'td')
         dates = np.unique(np.concatenate([df['prev'].to_numpy() , df['end'].to_numpy()]))
-        quotes = DB.loads('trade_ts' , 'day' , dates).filter(items = ['secid' , 'date' , ret_type , 'adjfactor'])
-        quotes[ret_type] = quotes[ret_type] * quotes['adjfactor']
+        adj_dates = DB.dates('trade_ts' , 'adjprice')
+        use_adj = (not adj_dates.empty) and Dates(dates).diff(adj_dates).empty
+        if use_adj:
+            quotes = DB.loads('trade_ts' , 'adjprice' , dates , vb_level = 'never').filter(
+                items = ['secid' , 'date' , ret_type] ,
+            )
+            price_col = ret_type
+        else:
+            quotes = DB.loads('trade_ts' , 'day' , dates , vb_level = 'never').filter(
+                items = ['secid' , 'date' , ret_type , 'adjfactor'] ,
+            )
+            quotes[ret_type] = quotes[ret_type] * quotes['adjfactor'].fillna(1)
+            price_col = ret_type
 
-        q0 = df.merge(quotes , left_on = ['secid' , 'prev'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]
-        q1 = df.merge(quotes , left_on = ['secid' , 'end'] , right_on = ['secid' , 'date'] , how = 'left')[ret_type]
+        q0 = df.merge(quotes , left_on = ['secid' , 'prev'] , right_on = ['secid' , 'date'] , how = 'left')[price_col]
+        q1 = df.merge(quotes , left_on = ['secid' , 'end'] , right_on = ['secid' , 'date'] , how = 'left')[price_col]
         ret = q1 / q0 - 1
         df['ret'] = ret
         df.drop(columns = ['prev'] , inplace = True)
