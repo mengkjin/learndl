@@ -766,11 +766,17 @@ class DataBlock:
             return None
 
     def ffill(self , if_fill : bool = True) -> DataBlock:
-        """Forward-fill NaN values along the date axis (axis=1). No-op when ``if_fill=False``."""
+        """
+        Forward-fill NaN values along chronological time. No-op when ``if_fill=False``.
+
+        When ``N_inday == 1``, fills along the date axis (axis=1). When
+        ``N_inday > 1``, ``(date, inday)`` is a folded time series: fill on the
+        stretched layout ``(N, T*I, F)`` then restore ``(N, T, I, F)``.
+        """
         if self.empty:
             return self
         if if_fill:
-            forward_fillna(self.values , axis = 1 , inplace = True)
+            self._forward_fillna_time(self.values)
         return self
 
     def fillna(self , value : Any = 0) -> DataBlock:
@@ -787,7 +793,7 @@ class DataBlock:
         vol_other : AutoFillOption = 'forward' ,
     ) -> DataBlock:
         """
-        Feature-aware NaN fill along the date axis (axis=1).
+        Feature-aware NaN fill along chronological time.
 
         Features are split into three groups with independent fill strategies:
 
@@ -798,6 +804,9 @@ class DataBlock:
         Each strategy may be ``'forward'`` (last-observation-carried-forward) or
         a numeric scalar (fill NaNs in the active span with that value, same as
         ``forward_fillna(..., force_value=...)``).
+
+        Time axis matches :meth:`ffill`: date only when ``N_inday == 1``, else
+        the stretched ``date × inday`` sequence.
         """
         if self.empty:
             return self
@@ -814,7 +823,7 @@ class DataBlock:
         vol_other : AutoFillOption = 'forward' ,
     ) -> Any:
         """
-        In-place feature-aware autofill on a values tensor/array (date axis=1).
+        In-place feature-aware autofill on a values tensor/array.
 
         Same grouping rules as ``autofill``; does not require a ``DataBlock``
         instance so callers can fill clones without mutating cached blocks.
@@ -843,12 +852,43 @@ class DataBlock:
         return values
 
     @staticmethod
+    def _forward_fillna_time(values : Any , * , force_value : Any = None) -> None:
+        """
+        In-place LOCF (or ``force_value`` span fill) along chronological time.
+
+        ``values`` must be 4-D ``(N_secid, N_date, N_inday, N_feature)``.
+
+        - ``N_inday == 1``: ``forward_fillna`` on date axis (axis=1).
+        - ``N_inday > 1``: reshape to ``(N, T*I, F)``, fill along axis=1, restore
+          ``(N, T, I, F)`` so carry propagates across intraday bars and day boundaries
+          in true time order.
+        """
+        if values.ndim != 4:
+            raise ValueError(f'Expected 4-D values (N,T,I,F), got shape={tuple(values.shape)}')
+        n_secid , n_date , n_inday , n_feat = values.shape
+        if n_inday == 1:
+            forward_fillna(values , axis = 1 , force_value = force_value , inplace = True)
+            return
+        # shape: (N, T, I, F) -> (N, T*I, F) chronological stretch
+        flat = values.reshape(n_secid , n_date * n_inday , n_feat)
+        filled = forward_fillna(flat , axis = 1 , force_value = force_value , inplace = True)
+        # Write back when reshape/fill did not alias the original storage
+        # (e.g. non-contiguous feature slice that forced a copy).
+        if isinstance(values , torch.Tensor):
+            if filled.data_ptr() != values.data_ptr():
+                values.copy_(filled.reshape(n_secid , n_date , n_inday , n_feat))
+        else:
+            restored = np.asarray(filled).reshape(n_secid , n_date , n_inday , n_feat)
+            if not np.shares_memory(restored , values):
+                values[:] = restored
+
+    @staticmethod
     def _apply_autofill(values : Any , strategy : AutoFillOption | str) -> None:
-        """Apply one autofill strategy in-place along the date axis."""
+        """Apply one autofill strategy in-place along chronological time."""
         if strategy == 'forward':
-            forward_fillna(values , axis = 1 , inplace = True)
+            DataBlock._forward_fillna_time(values)
         elif isinstance(strategy , (int , float)) and not isinstance(strategy , bool):
-            forward_fillna(values , axis = 1 , force_value = strategy , inplace = True)
+            DataBlock._forward_fillna_time(values , force_value = strategy)
         else:
             raise TypeError(f'Invalid autofill strategy: {strategy!r}')
 
@@ -911,7 +951,7 @@ class DataBlock:
         if divide    is not None: 
             v_price /= divide
         if ffill:
-            forward_fillna(v_price , axis = 1 , inplace = True)
+            self._forward_fillna_time(v_price)
         self.values[...,i_price] = v_price 
 
         if 'vwap' in self.feature:
@@ -953,7 +993,7 @@ class DataBlock:
         if divide   is not None: 
             v_vol /= divide
         if ffill:
-            forward_fillna(v_vol , axis = 1 , force_value = 0 , inplace = True)
+            self._forward_fillna_time(v_vol , force_value = 0)
         self.values[...,i_vol] = v_vol
         self.volume_adjusted = True
         return self
