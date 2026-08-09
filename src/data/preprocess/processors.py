@@ -35,10 +35,16 @@ from src.data.loader import BlockLoader
 from .core import PreProcessor , FactorPreProcessor , TradePreProcessor , MicellaneousPreProcessor
 
 __all__ = [
-    'PrePros'
+    'PrePros' ,
+    'DIRECT_FFILL_DATABLOCK_KEYS' ,
 ]
 
 TRADE_ALLOW_INACTIVE : bool = True
+
+# DataBlock keys whose inday axis is a synthetic pack with overlapping calendar
+# days (not a true chronological fold like 15m/30m). For these, ffill/autofill
+# must use date-axis-only fill (stretch=False), not date×inday stretch.
+DIRECT_FFILL_DATABLOCK_KEYS : tuple[str , ...] = ('week' ,)
 
 class PrePros:
     """
@@ -69,6 +75,15 @@ class PrePros:
     def allow_inactive(cls , key : str) -> bool:
         """Return whether the preprocessor is allowed to be inactive."""
         return PreProcessor.registry[key].AllowInactive
+
+    @classmethod
+    def use_direct_ffill(cls , key : str) -> bool:
+        """
+        Return True if ``key`` should ffill on date axis only (no date×inday stretch).
+
+        Matches ``DIRECT_FFILL_DATABLOCK_KEYS`` after ``DataBlock.data_type_abbr``.
+        """
+        return DataBlock.data_type_abbr(key) in DIRECT_FFILL_DATABLOCK_KEYS
 
 class PrePro_y(TradePreProcessor):
     """

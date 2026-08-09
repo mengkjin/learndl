@@ -304,6 +304,7 @@ class DataModule(Base.BoundLogger):
             return
 
         from src.data.util import DataBlock
+        from src.data.preprocess import PrePros
 
         # Clone panel; x_finite is always measured on the unfilled clone.
         x_full = {k: v.values[:,self.d0:self.d1].clone() for k , v in self.datas.x.items()}
@@ -314,8 +315,11 @@ class DataModule(Base.BoundLogger):
             autofill_kw = self.config.input_verify_x_autofill
             for key in self.input_keys_data:
                 if key in x_full:
+                    # week-like packs: axis=1 only; 15m/30m: stretch date×inday
+                    stretch = not PrePros.use_direct_ffill(key)
                     DataBlock.autofill_values(
-                        x_full[key] , self.datas.x[key].feature , **autofill_kw ,
+                        x_full[key] , self.datas.x[key].feature ,
+                        stretch = stretch , **autofill_kw ,
                     )
 
         self.y_std = self.data_operator.fill_y_zero_no_trade(

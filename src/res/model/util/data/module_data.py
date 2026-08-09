@@ -262,7 +262,10 @@ class ModuleData(Base.BoundLogger):
         self._align_blocks()
         self._load_norms()
         self._load_factor()
-        DataBlock.blocks_ffill(self.blocks, exclude=["y"])
+        from src.data.preprocess import DIRECT_FFILL_DATABLOCK_KEYS
+        DataBlock.blocks_ffill(
+            self.blocks , exclude = ["y"] , direct_ffill_keys = DIRECT_FFILL_DATABLOCK_KEYS ,
+        )
         self.loaded = True
         return self
 

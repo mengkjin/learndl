@@ -765,18 +765,23 @@ class DataBlock:
             Logger.error(f'max_data_date({key , frame}) error: ModuleNotFoundError: {e}')
             return None
 
-    def ffill(self , if_fill : bool = True) -> DataBlock:
+    def ffill(self , if_fill : bool = True , * , stretch : bool = True) -> DataBlock:
         """
         Forward-fill NaN values along chronological time. No-op when ``if_fill=False``.
 
-        When ``N_inday == 1``, fills along the date axis (axis=1). When
-        ``N_inday > 1``, ``(date, inday)`` is a folded time series: fill on the
-        stretched layout ``(N, T*I, F)`` then restore ``(N, T, I, F)``.
+        Args:
+            if_fill: When False, return unchanged.
+            stretch: When True (default) and ``N_inday > 1``, treat ``(date, inday)``
+                as a folded time series: fill on ``(N, T*I, F)`` then restore
+                ``(N, T, I, F)``. When False, always fill on date axis (axis=1)
+                per inday slot — required for synthetic packs such as ``week``
+                where inday holds overlapping calendar days rather than true
+                intraday bars.
         """
         if self.empty:
             return self
         if if_fill:
-            self._forward_fillna_time(self.values)
+            self._forward_fillna_time(self.values , stretch = stretch)
         return self
 
     def fillna(self , value : Any = 0) -> DataBlock:
@@ -791,6 +796,8 @@ class DataBlock:
         vol_feat : AutoFillOption = 0 ,
         vol_price : AutoFillOption = 'forward' ,
         vol_other : AutoFillOption = 'forward' ,
+        * ,
+        stretch : bool = True ,
     ) -> DataBlock:
         """
         Feature-aware NaN fill along chronological time.
@@ -805,12 +812,14 @@ class DataBlock:
         a numeric scalar (fill NaNs in the active span with that value, same as
         ``forward_fillna(..., force_value=...)``).
 
-        Time axis matches :meth:`ffill`: date only when ``N_inday == 1``, else
-        the stretched ``date × inday`` sequence.
+        ``stretch`` matches :meth:`ffill`: default stretches ``date × inday``;
+        set False for axis=1-only fill (e.g. ``week`` packs).
         """
         if self.empty:
             return self
-        self.autofill_values(self.values , self.feature , vol_feat , vol_price , vol_other)
+        self.autofill_values(
+            self.values , self.feature , vol_feat , vol_price , vol_other , stretch = stretch ,
+        )
         return self
 
     @classmethod
@@ -821,6 +830,8 @@ class DataBlock:
         vol_feat : AutoFillOption = 0 ,
         vol_price : AutoFillOption = 'forward' ,
         vol_other : AutoFillOption = 'forward' ,
+        * ,
+        stretch : bool = True ,
     ) -> Any:
         """
         In-place feature-aware autofill on a values tensor/array.
@@ -842,31 +853,34 @@ class DataBlock:
             return values
         first = active[0][1]
         if len(active) == 1 or all(strategy == first for _ , strategy in active[1:]):
-            cls._apply_autofill(values , first)
+            cls._apply_autofill(values , first , stretch = stretch)
             return values
         for mask , strategy in active:
             idx = np.where(mask)[0]
             sub = values[..., idx]
-            cls._apply_autofill(sub , strategy)
+            cls._apply_autofill(sub , strategy , stretch = stretch)
             values[..., idx] = sub
         return values
 
     @staticmethod
-    def _forward_fillna_time(values : Any , * , force_value : Any = None) -> None:
+    def _forward_fillna_time(
+        values : Any , * , force_value : Any = None , stretch : bool = True ,
+    ) -> None:
         """
         In-place LOCF (or ``force_value`` span fill) along chronological time.
 
         ``values`` must be 4-D ``(N_secid, N_date, N_inday, N_feature)``.
 
-        - ``N_inday == 1``: ``forward_fillna`` on date axis (axis=1).
-        - ``N_inday > 1``: reshape to ``(N, T*I, F)``, fill along axis=1, restore
-          ``(N, T, I, F)`` so carry propagates across intraday bars and day boundaries
-          in true time order.
+        - ``stretch=False`` or ``N_inday == 1``: ``forward_fillna`` on date axis
+          (axis=1) independently per inday slot.
+        - ``stretch=True`` and ``N_inday > 1``: reshape to ``(N, T*I, F)``, fill
+          along axis=1, restore ``(N, T, I, F)`` so carry propagates across
+          intraday bars in true time order.
         """
         if values.ndim != 4:
             raise ValueError(f'Expected 4-D values (N,T,I,F), got shape={tuple(values.shape)}')
         n_secid , n_date , n_inday , n_feat = values.shape
-        if n_inday == 1:
+        if (not stretch) or n_inday == 1:
             forward_fillna(values , axis = 1 , force_value = force_value , inplace = True)
             return
         # shape: (N, T, I, F) -> (N, T*I, F) chronological stretch
@@ -883,12 +897,14 @@ class DataBlock:
                 values[:] = restored
 
     @staticmethod
-    def _apply_autofill(values : Any , strategy : AutoFillOption | str) -> None:
+    def _apply_autofill(
+        values : Any , strategy : AutoFillOption | str , * , stretch : bool = True ,
+    ) -> None:
         """Apply one autofill strategy in-place along chronological time."""
         if strategy == 'forward':
-            DataBlock._forward_fillna_time(values)
+            DataBlock._forward_fillna_time(values , stretch = stretch)
         elif isinstance(strategy , (int , float)) and not isinstance(strategy , bool):
-            DataBlock._forward_fillna_time(values , force_value = strategy)
+            DataBlock._forward_fillna_time(values , force_value = strategy , stretch = stretch)
         else:
             raise TypeError(f'Invalid autofill strategy: {strategy!r}')
 
@@ -1154,15 +1170,24 @@ class DataBlock:
     def blocks_ffill(
         cls , blocks : dict[str,DataBlock] , * ,
         fillna : FillNanOption = 'guess' , 
-        exclude : Base.alias.NamesType = None 
+        exclude : Base.alias.NamesType = None ,
+        direct_ffill_keys : Base.alias.NamesType = None ,
     ) -> dict[str,DataBlock]:
-        """Apply forward-fill to each block in the dict, optionally excluding specific keys."""
+        """
+        Apply forward-fill to each block in the dict, optionally excluding specific keys.
+
+        ``direct_ffill_keys`` lists block keys whose inday axis is not a true
+        chronological fold (e.g. ``week``); those use ``stretch=False`` (axis=1
+        only). All other keys default to stretched fill.
+        """
         exclude = Base.ensure_name_list(exclude , [])
+        direct = {cls.data_type_abbr(k) for k in Base.ensure_name_list(direct_ffill_keys , [])}
         fillnas = {key:cls.guess_fillna(key , fillna) for key in blocks}
         for key , blk in blocks.items():
             if key in exclude:
                 continue
-            blk.ffill(fillnas[key])
+            stretch = cls.data_type_abbr(key) not in direct
+            blk.ffill(fillnas[key] , stretch = stretch)
         return blocks
 
     @classmethod
