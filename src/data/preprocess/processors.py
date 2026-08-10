@@ -177,10 +177,12 @@ class PrePro_30m(TradePreProcessor):
         data_block = blocks['30m']
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         
-        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        data_block = data_block.adjust_volume(multiply = db_day.loc(feature = 'turn_fl') , 
-                                              divide = db_day.loc(feature = 'volume') + 1e-6, 
-                                              vol_feat = 'volume')
+        data_block = data_block.adjust_price(
+            divide = db_day.loc(feature = 'preclose'))
+        data_block = data_block.adjust_volume(
+            multiply = db_day.loc(feature = 'turn_fl') , 
+            divide = db_day.loc(feature = 'volume') + 1e-6, 
+            vol_feat = 'volume')
         data_block = data_block.rename_feature({'volume':'turn_fl'})
         return data_block
 

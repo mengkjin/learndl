@@ -13,6 +13,7 @@ __all__ = ['DirectCallHub']
 _TOP_LEVEL_LABELS = (
     'Git Pull',
     'Launch Streamlit App',
+    'Train Schedule Model',
     'Non-Research Operations',
     'Research Operations',
     'Run Pipeline Script',
@@ -27,7 +28,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def get_description(cls, **kwargs) -> str:
         return (
-            'CLI launcher with four top-level groups: Streamlit app, non-research tools, '
+            'CLI launcher hub: Streamlit app, train schedule model, non-research tools, '
             'research workflows, and pipeline scripts. Submenus spawn the selected action in a new pane.'
         )
 
@@ -36,7 +37,11 @@ class DirectCallHub(DirectCall):
         return {
             'Git Pull': 'Pull the latest code from remote. Clear changes before pulling.',
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
-            'Non-Research Operations': 'Submenu: git pull, tests, lint, preview, and project auto-fix.',
+            'Train Schedule Model': (
+                'Train a schedule model (scripts/4_train/2_schedule_model.py). '
+                'Pick schedule_name, resume, short_test, and optional date range.'
+            ),
+            'Non-Research Operations': 'Submenu: tests, lint, preview, and project auto-fix.',
             'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
@@ -203,6 +208,13 @@ class DirectCallHub(DirectCall):
             LaunchApp.spawn_in_pane(vertical=True, done_action='close')
             return
 
+        if choice == 'Train Schedule Model':
+            from src.api.calls.research import ScheduleModel
+
+            Logger.note('Spawning [ScheduleModel] in new pane')
+            ScheduleModel.spawn_in_pane(vertical=True, done_action='close')
+            return
+
         if choice == 'Non-Research Operations':
             selected_cls = self._pick_direct_call(
                 self._source_code_entries(),
@@ -255,8 +267,8 @@ class DirectCallHub(DirectCall):
                 allow_back=False,
                 title='DirectCall Hub — what do you want to do?',
                 help_description=(
-                    'Four top-level groups. Launch Streamlit runs immediately; the other three open a submenu. '
-                    'Selections spawn in a split pane while this hub keeps running. '
+                    'Top-level actions. Git Pull / Streamlit / Train Schedule Model run immediately; '
+                    'the other three open a submenu. Selections spawn in a split pane while this hub keeps running. '
                     'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                 ),
                 option_help=self._top_level_help(),
