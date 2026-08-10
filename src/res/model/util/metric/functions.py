@@ -145,7 +145,8 @@ class AccuracyFunction(MetricFunction):
             return {}
         accuracies = self(data, which_output = which_output , which_label = which_label , require_grad = False)
         if any(torch.isnan(value) for value in accuracies.values()):
-            raise ValueError('Encountered nan accuracies!')
+            bad = {k: float(v) for k , v in accuracies.items() if torch.isnan(v)}
+            raise ValueError(f'Encountered nan accuracies! {bad}')
         accuracies = {key:value.item() if isinstance(value , Tensor) else value for key,value in accuracies.items()}
         return accuracies
 

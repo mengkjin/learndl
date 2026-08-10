@@ -231,8 +231,9 @@ class DataOperator:
         """
         return effective sample position (with shape of len(index[0]) * step_len) the first 2 dims
         effective sample:
-            1. x should be non-nan, all for nn, any for others
-            2. x should be active, that is for any channel, block of seq_len * inday should be chaning any
+            1. x (NN): pre-fill nan_ratio <= max_nan_ratio, AND post-fill window fully finite
+               (residual align/autofill holes and Inf must not enter training)
+            2. x should be active, that is for any channel, block of seq_len * inday should be changing
         x : filled (or raw) panel used for DivLast / active checks and for training
         y : endpoint non-nan if y is not None
         x_finite : pre-fill finite masks (same shape as raw x); NN nan_ratio is computed from these
@@ -335,17 +336,16 @@ class DataOperator:
 
         if require_all and key is not None:
             max_nan = self.config.input_verify_x_max_nan_ratio
-            mask = finite_mask if finite_mask is not None else ~torch.isnan(data)
-            # Pre-fill mask: admit short-halt holes up to max_nan_ratio.
-            finite = self.nan_ratio_from_finite(key , mask , index1) <= max_nan
-            if max_nan > 0 and finite_mask is not None:
-                # Autofill is forward-only; leading (e.g. IPO) NaNs remain.
-                # Training window on the filled panel must be fully finite,
-                # else residual NaNs poison NN forward (esp. MPS train mode).
-                filled_ok = self.nan_ratio_from_finite(
-                    key , ~torch.isnan(data) , index1 ,
-                ) <= 0
-                finite = finite & filled_ok
+            # Pre-fill mask (or post-fill data if none): admit holes up to max_nan_ratio.
+            pre = finite_mask if finite_mask is not None else torch.isfinite(data)
+            finite = self.nan_ratio_from_finite(key , pre , index1) <= max_nan
+            # After autofill (or when no fill), the training window must be fully
+            # finite. Residual NaN/Inf from align holes, leading IPO gaps, or
+            # float overflow must not enter NN batches.
+            post_ok = self.nan_ratio_from_finite(
+                key , torch.isfinite(data) , index1 ,
+            ) <= 0
+            finite = finite & post_ok
         elif window == 1:
             start , end , rel_index1 = self._index1_date_window(index1 , 1 , data.shape[1])
             data_slice = data[:,start:end]

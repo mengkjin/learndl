@@ -55,23 +55,26 @@ class BatchInput:
 
     def check_x_integrity_for_nn(self , auto_fix = False):
         """
-        check if x has nan, if yes, remove the rows with nan
-        ! now default auto_fix as False, because ideally input of BatchInput should be valid_sampled first so have no nan
-        ! careful, some prenormer if defined incorrectly might include new nans, so need to check and fix manually
+        Ensure ``x`` has no non-finite values for NN training.
+
+        Effective-sample filtering should already drop residual NaN/Inf windows;
+        this is a hard gate. When ``auto_fix=True``, drop offending rows;
+        otherwise raise (default) so align/autofill bugs surface loudly.
         """
-        if not auto_fix:
-            return self
         if not self.x_has_nan:
             return self
-        # self.auto_fix_nan_in_x()
-        raise ValueError('Encountered nan in x for nn')
+        if auto_fix:
+            return self.auto_fix_nan_in_x()
+        raise ValueError('Encountered non-finite values in x for nn')
 
     def auto_fix_nan_in_x(self):
         if isinstance(self.x , torch.Tensor):
-            nan_row = self.x.flatten(start_dim=1).isnan().any(dim=-1)
+            nan_row = (~torch.isfinite(self.x)).flatten(start_dim=1).any(dim=-1)
             self.x = self.x[~nan_row]
         else:
-            nan_row = torch.stack([v.flatten(start_dim=1).isnan().any(dim=-1) for v in self.x], dim=-1).any(dim=-1)
+            nan_row = torch.stack(
+                [(~torch.isfinite(v)).flatten(start_dim=1).any(dim=-1) for v in self.x] , dim=-1 ,
+            ).any(dim=-1)
             self.x = [v[~nan_row] for v in self.x]
         self.y = self.y[~nan_row]
         if self.w is not None:
@@ -128,7 +131,10 @@ class BatchInput:
             '\n'.join([f'{k} : {shape}' for k,shape in self.shape.items()])
     @property
     def x_has_nan(self):
-        return self.x.isnan().any() if isinstance(self.x , torch.Tensor) else any(v.isnan().any() for v in self.x)
+        """True if any x value is non-finite (NaN or Inf)."""
+        if isinstance(self.x , torch.Tensor):
+            return (~torch.isfinite(self.x)).any()
+        return any((~torch.isfinite(v)).any() for v in self.x)
 
     @cached_property
     def date(self) -> np.ndarray:
@@ -456,7 +462,8 @@ class BatchData:
             return None
         nanpos = torch.zeros_like(tensors[0])
         for ts in tensors:
-            nanpos += ts.isnan().any(dim = -1 , keepdim = True)
+            # Exclude NaN and Inf — Inf preds/labels also break correlation metrics.
+            nanpos += (~torch.isfinite(ts)).any(dim = -1 , keepdim = True)
         if nanpos.ndim > 1:
             nanpos = nanpos.sum(tuple(range(1 , nanpos.ndim))) > 0 
         if print_all_nan and nanpos.all(): 

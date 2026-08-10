@@ -14,6 +14,7 @@ PreProcessor               — abstract base; handles incremental extension/cach
 """
 from __future__ import annotations
 
+import torch
 import numpy as np
 
 from abc import abstractmethod , ABCMeta
@@ -28,6 +29,8 @@ from src.data.loader import BlockLoader , FactorCategory1Loader
 __all__ = ['PreProcessor' , 'FactorPreProcessor' , 'TradePreProcessor' , 'MicellaneousPreProcessor']
 
 TRADE_FEAT : tuple[str,...] = ('open','close','high','low','vwap','turn_fl')
+# Single-bar free-float turnover cap (percent, same unit as day turn_fl from Tushare *1e5).
+TURN_FL_BAR_CLIP : float = 200.0
 
 class PreProcessorMeta(ABCMeta):
     """
@@ -416,6 +419,37 @@ class TradePreProcessor(PreProcessor):
     def final_feat(self) -> list[str] | None:
         """Return the standard OHLCV feature list."""
         return [*TRADE_FEAT]
+
+    @staticmethod
+    def allocate_turn_fl_by_bar_volume(
+        data_block : DataBlock ,
+        day_turn_fl : torch.Tensor | Any ,
+        * ,
+        vol_feat : str = 'volume' ,
+        clip : float = TURN_FL_BAR_CLIP ,
+    ) -> DataBlock:
+        """
+        Replace intraday ``volume`` by day ``turn_fl`` allocated by bar volume share.
+
+        ``turn_bar = day_turn_fl * vol_bar / sum_inday(vol_bar)``, then clipped to
+        ``[0, clip]`` (percent). Uses only intraday volumes for the share so
+        day/minute volume unit mismatches (手 vs 股) cannot inflate turnover.
+        """
+        if data_block.empty or vol_feat not in data_block.feature:
+            return data_block
+        i_vol = int(np.where(data_block.feature == vol_feat)[0][0])
+        vol = data_block.values[..., i_vol : i_vol + 1]  # (N, T, I, 1)
+        # shape: (N, T, 1, 1) — sum over intraday bars
+        vol_sum = vol.sum(dim = 2 , keepdim = True)
+        share = torch.where(
+            vol_sum > 0 ,
+            vol / vol_sum ,
+            torch.full_like(vol , torch.nan) ,
+        )
+        turn = day_turn_fl * share
+        turn = torch.where(torch.isfinite(turn) , turn.clamp(0.0 , clip) , turn)
+        data_block.values[..., i_vol : i_vol + 1] = turn
+        return data_block.rename_feature({vol_feat : 'turn_fl'})
 
 class MicellaneousPreProcessor(PreProcessor):
     """

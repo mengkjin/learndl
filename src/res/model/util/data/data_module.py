@@ -306,9 +306,12 @@ class DataModule(Base.BoundLogger):
         from src.data.util import DataBlock
         from src.data.preprocess import PrePros
 
-        # Clone panel; x_finite is always measured on the unfilled clone.
+        # Clone panel; treat Inf as invalid (preprocess volume ratios can overflow float32).
         x_full = {k: v.values[:,self.d0:self.d1].clone() for k , v in self.datas.x.items()}
-        x_finite = {k: ~torch.isnan(v) for k , v in x_full.items()}
+        for k , v in x_full.items():
+            x_full[k] = torch.where(torch.isfinite(v) , v , torch.nan)
+        # Pre-fill finite mask (True = finite); measured before autofill.
+        x_finite = {k: torch.isfinite(v) for k , v in x_full.items()}
 
         max_nan = self.config.input_verify_x_max_nan_ratio
         if max_nan > 0:
@@ -498,14 +501,22 @@ class DataModule(Base.BoundLogger):
     ) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
-            if self.config.module_type == 'nn' and data[index0,index1].isnan().all():
+            if self.config.module_type == 'nn' and (~torch.isfinite(data[index0 , index1])).all():
                 self.logger.error(f'{model_data_type} meaningful_dates: {self.datas.x[model_data_type].meaningful_dates}')
                 self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
                 self.logger.error(f'seq_lens: {self.seq_lens} , seq_steps: {self.seq_steps}')
-                raise ValueError(f'Get all nan in {model_data_type} at index {index0} , {index1}')
+                raise ValueError(f'Get all non-finite in {model_data_type} at index {index0} , {index1}')
             features = self.datas.x[model_data_type].feature if model_data_type in self.datas.x else None
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
             data = self.prenorm_operator.prenorm(model_data_type , data , features)
+            if self.config.module_type == 'nn' and (~torch.isfinite(data)).any():
+                date = int(self.y_date[int(index1[0].item())])
+                raise ValueError(
+                    f'Non-finite values in {model_data_type} batch window at date={date} '
+                    f'after rolling/prenorm (nan%={float(torch.isnan(data).float().mean()):.4g} '
+                    f'inf%={float(torch.isinf(data).float().mean()):.4g}); '
+                    f'autofill/effective-sample filter failed to drop residual holes'
+                )
             datas.append(data)
         return datas
 

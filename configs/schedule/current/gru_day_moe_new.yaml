@@ -3,7 +3,7 @@ model:
   submodels     : [best]
 
   labels:
-    - std_lag1_10
+    - rtn_lag1_10
 
   special:
     moe: true
