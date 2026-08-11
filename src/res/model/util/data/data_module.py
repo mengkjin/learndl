@@ -306,9 +306,11 @@ class DataModule(Base.BoundLogger):
         from src.data.util import DataBlock
         from src.data.preprocess import PrePros
 
-        # Clone panel; treat Inf as invalid (preprocess volume ratios can overflow float32).
+        # Clone panel; treat Inf as invalid; NN weights are float32.
         x_full = {k: v.values[:,self.d0:self.d1].clone() for k , v in self.datas.x.items()}
         for k , v in x_full.items():
+            if v.dtype != torch.float32:
+                v = v.to(dtype = torch.float32)
             x_full[k] = torch.where(torch.isfinite(v) , v , torch.nan)
         # Pre-fill finite mask (True = finite); measured before autofill.
         x_finite = {k: torch.isfinite(v) for k , v in x_full.items()}

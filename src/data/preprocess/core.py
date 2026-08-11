@@ -200,12 +200,19 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         Call ``process(blocks)`` with numpy error suppression and apply final feature alignment.
 
         Returns an empty DataBlock if any input block is empty.
+        Casts float64 panels to float32 so NN dumps match model weights.
         """
         if any([block.empty for block in blocks.values()]):
             return DataBlock()
         np.seterr(invalid = 'ignore' , divide = 'ignore')
         data_block = self.process(blocks)
         data_block = data_block.align_feature(self.final_feat() , inplace = True)
+        if (
+            data_block.values is not None
+            and isinstance(data_block.values , torch.Tensor)
+            and data_block.values.dtype == torch.float64
+        ):
+            data_block = data_block.to(torch.float32)
         np.seterr(invalid = 'warn' , divide = 'warn')
         return data_block
 
@@ -439,6 +446,8 @@ class TradePreProcessor(PreProcessor):
             return data_block
         i_vol = int(np.where(data_block.feature == vol_feat)[0][0])
         vol = data_block.values[..., i_vol : i_vol + 1]  # (N, T, I, 1)
+        if torch.is_tensor(day_turn_fl) and day_turn_fl.dtype != vol.dtype:
+            day_turn_fl = day_turn_fl.to(dtype = vol.dtype)
         # shape: (N, T, 1, 1) — sum over intraday bars
         vol_sum = vol.sum(dim = 2 , keepdim = True)
         share = torch.where(
@@ -448,7 +457,7 @@ class TradePreProcessor(PreProcessor):
         )
         turn = day_turn_fl * share
         turn = torch.where(torch.isfinite(turn) , turn.clamp(0.0 , clip) , turn)
-        data_block.values[..., i_vol : i_vol + 1] = turn
+        data_block.values[..., i_vol : i_vol + 1] = turn.to(dtype = data_block.values.dtype)
         return data_block.rename_feature({vol_feat : 'turn_fl'})
 
 class MicellaneousPreProcessor(PreProcessor):
