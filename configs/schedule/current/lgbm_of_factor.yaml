@@ -5,23 +5,23 @@ model:
   
   module.boost.optuna: False
 
-  window  : 1200
+  window  : 480
   # labels specification ------------------------------------------------------------
   # rtn : raw return | std : standardized return | res : risk model residual
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+    - rtn_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
 input:
   # input specification ----------------------------------------------------------------
   type: factor # [data , hidden , factor] , specify below
 
   factor.types: # list of category1 , use if input_type is factor
-    fundament:  [quality , growth , value , earning]
-    analyst:    [surprise , coverage , forecast , adjustment]
-    behavioral: [momentum , volatility , correlation , liquidity]
-    money_flow: [holding , trading]
+    # fundament:  [quality , growth , value , earning]
+    # analyst:    [surprise , coverage , forecast , adjustment]
+    # behavioral: [momentum , volatility , correlation , liquidity]
+    # money_flow: [holding , trading]
     high_frequency: [hf_momentum , hf_volatility , hf_correlation , hf_liquidity]
 
 train:
@@ -29,7 +29,7 @@ train:
     param:
       objective: mse # null , mse , mae , rank
     weight:
-      cs_type: null
+      cs_type: top
       ts_type: lin
       bm_type: null
     # valid_metric:
