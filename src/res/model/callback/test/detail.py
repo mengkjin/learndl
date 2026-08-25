@@ -25,7 +25,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
     TABLE_VB_LEVELS = {'factor@frontface':'max'}
     FIGURE_VB_LEVELS = {
         'factor@ic_curve@best.market': 2 , 
-        'factor@group_return@best':'max' ,
+        'factor@group_return@best':2 ,
+        'factor@group_percentile@best':2 ,
         't50@perf_curve@best.univ':2 ,
         # 'screen@perf_curve@best.univ':2 ,
         'reinforce@perf_curve@best.univ':2 ,
@@ -33,7 +34,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def __init__(self , 
         trainer , 
-        tasks : list[TestType | str] = ['factor' , 't50' , 'reinforce'] , **kwargs
+        tasks : list[TestType | str] = ['factor' , 't50'] , **kwargs
     ) -> None:
         super().__init__(trainer , **kwargs)
         assert all(task in TestType for task in tasks) , \

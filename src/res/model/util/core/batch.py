@@ -47,11 +47,18 @@ class BatchInput:
     def to(self , device = None): 
         if device is None: 
             return self
-        else:
-            if isinstance(device , Device): 
-                device = device.device
-            inputs = {name:Device.send_to(getattr(self , name) , device) for name in ['x' , 'y' , 'w' , 'i' , 'eff' , 'y_date' , 'y_secid' , 'kwargs']}
+        names = ['x' , 'y' , 'w' , 'i' , 'eff' , 'y_date' , 'y_secid' , 'kwargs']
+        if isinstance(device , Device):
+            try:
+                inputs = {name: Device.send_to(getattr(self , name) , device.device) for name in names}
+            except Exception as exc:
+                if device.policy != 'cuda_then_cpu' or not Device.is_cuda_oom(exc):
+                    raise
+                device.redirect_to_cpu()
+                inputs = {name: Device.send_to(getattr(self , name) , device.device) for name in names}
             return BatchInput(**inputs)
+        inputs = {name: Device.send_to(getattr(self , name) , device) for name in names}
+        return BatchInput(**inputs)
 
     def check_x_integrity_for_nn(self , auto_fix = False):
         """

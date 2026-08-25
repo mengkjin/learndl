@@ -2,6 +2,7 @@
 
 from .script_cmd import ScriptCmd
 from .script_lock import ScriptLockMultiple
+from .fit_lock import FitLock
 from .script_tool import ScriptTool
 from .autorun import AutoRunTask 
 from .task_record import TaskRecorder 

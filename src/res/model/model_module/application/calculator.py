@@ -28,6 +28,7 @@ class ModelCalculator(Base.BoundLogger):
     def calculate(self , date : int , model_num : int = 0 , model_submodel : str = 'best'):
         """calculate the model output (batch_data) for a given date"""
         assert CALENDAR.is_trade_date(date) , f'{date} is not a trading day'
+        self.config.apply_inference_device('predict')
         self._set_model_and_data(date , model_num , model_submodel)
         batch_input = self.data_module.get_batch_input_of_date(date).to(self.model.device)
         batch_output = self.model(batch_input)

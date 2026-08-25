@@ -10,6 +10,7 @@ from functools import wraps
 from typing import Any , Literal , TypeAlias , cast , Sized , Callable
 
 from src.proj import Const , Base
+from src.proj.util.script.fit_lock import FitLock
 
 from src.proj.bases import FittingEventType
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
@@ -284,24 +285,26 @@ class BaseTrainer(BasePipeline):
         
     def stage_fit(self):
         """stage of fitting"""
-        with self.logger.paragraph('Stage [Fit]' , 2):
-            self.config.log_operation('fit' , 'start')
-            self.on_fit_start_before()
-            self.on_fit_start()
-            for self.status.model_date , self.status.model_num in self.iter_model_num_date():
-                if self.status.model_num == 0:
-                    self.on_fit_model_date_start()
-                self.on_fit_model_start()
-                self.model.fit()
-                self.on_fit_model_end()
-                if self.status.model_num == self.config.model_num:
-                    self.on_fit_model_date_end()
-            self.on_fit_end()
-            self.on_fit_end_after()
-            self.config.log_operation('fit' , 'end')
+        with FitLock.guard(try_cuda=self.config.try_cuda):
+            with self.logger.paragraph('Stage [Fit]' , 2):
+                self.config.log_operation('fit' , 'start')
+                self.on_fit_start_before()
+                self.on_fit_start()
+                for self.status.model_date , self.status.model_num in self.iter_model_num_date():
+                    if self.status.model_num == 0:
+                        self.on_fit_model_date_start()
+                    self.on_fit_model_start()
+                    self.model.fit()
+                    self.on_fit_model_end()
+                    if self.status.model_num == self.config.model_num:
+                        self.on_fit_model_date_end()
+                self.on_fit_end()
+                self.on_fit_end_after()
+                self.config.log_operation('fit' , 'end')
 
     def stage_test(self):
         """stage of testing"""
+        self.config.apply_inference_device('test')
         with self.logger.paragraph('Stage [Test]' , 2):
             self.config.log_operation('test' , 'start')
             self.on_test_start_before()

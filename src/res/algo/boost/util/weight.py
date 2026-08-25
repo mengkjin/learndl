@@ -35,13 +35,16 @@ class BoostWeightMethod:
                            ``ts_half_life_rate * n_date``.
         cs_type:           Cross-sectional weighting scheme.
                            ``'ones'`` — doubles weight on positive-label samples.
-                           ``'top'`` — upweight top half (polar-style, min 0.25).
+                           ``'top'`` — smooth power tilt ``1 + λ * rank^p`` on
+                           cross-sectional return percentile.
         bm_type:           Benchmark membership weighting.
                            ``'in'`` — doubles weight for securities in
                            ``bm_secid``.
         ts_lin_rate:       Start value of linear time-series weights (default 0.5).
         ts_half_life_rate: Half-life as a fraction of ``n_date`` (default 0.5).
-        cs_top_tau:        Deprecated; no longer used by ``'top'`` scheme.
+        cs_top_lambda:     Extra weight at rank 1; max weight is ``1 + λ`` (default 3).
+        cs_top_p:          Power on rank percentile; higher concentrates on the top (default 4).
+        cs_top_tau:        Deprecated; kept so old ``weight_param`` dicts still load.
         cs_ones_rate:      Multiplier applied to positive-label rows (default 2.0).
         bm_rate:           Multiplier applied to benchmark members (default 2.0).
         bm_secid:          Security IDs that constitute the benchmark universe.
@@ -51,6 +54,8 @@ class BoostWeightMethod:
     bm_type : BenchmarkWeight = None
     ts_lin_rate : float = 0.5
     ts_half_life_rate : float = 0.5
+    cs_top_lambda : float = 3.
+    cs_top_p : float = 4.
     cs_top_tau : float = 0.75*np.log(0.5)/np.log(0.75)
     cs_ones_rate : float = 2.
     bm_rate : float = 2.
@@ -76,7 +81,9 @@ class BoostWeightMethod:
 
         ``'ones'``: samples with label ``== 1`` get weight ``cs_ones_rate``
         (default * 2).
-        ``'top'``: bottom/middle weight 0.25; top half ramps smoothly to 1.0.
+        ``'top'``: ``w = 1 + λ * rank_pct(y)^p`` so the whole cross-section
+        still trains, with a modest 2–5× tilt toward high-return names
+        (default ``λ=3``, ``p=4`` → weight 1 / 1.19 / 2.23 / 4 at pctl 0 / 50 / 80 / 100).
         ``None``: uniform ones.
         """
         w = y * 0 + 1.
@@ -87,8 +94,7 @@ class BoostWeightMethod:
         elif self.cs_type == 'top':
             y_t = y if isinstance(y, torch.Tensor) else torch.from_numpy(y)
             y_rank = rank_pct(y_t, dim=0)
-            top_frac = (y_rank - 0.8).clamp(min=0) / (1 - 0.8)
-            w = 0.1 + 0.9 * top_frac.square()
+            w = 1. + self.cs_top_lambda * y_rank.pow(self.cs_top_p)
             if isinstance(y, np.ndarray):
                 w = w.numpy()
         else:

@@ -1,0 +1,18 @@
+fit_lock:
+  enabled: true
+  lock_name: train_fit
+  nn_only: true          # only NN / NNBoost stage_fit
+
+# idle = no training instance; busy = FitLock.is_held()
+# values: cuda_then_cpu | cuda_then_raise | cpu_only
+# macos: Device still prefers MPS; cpu_only on Mac is MPS (same as use_device)
+inference:
+  test:
+    idle: cuda_then_raise
+    busy: cuda_then_cpu
+  predict:
+    idle: cuda_then_raise
+    busy: cuda_then_cpu
+  retrospective:
+    idle: cuda_then_raise
+    busy: cuda_then_cpu

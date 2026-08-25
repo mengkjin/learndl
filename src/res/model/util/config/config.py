@@ -875,9 +875,21 @@ class ModelConfig(BaseModelConfig):
     def __repr__(self):
         return f"{self.__class__.__name__}(base_path={self.base_path})"
 
-    @cached_property
-    def device(self):
-        return Device(try_cuda=self.try_cuda)
+    @property
+    def device(self) -> Device:
+        return self.cached_properties.query(
+            'device', lambda: Device(try_cuda=self.try_cuda, policy='cuda_then_raise')
+        )
+
+    @device.setter
+    def device(self, value: Device) -> None:
+        self.cached_properties.set('device', value)
+
+    def apply_inference_device(self, stage: str) -> Device:
+        """Replace ``device`` with the yaml policy for an inference stage (NN only)."""
+        if self.try_cuda:
+            self.device = Device.from_inference_stage(stage)
+        return self.device
 
     @cached_property
     def value_dict(self) -> dict[str, Any]:

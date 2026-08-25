@@ -7,9 +7,10 @@ import torch
 
 from abc import abstractmethod
 from functools import cached_property
-from typing import Any
+from typing import Any, Self
 
 from src.proj import Base
+from src.proj.util.functional.device import Device
 from src.res.algo.nn.loss import MultiHeadLosses
 from src.res.model.util.advance.torch_compile import TorchCompiler
 from src.res.model.util.core import ModelDict , BatchInput , BatchOutput , BatchData , ModelFile
@@ -32,12 +33,50 @@ class PredictorModel(TrainerPipeline):
         if input is None or len(input) == 0:
             output = None
         else:
-            output = self.forward(input , *args , **kwargs)
+            self.sync_device()
+            try:
+                output = self.forward(input , *args , **kwargs)
+            except Exception as exc:
+                device = self.config.device if self.config else None
+                if device is None or device.policy != 'cuda_then_cpu' or not Device.is_cuda_oom(exc):
+                    raise
+                device.redirect_to_cpu()
+                self.relocate_to(device)
+                if isinstance(input , BatchInput):
+                    input = input.to(device)
+                output = self.forward(input , *args , **kwargs)
         return BatchOutput(output)
 
     def get_batch_data(self , input : BatchInput , *args , **kwargs):
-        output = BatchOutput(self.forward(input , *args , **kwargs))
+        output = self(input , *args , **kwargs)
+        if self.config:
+            input = input.to(self.config.device)
         return BatchData(input , output)
+
+    def relocate_to(self , device : Device | torch.device | str) -> Self:
+        """Move ``self.net`` onto ``device`` after a Device redirect (inference)."""
+        if self.net is None:
+            return self
+        target = device.device if isinstance(device , Device) else torch.device(device)
+        net = self.persist_net().to(target)
+        self.net = net
+        if self.torch_compile is not None:
+            self.torch_compile._raw = net
+            self.torch_compile._active = net
+        if target.type == 'cpu' and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        return self
+
+    def sync_device(self) -> None:
+        """Move net onto ``config.device`` when they have diverged (e.g. CUDA fallback)."""
+        if self.net is None or not self.config:
+            return
+        try:
+            current = Device.get_device(self.persist_net())
+        except (RuntimeError, StopIteration, ValueError):
+            return
+        if not Device.compare_devices(current , self.config.device):
+            self.relocate_to(self.config.device)
 
     def __repr__(self): 
         if not self.is_bounded:
@@ -221,6 +260,8 @@ class PredictorModel(TrainerPipeline):
     def batch_forward(self) -> None: 
         if self.batch_idx >= self.trainer.batch_resumed: 
             self.batch_output = self(self.batch_input)
+            if self.config:
+                self.trainer.batch_input = self.batch_input.to(self.config.device)
             if self.batch_idx < self.trainer.batch_warm_up or self.batch_idx >= self.trainer.batch_aftermath:
                 self.batch_output = BatchOutput()
 

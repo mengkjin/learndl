@@ -21,7 +21,8 @@ plotter = Plotter(test_type.title())
 __all__ = [
     'FactorPerfCalc' ,
     'FrontFace' , 'Coverage' , 'IC_Curve' , 'IC_Decay' , 'IC_Indus' , 'IC_Year' , 'IC_Benchmark' , 'IC_Monotony' ,
-    'PnL_Curve' , 'Style_Corr' , 'Style_Corr_Distrib' , 'Group_Return' , 'Group_Curve' , 'Group_Decay' , 'Group_IR_Decay' ,
+    'PnL_Curve' , 'Style_Corr' , 'Style_Corr_Distrib' , 'Group_Return' , 'Group_Percentile' ,
+    'Group_Curve' , 'Group_Decay' , 'Group_IR_Decay' ,
     'Group_Year' , 'Distrib_Curve' , 'Distrib_Qtile' ,
     'FactorPerfTest'
 ]
@@ -160,6 +161,15 @@ class Group_Return(FactorPerfCalc):
     def calculator(self): return Stat.calc_group_return
     def plotter(self): return plotter.plot_group_return
 
+class Group_Percentile(FactorPerfCalc):
+    COMPULSORY_BENCHMARKS = Benchmark.TESTS
+    def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 20 ,
+                 ret_type : Base.lit.ReturnType = 'close' , **kwargs) -> None:
+        params = {'nday' : nday , 'lag' : lag , 'group_num' : group_num , 'ret_type' : ret_type}
+        super().__init__(params = params , **kwargs)
+    def calculator(self): return Stat.calc_group_percentile
+    def plotter(self): return plotter.plot_group_percentile
+
 class Group_Curve(FactorPerfCalc):
     COMPULSORY_BENCHMARKS = Benchmark.TESTS
     def __init__(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
@@ -230,6 +240,8 @@ class FactorPerfTest(BaseFactorAnalyticTest):
             'ic_mono' : IC Monotony
             'pnl_curve' : PnL Cumulative Curve
             'style_corr' : Factor Style Correlation
+            'group_return' : Group Excess Return
+            'group_percentile' : Group Realized Return Percentile
             'grp_curve' : Group Return Cumulative Curve
             'grp_decay_ir' : Group Return Decay
             'grp_year' : Group Return Yearly Top
@@ -249,6 +261,7 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         IC_Benchmark ,
         IC_Monotony ,
         Group_Return ,
+        Group_Percentile ,
         # PnL_Curve ,
         Style_Corr ,
         # Style_Corr_Distrib ,

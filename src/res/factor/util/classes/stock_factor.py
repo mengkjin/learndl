@@ -195,17 +195,23 @@ def series_grouping(x : pd.Series , group_num : int , * , direction : int = 1 , 
 
 def eval_grp_avg(
     x : pd.DataFrame , x_cols : list[str], y_name : str = 'ret', 
-    group_num : int = 10 , excess = False , direction : int = 1 , strict_sparse_grouping = True
+    group_num : int = 10 , excess = False , direction : int = 1 , strict_sparse_grouping = True ,
+    as_rank : bool = False
 ) -> pd.DataFrame:
     """
-    evaluate the group average return of the factors
+    evaluate the group average of y (return, or its cross-sectional percentile)
+    as_rank: average rank_pct(y) within each predicted group instead of raw/excess y.
+        Rank is invariant to a cross-sectional constant, so this is the ordinal
+        analogue of group excess return and is robust to heavy-tailed outliers.
     """
     y = pd.DataFrame(x[y_name], index=x.index, columns=pd.Index([y_name]))
+    if as_rank:
+        y[y_name] = y[y_name].rank(pct=True)
     
     rtn = list()
     for col in x_cols:
         y['group'] = series_grouping(x[col], group_num, direction=direction, strict_sparse_grouping=strict_sparse_grouping)
-        if excess: 
+        if excess and not as_rank: 
             y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)
         rtn.append(grp_avg_ret)
@@ -998,25 +1004,30 @@ class StockFactor:
         return stat if all_dates else stat.query('date in @self.date')
     
     @staticmethod
-    def _eval_group_perf(df : pd.DataFrame , factors , group_num : int = 10 , excess = False , direction : int = 1) -> pd.DataFrame:
+    def _eval_group_perf(df : pd.DataFrame , factors , group_num : int = 10 , excess = False , direction : int = 1 ,
+                         as_rank : bool = False) -> pd.DataFrame:
         """
         evaluate the group performance df , columns must have : ['ret' , *factors]
         """
-        kwargs = {'x_cols' : factors , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess , 'include_groups' : False , 'direction' : direction}
+        kwargs = {'x_cols' : factors , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess ,
+                  'include_groups' : False , 'direction' : direction , 'as_rank' : as_rank}
         df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
         df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
         return df
 
     def eval_group_perf(self , nday : int = 10 , lag : int = 2 , group_num : int = 10 , excess = False , 
-                        ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
+                        ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False ,
+                        as_rank : bool = False) -> pd.DataFrame:
         """
         evaluate the group performance of the factor
         """
         params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type}
+        if as_rank:
+            params['rank'] = True
         calc_dates = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
         if len(calc_dates) > 0:
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
-            df = self._eval_group_perf(df , self.factor_names , group_num , excess)
+            df = self._eval_group_perf(df , self.factor_names , group_num , excess , as_rank = as_rank)
             df['start'] = CALENDAR.offset(df['date'] , lag , 'td')
             df['end']   = CALENDAR.offset(df['date'] , lag + nday - 1 , 'td')
             self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name' , 'group'])

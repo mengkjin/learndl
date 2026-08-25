@@ -1,15 +1,19 @@
-"""Torch device selection, nested ``.to()``, and simple RAM usage string."""
+"""Torch device selection, nested ``.to()``, inference policy, and CUDA OOM redirect."""
 from __future__ import annotations
 
 import torch
 from copy import deepcopy
-from functools import cached_property
-from typing import Any
+from typing import Any, Literal
 
 from src.proj.core import lit
 from src.proj.bases import BoundLogger
 
-__all__ = ['Device']
+__all__ = ['Device', 'DevicePolicy']
+
+DevicePolicy = Literal['cuda_then_cpu', 'cuda_then_raise', 'cpu_only']
+InferenceStage = Literal['test', 'predict', 'retrospective']
+_VALID_POLICIES: tuple[DevicePolicy, ...] = ('cuda_then_cpu', 'cuda_then_raise', 'cpu_only')
+_VALID_STAGES: tuple[InferenceStage, ...] = ('test', 'predict', 'retrospective')
 
 def _send_to(x : Any , device = None , copy = False) -> Any:
     """Recursively move tensors/modules/containers to ``device``."""
@@ -42,27 +46,36 @@ def _get_device(obj : torch.Module | torch.Tensor | list | tuple | dict | Any) -
     
 class Device(BoundLogger):
     """Preferred accelerator (MPS > CUDA > CPU) with helpers to move data."""
-    def __init__(self , try_cuda = True , * , indent : int = 0 , vb_level : lit.VerbosityLevel = 1 , **kwargs):
+    def __init__(
+        self ,
+        try_cuda = True ,
+        policy : DevicePolicy = 'cuda_then_raise' ,
+        * ,
+        indent : int = 0 ,
+        vb_level : lit.VerbosityLevel = 1 ,
+        **kwargs,
+    ):
         """Pick device via ``use_device`` (MPS checked before CUDA when available)."""
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.set_mps_memory_fraction()
-        self.try_cuda = try_cuda
+        if policy not in _VALID_POLICIES:
+            raise ValueError(f'Invalid device policy {policy}, expected one of {_VALID_POLICIES}')
+        self.policy : DevicePolicy = policy
+        self.try_cuda = False if policy == 'cpu_only' else try_cuda
+        self._redirected = False
+        self._device = self.use_device(self.try_cuda)
 
     def __repr__(self): 
         return str(self.device)
 
     def __call__(self, obj):
-        """Move ``obj`` to this device (see ``send_to``)."""
-        return _send_to(obj , self.device)
+        """Move ``obj`` to this device, applying inference policy on CUDA OOM."""
+        return self.to(obj)
     def __eq__(self , other : Any) -> bool:
         """True if type and index match another ``Device`` or ``torch.device``."""
-        if isinstance(other , torch.device):
-            return self.device == other
-        elif isinstance(other , Device):
-            return self.device == other.device
-        else:
-            return False
-        return self.compare_devices(self.device , other)
+        if isinstance(other , (torch.device, Device)):
+            return self.compare_devices(self.device , other)
+        return False
 
     @classmethod
     def set_mps_memory_fraction(cls , fraction : float = 0.7):
@@ -73,9 +86,14 @@ class Device(BoundLogger):
             # set memory allocation strategy
             torch.mps.set_per_process_memory_fraction(fraction)  # 使用60%的GPU内存
 
-    @cached_property
+    @property
     def device(self) -> torch.device:
-        return self.use_device(self.try_cuda)
+        return self._device
+
+    @property
+    def redirected(self) -> bool:
+        """True after a CUDA OOM fallback to CPU."""
+        return self._redirected
 
     @staticmethod
     def compare_devices(device1 : torch.device | Device , device2 : torch.device | Device) -> bool:
@@ -92,6 +110,52 @@ class Device(BoundLogger):
             return torch.device('cuda:0')
         else:
             return torch.device('cpu')
+
+    @classmethod
+    def from_inference_stage(cls , stage : str) -> Device:
+        """Build a Device from ``configs/preference/gpu.yaml`` and current fit-lock occupancy."""
+        from src.proj.env.machine import MACHINE
+        from src.proj.util.script.fit_lock import FitLock
+
+        if stage not in _VALID_STAGES:
+            raise ValueError(f'Invalid inference stage {stage}, expected one of {_VALID_STAGES}')
+        occupancy = 'busy' if FitLock.is_held() else 'idle'
+        policy = MACHINE.preference(
+            'gpu' , f'inference/{stage}/{occupancy}' , default = 'cuda_then_raise'
+        )
+        if policy not in _VALID_POLICIES:
+            raise ValueError(f'Invalid device policy {policy} for {stage}/{occupancy}')
+        return cls(try_cuda = policy != 'cpu_only' , policy = policy)
+
+    @staticmethod
+    def is_cuda_oom(exc : BaseException) -> bool:
+        """True if ``exc`` is a CUDA out-of-memory error."""
+        if isinstance(exc , torch.cuda.OutOfMemoryError):
+            return True
+        return isinstance(exc , RuntimeError) and 'out of memory' in str(exc).lower()
+
+    def to(self , obj : Any) -> Any:
+        """Move ``obj`` to the current device; ``cuda_then_cpu`` redirects on OOM."""
+        try:
+            return _send_to(obj , self.device)
+        except Exception as exc:
+            if self.policy != 'cuda_then_cpu' or not self.is_cuda_oom(exc):
+                raise
+            self.redirect_to_cpu()
+            return _send_to(obj , self.device)
+
+    def redirect_to_cpu(self) -> None:
+        """Switch this Device to CPU after CUDA failure; subsequent transfers follow."""
+        if self.is_cpu:
+            self._redirected = True
+            return
+        prev = self._device
+        self._device = torch.device('cpu')
+        self.try_cuda = False
+        self._redirected = True
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        self.logger.warning(f'Device redirected {prev} -> cpu (policy={self.policy})')
 
     @property
     def is_cuda(self):

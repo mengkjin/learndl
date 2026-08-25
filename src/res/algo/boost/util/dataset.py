@@ -200,7 +200,9 @@ class BoostInput:
                         * ``bm_type``           : ``'in'`` , ``None``
                         * ``ts_lin_rate``       : float (default 0.5)
                         * ``ts_half_life_rate`` : float (default 0.5)
-                        * ``cs_top_tau``        : float
+                        * ``cs_top_lambda``     : float (default 3.0)
+                        * ``cs_top_p``          : float (default 4.0)
+                        * ``cs_top_tau``        : float (deprecated)
                         * ``cs_ones_rate``      : float (default 2.0)
                         * ``bm_rate``           : float (default 2.0)
                         * ``bm_secid``          : benchmark security IDs or ``None``

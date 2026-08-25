@@ -17,8 +17,8 @@ from .basic import eval_stats , eval_ic_stats , eval_qtile_by_day
 __all__ = [
     'calc_frontface' , 'calc_coverage' , 'calc_ic_curve' , 'calc_ic_decay' , 
     'calc_ic_indus' , 'calc_ic_year' , 'calc_ic_benchmark' , 'calc_ic_monotony' ,
-    'calc_pnl_curve' , 'calc_style_corr' , 'calc_group_return' , 'calc_group_curve' , 
-    'calc_group_decay' , 'calc_group_year' , 'calc_distrib_curve' , 'calc_distrib_qtile'
+    'calc_pnl_curve' , 'calc_style_corr' , 'calc_group_return' , 'calc_group_percentile' ,
+    'calc_group_curve' , 'calc_group_decay' , 'calc_group_year' , 'calc_distrib_curve' , 'calc_distrib_qtile'
 ]
 
 DirectionType : TypeAlias = Literal[1,0,-1]
@@ -172,6 +172,25 @@ def calc_group_return(
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type).drop(columns=['start' , 'end']).set_index(['factor_name','group'])
+    grp = grp_perf.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
+    grp = grp.pivot_table('group_ret','factor_name','group',observed=False).reset_index(drop=False)
+    return grp
+
+def calc_group_percentile(
+    factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None , 
+    nday : int = 10 , lag : int = 2 , group_num : int = 10 , 
+    ret_type : Base.lit.ReturnType = 'close'
+) -> pd.DataFrame:
+    """Mean realized future-return percentile by predicted group.
+
+    Uses the same grouping as ``calc_group_return``, but averages the
+    cross-sectional rank of future return rather than excess return magnitude.
+    Random ranking sits at 0.5; a monotonic curve means the model ranks well
+    even when mean-return bars are distorted by heavy tails.
+    """
+    factor = factor.within(benchmark)
+    grp_perf = factor.eval_group_perf(nday , lag , group_num , False , ret_type , as_rank = True)
+    grp_perf = grp_perf.drop(columns=['start' , 'end']).set_index(['factor_name','group'])
     grp = grp_perf.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
     grp = grp.pivot_table('group_ret','factor_name','group',observed=False).reset_index(drop=False)
     return grp

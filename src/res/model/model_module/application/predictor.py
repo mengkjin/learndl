@@ -206,6 +206,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             model_date = prev_model_dates[-1] if len(prev_model_dates) > 0 else self.model_dates[0]
         assert model_date is not None and model_date in self.model_dates , f'model_date {model_date} not in {self.model_dates}'
         with Proj.silence(silent):
+            self.config.apply_inference_device('retrospective')
             model_param = self.config.model_param[model_num]
             self.load_data(date)
             self.data.setup('retrospective' , model_param , date , retro_start_date = retro_start_date , retro_end_date = retro_end_date)
@@ -252,6 +253,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         if dates.empty:
             return iter([])
         start_date , end_date = dates.min , dates.max
+        self.config.apply_inference_device('retrospective')
         model_param = self.config.model_param[model_num]
         with Proj.silence(silent):
             self.load_data(start_date , end_date)
@@ -406,6 +408,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             'calculated' : 0
         })
         torch.set_grad_enabled(False)
+        self.config.apply_inference_device('retrospective')
         df_list : list[pd.DataFrame] = []
         for model_date , df_sub in df_task.query('calculated == 0').groupby('model_date'):
             assert isinstance(model_date , int) and model_date in self.model_dates , \

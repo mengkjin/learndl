@@ -3,7 +3,7 @@ model:
   module        : resnet_gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
-  window  : 1200
+  window  : 2400
 
   # labels specification ------------------------------------------------------------
   # rtn : raw return | std : standardized return | res : risk model residual

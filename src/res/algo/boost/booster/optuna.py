@@ -68,7 +68,7 @@ class OptunaBoostModel(GeneralBoostModel):
                 'learning_rate':    trial.suggest_float('learning_rate', 1e-3, 0.3, log=True),
                 'max_depth':        trial.suggest_int('max_depth', 3, 12),
                 'num_leaves':       trial.suggest_int('num_leaves', 20, 100, step=10),
-                'min_data_in_leaf': trial.suggest_int('min_data_in_leaf', 10, 50, step=10),
+                'min_data_in_leaf': trial.suggest_int('min_data_in_leaf', 50, 400, step=50),
                 'reg_alpha':        trial.suggest_float('reg_alpha', 1e-7, 100, log=True),
                 'reg_lambda':       trial.suggest_float('reg_lambda', 1e-6, 100, log=True),
                 'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1.0, step=0.1),

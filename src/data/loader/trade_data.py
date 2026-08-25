@@ -201,8 +201,9 @@ class TradeDataAccess(DateDataAccess):
         mask = False , pivot = False , drop_old = False
     ) -> pd.DataFrame:
         """Return limit-price data (daily limit-up / limit-down prices and previous close)."""
-        return self.get_specific_data(start , end , 'limit' , field ,
-                                      prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
+        return self.get_specific_data(
+            start , end , 'limit' , field ,
+            prev = False , mask = mask , pivot = pivot , drop_old = drop_old)
     
     def get_returns(
         self , start : Base.intDate , end : Base.intDate ,
