@@ -90,7 +90,7 @@ class ChangeName(InfoFetcher):
     def dangerous_type():
         return [
             '终止上市', 'ST', '*ST', '暂停上市','撤消*ST并实行ST',
-            '退市整理期','从ST变为*ST','叠加ST','撤销叠加*ST', 'PT','高风险警示']
+            '退市整理期','从ST变为*ST','叠加ST','叠加*ST','撤销叠加*ST', 'PT','高风险警示']
 
     @staticmethod
     def recover_type():
