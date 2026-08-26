@@ -33,6 +33,18 @@ final_path.mkdir(exist_ok=True , parents=True)
 secdf_path.mkdir(exist_ok=True , parents=True)
 task_path.mkdir(exist_ok=True , parents=True)
 
+def baostock_result_df(rs) -> pd.DataFrame:
+    """Materialize a baostock ``ResultData`` without ``DataFrame.append``.
+
+    baostock 0.9.x ``ResultData.get_data()`` still uses ``df.append``, which
+    was removed in pandas 2.0 and crashes once the result spans more than
+    one page (e.g. ``query_all_stock``).
+    """
+    rows : list[list] = []
+    while rs.error_code == '0' and rs.next():
+        rows.append(rs.get_row_data())
+    return pd.DataFrame(rows , columns=rs.fields)
+
 def tmp_file_dir(start : int , end : int):
     path = task_path.joinpath(f'{start}_{end}')
     return path
@@ -46,7 +58,7 @@ def baostock_secdf(date : int):
     if path.exists():
         return Load.df(path)
     end_str = f'{date // 10000}-{(date // 100) % 100}-{date % 100}'
-    secdf = bs.query_all_stock(end_str).get_data()
+    secdf = baostock_result_df(bs.query_all_stock(end_str))
     secdf['market'] = secdf['code'].str.slice(0,2)
     secdf['secid'] = secdf['code'].str.slice(3).astype(int)
     secdf['is_sec'] = ((secdf['market'] == 'sh') * (secdf['secid'] >= 600000) + \
@@ -210,7 +222,7 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
                         code, 'date,time,code,open,high,low,close,volume,amount,adjustflag',
                         start_date=start_str,end_date=end_str,frequency='5', adjustflag='3')
                     assert rs is not None , f'{rs} is None , corrupted data'
-                    result = rs.get_data()
+                    result = baostock_result_df(rs)
                     if isinstance(result , pd.DataFrame):
                         Save.df(result , tmp_file_path(start , end , code) , vb_level = 'max' , prefix = f'Baostock 5min codes {i}/{len(task_codes)}')
 

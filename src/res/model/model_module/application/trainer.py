@@ -86,7 +86,10 @@ class ModelTrainer(BaseTrainer):
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):
         """
-        Resume testing prediction models and factors:
+        Resume testing prediction models and factors.
+
+        A failure of one testee is logged and skipped so the remaining
+        models/factors (and the outer daily update) can continue.
         """
 
         resumable_models = cls.resumable_models() if models else []
@@ -102,13 +105,22 @@ class ModelTrainer(BaseTrainer):
         cls.logger.divider()
         Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
 
+        failed : list[str] = []
         for testee_type , testee_path in testees:
             title_object = f'{testee_type.title()} {testee_path.base.name}'
-            cls.GO(base_path = testee_path , short_test = False ,
-                   title = f'Resume Testing {title_object}' , paragraph = True , 
-                   check_operation = None if force_resume else 'resume_testing' ,
-                   log_operation = 'resume_testing' , use_data = 'both' ,
-                   stage = 2 , resume = 1 , selection = 0)
+            try:
+                cls.GO(base_path = testee_path , short_test = False ,
+                       title = f'Resume Testing {title_object}' , paragraph = True , 
+                       check_operation = None if force_resume else 'resume_testing' ,
+                       log_operation = 'resume_testing' , use_data = 'both' ,
+                       stage = 2 , resume = 1 , selection = 0)
+            except Exception as e:
+                failed.append(title_object)
+                cls.logger.error(f'Resume testing {title_object} failed, skip and continue: {e}')
+                cls.logger.print_exc(e)
+                cls.logger.conclude(f'Resume testing {title_object} failed: {e}' , level = 'error')
+        if failed:
+            cls.logger.alert1(f'{len(failed)} / {len(testees)} resume testing failed: {failed}')
         
     @classmethod
     def train(cls , module : str | None = None , short_test : bool | None = None , 
