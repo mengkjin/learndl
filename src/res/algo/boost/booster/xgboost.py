@@ -31,6 +31,8 @@ class XgBoost(BasicBoostModel):
         'early_stopping' : 50 , 
         'rank_target_size' : 100 ,
         'n_bins' : None ,
+        'x_norm' : 'rankpct',
+        'y_norm' : 'rankpct',
         'eval_metric' : None , # rank:ndcg ,
         'subsample': 1.,
         'colsample_bytree':1.,

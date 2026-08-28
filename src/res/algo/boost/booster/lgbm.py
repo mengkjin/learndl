@@ -66,6 +66,8 @@ class Lgbm(BasicBoostModel):
         'device_type': 'cpu',
         'seed': 42,
         'n_bins' : None,
+        'x_norm' : 'rankpct',
+        'y_norm' : 'rankpct',
     }
     
     def assert_param(self , **kwargs):

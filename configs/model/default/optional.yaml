@@ -78,6 +78,8 @@ train.boost:
     objective: null # 'mse' ,'mae' , 'rank'
     n_bins: null # positive integer value
     rank_target_size: null
+    x_norm: null # rankpct | zscore | mad | raw ; default rankpct
+    y_norm: null # rankpct | zscore | mad | raw ; default rankpct
   weight: {}
   valid_metric: {}
 

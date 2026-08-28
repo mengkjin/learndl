@@ -46,7 +46,7 @@ class BasicBoostModel(ABC, Base.BoundLogger):
     DEFAULT_TRAIN_PARAM = {}
     DEFAULT_WEIGHT_PARAM = {}
     DEFAULT_VALID_METRIC_PARAM : dict[str, Any] = {}
-    MASK_PARAM : tuple[str, ...] = ('rank_target_size',)
+    MASK_PARAM : tuple[str, ...] = ('rank_target_size', 'x_norm', 'y_norm')
     DEFAULT_CATEGORICAL_N_BINS = 3
     DEFAULT_CATEGORICAL_MAX_BINS = 10
 
@@ -132,7 +132,14 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         return obj is not None and 'rank' in obj
 
     def boost_input(self , x : BoostInput | Any = 'test'):
-        return self.data[x] if isinstance(x , str) else x
+        data = self.data[x] if isinstance(x , str) else x
+        return data.set_data_param(**self._data_norm_param())
+
+    def _data_norm_param(self) -> dict[str, Any]:
+        return {
+            'x_norm' : self.train_param.get('x_norm' , 'rankpct') ,
+            'y_norm' : self.train_param.get('y_norm' , 'rankpct') ,
+        }
 
     def boost_fit_inputs(self , train : BoostInput | Any = None , valid : BoostInput | Any = None , silent = False , **kwargs):
         self.silent = silent
@@ -156,8 +163,8 @@ class BasicBoostModel(ABC, Base.BoundLogger):
         if valid is None: 
             valid = self.data['valid']
 
-        self.fit_train_ds = train.set_data_param(n_bins = n_bins).Dataset()
-        self.fit_valid_ds = valid.set_data_param(n_bins = n_bins).Dataset()
+        self.fit_train_ds = train.set_data_param(n_bins = n_bins , **self._data_norm_param()).Dataset()
+        self.fit_valid_ds = valid.set_data_param(n_bins = n_bins , **self._data_norm_param()).Dataset()
         self.fit_train_param = train_param
         self.valid_metric = self.build_valid_metric(valid)
 

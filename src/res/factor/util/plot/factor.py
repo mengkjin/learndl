@@ -194,6 +194,7 @@ class Plotter:
 
     def plot_group_percentile(self , data : pd.DataFrame , show = False , title_prefix = None):
         self.plot_iter.set_args(data , show , title_prefix , 'Group Realized Percentile' , ['factor_name'])
+        baseline = 0.5
         for df , fig in self.plot_iter.iter():
             df = df.transpose()
             ax = fig.add_subplot(111)
@@ -201,12 +202,17 @@ class Plotter:
             bar_width = 1 / (len(df.columns) + 1)
             for j , bm in enumerate(df.columns):
                 x_pos = index_mid + (j - (len(df.columns) - 1) / 2) * bar_width
-                ax.bar(x_pos  , df[bm], label = bm , width=bar_width) 
-            ax.axhline(0.5 , color='grey' , linestyle='--' , linewidth=0.8 , zorder=0)
+                ax.bar(x_pos , df[bm] - baseline , bottom = baseline , label = bm , width=bar_width) 
+            ax.axhline(baseline , color='grey' , linestyle='--' , linewidth=0.8 , zorder=0)
+            tick_lim = None
             if not df.empty:
                 ax.legend(loc='upper right')
+                vals = df.to_numpy(dtype=float)
+                lo , hi = np.nanmin(vals) , np.nanmax(vals)
+                pad = max(0.02 , 0.08 * max(hi - lo , 1e-6))
+                tick_lim = (min(lo , baseline) - pad , max(hi , baseline) + pad)
             set_xaxis(ax , index_mid , labels = df.index)
-            set_yaxis(ax , format='pct' , digits=2 , title = 'Mean Realized Percentile' , title_color='b')
+            set_yaxis(ax , format='pct' , digits=2 , title = 'Mean Realized Percentile' , title_color='b' , tick_lim = tick_lim)
         return self.plot_iter.figs
 
     def plot_group_curve(self , data : pd.DataFrame , show = False , title_prefix = None):

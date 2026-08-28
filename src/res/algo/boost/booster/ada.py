@@ -36,6 +36,8 @@ class AdaBoost(BasicBoostModel):
         'max_nan_ratio' : 0.8 ,
         'rank_target_size' : None ,
         'objective' : None ,
+        'x_norm' : 'rankpct',
+        'y_norm' : 'rankpct',
     }
     DEFAULT_WEIGHT_PARAM = {
         'ts_type' : None ,
@@ -59,7 +61,7 @@ class AdaBoost(BasicBoostModel):
             valid = self.data['valid']
 
         device = torch.device('cuda:0' if torch.cuda.is_available() and self.cuda else 'cpu')
-        train_data = BoostInput.concat([train , valid])
+        train_data = BoostInput.concat([train , valid]).set_data_param(**self._data_norm_param())
         dset = train_data.Dataset().to(device)
 
         assert dset.y is not None , 'y must not be None in fitting'

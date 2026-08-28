@@ -19,13 +19,15 @@ from typing import Any
 from src.proj import Logger , Base
 from src.func.basic import index_merge , match_slice , intersect_meshgrid
 from src.func.metric import rankic_2d , ic_2d
-from src.func.tensor import rank_pct
+from src.func.tensor import rank_pct , standardize , standardize_mad
 
 from .weight import BoostWeightMethod
 
-__all__ = ['BoostDataset' , 'BoostOutput' , 'BoostInput']
+__all__ = ['BoostDataset' , 'BoostOutput' , 'BoostInput' , 'DEFAULT_X_NORM' , 'DEFAULT_Y_NORM']
 
-RANKPCT_OF_X : bool = False
+DEFAULT_X_NORM : Base.lit.BoostNormMethod = 'rankpct'
+DEFAULT_Y_NORM : Base.lit.BoostNormMethod = 'rankpct'
+_VALID_NORMS = ('rankpct' , 'zscore' , 'mad' , 'raw')
 
 @dataclass(slots=True)
 class BoostDataset:
@@ -208,12 +210,18 @@ class BoostInput:
                         * ``bm_secid``          : benchmark security IDs or ``None``
         n_bins:       When not ``None``, ``y`` is converted to integer category
                       labels in ``[0, n_bins - 1]`` for classification training.
+        x_norm:       Cross-sectional transform for ``X`` along secid (dim 0).
+                      ``rankpct`` (default) / ``zscore`` / ``mad`` / ``raw``.
+        y_norm:       Cross-sectional transform for ``Y`` along secid (dim 0).
+                      Same options as ``x_norm``; default ``rankpct``.
+                      Ignored when ``n_bins`` is set (equal-count rank bins).
     """
    
     def __init__(
         self , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
         secid : Base.alias.SecidType = None , date : Base.alias.DateType = None , feature : np.ndarray | None = None ,
-        weight_param : dict[str, Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | None = None
+        weight_param : dict[str, Any] | None = None , n_bins : int | None = None , use_feature : np.ndarray | None = None ,
+        x_norm : Base.lit.BoostNormMethod = DEFAULT_X_NORM , y_norm : Base.lit.BoostNormMethod = DEFAULT_Y_NORM
     ):
         self._x = x
         self._y = y
@@ -224,12 +232,15 @@ class BoostInput:
         self._weight_param = weight_param or {}
         self._n_bins = n_bins
         self._use_feature = use_feature
+        self._x_norm : Base.lit.BoostNormMethod = self._check_norm(x_norm , 'x_norm')
+        self._y_norm : Base.lit.BoostNormMethod = self._check_norm(y_norm , 'y_norm')
 
     def __repr__(self):
         return '\n'.join(
             [f'secid={self.secid}', 
              f'date={self.date}', 
              f'feature={self.feature}', 
+             f'x_norm={self.x_norm}, y_norm={self.y_norm}',
              f'weight_method={self.weight_method})'])
 
     @property
@@ -266,8 +277,40 @@ class BoostInput:
         return self._n_bins
 
     @property
+    def x_norm(self) -> Base.lit.BoostNormMethod:
+        return self._x_norm
+
+    @property
+    def y_norm(self) -> Base.lit.BoostNormMethod:
+        return self._y_norm
+
+    @property
     def use_feature(self) -> np.ndarray | None:
         return np.array(self._use_feature) if self._use_feature is not None else None
+
+    @staticmethod
+    def _check_norm(method : Base.lit.BoostNormMethod , name : str) -> Base.lit.BoostNormMethod:
+        assert method in _VALID_NORMS , f'{name}={method!r} not in {_VALID_NORMS}'
+        return method
+
+    @staticmethod
+    def cs_norm(value : torch.Tensor , method : Base.lit.BoostNormMethod , * , dim : int = 0) -> torch.Tensor:
+        """Cross-sectional transform along ``dim`` (default: secid).
+
+        ``rankpct`` is scaled to ``[0, 100)`` so tree splits stay on the
+        historical percentile grid. ``zscore`` is mean/std; ``mad`` is
+        median / 1.4826-MAD. ``raw`` is a no-op.
+        """
+        if method == 'raw':
+            return value
+        elif method == 'rankpct':
+            return rank_pct(value , dim = dim).clip(0 , 0.9999) * 100
+        elif method == 'zscore':
+            return standardize(value , dim = dim)
+        elif method == 'mad':
+            return standardize_mad(value , dim = dim)
+        else:
+            raise ValueError(f'Unknown cs-norm method {method!r}, expected {_VALID_NORMS}')
 
     @property
     def feat_idx(self): 
@@ -300,7 +343,11 @@ class BoostInput:
     def copy(self) -> BoostInput:
         return deepcopy(self)
 
-    def set_data_param(self , use_feature : Base.alias.NamesType = None , n_bins : int | None = None , weight_param : dict[str, Any] | None = None): 
+    def set_data_param(
+        self , use_feature : Base.alias.NamesType = None , n_bins : int | None = None ,
+        weight_param : dict[str, Any] | None = None ,
+        x_norm : Base.lit.BoostNormMethod | None = None , y_norm : Base.lit.BoostNormMethod | None = None
+    ):
         use_feature = Base.ensure_name_list(use_feature)
         if use_feature is not None and (self._use_feature is None or not np.array_equal(use_feature , self._use_feature)):
             self._use_feature = np.array(use_feature)
@@ -308,6 +355,14 @@ class BoostInput:
 
         if n_bins is not None and n_bins != self._n_bins:
             self._n_bins = n_bins
+            self.__dict__.pop('Y' , None)
+
+        if x_norm is not None and x_norm != self._x_norm:
+            self._x_norm = self._check_norm(x_norm , 'x_norm')
+            self.__dict__.pop('X' , None)
+
+        if y_norm is not None and y_norm != self._y_norm:
+            self._y_norm = self._check_norm(y_norm , 'y_norm')
             self.__dict__.pop('Y' , None)
 
         if weight_param is not None:
@@ -358,31 +413,28 @@ class BoostInput:
         """Return flat feature matrix of shape ``(n_finite, n_use_feature)``.
 
         Only the columns in ``use_feature`` are returned; NaN rows are dropped.
-        ! important: rank_pct is applied to every date every feature
+        Cross-sectional ``x_norm`` is applied per date × feature (dim 0).
         """
-        if RANKPCT_OF_X:
-            x_raw = rank_pct(self.x[...,self.feat_idx] , dim = 0).clip(0 , 0.9999) * 100
-        else:
-            x_raw = self.x[...,self.feat_idx]
+        x_raw = self.cs_norm(self.x[...,self.feat_idx] , self.x_norm , dim = 0)
         x = self._flatten_by_date(x_raw)
         assert x is not None , 'x is None'
         return x
 
     @cached_property
     def Y(self) -> torch.Tensor | None:
-        """
-        Return flat label vector of length ``n_finite``, NaN rows dropped.
-        ! important: rank_pct is applied to every date
+        """Return flat label vector of length ``n_finite``, NaN rows dropped.
+
+        Cross-sectional ``y_norm`` is applied per date (dim 0). When
+        ``n_bins`` is set, labels are equal-count rank bins in
+        ``[0, n_bins - 1]`` regardless of ``y_norm``.
         """
         if self.y is None:
             return None
+        if self.n_bins is None:
+            y_cs = self.cs_norm(self.y , self.y_norm , dim = 0)
         else:
-            rank_y = rank_pct(self.y , dim = 0).clip(0 , 0.9999)
-            if self.n_bins is None:
-                rank_y = rank_y * 100
-            else:
-                rank_y = (rank_y * self.n_bins).nan_to_num(-1).int().clip(-1 , self.n_bins-1)
-            return self._flatten_by_date(rank_y)
+            y_cs = (rank_pct(self.y , dim = 0).clip(0 , 0.9999) * self.n_bins).nan_to_num(-1).int().clip(-1 , self.n_bins-1)
+        return self._flatten_by_date(y_cs)
         
     @cached_property
     def W(self) -> torch.Tensor:
@@ -440,7 +492,8 @@ class BoostInput:
         return df
 
     @classmethod
-    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str, Any] | None = None , label_col : str | None = None):
+    def from_dataframe(cls , data : pd.DataFrame , weight_param : dict[str, Any] | None = None , label_col : str | None = None ,
+                       x_norm : Base.lit.BoostNormMethod = DEFAULT_X_NORM , y_norm : Base.lit.BoostNormMethod = DEFAULT_Y_NORM):
         """Construct from a tidy ``DataFrame`` with a secid/date multi-index.
 
         The label column is treated as the label (``y``); all other columns
@@ -472,25 +525,28 @@ class BoostInput:
         y = torch.Tensor(np.stack([arr.to_numpy() for arr in yarr.data_vars.values()] , -1)[...,0])
         
         secid , date , feature = xindex[0] , xindex[1] , xindex[-1]
-        return cls(x , y , None , secid , date , feature , weight_param)
+        return cls(x , y , None , secid , date , feature , weight_param , x_norm = x_norm , y_norm = y_norm)
 
     @classmethod
     def from_numpy(
         cls , x : np.ndarray , y : np.ndarray | None = None,  w : np.ndarray | None = None ,
         secid : Any = None , date : Any = None , feature : Any = None ,
-        weight_param : dict[str, Any] | None = None):
+        weight_param : dict[str, Any] | None = None ,
+        x_norm : Base.lit.BoostNormMethod = DEFAULT_X_NORM , y_norm : Base.lit.BoostNormMethod = DEFAULT_Y_NORM):
         """Construct from NumPy arrays, delegating to :meth:`from_tensor`."""
         return cls.from_tensor(
             x = torch.Tensor(x) , 
             y = None if y is None else torch.Tensor(y) ,
             w = None if w is None else torch.Tensor(w) ,
-            secid = secid , date = date , feature = feature , weight_param = weight_param)
+            secid = secid , date = date , feature = feature , weight_param = weight_param ,
+            x_norm = x_norm , y_norm = y_norm)
     
     @classmethod
     def from_tensor(
         cls , x : torch.Tensor , y : torch.Tensor | None = None , w : torch.Tensor | None = None ,
         secid : Any = None , date : Any = None , feature : Any = None ,
-        weight_param : dict[str, Any] | None = None):
+        weight_param : dict[str, Any] | None = None ,
+        x_norm : Base.lit.BoostNormMethod = DEFAULT_X_NORM , y_norm : Base.lit.BoostNormMethod = DEFAULT_Y_NORM):
         """Construct from tensors, normalising shapes and generating default indices.
 
         ``x`` may be 2-D ``(n_sample, n_feature)`` (treated as single date) or
@@ -516,7 +572,7 @@ class BoostInput:
             date  = np.arange(x.shape[1])
         if feature is None : 
             feature = np.array([f'F.{i}' for i in range(x.shape[-1])])
-        return cls(x , y , w , secid , date , feature , weight_param)
+        return cls(x , y , w , secid , date , feature , weight_param , x_norm = x_norm , y_norm = y_norm)
     
     @classmethod
     def concat(cls , datas : list[BoostInput | None]) -> BoostInput:
@@ -547,5 +603,6 @@ class BoostInput:
                 w[*tar_grid] = blk.w[*src_grid]
         if y.isnan().all():
             y = None
-        new_binput = cls(x , y , w , secid , date , feature)
+        new_binput = cls(x , y , w , secid , date , feature ,
+                         x_norm = blocks[0].x_norm , y_norm = blocks[0].y_norm)
         return new_binput

@@ -314,6 +314,27 @@ def standardize(x : torch.Tensor, * , dim : int | None = 0):
     x = (x - nanmean(x,dim=dim,keepdim=True)) / (nanstd(x,dim=dim,correction=0,keepdim=True) + DIV_TOL)
     return x
 
+def standardize_mad(x : torch.Tensor, * , dim : int | None = 0 , gauss_scale : float = 1.4826):
+    """MAD-robust z-score along ``dim``: ``(x - median) / (1.4826 * MAD + DIV_TOL)``.
+
+    ``gauss_scale=1.4826`` makes MAD consistent with Gaussian std, so the
+    output scale is comparable to :func:`standardize`. Cross-section with
+    zero MAD collapses to 0.
+
+    Args:
+        x: Input tensor.
+        dim: Axis for median / MAD; if all NaN, returns ``x`` unchanged.
+        gauss_scale: Consistency constant; ``1.4826`` ≈ ``1 / Φ^{-1}(0.75)``.
+
+    Returns:
+        Robust-standardized tensor.
+    """
+    if x.isnan().all().item():
+        return x
+    med = nanmedian(x , dim=dim , keepdim=True)
+    mad = nanmedian((x - med).abs() , dim=dim , keepdim=True)
+    return (x - med) / (gauss_scale * mad + DIV_TOL)
+
 def rank(x : Tensor , * , dim : int | None = 0) -> Tensor:
     """Average-rank style order (1-based), NaNs preserved.
 

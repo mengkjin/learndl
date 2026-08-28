@@ -6,7 +6,7 @@ model:
   module.boost.optuna: False
 
   window   : 1200
-  interval : 60
+  interval : 20
   # labels specification ------------------------------------------------------------
   # rtn : raw return | std : standardized return | res : risk model residual
   # if module is nn , use multiloss combination of the labels

@@ -444,11 +444,22 @@ class CacheFactorStats:
             return np.array([] , dtype=int)
         assert path.is_dir() , f'path {path} is not a directory'
         dates : list[np.ndarray] = []
+        has_group_perf = False
+        has_group_perf_rank = False
         for name in subsets:
             for file in path.joinpath(name).glob('*.feather'):
                 if exclude_csi2000 and 'bm=csi2000' in file.stem:
                     continue
+                if name == 'group_perf':
+                    has_group_perf = True
+                    if 'rank=True' in file.stem:
+                        has_group_perf_rank = True
                 dates.append(FactorStats.stat_dates(Load.df(file)))
+        # Group_Percentile uses a separate group_perf key (rank=True). If only the
+        # older excess-return cache exists, treat coverage as incomplete so resume
+        # reloads the full factor history instead of the last date only.
+        if has_group_perf and not has_group_perf_rank:
+            return np.array([] , dtype=int)
         return common_elements(dates)
 
     @property
@@ -950,7 +961,9 @@ class StockFactor:
         df = self.frame()
         dates = Base.ensure_date(dates)
         if dates is not None:
-            df = df.query('date in @dates')
+            df = self._slice_frame_dates(df , dates)
+        if df.empty:
+            return df
         if indus:   
             df = append_indus(df)
         if fut_ret: 
@@ -961,7 +974,33 @@ class StockFactor:
                 df = df.query('effective_date').drop(columns=['effective' , 'effective_date'])
         if ffmv:    
             df = append_ffmv(df)
-        return df   
+        return df
+
+    def _slice_frame_dates(self , df : pd.DataFrame , dates : np.ndarray) -> pd.DataFrame:
+        """Filter *df* to *dates* whether ``date`` is a column or an index level."""
+        if df.empty:
+            return df
+        if 'date' in df.columns:
+            return df[df['date'].isin(dates)]
+        if 'date' in df.index.names:
+            return df.loc[df.index.get_level_values('date').isin(dates)]
+        return df
+
+    def _slice_stat_by_date(self , stat : pd.DataFrame) -> pd.DataFrame:
+        """Keep cached stats whose date is in ``self.date``.
+
+        ``FactorStats.get_stat`` returns a schemaless empty frame on cache miss.
+        ``DataFrame.query('date in ...')`` then raises ``UndefinedVariableError``
+        because ``date`` is neither a column nor a local name.
+        """
+        if stat.empty:
+            return stat
+        dates = self.date
+        if 'date' in stat.columns:
+            return stat[stat['date'].isin(dates)]
+        if 'date' in stat.index.names:
+            return stat.loc[stat.index.get_level_values('date').isin(dates)]
+        return stat
 
     def eval_ic(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
                 ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
@@ -981,7 +1020,7 @@ class StockFactor:
             ic = grouped.apply(df_ic , include_groups = False).rename_axis('factor_name',axis='columns')
             self.cache_factor_stats.ic.append_stat(params , ic , keys = ['date'])
         stat = self.cache_factor_stats.ic.get_stat(params)
-        return stat if all_dates else stat.query('date in @self.date')
+        return stat if all_dates else self._slice_stat_by_date(stat)
     
     def eval_ic_indus(self , nday : int = 10 , lag : int = 2 , ic_type  : Base.lit.ICType = 'spearman' ,
                       ret_type : Base.lit.ReturnType = 'close' , use_cache = True , all_dates = False) -> pd.DataFrame:
@@ -1001,7 +1040,7 @@ class StockFactor:
                     melt(id_vars = ['date' , 'industry'] , var_name = 'factor_name' , value_name = 'ic_indus')
             self.cache_factor_stats.ic_indus.append_stat(params , ic , keys = ['date' , 'industry'])
         stat = self.cache_factor_stats.ic_indus.get_stat(params)
-        return stat if all_dates else stat.query('date in @self.date')
+        return stat if all_dates else self._slice_stat_by_date(stat)
     
     @staticmethod
     def _eval_group_perf(df : pd.DataFrame , factors , group_num : int = 10 , excess = False , direction : int = 1 ,
@@ -1009,9 +1048,14 @@ class StockFactor:
         """
         evaluate the group performance df , columns must have : ['ret' , *factors]
         """
+        empty = pd.DataFrame(columns=['date' , 'group' , 'factor_name' , 'group_ret'])
+        if df.empty:
+            return empty
         kwargs = {'x_cols' : factors , 'y_name' : 'ret' , 'group_num' : group_num , 'excess' : excess ,
                   'include_groups' : False , 'direction' : direction , 'as_rank' : as_rank}
-        df = df.groupby('date').apply(eval_grp_avg , **kwargs) 
+        df = df.groupby('date').apply(eval_grp_avg , **kwargs)
+        if df.empty:
+            return empty
         df = df.melt(var_name='factor_name' , value_name='group_ret' , ignore_index=False).sort_values(['date','factor_name']).reset_index()
         return df
 
@@ -1024,15 +1068,19 @@ class StockFactor:
         params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type}
         if as_rank:
             params['rank'] = True
-        calc_dates = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
+        needed = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
+        # pseudo_date can outrun loaded data (resume only keeps the last date);
+        # never request group stats for dates that are not actually in the frame.
+        calc_dates = np.intersect1d(np.asarray(needed) , self.data_date)
         if len(calc_dates) > 0:
             df = self.frame_with_cols(fut_ret = True , nday = nday , lag = lag , ret_type = ret_type , dates = calc_dates)
             df = self._eval_group_perf(df , self.factor_names , group_num , excess , as_rank = as_rank)
-            df['start'] = CALENDAR.offset(df['date'] , lag , 'td')
-            df['end']   = CALENDAR.offset(df['date'] , lag + nday - 1 , 'td')
-            self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name' , 'group'])
+            if not df.empty:
+                df['start'] = CALENDAR.offset(df['date'] , lag , 'td')
+                df['end']   = CALENDAR.offset(df['date'] , lag + nday - 1 , 'td')
+                self.cache_factor_stats.group_perf.append_stat(params , df , keys = ['date' , 'factor_name' , 'group'])
         stat = self.cache_factor_stats.group_perf.get_stat(params)
-        return stat if all_dates else stat.query('date in @self.date')
+        return stat if all_dates else self._slice_stat_by_date(stat)
     
     def eval_weighted_pnl(
         self , nday : int = 10 , lag : int = 2 , group_num : int = 10 ,
@@ -1058,7 +1106,7 @@ class StockFactor:
             pnl = pd.concat(dfs).set_index(['weight_type' , 'date'])
             self.cache_factor_stats.weighted_pnl.append_stat(params , pnl , keys = ['weight_type' , 'date'])
         stat = self.cache_factor_stats.weighted_pnl.get_stat(params)
-        return stat if all_dates else stat.query('date in @self.date')
+        return stat if all_dates else self._slice_stat_by_date(stat)
 
     def coverage(self , benchmark : Base.alias.SingleBenchmark = None , use_cache = True , all_dates = False) -> pd.DataFrame:
         """
@@ -1076,7 +1124,7 @@ class StockFactor:
                 coverage[factor_name] = (coverage[factor_name] / benchmark_size).clip(0 , 1)
             self.cache_factor_stats.coverage.append_stat(params , coverage , keys = ['date'])
         stat = self.cache_factor_stats.coverage.get_stat(params)
-        return stat if all_dates else stat.query('date in @self.date')
+        return stat if all_dates else self._slice_stat_by_date(stat)
 
     def time_series_stats(self , nday : int = 1 , lag : int = 1) -> pd.DataFrame:
         """

@@ -48,6 +48,7 @@ DatasetAll : TypeAlias = Literal['train' , 'valid' , 'test' , 'predict' , 'retro
 StageAll : TypeAlias = Literal['setup' , 'data' , 'fit' , 'test' , 'predict' , 'retrospective' , 'summary']
 
 ConfigWeightScheme : TypeAlias = Literal['equal' , 'top' , 'polar']
+BoostNormMethod : TypeAlias = Literal['rankpct' , 'zscore' , 'mad' , 'raw']
 
 ReturnType : TypeAlias = Literal['close' , 'vwap']
 

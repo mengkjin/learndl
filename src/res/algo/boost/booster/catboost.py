@@ -32,6 +32,8 @@ class CatBoost(BasicBoostModel):
         'eval_metric' : None , # 'NDCG:top=100'
         'rank_target_size' : 100 ,
         'n_bins' : None ,
+        'x_norm' : 'rankpct',
+        'y_norm' : 'rankpct',
         'num_boost_round' : 100 , 
         'early_stopping' : 50 , 
         'verbosity': 1 , 
