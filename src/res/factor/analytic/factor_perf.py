@@ -38,7 +38,16 @@ class FactorPerfCalc(BaseFactorAnalyticCalculator):
     def calc(self , factor : StockFactor, benchmarks : Base.alias.MultipleBenchmark = None):
         with self.calc_manager():
             func = self.calculator()
-            rslt = pd.concat([func(factor , bm , **self.params).assign(benchmark = bm.name) for bm in self.use_benchmarks(benchmarks)])
+            frames = []
+            for bm in self.use_benchmarks(benchmarks):
+                df = func(factor , bm , **self.params)
+                if df.empty:
+                    continue
+                frames.append(df.assign(benchmark = bm.name))
+            if not frames:
+                self.calc_rslt = pd.DataFrame()
+                return self
+            rslt = pd.concat(frames)
             self.calc_rslt = rslt.assign(benchmark = Benchmark.as_category(rslt['benchmark'])).set_index(['factor_name', 'benchmark']).sort_index()
         return self
     

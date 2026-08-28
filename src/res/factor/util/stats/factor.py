@@ -124,7 +124,10 @@ def calc_ic_monotony(
     nday : int = 10 , lag_init : int = 2 , ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
-    grp_perf = factor.eval_group_perf(nday , lag_init , 100 , True , ret_type).drop(columns=['start' , 'end'])
+    grp_perf = factor.eval_group_perf(nday , lag_init , 100 , True , ret_type)
+    if grp_perf.empty:
+        return grp_perf
+    grp_perf = grp_perf.drop(columns=['start' , 'end'])
     grouped = grp_perf.groupby(['factor_name', 'group'],observed=False)['group_ret']
 
     ret_mean : pd.Series | Any = grouped.mean()
@@ -171,7 +174,10 @@ def calc_group_return(
     ret_type : Base.lit.ReturnType = 'close'
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
-    grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type).drop(columns=['start' , 'end']).set_index(['factor_name','group'])
+    grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type)
+    if grp_perf.empty:
+        return grp_perf
+    grp_perf = grp_perf.drop(columns=['start' , 'end']).set_index(['factor_name','group'])
     grp = grp_perf.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
     grp = grp.pivot_table('group_ret','factor_name','group',observed=False).reset_index(drop=False)
     return grp
@@ -190,6 +196,8 @@ def calc_group_percentile(
     """
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , False , ret_type , as_rank = True)
+    if grp_perf.empty:
+        return grp_perf
     grp_perf = grp_perf.drop(columns=['start' , 'end']).set_index(['factor_name','group'])
     grp = grp_perf.groupby(['factor_name' , 'group'] , observed=False)['group_ret'].mean().reset_index()
     grp = grp.pivot_table('group_ret','factor_name','group',observed=False).reset_index(drop=False)

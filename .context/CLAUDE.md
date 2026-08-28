@@ -26,6 +26,12 @@ This folder is the living documentation vault for the `learndl` project. It is a
 | [[workflows/training_run]] | Model training end-to-end |
 | [[workflows/strategy_dev]] | New alpha signal development checklist |
 
+## Reference Docs
+
+| Doc | Covers |
+|-----|--------|
+| [[references/dongfang_ms_l2_chars]] | 东方 `ms_chars` ∪ `l2_chars` 已命名字段词典（剔除 `l2c*`） |
+
 ## Maintenance
 
 Selective updates are driven by `_index.yaml` (module → source directory ownership map).
