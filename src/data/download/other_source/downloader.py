@@ -38,8 +38,8 @@ class OtherSourceDownloader(Base.SelectiveUpdateSupport):
                 Base.UpdateMenuNode(
                     label = 'Baostock' ,
                     key = f'{cls.SELECTION_PREFIX}.baostock' ,
-                    help = 'Baostock 5-min bars (START_DATE=20401231 effectively disables on most machines)' ,
-                    disabled = False ,
+                    help = 'Temporarily disabled: baostock download hangs with no socket timeout' ,
+                    disabled = not Baostock5minBarDownloader.ENABLED ,
                 ) ,
             ] ,
         )
@@ -59,7 +59,10 @@ class OtherSourceDownloader(Base.SelectiveUpdateSupport):
             for key in selection
             if key.startswith(f'{cls.SELECTION_PREFIX}.rcquant.')
         ]
-        do_baostock = f'{cls.SELECTION_PREFIX}.baostock' in selection
+        do_baostock = (
+            Baostock5minBarDownloader.ENABLED
+            and f'{cls.SELECTION_PREFIX}.baostock' in selection
+        )
         if not rcquant_types and not do_baostock:
             return Base.UpdateFlag.SKIPPED
 
@@ -102,5 +105,10 @@ class OtherSourceDownloader(Base.SelectiveUpdateSupport):
     def update(cls , * , indent: int = 0, vb_level: int = 1) -> Base.UpdateFlagList:
         flags = Base.UpdateFlagList()
         flags += RcquantMinBarDownloader.update(indent=indent, vb_level=vb_level)
-        flags += Baostock5minBarDownloader.update(indent=indent, vb_level=vb_level)
+        if Baostock5minBarDownloader.ENABLED:
+            flags += Baostock5minBarDownloader.update(indent=indent, vb_level=vb_level)
+        else:
+            Baostock5minBarDownloader.logger.skipping(
+                'Baostock 5min download temporarily disabled (no socket timeout)')
+            flags += Base.UpdateFlag.SKIPPED
         return flags

@@ -128,6 +128,8 @@ def baostock_5min_to_normal_5min(df : pd.DataFrame):
 class Baostock5minBarDownloader(Base.BasicUpdater):
     UPDATE_ALIAS : str = 'download'
     ACCEPTABLE_UPDATE_TYPES : tuple[Base.UpdateType,...] = (Base.UpdateType.UPDATE, )
+    # baostock socket has no timeout and can hang the daily update. Flip to True to re-enable.
+    ENABLED = False
 
     @classmethod
     def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
@@ -138,6 +140,9 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
         cls , start : int , end : int , * ,
         first_n : int = -1 , overwrite : bool = False , **kwargs
     ) -> Base.UpdateFlag:
+        if not cls.ENABLED:
+            cls.logger.skipping('Baostock 5min download temporarily disabled (no socket timeout)')
+            return Base.UpdateFlag.SKIPPED
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
         return updater.download_since_last_data(
             start = start , end = end , first_n = first_n , overwrite = overwrite ,
