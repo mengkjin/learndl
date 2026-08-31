@@ -44,11 +44,15 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
     """
     _imported : bool = False
     START_DATE : int = 20170101
+    UPDATE_ORDER : int = 0
 
     @classmethod
     def iter_updaters(cls) -> Iterator[type[BasicCustomUpdater]]:
         cls.import_updaters()
-        for name , updater in cls.registry.items():
+        # Stable on UPDATE_ORDER so default-0 updaters keep import order.
+        items = list(cls.registry.items())
+        items.sort(key = lambda kv: getattr(kv[1] , 'UPDATE_ORDER' , 0))
+        for _name , updater in items:
             yield updater
 
     @classmethod

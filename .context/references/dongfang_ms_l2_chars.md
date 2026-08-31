@@ -242,3 +242,66 @@ l2c0 l2c1 l2c2 l2c3 l2c4
 - 两表用 `date+secid` 对齐；量额用 `amt{k}h = bamt{k}h+samt{k}h` 衔接，竞价用 `amtoa = volu0h×opri`。
 - 入模前按项目现有 `PrePro_dfl2` / `PrePro_dfl2cs` 做时序分位或截面 z-score；金额类需先取对数或除以当日 `amt`。
 - 加载：`DB.loads_pl('sellside', 'dongfang.ms_chars', ...)` / `dongfang.l2_chars`。
+
+---
+
+## 分钟线可算性（`min_chars/*`）
+
+包：`src/data/update/custom/min_chars/`。列级公式见 `FACTORS.md`，一行一列见 `factors.csv`。  
+三个 updater **分表落盘** 到 `data/DataBase/DB_min_chars/{key}/`，按 `UPDATE_ORDER` 110→111→112 跑；缺上游则跳过、不报错。日期宇宙跟随 `trade_ts/min`（`use_alt=True`），不发明没有分钟线的交易日。数值列为 float32。历史补全：`scripts/2_data/4_backfill_min_chars.py`。
+
+| 顺序 | Updater | DB key | 依赖 |
+|---|---|---|---|
+| 1 | `MinCharsDailyUpdater` | `min_chars/min_chars` | `trade_ts/min` |
+| 2 | `MinCharsRollUpdater` | `min_chars/min_chars_roll` | 最近 20 个 **min ∩ min_chars** 日（含当日） |
+| 3 | `MinCharsTaggedUpdater` | `min_chars/min_chars_tag` | 当日 min ∩ `min_chars/min_chars_roll` |
+
+主动买卖按 1 分钟收益符号重定义（涨=买、跌=卖、平=各半），**不是** L2 逐笔主买。尺度与东方原表不可比。  
+`ret_path = (∏(1+ret)−1)×100`。OHLC / `volu` 只作内部计算，不落盘。列名无 `inday_`。
+
+### 日频 `min_chars`
+
+| 类别 | 常量 | 字段 |
+|---|---|---|
+| 直接可算 | `COMPUTABLE_FEATURES` | `amt`/`twap`/`vwap`、`ret_path`、`ret_std/ret_skew/ret_kurt/vol_std/vol_hhi/ret_jump` 及 `{k}h`；hf 日值见下 |
+| 分钟涨跌重定义 | `REDEFINED_FEATURES` | `bamt/samt/bwap/swap/bopct/bopct_h1` 及 `bamt{k}h`/`samt{k}h` |
+| 近似 | `APPROX_FEATURES` | `amt_ca` = 末 3 分钟（`minute>=237`，14:57–15:00）成交额 |
+| 不落盘 | `OMITTED_OHLC` | 全日及 `{k}h` 的 `opri/hpri/lpri/cpri/volu`（相对 1 分钟 bar 无增量；保留 `twap`） |
+| 不能定义 | `DROPPED_FEATURES` | 全部东方 `_p1/_p5`、`volu0h`、`amtoa`、`l2c0`–`l2c4` |
+
+hf 日构件（对齐 `src/res/factor/defs/stock/level0/highfreq` 的**同日**计算，20 日 trailing 在 roll）：
+
+| 组 | 茎 |
+|---|---|
+| 波动 | `ret_topk_mean` `ret_maxdd` `ret_vardown` `vol_cv`；5 分钟重采 `ret_std5/ret_skew5/ret_kurt5/ret_vardown5/vol_cv5` |
+| 相关（全日 + `{k}h`，lag 不跨半小时） | `mkt_beta` `mkt_corr` `ret_autocorr` `vol_autocorr` `vol_retlag_corr` `vol_vwap_corr` |
+| 流动性 | `smart_money` `stupid_money` `vol_end15_share` `vol_open5_share` `vol_highrank_share` `vol_lowrank_share` `vol_highdev_share` |
+| 动量日值 | `ret_am` `ret_pm` `conf_persist` `high_time` `incvol_ret` `vwap_trend` `vwap_hlvol` |
+
+`ret_kurt*` 为 Pearson 峰度（`fisher=False`）。
+
+### 滚动 `min_chars_roll`
+
+同一张表两块：
+
+- **pool**：最近 20 个对齐日的分钟 `ret`/`volume`/`amount` 池化。`n`；`{ret,vol,amt}_{p01,p05,p50,p95,p99}`；`{ret,vol,amt}_pool_{mean,std,skew,kurt}`。
+- **trail**：读 20 日 `min_chars`，按 hf trailing 聚合（`_ma20`/`_std20`/`_cv20`/`_sum20`/`_max5`）。同一定义只留一列（如 `vol_cv_ma20` 同时覆盖 `inday_vol_std_1min` 与 `inday_vol_coefvar`）。
+
+未落入 trail：`amap` 终值、`regain_conf_persist` rank 残差、`vol_high_std`/`mom_high_*`（要 TRADE）、`vwap_diff_hlvol` 的 20 日拼 bar 版。
+
+不足 20 个对齐日则跳过。连续日更用滑动缓存。
+
+### 标签 `min_chars_tag`
+
+用**同日** roll 阈值给当日分钟打标（类似东方 `_p1/_p5` 的尾部桶，但阈值来自 20 日分钟分布，不是当日逐笔金额）：
+
+| 标签 | 条件 |
+|---|---|
+| `rethi99` / `rethi95` | `ret > ret_p99` / `ret > ret_p95` |
+| `retlo01` / `retlo05` | `ret < ret_p01` / `ret < ret_p05` |
+| `amthi99` / `amthi95` | `amount > amt_p99` / `amount > amt_p95` |
+| `amtlo01` / `amtlo05` | `amount < amt_p01` / `amount < amt_p05` |
+
+每个标签三列：`ret_path_{tag}`、`ret_mean_{tag}`、`amt_share_{tag}`。`p95`/`p05` 桶包含更极端的 `p99`/`p01`。
+
+旧 schema（`aret`/`rvol`/OHLC/`volu`）不兼容，需 overwrite 或删旧 feather。

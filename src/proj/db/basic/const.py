@@ -20,7 +20,7 @@ DB_BY_NAME  : tuple[str,...] = (
 DB_BY_DATE  : tuple[str,...] = (
     'models' , 'sellside' , 'exposure' , 'trade_js' , 'labels_js' , 'benchmark_js' , 
     'trade_ts' , 'financial_ts' , 'analyst_ts' , 'labels_ts' , 'benchmark_ts' , 'membership_ts' , 'holding_ts' ,
-    'crawler'
+    'min_chars' , 'crawler'
 )
 EXPORT_BY_NAME : tuple[str,...] = (
     'market_factor' , 'factor_stats_daily' , 'factor_stats_weekly' , 'pooling_weight'

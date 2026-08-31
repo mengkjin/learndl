@@ -31,6 +31,8 @@ This folder is the living documentation vault for the `learndl` project. It is a
 | Doc | Covers |
 |-----|--------|
 | [[references/dongfang_ms_l2_chars]] | 东方 `ms_chars` ∪ `l2_chars` 已命名字段词典（剔除 `l2c*`） |
+| `src/data/update/custom/min_chars/FACTORS.md` | `min_chars` / `_roll` / `_tag` 列公式、hf 覆盖与 updater 次序 |
+| `src/data/update/custom/min_chars/factors.csv` | 已实现列清单（一行一因子：stage / hf 对照 / 公式） |
 
 ## Maintenance
 

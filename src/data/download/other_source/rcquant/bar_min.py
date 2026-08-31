@@ -2,28 +2,39 @@
 RiceQuant (rqdatac) minute-bar downloader.
 
 Downloads 1-minute OHLCV bars for equities (CS), ETFs, futures, and convertible
-bonds via the ``rqdatac`` Python API.  Handles quota errors with retry logic.
+bonds via the ``rqdatac`` Python API.
 
-Start date behaviour:
+Daily update swallows quota exhaustion (warning only) so later pipeline steps
+keep running. Historical sec backfill (``backfill_sec_min``) stops immediately
+on quota so leftover quota is not wasted.
+
+Start date behaviour (daily update):
 - Equity bars: enabled from 2024-11-01 on non-HFM machines; disabled on HFM machines.
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
+
+Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
+back to 20110101, independent of ``src_start_date``.
 """
 from __future__ import annotations
 import rqdatac
 import pandas as pd
 import numpy as np
+import warnings
 
+from datetime import datetime
 from typing import Any , Literal , TypeAlias
 from collections.abc import Sequence
 
-from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Save , Load
+from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Save , Load , Logger
+from src.proj.util.catcher import IOCatcher
 from src.data.util import secid_adjust , trade_min_reform
 
-from .initializer import RQInitializer , MinDataType , RQ_PATH
+from .initializer import RQInitializer , MinDataType , RQ_PATH , QuotaExceeded , is_quota_exceeded
 
 __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
+SEC_BACKFILL_FLOOR = 20110101
 
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
@@ -118,6 +129,89 @@ def x_mins_to_update(date : int , data_type : MinDataType) -> list[int]:
         if not path.exists(): 
             x_mins.append(x_min)
     return x_mins
+
+def backfill_sec_dates() -> Dates:
+    """Trading days in [20110101, last td before daily src_start) missing from trade_ts/min."""
+    ceiling = src_start_date(MinDataType.SEC)
+    if ceiling >= 20400101:
+        return Dates()
+    upper = int(CALENDAR.td(ceiling , -1))
+    if SEC_BACKFILL_FLOOR > upper:
+        return Dates()
+    return Dates(SEC_BACKFILL_FLOOR , upper).diff(stored_dates(MinDataType.SEC , 1))
+
+def _as_yyyymmdd(complete_time : Any) -> int | None:
+    if complete_time is None:
+        return None
+    if isinstance(complete_time , datetime):
+        return int(complete_time.strftime('%Y%m%d'))
+    digits = str(complete_time).strip()[:10].replace('-' , '')
+    if len(digits) >= 8 and digits[:8].isdigit():
+        return int(digits[:8])
+    return None
+
+def daily_update_succeeded_today() -> bool:
+    """True if autorun daily_update marked success with complete_time on calendar today (BJ)."""
+    from src.proj.util.script.task_record import TaskRecorder
+    recorder = TaskRecorder('autorun' , 'daily_update')
+    today = CALENDAR.today()
+    for row in recorder.get_finished_tasks():
+        success , complete_time = row[1] , row[2]
+        if not success:
+            continue
+        if _as_yyyymmdd(complete_time) == today:
+            return True
+    return False
+
+def _backfill_deadline_hit(started_at : datetime) -> bool:
+    """Stop starting new dates after midnight, or in the last minute of the 23:xx window."""
+    now = CALENDAR.now(bj_tz = True)
+    if now.date() > started_at.date():
+        return True
+    return now.hour == 23 and now.minute >= 59
+
+def rq_get_price(code_list : np.ndarray , date : int , * , raise_on_quota : bool = False) -> Any:
+    """``rqdatac.get_price`` for one session.
+
+    Daily path (``raise_on_quota=False``): quota is a warning, return whatever
+    payload we got (possibly ``None``). Backfill raises ``QuotaExceeded``.
+    """
+    with warnings.catch_warnings(record = True) as caught:
+        warnings.simplefilter('always')
+        with IOCatcher() as catcher:
+            try:
+                data = rqdatac.get_price(
+                    code_list , start_date = str(date) , end_date = str(date) ,
+                    frequency = '1m' , expect_df = True ,
+                )
+            except QuotaExceeded as e:
+                if raise_on_quota:
+                    raise
+                Logger.warning(f'RcQuant get_price quota exceeded: {e}')
+                return None
+            except Exception as e:
+                if is_quota_exceeded(e):
+                    if raise_on_quota:
+                        raise QuotaExceeded(str(e)) from e
+                    Logger.warning(f'RcQuant get_price quota exceeded: {e}')
+                    return None
+                raise
+        blob = '\n'.join(filter(None , (
+            catcher.contents['stdout'] ,
+            catcher.contents['stderr'] ,
+            *(str(w.message) for w in caught) ,
+        )))
+        if stdout := catcher.contents['stdout']:
+            Logger.stdout(stdout)
+        if stderr := catcher.contents['stderr']:
+            Logger.error(stderr)
+        for w in caught:
+            Logger.warning(str(w.message))
+        if is_quota_exceeded(blob):
+            if raise_on_quota:
+                raise QuotaExceeded(blob)
+            Logger.warning(f'RcQuant get_price quota exceeded: {blob}')
+    return data
 
 def rcquant_instrument_list(date : int , data_type : MinDataType) -> pd.DataFrame:
     secdf = load_list(date , data_type)
@@ -214,7 +308,10 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 
-    def rcquant_bar_min(self ,date : int , data_type : MinDataType , first_n : int = -1) -> bool:    
+    def rcquant_bar_min(
+        self , date : int , data_type : MinDataType , first_n : int = -1 ,
+        * , raise_on_quota : bool = False ,
+    ) -> bool:    
         def code_map(x : str):
             if data_type != 'sec': 
                 return x
@@ -232,7 +329,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
             return True
 
-        if not RQInitializer.init(): 
+        if not RQInitializer.init(raise_on_quota = raise_on_quota): 
             return False
 
         instrument_list = rcquant_instrument_list(date , data_type = data_type)
@@ -240,7 +337,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         if first_n > 0: 
             instrument_list = instrument_list.iloc[:first_n]
         code_list = instrument_list['code'].to_numpy(str)
-        data = rqdatac.get_price(code_list, start_date=str(date), end_date=str(date), frequency='1m',expect_df=True)
+        data = rq_get_price(code_list , date , raise_on_quota = raise_on_quota)
         if isinstance(data , pd.DataFrame) and not data.empty:
             data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
             data['code'] = data['code'].map(code_map)
@@ -267,3 +364,92 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         df['vwap'] = df['vwap'].where(df['vwap'].notna() , df['open'])
         df = df.loc[:,['secid','minute','open','high','low','close','amount','volume','vwap','num_trades']].sort_values(['secid','minute']).reset_index(drop = True)
         return df
+
+    @classmethod
+    def backfill_sec_min(cls , * , force : bool = False , first_n : int = -1 , **kwargs) -> Base.UpdateFlag:
+        """Fill missing equity 1-min bars from the day before daily start back to 20110101.
+
+        Runs newest-missing first. Stops immediately on quota exhaustion or at Beijing
+        midnight (no new date after 23:59). ``force`` skips the 23:xx window and the
+        daily_update gate; quota and midnight still apply.
+        """
+        updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
+        return updater._backfill_sec_min(force = force , first_n = first_n)
+
+    def _backfill_sec_min(self , * , force : bool , first_n : int) -> Base.UpdateFlag:
+        started_at = CALENDAR.now(bj_tz = True)
+        data_type = MinDataType.SEC
+        filled : list[int] = []
+
+        def conclude_filled(extra : str | None = None , level : str = 'info') -> None:
+            if filled:
+                dates_msg = f'RcQuant sec min updated dates ({len(filled)}): {",".join(str(d) for d in filled)}'
+            else:
+                dates_msg = 'RcQuant sec min updated dates: none'
+            msg = f'{extra} | {dates_msg}' if extra else dates_msg
+            self.logger.conclude(msg , level = level)
+
+        if not MACHINE.updatable or MACHINE.belong_to_hfm:
+            msg = f'RcQuant sec backfill skipped: machine {MACHINE.name} is not eligible'
+            self.logger.skipping(msg)
+            conclude_filled(msg)
+            return Base.UpdateFlag.SKIPPED
+
+        if not force and started_at.hour != 23:
+            msg = f'RcQuant sec backfill skipped: BJ hour is {started_at.hour}, window is 23:00-23:59'
+            self.logger.skipping(msg)
+            conclude_filled(msg)
+            return Base.UpdateFlag.SKIPPED
+
+        if not force and not daily_update_succeeded_today():
+            msg = 'RcQuant sec backfill skipped: daily_update has not succeeded today'
+            self.logger.skipping(msg)
+            conclude_filled(msg)
+            return Base.UpdateFlag.SKIPPED
+
+        dates = backfill_sec_dates()
+        if dates.empty:
+            msg = f'RcQuant sec backfill is complete through {SEC_BACKFILL_FLOOR}'
+            self.logger.skipping(msg)
+            conclude_filled(msg)
+            return Base.UpdateFlag.SKIPPED
+
+        self.logger.info(f'RcQuant sec backfill {len(dates)} missing dates, newest first, floor={SEC_BACKFILL_FLOOR}')
+        n_fail = 0
+        for dt in reversed(dates):
+            if _backfill_deadline_hit(started_at):
+                msg = f'RcQuant sec backfill hit midnight deadline after {len(filled)} dates'
+                self.logger.alert1(msg)
+                conclude_filled(msg , level = 'warning')
+                return Base.UpdateFlag.SUCCESS if filled else Base.UpdateFlag.SKIPPED
+            try:
+                mark = self.rcquant_bar_min(dt , data_type , first_n , raise_on_quota = True)
+            except QuotaExceeded as e:
+                msg = f'RcQuant quota exceeded after {len(filled)} dates at {dt}: {e}'
+                self.logger.alert1(msg)
+                conclude_filled(msg , level = 'warning')
+                return Base.UpdateFlag.SUCCESS if filled else Base.UpdateFlag.SKIPPED
+            if not mark:
+                self.logger.alert1(f'Backfill RcQuant sec bar min {dt} failed')
+                n_fail += 1
+                continue
+            for x_min in x_mins_to_update(dt , data_type = data_type):
+                min_df = DB.load('trade_ts' , src_key(data_type) , dt)
+                x_min_df = trade_min_reform(min_df , x_min , 1)
+                DB.save(
+                    x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt ,
+                    indent = self.indent + 1 , vb_level = self.vb_level + 1 ,
+                )
+            filled.append(dt)
+            self.logger.success(
+                f'Backfill RcQuant sec bar min {dt} ({len(filled)} done, {len(dates) - len(filled) - n_fail} remaining)'
+            )
+
+        if n_fail:
+            msg = f'RcQuant sec backfill finished with {len(filled)} ok, {n_fail} failed'
+            conclude_filled(msg , level = 'warning')
+            return Base.UpdateFlag.FAILED
+        msg = f'RcQuant sec backfill filled {len(filled)} dates through {SEC_BACKFILL_FLOOR}'
+        self.logger.success(msg)
+        conclude_filled(msg)
+        return Base.UpdateFlag.SUCCESS

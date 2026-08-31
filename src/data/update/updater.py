@@ -210,7 +210,10 @@ class CustomDataUpdater(Base.SelectiveUpdateSupport):
             else:
                 updater_names.add(rest)
 
-        for name in sorted(updater_names):
+        for name in sorted(
+            updater_names ,
+            key = lambda n: (getattr(BasicCustomUpdater.registry[n] , 'UPDATE_ORDER' , 0) , n) ,
+        ):
             updater = BasicCustomUpdater.registry[name]
             indent = kwargs.get('indent' , 0)
             vb_level = kwargs.get('vb_level' , 1)

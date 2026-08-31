@@ -1,0 +1,274 @@
+name,stage,db_src,db_key,family,window,agg,daily_src,hf_factor,formula
+amt,daily,min_chars,min_chars,px,1,same_day,,,sum(amount)
+twap,daily,min_chars,min_chars,px,1,same_day,,,mean(close)
+vwap,daily,min_chars,min_chars,px,1,same_day,,,sum(amount)/sum(volume); fill last close
+bwap,daily,min_chars,min_chars,flow,1,same_day,,,sum(buy_amt*px)/sum(buy_amt)
+swap,daily,min_chars,min_chars,flow,1,same_day,,,sum(sell_amt*px)/sum(sell_amt)
+bamt,daily,min_chars,min_chars,flow,1,same_day,,,sum(amount) where ret>0 (flat split 50/50)
+samt,daily,min_chars,min_chars,flow,1,same_day,,,sum(amount) where ret<0 (flat split 50/50)
+ret_path,daily,min_chars,min_chars,flow,1,same_day,,,(prod(1+ret)-1)*100
+bopct,daily,min_chars,min_chars,flow,1,same_day,,,bamt/(bamt+samt)*100
+amt_ca,daily,min_chars,min_chars,approx,1,same_day,,,sum(amount) for minute>=237
+ret_std,daily,min_chars,min_chars,rv,1,same_day,,inday_std_1min;mom_high_pstd;vol_high_std,std(ret)
+ret_skew,daily,min_chars,min_chars,rv,1,same_day,,inday_skewness_1min,"skew(ret), n>=3"
+ret_kurt,daily,min_chars,min_chars,rv,1,same_day,,inday_kurt_1min,"kurtosis(ret, fisher=False), n>=3"
+vol_std,daily,min_chars,min_chars,rv,1,same_day,,inday_vol_utd,std(volume)
+vol_hhi,daily,min_chars,min_chars,rv,1,same_day,,,n*sum(volume^2)/sum(volume)^2
+ret_jump,daily,min_chars,min_chars,rv,1,same_day,,,ret*100 of max |ret| bar
+bopct_h1,daily,min_chars,min_chars,flow,1,same_day,,,bopct of sess=0 (09:30-10:00)
+ret_topk_mean,daily,min_chars,min_chars,rv,1,same_day,,inday_err_ret,mean(ret) above top_k(5) threshold
+ret_maxdd,daily,min_chars,min_chars,rv,1,same_day,,inday_maxdd,max(1-low/cum_high)
+ret_vardown,daily,min_chars,min_chars,rv,1,same_day,,inday_vardown_1min,std(ret|ret<0)/std(ret)
+vol_cv,daily,min_chars,min_chars,rv,1,same_day,,inday_vol_std_1min;inday_vol_coefvar;mom_high_volcv,std(volume)/mean(volume)
+ret_std5,daily,min_chars,min_chars,rv,1,same_day,,inday_std_5min,std(ret) on minute//5 bars
+ret_skew5,daily,min_chars,min_chars,rv,1,same_day,,inday_skewness_5min,skew(ret) on 5-min bars
+ret_kurt5,daily,min_chars,min_chars,rv,1,same_day,,inday_kurt_5min,Pearson kurtosis on 5-min bars
+ret_vardown5,daily,min_chars,min_chars,rv,1,same_day,,vardown_intra5min,downside std ratio on 5-min bars
+vol_cv5,daily,min_chars,min_chars,rv,1,same_day,,inday_vol_std_5min,volume CV on 5-min bars
+mkt_beta,daily,min_chars,min_chars,corr,1,same_day,,inday_mkt_beta;inday_mkt_beta_std,"corr(ret,mkt)*std(ret)/std(mkt)"
+mkt_corr,daily,min_chars,min_chars,corr,1,same_day,,inday_mkt_corr;inday_mkt_corr_std,"corr(ret,mkt)"
+ret_autocorr,daily,min_chars,min_chars,corr,1,same_day,,inday_ret_autocorr;inday_ret_autocorr_std,"corr(ret, ret.shift1)"
+vol_autocorr,daily,min_chars,min_chars,corr,1,same_day,,inday_vol_autocorr;inday_vol_autocorr_std,"corr(volume, volume.shift1)"
+vol_retlag_corr,daily,min_chars,min_chars,corr,1,same_day,,inday_vol_ret1_corr;inday_vol_ret1_corr_std,"corr(volume, ret.shift1)"
+vol_vwap_corr,daily,min_chars,min_chars,corr,1,same_day,,inday_vol_vwap_corr;inday_vol_vwap_corr_std,"corr(volume, px)"
+smart_money,daily,min_chars,min_chars,liq,1,same_day,,inday_smart_money,volume share of next-ret rank top 10%
+stupid_money,daily,min_chars,min_chars,liq,1,same_day,,inday_stupid_money,volume share of next-ret rank bottom 10%
+vol_end15_share,daily,min_chars,min_chars,liq,1,same_day,,inday_vol_end15min,volume share minute>=225
+vol_open5_share,daily,min_chars,min_chars,liq,1,same_day,,inday_vol_st5min,volume share minute<5
+vol_highrank_share,daily,min_chars,min_chars,liq,1,same_day,,inday_volpct_phigh,volume share of volume-rank>=90%
+vol_lowrank_share,daily,min_chars,min_chars,liq,1,same_day,,inday_volpct_plow,volume share of volume-rank<=10%
+vol_highdev_share,daily,min_chars,min_chars,liq,1,same_day,,inday_volpct_devhigh,volume share of |dclose|/max>=90%
+ret_am,daily,min_chars,min_chars,mom,1,same_day,,inday_amap_orig,prod(1+ret)-1 for minute<120
+ret_pm,daily,min_chars,min_chars,mom,1,same_day,,inday_amap_orig,prod(1+ret)-1 for minute>=120
+conf_persist,daily,min_chars,min_chars,mom,1,same_day,,inday_conf_persist;inday_regain_conf_persist,median(minute|down)-median(minute|up)
+high_time,daily,min_chars,min_chars,mom,1,same_day,,inday_high_time,median(minute) of top-5 high
+incvol_ret,daily,min_chars,min_chars,mom,1,same_day,,inday_incvol_mom,sum(ret) where volume>shift1
+vwap_trend,daily,min_chars,min_chars,mom,1,same_day,,inday_trend_avg;inday_trend_std,"corr(px,minute)*std(px)/std(minute)"
+vwap_hlvol,daily,min_chars,min_chars,mom,1,same_day,,inday_vwap_diff_hlvol,(vwap_highvol-vwap_lowvol)/avg
+amt1h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=0 (1h)
+twap1h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=0 (1h)
+bamt1h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=0 (1h)
+samt1h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=0 (1h)
+ret_path1h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=0 (1h)
+ret_std1h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=0 (1h)
+ret_skew1h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=0 (1h)"
+ret_kurt1h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=0 (1h)"
+vol_std1h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=0 (1h)
+vol_hhi1h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=0 (1h)
+ret_jump1h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=0 (1h)
+mkt_beta1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=0 (1h)"
+mkt_corr1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=0 (1h)"
+ret_autocorr1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=0 (1h)"
+vol_autocorr1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=0 (1h)"
+vol_retlag_corr1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=0 (1h)"
+vol_vwap_corr1h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=0 (1h)"
+amt2h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=1 (2h)
+twap2h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=1 (2h)
+bamt2h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=1 (2h)
+samt2h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=1 (2h)
+ret_path2h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=1 (2h)
+ret_std2h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=1 (2h)
+ret_skew2h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=1 (2h)"
+ret_kurt2h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=1 (2h)"
+vol_std2h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=1 (2h)
+vol_hhi2h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=1 (2h)
+ret_jump2h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=1 (2h)
+mkt_beta2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=1 (2h)"
+mkt_corr2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=1 (2h)"
+ret_autocorr2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=1 (2h)"
+vol_autocorr2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=1 (2h)"
+vol_retlag_corr2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=1 (2h)"
+vol_vwap_corr2h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=1 (2h)"
+amt3h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=2 (3h)
+twap3h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=2 (3h)
+bamt3h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=2 (3h)
+samt3h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=2 (3h)
+ret_path3h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=2 (3h)
+ret_std3h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=2 (3h)
+ret_skew3h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=2 (3h)"
+ret_kurt3h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=2 (3h)"
+vol_std3h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=2 (3h)
+vol_hhi3h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=2 (3h)
+ret_jump3h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=2 (3h)
+mkt_beta3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=2 (3h)"
+mkt_corr3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=2 (3h)"
+ret_autocorr3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=2 (3h)"
+vol_autocorr3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=2 (3h)"
+vol_retlag_corr3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=2 (3h)"
+vol_vwap_corr3h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=2 (3h)"
+amt4h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=3 (4h)
+twap4h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=3 (4h)
+bamt4h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=3 (4h)
+samt4h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=3 (4h)
+ret_path4h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=3 (4h)
+ret_std4h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=3 (4h)
+ret_skew4h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=3 (4h)"
+ret_kurt4h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=3 (4h)"
+vol_std4h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=3 (4h)
+vol_hhi4h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=3 (4h)
+ret_jump4h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=3 (4h)
+mkt_beta4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=3 (4h)"
+mkt_corr4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=3 (4h)"
+ret_autocorr4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=3 (4h)"
+vol_autocorr4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=3 (4h)"
+vol_retlag_corr4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=3 (4h)"
+vol_vwap_corr4h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=3 (4h)"
+amt5h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=4 (5h)
+twap5h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=4 (5h)
+bamt5h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=4 (5h)
+samt5h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=4 (5h)
+ret_path5h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=4 (5h)
+ret_std5h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=4 (5h)
+ret_skew5h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=4 (5h)"
+ret_kurt5h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=4 (5h)"
+vol_std5h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=4 (5h)
+vol_hhi5h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=4 (5h)
+ret_jump5h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=4 (5h)
+mkt_beta5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=4 (5h)"
+mkt_corr5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=4 (5h)"
+ret_autocorr5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=4 (5h)"
+vol_autocorr5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=4 (5h)"
+vol_retlag_corr5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=4 (5h)"
+vol_vwap_corr5h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=4 (5h)"
+amt6h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=5 (6h)
+twap6h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=5 (6h)
+bamt6h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=5 (6h)
+samt6h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=5 (6h)
+ret_path6h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=5 (6h)
+ret_std6h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=5 (6h)
+ret_skew6h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=5 (6h)"
+ret_kurt6h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=5 (6h)"
+vol_std6h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=5 (6h)
+vol_hhi6h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=5 (6h)
+ret_jump6h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=5 (6h)
+mkt_beta6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=5 (6h)"
+mkt_corr6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=5 (6h)"
+ret_autocorr6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=5 (6h)"
+vol_autocorr6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=5 (6h)"
+vol_retlag_corr6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=5 (6h)"
+vol_vwap_corr6h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=5 (6h)"
+amt7h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=6 (7h)
+twap7h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=6 (7h)
+bamt7h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=6 (7h)
+samt7h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=6 (7h)
+ret_path7h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=6 (7h)
+ret_std7h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=6 (7h)
+ret_skew7h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=6 (7h)"
+ret_kurt7h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=6 (7h)"
+vol_std7h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=6 (7h)
+vol_hhi7h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=6 (7h)
+ret_jump7h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=6 (7h)
+mkt_beta7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=6 (7h)"
+mkt_corr7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=6 (7h)"
+ret_autocorr7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=6 (7h)"
+vol_autocorr7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=6 (7h)"
+vol_retlag_corr7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=6 (7h)"
+vol_vwap_corr7h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=6 (7h)"
+amt8h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) within sess=7 (8h)
+twap8h,daily,min_chars,min_chars,session,1,same_day,,,mean(close) within sess=7 (8h)
+bamt8h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret>0 (flat split 50/50) within sess=7 (8h)
+samt8h,daily,min_chars,min_chars,session,1,same_day,,,sum(amount) where ret<0 (flat split 50/50) within sess=7 (8h)
+ret_path8h,daily,min_chars,min_chars,session,1,same_day,,,(prod(1+ret)-1)*100 within sess=7 (8h)
+ret_std8h,daily,min_chars,min_chars,session,1,same_day,,,std(ret) within sess=7 (8h)
+ret_skew8h,daily,min_chars,min_chars,session,1,same_day,,,"skew(ret), n>=3 within sess=7 (8h)"
+ret_kurt8h,daily,min_chars,min_chars,session,1,same_day,,,"kurtosis(ret, fisher=False), n>=3 within sess=7 (8h)"
+vol_std8h,daily,min_chars,min_chars,session,1,same_day,,,std(volume) within sess=7 (8h)
+vol_hhi8h,daily,min_chars,min_chars,session,1,same_day,,,n*sum(volume^2)/sum(volume)^2 within sess=7 (8h)
+ret_jump8h,daily,min_chars,min_chars,session,1,same_day,,,ret*100 of max |ret| bar within sess=7 (8h)
+mkt_beta8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt)*std(ret)/std(mkt) within sess=7 (8h)"
+mkt_corr8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret,mkt) within sess=7 (8h)"
+ret_autocorr8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(ret, ret.shift1) within sess=7 (8h)"
+vol_autocorr8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, volume.shift1) within sess=7 (8h)"
+vol_retlag_corr8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, ret.shift1) within sess=7 (8h)"
+vol_vwap_corr8h,daily,min_chars,min_chars,session,1,same_day,,,"corr(volume, px) within sess=7 (8h)"
+n,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,count of pooled 1-min bars in window
+ret_p01,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.01 of pooled 1-min ret
+ret_p05,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.05 of pooled 1-min ret
+ret_p50,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.50 of pooled 1-min ret
+ret_p95,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.95 of pooled 1-min ret
+ret_p99,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.99 of pooled 1-min ret
+vol_p01,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.01 of pooled 1-min vol
+vol_p05,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.05 of pooled 1-min vol
+vol_p50,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.50 of pooled 1-min vol
+vol_p95,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.95 of pooled 1-min vol
+vol_p99,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.99 of pooled 1-min vol
+amt_p01,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.01 of pooled 1-min amt
+amt_p05,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.05 of pooled 1-min amt
+amt_p50,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.50 of pooled 1-min amt
+amt_p95,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.95 of pooled 1-min amt
+amt_p99,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,quantile 0.99 of pooled 1-min amt
+ret_pool_mean,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,mean of pooled 1-min ret over 20 min dates
+ret_pool_std,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,std of pooled 1-min ret over 20 min dates
+ret_pool_skew,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,skew of pooled 1-min ret over 20 min dates
+ret_pool_kurt,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,kurt of pooled 1-min ret over 20 min dates
+vol_pool_mean,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,mean of pooled 1-min vol over 20 min dates
+vol_pool_std,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,std of pooled 1-min vol over 20 min dates
+vol_pool_skew,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,skew of pooled 1-min vol over 20 min dates
+vol_pool_kurt,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,kurt of pooled 1-min vol over 20 min dates
+amt_pool_mean,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,mean of pooled 1-min amt over 20 min dates
+amt_pool_std,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,std of pooled 1-min amt over 20 min dates
+amt_pool_skew,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,skew of pooled 1-min amt over 20 min dates
+amt_pool_kurt,roll_pool,min_chars,min_chars_roll,pool,20,pool_minutes,,,kurt of pooled 1-min amt over 20 min dates
+mkt_beta_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,mkt_beta,inday_mkt_beta,mean of daily mkt_beta over 20 days
+mkt_corr_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,mkt_corr,inday_mkt_corr,mean of daily mkt_corr over 20 days
+ret_autocorr_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_autocorr,inday_ret_autocorr,mean of daily ret_autocorr over 20 days
+vol_autocorr_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_autocorr,inday_vol_autocorr,mean of daily vol_autocorr over 20 days
+vol_retlag_corr_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_retlag_corr,inday_vol_ret1_corr,mean of daily vol_retlag_corr over 20 days
+vol_vwap_corr_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_vwap_corr,inday_vol_vwap_corr,mean of daily vol_vwap_corr over 20 days
+mkt_beta_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,mkt_beta,inday_mkt_beta_std,std of daily mkt_beta over 20 days
+mkt_corr_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,mkt_corr,inday_mkt_corr_std,std of daily mkt_corr over 20 days
+ret_autocorr_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,ret_autocorr,inday_ret_autocorr_std,std of daily ret_autocorr over 20 days
+vol_autocorr_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,vol_autocorr,inday_vol_autocorr_std,std of daily vol_autocorr over 20 days
+vol_retlag_corr_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,vol_retlag_corr,inday_vol_ret1_corr_std,std of daily vol_retlag_corr over 20 days
+vol_vwap_corr_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,vol_vwap_corr,inday_vol_vwap_corr_std,std of daily vol_vwap_corr over 20 days
+ret_topk_mean_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_topk_mean,inday_err_ret,mean of daily ret_topk_mean over 20 days
+ret_std_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_std,inday_std_1min,mean of daily ret_std over 20 days
+ret_std5_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_std5,inday_std_5min,mean of daily ret_std5 over 20 days
+ret_skew_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_skew,inday_skewness_1min,mean of daily ret_skew over 20 days
+ret_skew5_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_skew5,inday_skewness_5min,mean of daily ret_skew5 over 20 days
+ret_kurt_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_kurt,inday_kurt_1min,mean of daily ret_kurt over 20 days
+ret_kurt5_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_kurt5,inday_kurt_5min,mean of daily ret_kurt5 over 20 days
+ret_vardown_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_vardown,inday_vardown_1min,mean of daily ret_vardown over 20 days
+ret_vardown5_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,ret_vardown5,vardown_intra5min,mean of daily ret_vardown5 over 20 days
+vol_cv_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_cv,inday_vol_std_1min;inday_vol_coefvar,mean of daily vol_cv over 20 days
+vol_cv5_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_cv5,inday_vol_std_5min,mean of daily vol_cv5 over 20 days
+ret_maxdd_max5,roll_trail,min_chars,min_chars_roll,trail,5,max,ret_maxdd,inday_maxdd,max of daily ret_maxdd over 5 days
+smart_money_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,smart_money,inday_smart_money,mean of daily smart_money over 20 days
+stupid_money_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,stupid_money,inday_stupid_money,mean of daily stupid_money over 20 days
+vol_std_cv20,roll_trail,min_chars,min_chars_roll,trail,20,cv,vol_std,inday_vol_utd,cv of daily vol_std over 20 days
+vol_end15_share_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_end15_share,inday_vol_end15min,mean of daily vol_end15_share over 20 days
+vol_open5_share_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_open5_share,inday_vol_st5min,mean of daily vol_open5_share over 20 days
+vol_highrank_share_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_highrank_share,inday_volpct_phigh,mean of daily vol_highrank_share over 20 days
+vol_lowrank_share_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_lowrank_share,inday_volpct_plow,mean of daily vol_lowrank_share over 20 days
+vol_highdev_share_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vol_highdev_share,inday_volpct_devhigh,mean of daily vol_highdev_share over 20 days
+high_time_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,high_time,inday_high_time,mean of daily high_time over 20 days
+incvol_ret_sum20,roll_trail,min_chars,min_chars_roll,trail,20,sum,incvol_ret,inday_incvol_mom,sum of daily incvol_ret over 20 days
+vwap_trend_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vwap_trend,inday_trend_avg,mean of daily vwap_trend over 20 days
+vwap_trend_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,vwap_trend,inday_trend_std,std of daily vwap_trend over 20 days
+vwap_hlvol_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,vwap_hlvol,inday_vwap_diff_hlvol,mean of daily vwap_hlvol over 20 days
+conf_persist_ma20,roll_trail,min_chars,min_chars_roll,trail,20,mean,conf_persist,inday_conf_persist,mean of daily conf_persist over 20 days
+conf_persist_std20,roll_trail,min_chars,min_chars_roll,trail,20,std,conf_persist,inday_conf_persist,std of daily conf_persist over 20 days
+ret_path_rethi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p99,,(prod(1+ret)-1)*100 on tagged minutes; null if none | ret > ret_p99
+ret_mean_rethi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p99,,mean(ret) on tagged minutes; null if none | ret > ret_p99
+amt_share_rethi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p99,,sum(amount_tagged)/sum(amount); 0 if none | ret > ret_p99
+ret_path_rethi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p95,,(prod(1+ret)-1)*100 on tagged minutes; null if none | ret > ret_p95
+ret_mean_rethi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p95,,mean(ret) on tagged minutes; null if none | ret > ret_p95
+amt_share_rethi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret > ret_p95,,sum(amount_tagged)/sum(amount); 0 if none | ret > ret_p95
+ret_path_retlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p01,,(prod(1+ret)-1)*100 on tagged minutes; null if none | ret < ret_p01
+ret_mean_retlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p01,,mean(ret) on tagged minutes; null if none | ret < ret_p01
+amt_share_retlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p01,,sum(amount_tagged)/sum(amount); 0 if none | ret < ret_p01
+ret_path_retlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p05,,(prod(1+ret)-1)*100 on tagged minutes; null if none | ret < ret_p05
+ret_mean_retlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p05,,mean(ret) on tagged minutes; null if none | ret < ret_p05
+amt_share_retlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,ret < ret_p05,,sum(amount_tagged)/sum(amount); 0 if none | ret < ret_p05
+ret_path_amthi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p99,,(prod(1+ret)-1)*100 on tagged minutes; null if none | amount > amt_p99
+ret_mean_amthi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p99,,mean(ret) on tagged minutes; null if none | amount > amt_p99
+amt_share_amthi99,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p99,,sum(amount_tagged)/sum(amount); 0 if none | amount > amt_p99
+ret_path_amthi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p95,,(prod(1+ret)-1)*100 on tagged minutes; null if none | amount > amt_p95
+ret_mean_amthi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p95,,mean(ret) on tagged minutes; null if none | amount > amt_p95
+amt_share_amthi95,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount > amt_p95,,sum(amount_tagged)/sum(amount); 0 if none | amount > amt_p95
+ret_path_amtlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p01,,(prod(1+ret)-1)*100 on tagged minutes; null if none | amount < amt_p01
+ret_mean_amtlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p01,,mean(ret) on tagged minutes; null if none | amount < amt_p01
+amt_share_amtlo01,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p01,,sum(amount_tagged)/sum(amount); 0 if none | amount < amt_p01
+ret_path_amtlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p05,,(prod(1+ret)-1)*100 on tagged minutes; null if none | amount < amt_p05
+ret_mean_amtlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p05,,mean(ret) on tagged minutes; null if none | amount < amt_p05
+amt_share_amtlo05,tag,min_chars,min_chars_tag,tag,20+1,tag_today,amount < amt_p05,,sum(amount_tagged)/sum(amount); 0 if none | amount < amt_p05

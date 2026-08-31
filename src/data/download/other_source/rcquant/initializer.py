@@ -10,9 +10,16 @@ from rqdatac.share.errors import QuotaExceeded
 from src.proj import PATH , MACHINE , Logger , Base
 from src.proj.util.catcher import IOCatcher
 
-__all__ = ['RQ_PATH' , 'MinDataType' , 'RQInitializer']
+__all__ = ['RQ_PATH' , 'MinDataType' , 'RQInitializer' , 'QuotaExceeded' , 'is_quota_exceeded']
 
 RQ_PATH = PATH.miscel.joinpath('Rcquant')
+_QUOTA_PATTERN = re.compile(r'quota\s*exceeded', re.IGNORECASE)
+
+def is_quota_exceeded(text : str | BaseException | None) -> bool:
+    """True when *text* looks like an rqdatac daily-quota exhaustion signal."""
+    if text is None:
+        return False
+    return bool(_QUOTA_PATTERN.search(str(text)))
 
 class MinDataType(Base.StrEnum):
     SEC = 'sec'
@@ -26,7 +33,7 @@ class MinDataType(Base.StrEnum):
 
 class RQInitializer:
     @classmethod
-    def init(cls) -> bool:
+    def init(cls , * , raise_on_quota : bool = False) -> bool:
         if not rqdatac.initialized(): 
             try:
                 with IOCatcher() as catcher:
@@ -45,5 +52,7 @@ class RQInitializer:
                 return False
             except QuotaExceeded as e:
                 Logger.error(f'rcquant init failed: {e}')
+                if raise_on_quota:
+                    raise
                 return False
         return True
