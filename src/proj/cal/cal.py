@@ -21,6 +21,8 @@ from .basic import BJ_TZ , BC , get_cd , get_td
 
 __all__ = ['CALENDAR']
 
+UPDATE_TO_REFRESH_TIME : tuple[int, int] = (18, 00)
+
 class CALENDAR(metaclass=NoInstanceMeta):
     """Static tools for trading date and natural date conversion, interval truncation, quarter end, etc."""
 
@@ -122,8 +124,7 @@ class CALENDAR(metaclass=NoInstanceMeta):
 
     @classmethod
     def is_updated_today(
-        cls, file_or_modified_time: PathsType | int | float | None , 
-        hour=20, minute=0 , * , bj_tz: bool = True
+        cls, file_or_modified_time: PathsType | int | float | None , * , bj_tz: bool = True
     ) -> bool:
         """
         Check if 'modified_time' is not earlier than the corresponding time of "required_date + hour:minute".
@@ -131,9 +132,9 @@ class CALENDAR(metaclass=NoInstanceMeta):
         """
         modified_time = cls.get_modified_time(file_or_modified_time , bj_tz=bj_tz)
         bjtime = cls.now(bj_tz=bj_tz)
-        if int(bjtime.strftime("%H%M")) < hour * 100 + minute:
+        if int(bjtime.strftime("%H%M")) < UPDATE_TO_REFRESH_TIME[0] * 100 + UPDATE_TO_REFRESH_TIME[1]:
             bjtime = bjtime - timedelta(days=1)
-        required_time = cls.clock(int(bjtime.strftime("%Y%m%d")), hour, minute)
+        required_time = cls.clock(int(bjtime.strftime("%Y%m%d")), UPDATE_TO_REFRESH_TIME[0], UPDATE_TO_REFRESH_TIME[1])
         return modified_time >= required_time
 
     @classmethod
@@ -160,13 +161,13 @@ class CALENDAR(metaclass=NoInstanceMeta):
     def update_to(cls , offset: int = 0 , key: lit.DataUpdateKey | None = None) -> int:
         """
         The cached 'updated to' natural date; 
-        - take today or yesterday based on whether the current time is after 19:59.
+        - take today or yesterday based on whether the current time is after UPDATE_TO_REFRESH_TIME.
         if offset != 0, the update_to will be truncated to today + offset.
         at platform coding, the update_to will be the latest date in the 'trade_ts/day' database table.
         """
 
         if cls._update_to is None:
-            cls._update_to = cls.today(-1 if cls.now(bj_tz=True).time() <= time(19, 59, 0) else 0)
+            cls._update_to = cls.today(-1 if cls.now(bj_tz=True).time() <= time(*UPDATE_TO_REFRESH_TIME) else 0)
         update_to = min(cls._update_to, Const.Data.UPDATE.end(key))
         update_to = cls.cd(update_to , offset)
         return update_to
