@@ -248,7 +248,7 @@ l2c0 l2c1 l2c2 l2c3 l2c4
 ## 分钟线可算性（`min_chars/*`）
 
 包：`src/data/update/custom/min_chars/`。列级公式见 `FACTORS.md`，一行一列见 `factors.csv`。  
-三个 updater **分表落盘** 到 `data/DataBase/DB_min_chars/{key}/`，按 `UPDATE_ORDER` 110→111→112 跑；缺上游则跳过、不报错。日期宇宙跟随 `trade_ts/min`（`use_alt=True`），不发明没有分钟线的交易日。数值列为 float32。历史补全：`scripts/2_data/4_backfill_min_chars.py`。
+三个 updater **均开启**，分表落盘到 `data/DataBase/DB_min_chars/{key}/`，按 `UPDATE_ORDER` 110→111→112 跑；缺上游则跳过、不报错。日期宇宙跟随 `trade_ts/min`（`use_alt=True`）。`daily_update` 只补机器日程 ∩ 最近 20 个交易日；长历史用 `scripts/2_data/4_backfill_min_chars.py`；覆盖重算 overflow 的 tag 用 `scripts/2_data/5_recalc_min_chars_tag.py`。数值列为 float32。
 
 | 顺序 | Updater | DB key | 依赖 |
 |---|---|---|---|

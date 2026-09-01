@@ -31,7 +31,9 @@
 | `MinCharsRollUpdater` | 111 | `min_chars/min_chars_roll` | 最近 20 个 **min ∩ min_chars** 日（含当日） |
 | `MinCharsTaggedUpdater` | 112 | `min_chars/min_chars_tag` | 当日 min ∩ 当日 roll |
 
-路径：`data/DataBase/DB_min_chars/{key}/{yyyy}/{key}.{yyyymmdd}.feather`。数值列为 **float32**（`date`/`secid`/`n` 为 int64）。可按 updater 分开补全。
+路径：`data/DataBase/DB_min_chars/{key}/{yyyy}/{key}.{yyyymmdd}.feather`。数值列为 **float32**（`date`/`secid`/`n` 为 int64；超出 float32 范围写 NaN）。可按 updater 分开补全。
+
+`daily_update` 只补 **机器日程 ∩ 最近 20 个交易日**（本机 testing 通常是 `20250416–20250422`）。2010 起的历史请用下面的 backfill 脚本，不要靠日更。
 
 ---
 
@@ -109,4 +111,6 @@ Roll 现在依赖 daily（trail）也依赖 min（pool）。Tag 只依赖 roll �
 uv run scripts/2_data/4_backfill_min_chars.py --start=20140101
 # 重算区间：加 --overwrite=True
 # 只补某一层：--do_daily=False --do_roll=True --do_tag=False
+# 只覆盖重算 tag（float32 overflow）：
+uv run scripts/2_data/5_recalc_min_chars_tag.py --start=20100101
 ```

@@ -6,20 +6,25 @@ skips it).  Daily / roll / tag stages import from here.
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import polars as pl
 
-from src.proj import DB , Dates
+from src.proj import DB , Dates , CALENDAR , Base
 from src.func.basic import DIV_TOL
 
 N_SESS = 8
 MAX_MINUTE = 239
 START_DATE = 20100101
+# daily_update only fills this many trailing trading days (history → backfill script).
+INCR_LOOKBACK_TD = 20
 DB_MIN_SRC = 'trade_ts'
 MIN_KEY = 'min'
 DB_SRC = 'min_chars'
 INT_COLS : tuple[str, ...] = ('date' , 'secid' , 'n')
+_F32_MAX = float(np.finfo(np.float32).max)
 
 RET_PANEL_COLS : tuple[str, ...] = ('secid' , 'ret' , 'volume' , 'amount')
 
@@ -27,6 +32,44 @@ RET_PANEL_COLS : tuple[str, ...] = ('secid' , 'ret' , 'volume' , 'amount')
 def safe_div(num : pl.Expr , den : pl.Expr) -> pl.Expr:
     """Divide, returning null when the denominator is ~0."""
     return pl.when(den.abs() <= DIV_TOL).then(None).otherwise(num / den)
+
+
+def ret_path_expr(ret : pl.Expr , * , pct : bool = True) -> pl.Expr:
+    """Path return ``∏(1+ret)−1`` via log-sum so a bad tick cannot overflow."""
+    path = ret.log1p().sum().exp() - 1
+    return path * 100 if pct else path
+
+
+class MinCharsSchedule:
+    """
+    Incremental ``daily_update`` window: machine schedule ∩ last ``INCR_LOOKBACK_TD`` days.
+
+    Historical fill must call ``proceed_update(start=..., end=...)`` directly
+    (see ``scripts/2_data/4_backfill_min_chars.py``).
+    """
+    START_DATE = START_DATE
+
+    @classmethod
+    def parse_update_input(
+        cls , update_type : Base.UpdateType , rollback_date : int | None = None ,
+        start : int | None = None , end : int | None = None , **kwargs ,
+    ) -> dict[str , Any]:
+        """Schedule-clamped window, then cut to the recent lookback for UPDATE."""
+        if update_type == Base.UpdateType.UPDATE:
+            start , end = CALENDAR.update_schedule(cls.START_DATE)
+            start = max(int(start) , int(CALENDAR.td(end , -INCR_LOOKBACK_TD).as_int()))
+            overwrite = False
+        elif update_type == Base.UpdateType.ROLLBACK:
+            assert rollback_date is not None , 'rollback_date is required for rollback'
+            start , end = CALENDAR.update_schedule(rollback_date)
+            overwrite = True
+        elif update_type == Base.UpdateType.RECALC:
+            assert start is not None and end is not None , 'start and end are required for recalculate'
+            start , end = CALENDAR.update_schedule(max(int(start) , cls.START_DATE) , end)
+            overwrite = True
+        else:
+            raise ValueError(f'Invalid update type: {update_type}')
+        return {'start' : start , 'end' : end , 'overwrite' : overwrite}
 
 
 def prepare_ret_bars(raw : pd.DataFrame) -> pl.DataFrame:
@@ -158,5 +201,9 @@ def to_date_secid(pdf : pd.DataFrame , date : int , columns : tuple[str, ...]) -
         if col in INT_COLS:
             pdf[col] = pd.to_numeric(pdf[col] , errors = 'coerce').fillna(0).astype(np.int64)
         else:
-            pdf[col] = pd.to_numeric(pdf[col] , errors = 'coerce').astype(np.float32)
+            arr = np.asarray(pd.to_numeric(pdf[col] , errors = 'coerce') , dtype = np.float64)
+            out = np.full(arr.shape , np.nan , dtype = np.float32)
+            ok = np.isfinite(arr) & (np.abs(arr) <= _F32_MAX)
+            out[ok] = arr[ok].astype(np.float32 , copy = False)
+            pdf[col] = out
     return pdf

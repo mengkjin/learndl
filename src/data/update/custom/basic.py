@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Iterator
 
-from src.proj import PATH , Base
+from src.proj import PATH , Base , CALENDAR
 
 __all__ = ['BasicCustomUpdater']
 
@@ -75,15 +75,19 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
     @classmethod
     def parse_update_input(cls , update_type : Base.UpdateType , rollback_date : int | None = None , 
         start : int | None = None , end : int | None = None , **kwargs) -> dict[str , Any]:
+        """Clamp ``[start, end]`` with ``CALENDAR.update_schedule`` (testing vs production)."""
         if update_type == Base.UpdateType.UPDATE:
-            start , end , overwrite = cls.START_DATE , None , False
+            start , end = CALENDAR.update_schedule(cls.START_DATE)
+            overwrite = False
         elif update_type == Base.UpdateType.ROLLBACK:
             assert rollback_date is not None , 'rollback_date is required for rollback'
-            start , end , overwrite = rollback_date , None , True
+            start , end = CALENDAR.update_schedule(rollback_date)
+            overwrite = True
         elif update_type == Base.UpdateType.RECALC:
             cls.logger.warning(f'Recalculate all {cls.__name__} is supported , but beware of the performance for {cls.__class__.__name__}!')
             assert start is not None and end is not None , 'start and end are required for recalculate'
-            start , end , overwrite = max(start , cls.START_DATE) , end , True
+            start , end = CALENDAR.update_schedule(max(start , cls.START_DATE) , end)
+            overwrite = True
         return {
             'start' : start , 
             'end' : end , 

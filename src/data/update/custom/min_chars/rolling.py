@@ -15,6 +15,7 @@ from src.data.update.custom.basic import BasicCustomUpdater
 from src.data.update.custom.min_chars._common import (
     DB_SRC ,
     START_DATE ,
+    MinCharsSchedule ,
     follow_source_dates ,
     load_daily_chars ,
     load_ret_panel ,
@@ -209,7 +210,7 @@ def calc_min_chars_roll(date : int , window : int = ROLL_WINDOW) -> pd.DataFrame
     return _join_roll(pool , trail , int(date))
 
 
-class MinCharsRollUpdater(BasicCustomUpdater):
+class MinCharsRollUpdater(MinCharsSchedule , BasicCustomUpdater):
     """
     Write ``min_chars/min_chars_roll``.
 

@@ -5,6 +5,7 @@
 # content: |
 #   按 Daily → Roll → Tag 补全 min_chars 历史（落盘 DB_min_chars）。
 #   日期宇宙跟随 trade_ts/min，缺分钟线的交易日不发明。
+#   daily_update 只补近 20 日；本脚本才是 2010/2014 起的长历史入口。
 #   默认只写缺失日；overwrite=True 则重算区间内已有文件。
 # email: True
 # mode: shell

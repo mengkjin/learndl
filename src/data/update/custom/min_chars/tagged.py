@@ -16,9 +16,11 @@ from src.data.update.custom.min_chars._common import (
     DB_MIN_SRC ,
     DB_SRC ,
     START_DATE ,
+    MinCharsSchedule ,
     follow_source_dates ,
     min_dates ,
     prepare_ret_bars ,
+    ret_path_expr ,
     safe_div ,
     save_stage_df ,
     to_date_secid ,
@@ -69,7 +71,7 @@ def _tag_aggs() -> list[pl.Expr]:
         amt_f = pl.col('amount').filter(flag)
         n_f = flag.sum()
         aggs.extend([
-            pl.when(n_f > 0).then(((ret_f + 1).product() - 1) * 100).otherwise(None).alias(f'ret_path_{name}') ,
+            pl.when(n_f > 0).then(ret_path_expr(ret_f)).otherwise(None).alias(f'ret_path_{name}') ,
             ret_f.mean().alias(f'ret_mean_{name}') ,
             safe_div(amt_f.sum() , day_amt).alias(f'amt_share_{name}') ,
         ])
@@ -106,7 +108,7 @@ def calc_min_chars_tag(date : int) -> pd.DataFrame:
     return to_date_secid(out.to_pandas() , date , TAG_COLUMNS)
 
 
-class MinCharsTaggedUpdater(BasicCustomUpdater):
+class MinCharsTaggedUpdater(MinCharsSchedule , BasicCustomUpdater):
     """
     Write ``min_chars/min_chars_tag``.
 

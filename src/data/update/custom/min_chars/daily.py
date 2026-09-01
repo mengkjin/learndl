@@ -15,9 +15,11 @@ from src.data.update.custom.min_chars._common import (
     DB_SRC ,
     N_SESS ,
     START_DATE ,
+    MinCharsSchedule ,
     follow_source_dates ,
     min_dates ,
     prepare_ret_bars ,
+    ret_path_expr ,
     safe_div ,
     save_stage_df ,
     to_date_secid ,
@@ -138,7 +140,7 @@ def _px_rv_aggs(* , include_side_wap : bool) -> list[pl.Expr]:
         pl.col('close').mean().alias('twap') ,
         buy_amt.sum().alias('bamt') ,
         sell_amt.sum().alias('samt') ,
-        (((ret + 1).product() - 1) * 100).alias('ret_path') ,
+        ret_path_expr(ret).alias('ret_path') ,
         ret.std().alias('ret_std') ,
         pl.when(n >= MIN_STAT_SAMPLES).then(ret.skew()).otherwise(None).alias('ret_skew') ,
         pl.when(n >= MIN_STAT_SAMPLES).then(ret.kurtosis(fisher = False)).otherwise(None).alias('ret_kurt') ,
@@ -193,8 +195,8 @@ def _hf_daily_aggs() -> list[pl.Expr]:
         safe_div(vol.filter(pl.col('_vol_pct') >= 0.9).sum() , vol_sum).alias('vol_highrank_share') ,
         safe_div(vol.filter(pl.col('_vol_pct') <= 0.1).sum() , vol_sum).alias('vol_lowrank_share') ,
         safe_div(vol.filter(pl.col('_devhigh')).sum() , vol_sum).alias('vol_highdev_share') ,
-        ((ret.filter(minute < AM_MINUTE) + 1).product() - 1).alias('ret_am') ,
-        ((ret.filter(minute >= AM_MINUTE) + 1).product() - 1).alias('ret_pm') ,
+        ret_path_expr(ret.filter(minute < AM_MINUTE) , pct = False).alias('ret_am') ,
+        ret_path_expr(ret.filter(minute >= AM_MINUTE) , pct = False).alias('ret_pm') ,
         (
             minute.filter(pl.col('_down')).median()
             - minute.filter(pl.col('_up')).median()
@@ -358,7 +360,7 @@ def calc_min_chars(date : int) -> pd.DataFrame:
     return to_date_secid(out.to_pandas() , date , OUTPUT_COLUMNS)
 
 
-class MinCharsDailyUpdater(BasicCustomUpdater):
+class MinCharsDailyUpdater(MinCharsSchedule , BasicCustomUpdater):
     """Same-day ``min_chars/min_chars``.  Runs first in the min_chars stage order."""
     ENABLED = True
     UPDATE_ORDER = 110
