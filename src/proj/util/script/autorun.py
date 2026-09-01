@@ -194,6 +194,12 @@ class AutoRunTask(BoundLogger):
         @wraps(func)
         def wrapper(*args , **kwargs):
             self.kwargs.update(kwargs)
+            if 'forfeit_if_done' in kwargs:
+                raw = kwargs['forfeit_if_done']
+                if isinstance(raw, str):
+                    self.forfeit_if_done = raw.strip().lower() not in ('false', '0', 'no', 'off', '')
+                else:
+                    self.forfeit_if_done = bool(raw)
             with self:
                 if self.forfeit_if_done and self.forfeit_task:
                     self.logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')

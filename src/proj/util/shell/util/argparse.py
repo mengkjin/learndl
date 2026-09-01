@@ -7,16 +7,26 @@ import argparse
 __all__ = ['argparse_dict']
 
 def unknown_args(unknown):
-    """Build a dict from ``parse_known_args`` tail (``--a 1 --b`` style)."""
+    """Build a dict from ``parse_known_args`` tail (``--a 1 --b`` or ``--a=1`` style)."""
     args = {}
+    key = None
     for ua in unknown:
         if ua.startswith('--'):
-            key = ua[2:]
-            if key not in args:
-                args[key] = None
+            body = ua[2:]
+            if '=' in body:
+                eq_key, _, value = body.partition('=')
+                if eq_key in args:
+                    raise ValueError(f'Duplicate argument: {eq_key}')
+                args[eq_key] = value if value != '' else None
+                key = None
             else:
-                raise ValueError(f'Duplicate argument: {key}')
+                key = body
+                if key in args:
+                    raise ValueError(f'Duplicate argument: {key}')
+                args[key] = None
         else:
+            if key is None:
+                raise ValueError(f'Value without argument: {ua}')
             if args[key] is None:
                 args[key] = ua
             elif isinstance(args[key] , tuple):
@@ -26,7 +36,7 @@ def unknown_args(unknown):
     return args
 
 def argparse_dict(**kwargs):
-    """Parse known args plus ``--key value`` pairs into a flat dict merged with ``kwargs``."""
+    """Parse known args plus ``--key value`` / ``--key=value`` pairs into a flat dict merged with ``kwargs``."""
     parser = argparse.ArgumentParser(description='Run daily update script.')
     parser.add_argument('--source', type=str, default='py', help='Source of the script call')
     args , unknown = parser.parse_known_args()

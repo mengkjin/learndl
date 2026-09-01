@@ -115,7 +115,7 @@ $PYTHON_CMD [具体Python脚本路径] [参数]
 ### 1. `daily_update.sh` - 每日更新脚本
 **作用**：执行每日数据更新任务
 - **目标脚本**：`src/scripts/1_autorun/0_daily_update.py`
-- **参数**：`--source=bash --email=1`
+- **参数**：`--source=bash --email=1`；额外参数经 `"$@"` 透传（如 `--forfeit_if_done False` 强制重跑）
 - **功能**：自动化执行每日数据更新，支持邮件通知
 - **使用场景**：定时任务、每日维护
 
@@ -203,8 +203,11 @@ esac
 ### 定时任务
 ```bash
 # 添加到crontab实现自动化
-# 每日凌晨2点执行
+# 每日凌晨2点执行（当天已完成后 crontab 会 forfeit 跳过）
 0 2 * * * /path/to/learndl/runs/daily_update.sh
+
+# 强制重跑：忽略当天已完成记录
+0 2 * * * /path/to/learndl/runs/daily_update.sh --forfeit_if_done False
 
 # 每周日凌晨3点执行
 0 3 * * 0 /path/to/learndl/runs/weekly_update.sh
