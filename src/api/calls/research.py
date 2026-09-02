@@ -61,12 +61,23 @@ class CarryOutScheduleWorkList(DirectCall):
             return False
         return max_creation_time > datetime.now() - timedelta(days = days)
 
+    @classmethod
+    def _release_gpu_memory(cls) -> None:
+        """Drop cached GPU allocations after a schedule finishes successfully."""
+        import gc
+
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def run(self) -> None:
         Logger.critical(f'Training schedule model list {self.schedule_names()} started')
         with as_script_main(self.SCHEDULE_SCRIPT):
+            main = self._load_schedule_main()
             for schedule_name in self.get_schedules():
                 Logger.note(f'Training schedule model: {schedule_name}')
-                main = self._load_schedule_main()
                 main(
                     schedule_name=schedule_name,
                     short_test=None,
@@ -75,6 +86,8 @@ class CarryOutScheduleWorkList(DirectCall):
                     end=None,
                     email=True,
                 )
+                self._release_gpu_memory()
+                Logger.note(f'Schedule [{schedule_name}] completed; GPU cache cleared')
         Logger.success('Training schedule model list completed')
 
 class ScheduleModel(DirectCall):
