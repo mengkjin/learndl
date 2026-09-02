@@ -43,6 +43,9 @@ AVAILABLE_NNS = {
     'tft'               : Model.TFT.TemporalFusionTransformer,
     'astgnn'            : Model.ABCM.Astgnn,
     'resnet_gru'        : Model.resnet_gru.resnet_gru,
+    'transformer_gru'   : Model.transformer_gru.transformer_gru,
+    'resnet_transformer': Model.resnet_transformer.resnet_transformer,
+    'resnet_mlp'        : Model.resnet_mlp.resnet_mlp,
 }
 
 def get_nn_module(module_name : str) -> nn.Module:

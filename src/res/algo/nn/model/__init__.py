@@ -18,9 +18,13 @@ Sub-modules:
     TFT        — Temporal Fusion Transformer
     ABCM       — Alpha-Beta Co-Mining GRU
     ResNetGru  — ResNet-GRU
+    TransformerGru — Intra-day Transformer + day GRU
+    ResNetTransformer — ResNet bar encoder + day Transformer
+    ResNetMlp  — ResNet bar encoder + temporal MLP
 """
 from . import (
     CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU , MoE ,
     TSMixer , TRA , FactorVAE ,
-    Attention , ABCM , resnet_gru
+    Attention , ABCM , resnet_gru ,
+    transformer_gru , resnet_transformer , resnet_mlp ,
 )
