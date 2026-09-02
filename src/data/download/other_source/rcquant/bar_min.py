@@ -395,7 +395,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        if not force and started_at.hour <= 21:
+        if not force and started_at.hour < 21:
             msg = f'RcQuant sec backfill skipped: BJ hour is {started_at.hour}, window is 21:00-23:59'
             self.logger.skipping(msg)
             conclude_filled(msg)
