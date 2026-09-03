@@ -30,7 +30,7 @@ train:
     param:
       objective: mse # null , mse , mae , rank
     weight:
-      cs_type: top
+      cs_type: null
       ts_type: lin
       bm_type: null
     # valid_metric:
