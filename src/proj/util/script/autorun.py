@@ -180,8 +180,8 @@ class AutoRunTask(BoundLogger):
         
         self.exit_files = [p for p in Proj.exit_files.pop_all()]
 
-        # send email if not forfeit task
-        if not self.forfeit_task:
+        # send email unless this run was actually skipped
+        if not self.should_forfeit:
             self.send_email()
 
         if self.execution_success: 
@@ -201,7 +201,7 @@ class AutoRunTask(BoundLogger):
                 else:
                     self.forfeit_if_done = bool(raw)
             with self:
-                if self.forfeit_if_done and self.forfeit_task:
+                if self.should_forfeit:
                     self.logger.conclude(f'task {self.task_full_name} is forfeit, most likely due to finished autoupdate, skip daily update' , level = 'error')
                 else:
                     try:
@@ -272,6 +272,11 @@ class AutoRunTask(BoundLogger):
     def forfeit_task(self) -> bool:
         """return True if the task script is already done and the source is bash , so crontab scripts can be forfeit"""
         return self.already_done and not self.manual_start
+
+    @property
+    def should_forfeit(self) -> bool:
+        """True only when forfeit is enabled and this bash rerun is already finished."""
+        return self.forfeit_if_done and self.forfeit_task
 
     @property
     def success(self) -> bool:
