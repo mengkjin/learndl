@@ -170,47 +170,48 @@ def _backfill_deadline_hit(started_at : datetime) -> bool:
         return True
     return now.hour == 23 and now.minute >= 59
 
+def _handle_quota(text : str | BaseException , * , raise_on_quota : bool) -> None:
+    """Always log quota so HTML/email see it; raise only on the backfill path."""
+    Logger.warning(f'RcQuant quota exceeded: {text}')
+    if raise_on_quota:
+        raise QuotaExceeded(str(text))
+
 def rq_get_price(code_list : np.ndarray , date : int , * , raise_on_quota : bool = False) -> Any:
     """``rqdatac.get_price`` for one session.
 
     Daily path (``raise_on_quota=False``): quota is a warning, return whatever
     payload we got (possibly ``None``). Backfill raises ``QuotaExceeded``.
+
+    Stdout/stderr stay visible to HtmlCatcher (``keep_original=True``). Warnings
+    are re-emitted after recording so a raise does not hide the quota signal.
     """
+    catcher = IOCatcher()
+    catcher.keep_original = True
     with warnings.catch_warnings(record = True) as caught:
         warnings.simplefilter('always')
-        with IOCatcher() as catcher:
-            try:
+        try:
+            with catcher:
                 data = rqdatac.get_price(
                     code_list , start_date = str(date) , end_date = str(date) ,
                     frequency = '1m' , expect_df = True ,
                 )
-            except QuotaExceeded as e:
-                if raise_on_quota:
-                    raise
-                Logger.warning(f'RcQuant get_price quota exceeded: {e}')
+        except QuotaExceeded as e:
+            _handle_quota(e , raise_on_quota = raise_on_quota)
+            return None
+        except Exception as e:
+            if is_quota_exceeded(e):
+                _handle_quota(e , raise_on_quota = raise_on_quota)
                 return None
-            except Exception as e:
-                if is_quota_exceeded(e):
-                    if raise_on_quota:
-                        raise QuotaExceeded(str(e)) from e
-                    Logger.warning(f'RcQuant get_price quota exceeded: {e}')
-                    return None
-                raise
-        blob = '\n'.join(filter(None , (
-            catcher.contents['stdout'] ,
-            catcher.contents['stderr'] ,
-            *(str(w.message) for w in caught) ,
-        )))
-        if stdout := catcher.contents['stdout']:
-            Logger.stdout(stdout)
-        if stderr := catcher.contents['stderr']:
-            Logger.error(stderr)
-        for w in caught:
-            Logger.warning(str(w.message))
-        if is_quota_exceeded(blob):
-            if raise_on_quota:
-                raise QuotaExceeded(blob)
-            Logger.warning(f'RcQuant get_price quota exceeded: {blob}')
+            raise
+    for w in caught:
+        warnings.showwarning(w.message , w.category , w.filename , w.lineno)
+    blob = '\n'.join(filter(None , (
+        catcher.contents['stdout'] ,
+        catcher.contents['stderr'] ,
+        *(str(w.message) for w in caught) ,
+    )))
+    if is_quota_exceeded(blob):
+        _handle_quota(blob , raise_on_quota = raise_on_quota)
     return data
 
 def rcquant_instrument_list(date : int , data_type : MinDataType) -> pd.DataFrame:

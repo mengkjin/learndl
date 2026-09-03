@@ -1,8 +1,8 @@
 fit:
   - lgbm_of_hf_20
   - lgbm_of_hf_60
-  - resnet_transformer_15m
-  - resnet_mlp_15m
-  - transformer_gru_15m
+  # - resnet_transformer_15m
+  # - resnet_mlp_15m
+  # - transformer_gru_15m
 
 resume: True

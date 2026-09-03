@@ -162,7 +162,10 @@ class AutoRunTask(BoundLogger):
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        Save.async_wait_all(caller_name = self.__class__.__name__)
+        try:
+            Save.async_wait_all(caller_name = self.__class__.__name__)
+        except Exception as e:
+            self.logger.error(f'AutoRunTask async wait failed: {e}')
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):
             Proj.exit_files.append(self.func_return)
@@ -171,23 +174,44 @@ class AutoRunTask(BoundLogger):
         elif self.func_return is not None:
             self.logger.display(self.func_return)
 
-        assert exc_type is None , 'Unexpected exception in AutoRunTask , should be caught by the caller!'
+        if exc_type is not None:
+            self.status = 'Error'
+            self.logger.conclude(
+                f'AutoRunTask aborted: {exc_type.__name__}: {exc_value}' , level = 'error')
 
-        self.error_messages.extend(self.logger.get_conclusions('error'))
-        self.exit_message = self.logger.draw_conclusions()
+        try:
+            self.error_messages.extend(self.logger.get_conclusions('error'))
+            self.exit_message = self.logger.draw_conclusions()
+        except Exception as e:
+            # Never let conclusion rendering break the notification pipeline.
+            self.exit_message = ''
+            self.logger.error(f'AutoRunTask draw_conclusions failed: {e}')
 
-        self.catchers.exit(exc_type, exc_value, exc_traceback)
-        
+        try:
+            self.catchers.exit(exc_type, exc_value, exc_traceback)
+        except Exception as e:
+            self.logger.error(f'AutoRunTask catcher exit failed: {e}')
+
         self.exit_files = [p for p in Proj.exit_files.pop_all()]
 
-        # send email unless this run was actually skipped
         if not self.should_forfeit:
-            self.send_email()
+            try:
+                self.send_email()
+            except Exception as e:
+                # Email sending failures should not break the rest of cleanup.
+                self.logger.error(f'AutoRunTask send_email failed: {e}')
 
-        if self.execution_success: 
-            self.task_recorder.mark_finished(remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}']))
-        else:
-            self.task_recorder.mark_failed(remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}']))
+        try:
+            if self.execution_success: 
+                self.task_recorder.mark_finished(
+                    remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}'])
+                )
+            else:
+                self.task_recorder.mark_failed(
+                    remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}'])
+                )
+        except Exception as e:
+            self.logger.error(f'AutoRunTask task_record update failed: {e}')
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
