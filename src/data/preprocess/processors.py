@@ -17,8 +17,10 @@ Registered preprocessors
 - ``quality`` / ``growth`` / ``value`` / ``earning`` / ``surprise`` / ``coverage`` /
   ``forecast`` / ``adjustment`` / ``hf_*`` / ``momentum`` / ``volatility`` /
   ``correlation`` / ``liquidity`` / ``holding`` / ``trading`` : Factor category preprocessors
-- ``dfl2``           : Dongfang L2 characteristics (rolling time-series z-score)
-- ``dfl2cs``         : Dongfang L2 characteristics (cross-sectional z-score)
+- ``dfl2``           : Dongfang L2 characteristics (rolling rank; frozen, ``ENABLED=False``)
+- ``dfl2cs``         : Dongfang L2 characteristics (cross-sectional z-score; frozen, ``ENABLED=False``)
+- ``minc``           : All selected ``min_chars`` columns (cross-sectional z-score, NaN→0)
+- ``mincr``          : All selected ``min_chars`` columns (rolling pct_rank → CS z-score, NaN→0)
 - ``market``         : Market-level risk + index log returns (broadcast to secid)
 """
 from __future__ import annotations
@@ -58,6 +60,11 @@ class PrePros:
     def keys(cls) -> list[str]:
         """Return all registered preprocessor keys."""
         return [name for name in PreProcessor.registry.keys()]
+
+    @classmethod
+    def enabled_keys(cls) -> list[str]:
+        """Return registered keys whose processor is ``ENABLED``."""
+        return [name for name , kls in PreProcessor.registry.items() if kls.ENABLED]
 
     @classmethod
     def start_date(cls , frame : Base.lit.DataBlockTimeFrame = 'predict') -> int:
@@ -325,8 +332,12 @@ class PrePro_trading(FactorPreProcessor):
 
 class PrePro_dfl2(MicellaneousPreProcessor):
     """
-    Calculate the rolling rank (percentage rank) of the features partitioned over secid
+    Dongfang L2 rolling percentage rank (key: ``'dfl2'``).
+
+    Source ``sellside/dongfang.l2_chars`` is frozen.  Code is kept so existing
+    dumps can still be loaded; batch preprocess skips this key (``ENABLED=False``).
     """
+    ENABLED = False
     CalculationWindow = 250
     MIN_SAMPLES = 90
     FEATURE_CHUNK_SIZE = 20
@@ -393,11 +404,12 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
     """
     Dongfang L2 characteristics with cross-sectional z-score (key: ``'dfl2cs'``).
 
-    For each date, subtracts the cross-sectional mean and divides by the
-    cross-sectional std.  Features are processed in chunks of ``FEATURE_CHUNK_SIZE``.
+    Source ``sellside/dongfang.l2_chars`` is frozen.  Code is kept so existing
+    dumps can still be loaded; batch preprocess skips this key (``ENABLED=False``).
 
     Note: same parenthesisation bug as ``PrePro_dfl2`` — see TODO_data.md item C4.
     """
+    ENABLED = False
     FEATURE_CHUNK_SIZE = 20
 
     def pre_process(
@@ -432,6 +444,114 @@ class PrePro_dfl2cs(MicellaneousPreProcessor):
             blocks.append(DataBlock.from_polars(sub_df).slice_date(start , end))
         del df
         return DataBlock.merge(blocks , inplace = True)
+
+class _MinCharsPreProcessor(MicellaneousPreProcessor):
+    """
+    Load all selected ``min_chars`` columns (daily + roll + tag) into one block.
+
+    Subclasses choose the transform: cross-sectional z-score only, or per-secid
+    rolling pct_rank then cross-sectional z-score.  Non-finite values → 0.
+    """
+    FEATURE_CHUNK_SIZE = 20
+    fit_start = 20100101
+    hist_start = 20100101
+    DB_SRC = 'min_chars'
+    MIN_SAMPLES = 90
+    RANK_THEN_CS = False
+
+    def pre_process(
+        self , start : int | None = None , end : int | None = None , * ,
+        secid : Base.alias.SecidType = None ,
+        indent = 0 , vb_level : Base.lit.VerbosityLevel = 'max' , **kwargs
+    ) -> DataBlock:
+        start = start or self.load_start
+        end = end or self.load_end
+        if start > end:
+            return DataBlock()
+        from src.data.update.custom.min_chars._catalog import selected_by_db_key
+        grouped = selected_by_db_key()
+        if not grouped:
+            raise ValueError(f'{self.key}: no selected min_chars columns')
+        load_start = CALENDAR.td(start , -self.CalculationWindow + 1).td
+        secid = Base.ensure_secid(secid)
+        blocks : list[DataBlock] = []
+        for db_key , features in grouped.items():
+            df = DB.loads_pl(
+                self.DB_SRC , db_key , start = load_start , end = end ,
+                key_column = None , vb_level = self.vb_level ,
+            )
+            if df.is_empty():
+                continue
+            if secid is not None:
+                df = df.filter(pl.col('secid').is_in(secid))
+            missing = [c for c in features if c not in df.columns]
+            if missing:
+                raise ValueError(f'{self.DB_SRC}/{db_key} missing selected columns: {missing}')
+            blocks.extend(self._transform_chunks(df , features))
+            del df
+        if not blocks:
+            return DataBlock()
+        block = DataBlock.merge(blocks , inplace = True).slice_date(start , end).fillna(0)
+        return block.mask_values(mask = self.mask)
+
+    def _transform_chunks(self , df : pl.DataFrame , features : list[str]) -> list[DataBlock]:
+        out : list[DataBlock] = []
+        for i in range(0 , len(features) , self.FEATURE_CHUNK_SIZE):
+            sub = features[i : i + self.FEATURE_CHUNK_SIZE]
+            lf = df.lazy().select(['secid' , 'date'] + sub)
+            if self.RANK_THEN_CS:
+                lf = self._rolling_pct_rank(lf , sub)
+            lf = self._cs_zscore_fill0(lf , sub)
+            out.append(DataBlock.from_polars(lf.collect()))
+        return out
+
+    def _rolling_pct_rank(self , lf : pl.LazyFrame , features : list[str]) -> pl.LazyFrame:
+        """Per-secid rolling rank / window length, same definition as ``PrePro_dfl2``."""
+        rank_names = [f'{feat}_rk' for feat in features]
+        return (
+            lf.sort(['secid' , 'date'])
+            .with_columns(pl.lit(1).alias('_one'))
+            .with_columns(
+                pl.col(feat).rolling_rank(
+                    window_size = self.CalculationWindow , min_samples = self.MIN_SAMPLES ,
+                ).over('secid').alias(f'{feat}_rk')
+                for feat in features
+            )
+            .with_columns(
+                pl.col('_one').rolling_sum(window_size = self.CalculationWindow).over('secid').alias('_wn')
+            )
+            .with_columns((pl.col(f'{feat}_rk') / pl.col('_wn')).alias(feat) for feat in features)
+            .drop(['_one' , '_wn'] + rank_names)
+        )
+
+    @staticmethod
+    def _cs_zscore_fill0(lf : pl.LazyFrame , features : list[str]) -> pl.LazyFrame:
+        """Per-date z-score; non-finite (NaN/inf, empty cross-section) → 0."""
+        exprs = []
+        for feat in features:
+            z = (
+                (pl.col(feat) - pl.col(feat).mean().over('date'))
+                / (pl.col(feat).std().over('date') + 1e-6)
+            )
+            exprs.append(pl.when(z.is_finite()).then(z).otherwise(0.0).alias(feat))
+        return lf.with_columns(exprs)
+
+class PrePro_minc(_MinCharsPreProcessor):
+    """
+    All selected ``min_chars`` columns with cross-sectional z-score (key: ``'minc'``).
+
+    Same transform as ``dfl2cs``: per-date mean/std, then missing/non-finite → 0.
+    """
+
+class PrePro_mincr(_MinCharsPreProcessor):
+    """
+    All selected ``min_chars`` columns with rolling pct_rank then CS z-score (key: ``'mincr'``).
+
+    Per-secid rolling percentage rank (window ``CalculationWindow``, min ``MIN_SAMPLES``),
+    then the same cross-sectional z-score and fill-0 as ``PrePro_minc``.
+    """
+    CalculationWindow = 250
+    RANK_THEN_CS = True
 
 class PrePro_market(MicellaneousPreProcessor):
     """

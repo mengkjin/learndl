@@ -240,7 +240,7 @@ l2c0 l2c1 l2c2 l2c3 l2c4
 
 - 读分钟路径用 `ms_chars`（OHLC、TWAP、已实现矩）；读订单流用 `l2_chars`（主买主卖、大单、买方占比）。
 - 两表用 `date+secid` 对齐；量额用 `amt{k}h = bamt{k}h+samt{k}h` 衔接，竞价用 `amtoa = volu0h×opri`。
-- 入模前按项目现有 `PrePro_dfl2` / `PrePro_dfl2cs` 做时序分位或截面 z-score；金额类需先取对数或除以当日 `amt`。
+- 入模：东方 L2 的 `PrePro_dfl2` / `PrePro_dfl2cs` 已停更（源不再更新）。新特征全部选列打进 `PrePro_minc`（截面 z-score）与 `PrePro_mincr`（rolling pct_rank 后再截面 z-score），缺失归 0。金额类需先取对数或除以当日 `amt`。
 - 加载：`DB.loads_pl('sellside', 'dongfang.ms_chars', ...)` / `dongfang.l2_chars`。
 
 ---
@@ -257,7 +257,8 @@ l2c0 l2c1 l2c2 l2c3 l2c4
 | 3 | `MinCharsTaggedUpdater` | `min_chars/min_chars_tag` | 当日 min ∩ `min_chars/min_chars_roll` |
 
 主动买卖按 1 分钟收益符号重定义（涨=买、跌=卖、平=各半），**不是** L2 逐笔主买。尺度与东方原表不可比。  
-`ret_path = (∏(1+ret)−1)×100`。OHLC / `volu` 只作内部计算，不落盘。列名无 `inday_`。
+`ret_path = (∏(1+ret)−1)×100`。OHLC / `volu` 只作内部计算，不落盘。列名无 `inday_`。  
+入模 PrePro：`minc`（选列 + 截面 z-score）与 `mincr`（选列 + rolling pct_rank 再截面 z-score）；`select` 规则见 `FACTORS.md`。
 
 ### 日频 `min_chars`
 

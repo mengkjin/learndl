@@ -15,7 +15,7 @@ from .processors import PrePros
 
 __all__ = ['PreProcessorTask']
 
-DATASET_FIT : tuple[str,...] = tuple(PrePros.keys())
+DATASET_FIT : tuple[str,...] = tuple(PrePros.enabled_keys())
 DATASET_PREDICT : tuple[str,...] = DATASET_FIT
 
 class PreProcessorTask(Base.BasicUpdater):
@@ -58,7 +58,7 @@ class PreProcessorTask(Base.BasicUpdater):
         parser : argparse.ArgumentParser | None
             Pre-built parser (used when called from a parent script).
         data_types : list[str] | None
-            Explicit list of processor keys to update.  Defaults to all.
+            Explicit list of processor keys to update.  Defaults to enabled keys.
         force_update : bool
             If True, skip the "already updated" check.
         """
@@ -98,7 +98,7 @@ class PreProcessorTask(Base.BasicUpdater):
             confirm : bool
                 If True, will prompt for confirmation.
             data_types : list[str] | None
-                Explicit list of processor keys to update.  Defaults to all.
+                Explicit list of processor keys to update.  Defaults to enabled keys.
             indent : int
                 Indent level for logging.
             vb_level : Base.lit.VerbosityLevel
@@ -130,7 +130,7 @@ class PreProcessorTask(Base.BasicUpdater):
             confirm : bool
                 If True, will prompt for confirmation.
             data_types : list[str] | None
-                Explicit list of processor keys to update.  Defaults to all.
+                Explicit list of processor keys to update.  Defaults to enabled keys.
         """
         return cls.recalculate(
             frame = frame , confirm = confirm , data_types = data_types , 

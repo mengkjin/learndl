@@ -122,6 +122,9 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         ``'predict'`` mode.
     fit_start / hist_start / hist_end : int
         Date range used for ``'fit'`` mode and historical normalisation.
+    ENABLED : bool
+        If False, ``build`` / batch ``PreProcessorTask`` skip this key. Existing
+        dumps remain loadable.
     """
     key = _PPKey()
     
@@ -133,6 +136,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     ExtentionOverlay  : int = 10
     CalculationWindow : int = 1  # can be set slightly larger than the calculation window of the factor
     AllowInactive : bool = True
+    ENABLED : bool = True
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
@@ -337,7 +341,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         return block
 
     def should_be_skipped(self , force_update : bool = False) -> bool:
-        """Return True if the dump was already updated and ``force_update`` is False."""
+        """Return True if this processor is disabled or the dump is already fresh."""
+        if not self.ENABLED:
+            self.logger.skipping(f'[{self.key.upper()}] disabled (ENABLED=False)' , add_prefix = False)
+            return True
         modified_time = DataBlock.last_preprocess_time(self.key , self.frame)
         if not force_update and CALENDAR.is_updated_today(modified_time):
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")

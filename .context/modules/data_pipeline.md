@@ -304,8 +304,10 @@ PrePros.get_processor('day', type='fit')  # instantiate a specific processor
 | `quality`, `growth`, `value`, `earning`, `surprise`, `coverage`, `forecast`, `adjustment` | Factor category groups |
 | `hf_momentum`, `hf_volatility`, `hf_correlation`, `hf_liquidity` | High-frequency factor groups |
 | `momentum`, `volatility`, `correlation`, `liquidity`, `holding`, `trading` | Further factor groups |
-| `dfl2` | Dongfang L2 characteristics — rolling time-series z-score |
-| `dfl2cs` | Dongfang L2 characteristics — cross-sectional z-score |
+| `dfl2` | Dongfang L2 characteristics — rolling rank (**frozen**, `ENABLED=False`) |
+| `dfl2cs` | Dongfang L2 characteristics — cross-sectional z-score (**frozen**, `ENABLED=False`) |
+| `minc` | All selected `min_chars` columns — CS z-score, NaN→0 |
+| `mincr` | All selected `min_chars` columns — rolling pct_rank then CS z-score, NaN→0 |
 
 ### Incremental update via `load_with_extension`
 Processors load existing dumps and only compute new date spans, merging with an `EXTENSION_OVERLAY` overlap to avoid edge discontinuities.
@@ -423,7 +425,7 @@ Model Inputs
 - **secid**: intersection across all blocks
 - **date**: union, trimmed to the latest `min(date)` across blocks
 
-This means adding a short-history block will trim dates from all other blocks. Be careful when mixing `dfl2` (short history) with `day` (full history).
+This means adding a short-history block will trim dates from all other blocks. Be careful when mixing `minc`/`mincr` (minute history from 2010) or leftover `dfl2` dumps with `day` (full history).
 
 ### Polars vs pandas
 - `MKLINE` always returns `pl.DataFrame`.

@@ -114,3 +114,21 @@ uv run scripts/2_data/4_backfill_min_chars.py --start=20140101
 # 只覆盖重算 tag（float32 overflow）：
 uv run scripts/2_data/5_recalc_min_chars_tag.py --start=20100101
 ```
+
+---
+
+## 5. PrePro 选列（`select`）
+
+`factors.csv` 的 `select` 由 `_catalog.is_selected` 生成（`write_csv()`），不要手改。规则：
+
+- 不选 5 分钟重采茎（`ret_std5` 等）及其 trail（`ret_std5_ma20` 等）
+- 不选全日简单量价/路径收益（`amt` `twap` `vwap` `bwap` `swap` `bamt` `samt` `ret_path`）；**1h/8h session 同茎保留**
+- 不选 2h–7h session
+- 不选池化样本数 `n`
+
+入模：全部 `select=1` 列打成一个特征块，两个 PrePro 只差变换：
+
+- `PrePro_minc`：原始值按日截面 z-score，非有限/缺失归 0（对齐 `dfl2cs`）
+- `PrePro_mincr`：先按 secid 做 250 日 rolling pct_rank（`min_samples=90`），再按日截面 z-score，缺失归 0
+
+东方 `dfl2`/`dfl2cs` 已 `ENABLED=False`。

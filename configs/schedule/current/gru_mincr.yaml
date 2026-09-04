@@ -1,0 +1,41 @@
+model:
+  # main model configs ----------------------------------------------------------------
+  module        : gru  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+  submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
+
+  # labels specification ------------------------------------------------------------
+  # rtn : raw return | std : standardized return | res : risk model residual
+  # if module is nn , use multiloss combination of the labels
+  # if module is boost , only use the first label
+  labels:
+    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+
+  special:
+    global2top: true # false
+
+input:  # input specification ----------------------------------------------------------------
+  type: data # [data , hidden , factor] , specify below
+  data.types: mincr # selected min_chars, rolling pct_rank then CS z-score
+  sequence.lens: {mincr: 30}
+  sequence.steps: {mincr: 1}
+  data.prenorm.mincr: {divlast: false, histnorm: false, channelnorm: false}
+
+train:
+  criterion.weight:
+    fit: 'equal' #  'polar'
+
+algo:
+  gru:
+    hidden_dim:     [64 , 64] #  2**5
+    dropout:        [0.1]
+    enc_in:         [false , true]
+    enc_att:        [false]
+    rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
+    rnn_att:        [false]
+    rnn_layers:     [2]
+    dec_mlp_layers: [2]
+    num_output:     [1]
+    which_output:   [null]
+    kernel_size:    [3] # for tcn
+    hidden_as_factor:    [true]
+    ordered_param_group: [false]  # multiple data input , if train sequentially

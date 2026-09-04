@@ -35,9 +35,37 @@ from src.data.update.custom.min_chars.tagged import TAG_COLUMNS , TAGS , TAG_MET
 
 CSV_PATH = Path(__file__).with_name('factors.csv')
 CSV_FIELDS = (
-    'name' , 'stage' , 'db_src' , 'db_key' , 'family' , 'window' , 'agg' ,
+    'name' , 'select' , 'stage' , 'db_src' , 'db_key' , 'family' , 'window' , 'agg' ,
     'daily_src' , 'hf_factor' , 'formula' ,
 )
+
+# Full-day levels / path return: too simple for model input. Session 1h/8h of the
+# same stems stay in (open/close bucket shape).
+_SIMPLE_DAILY : frozenset[str] = frozenset({
+    'amt' , 'twap' , 'vwap' , 'bwap' , 'swap' , 'bamt' , 'samt' , 'ret_path' ,
+})
+
+
+def is_selected(name : str , stage : str) -> bool:
+    """
+    PrePro feature flag.
+
+    Drop: 5-min stems (and their trail), full-day simple levels, session 2h–7h,
+    and pool sample count ``n``. Session 1h/8h of the simple stems stay in.
+    """
+    if name in DAILY_HF_5MIN or any(name.startswith(f'{s}_') for s in DAILY_HF_5MIN):
+        return False
+    if name.endswith(('2h' , '3h' , '4h' , '5h' , '6h' , '7h')):
+        return False
+    if stage == 'daily' and name in _SIMPLE_DAILY:
+        return False
+    if name == 'n':
+        return False
+    return True
+
+
+def _select_cell(name : str , stage : str) -> str:
+    return '1' if is_selected(name , stage) else ''
 
 _HF_DAILY : dict[str , str] = {
     'mkt_beta' : 'inday_mkt_beta;inday_mkt_beta_std' ,
@@ -216,6 +244,7 @@ def catalog_rows() -> list[dict[str , Any]]:
             family = 'approx'
         rows.append({
             'name' : name ,
+            'select' : _select_cell(name , 'daily') ,
             'stage' : 'daily' ,
             'db_src' : DB_SRC ,
             'db_key' : 'min_chars' ,
@@ -241,6 +270,7 @@ def catalog_rows() -> list[dict[str , Any]]:
                 formula = f'quantile 0.{q} of pooled 1-min {stem}'
             rows.append({
                 'name' : name ,
+                'select' : _select_cell(name , 'roll_pool') ,
                 'stage' : 'roll_pool' ,
                 'db_src' : DB_SRC ,
                 'db_key' : 'min_chars_roll' ,
@@ -258,6 +288,7 @@ def catalog_rows() -> list[dict[str , Any]]:
         src , how , win , out = spec
         rows.append({
             'name' : out ,
+            'select' : _select_cell(out , 'roll_trail') ,
             'stage' : 'roll_trail' ,
             'db_src' : DB_SRC ,
             'db_key' : 'min_chars_roll' ,
@@ -286,6 +317,7 @@ def catalog_rows() -> list[dict[str , Any]]:
                 tag = name[len(prefix):]
                 rows.append({
                     'name' : name ,
+                    'select' : _select_cell(name , 'tag') ,
                     'stage' : 'tag' ,
                     'db_src' : DB_SRC ,
                     'db_key' : 'min_chars_tag' ,
@@ -299,6 +331,18 @@ def catalog_rows() -> list[dict[str , Any]]:
                 break
 
     return rows
+
+
+def selected_by_db_key(*stages : str) -> dict[str , list[str]]:
+    """Selected feature names grouped by ``db_key``, optionally filtered by stage."""
+    grouped : dict[str , list[str]] = {}
+    for row in catalog_rows():
+        if stages and row['stage'] not in stages:
+            continue
+        if row['select'] != '1':
+            continue
+        grouped.setdefault(row['db_key'] , []).append(row['name'])
+    return grouped
 
 
 def write_csv(path : Path = CSV_PATH) -> Path:
