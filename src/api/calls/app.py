@@ -8,7 +8,7 @@ import psutil
 from src.proj import MACHINE
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['LaunchApp' , 'KillAndRebootApp']
+__all__ = ['LaunchApp' , 'LaunchTaskMonitor' , 'KillAndRebootApp']
 
 class LaunchApp(DirectCall):
     """Launch the streamlit app."""
@@ -20,6 +20,24 @@ class LaunchApp(DirectCall):
             'done_action': 'pause',
             'title': 'Streamlit Server',
             'as_from_workspace': 'Streamlit Server',
+        }
+        if not MACHINE.is_macos:
+            kwargs['new_on'] = 'tab'
+        Shell.open(cmd , cwd=os.getcwd(), **kwargs)
+
+class LaunchTaskMonitor(DirectCall):
+    """Launch the read-only Streamlit monitor for active and recently completed tasks."""
+    category = 'App'
+    def run(self) -> None:
+        from src.proj.util.shell import Shell
+        cmd = (
+            'uv run --frozen streamlit run src/api/task_monitor/launch.py '
+            '--server.address 127.0.0.1 --server.port 8502'
+        )
+        kwargs = {
+            'done_action': 'pause',
+            'title': 'Learndl Monitor',
+            'as_from_workspace': 'Learndl Monitor',
         }
         if not MACHINE.is_macos:
             kwargs['new_on'] = 'tab'

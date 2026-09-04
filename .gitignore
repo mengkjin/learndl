@@ -17,6 +17,7 @@ __old_version__/
 /.local_resources
 /.secret
 /.logs
+/.agents
 /data
 /models
 /results

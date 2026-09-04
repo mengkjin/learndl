@@ -13,6 +13,7 @@ __all__ = ['DirectCallHub']
 _TOP_LEVEL_LABELS = (
     'Git Pull',
     'Launch Streamlit App',
+    'Launch Learndl Monitor',
     'Train Schedule Model',
     'Non-Research Operations',
     'Research Operations',
@@ -28,7 +29,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def get_description(cls, **kwargs) -> str:
         return (
-            'CLI launcher hub: Streamlit app, train schedule model, non-research tools, '
+            'CLI launcher hub: Streamlit app, task monitor, train schedule model, non-research tools, '
             'research workflows, and pipeline scripts. Submenus spawn the selected action in a new pane.'
         )
 
@@ -37,6 +38,9 @@ class DirectCallHub(DirectCall):
         return {
             'Git Pull': 'Pull the latest code from remote. Clear changes before pulling.',
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
+            'Launch Learndl Monitor': (
+                'Open the independent, read-only task monitor for active jobs and tasks completed in the last 24 hours.'
+            ),
             'Train Schedule Model': (
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '
                 'Pick schedule_name, resume, short_test, and optional date range.'
@@ -208,6 +212,13 @@ class DirectCallHub(DirectCall):
             LaunchApp.spawn_in_pane(vertical=True, done_action='close')
             return
 
+        if choice == 'Launch Learndl Monitor':
+            from src.api.calls.app import LaunchTaskMonitor
+
+            Logger.note('Spawning [LaunchTaskMonitor] in new pane')
+            LaunchTaskMonitor.spawn_in_pane(vertical=True, done_action='close')
+            return
+
         if choice == 'Train Schedule Model':
             from src.api.calls.research import ScheduleModel
 
@@ -267,7 +278,7 @@ class DirectCallHub(DirectCall):
                 allow_back=False,
                 title='DirectCall Hub — what do you want to do?',
                 help_description=(
-                    'Top-level actions. Git Pull / Streamlit / Train Schedule Model run immediately; '
+                    'Top-level actions. Git Pull / Streamlit / Monitor / Train Schedule Model run immediately; '
                     'the other three open a submenu. Selections spawn in a split pane while this hub keeps running. '
                     'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                 ),
