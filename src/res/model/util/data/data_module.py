@@ -40,6 +40,13 @@ class DataModule(Base.BoundLogger):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config    : ModelConfig = config or ModelConfig(stage=0)
         self._use_data : Base.lit.DataBlockTimeFrames = use_data
+        self.memory_tracker: Any | None = None
+
+    def _memory_mark(self, phase: str, **details: Any) -> None:
+        """Annotate the active trainer memory report without requiring one."""
+        tracker = getattr(self, 'memory_tracker', None)
+        if tracker is not None:
+            tracker.mark(phase, **details)
 
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig | None = None , use_data : Base.lit.DataBlockTimeFrames = 'fit' , *args , **kwargs):
@@ -92,6 +99,7 @@ class DataModule(Base.BoundLogger):
         """load prepared data at training begin , only load data once in a fitting"""
         if self.no_need_to_load_data(use_data):
             return self
+        self._memory_mark('module_data_initialize_start')
         self.datas = ModuleData.initialize(
             self.input_keys_data + self.input_keys_factor ,  self.config.labels , 
             use_data = self.target_use_data(use_data) ,
@@ -102,7 +110,15 @@ class DataModule(Base.BoundLogger):
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision)
 
+        self._memory_mark(
+            'module_data_load_start', input_keys=self.input_keys,
+            use_data=str(self.target_use_data(use_data)), precision=str(self.config.precision),
+        )
         self.datas.load()
+        self._memory_mark(
+            'module_data_load_end',
+            block_shapes={key: list(block.shape) for key, block in self.datas.blocks.items()},
+        )
         self.logger.stdout(f'Data loaded, shape: {self.datas.shape}' , vb = 1)
         
         self.config.update_data_param(self.datas.x)
@@ -110,7 +126,9 @@ class DataModule(Base.BoundLogger):
         self.set_critical_dates()
         self.ensure_hidden_values()
         
+        self._memory_mark('label_standardize_start', label_shape=list(self.datas.y.shape))
         self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2).clone() , no_weight = True)[0]
+        self._memory_mark('label_standardize_end', standardized_shape=list(self.labels.shape))
 
         if self.empty_x:
             self.logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
@@ -307,13 +325,21 @@ class DataModule(Base.BoundLogger):
         from src.data.preprocess import PrePros
 
         # Clone panel; treat Inf as invalid; NN weights are float32.
+        source_shapes = {k: list(v.values[:,self.d0:self.d1].shape) for k, v in self.datas.x.items()}
+        self._memory_mark(
+            'loader_static_clone_start', stage=self.stage, d0=int(self.d0), d1=int(self.d1),
+            source_shapes=source_shapes,
+        )
         x_full = {k: v.values[:,self.d0:self.d1].clone() for k , v in self.datas.x.items()}
+        self._memory_mark('loader_static_clone_end')
         for k , v in x_full.items():
             if v.dtype != torch.float32:
                 v = v.to(dtype = torch.float32)
             x_full[k] = torch.where(torch.isfinite(v) , v , torch.nan)
+        self._memory_mark('loader_static_sanitize_end')
         # Pre-fill finite mask (True = finite); measured before autofill.
         x_finite = {k: torch.isfinite(v) for k , v in x_full.items()}
+        self._memory_mark('loader_static_finite_mask_end')
 
         max_nan = self.config.input_verify_x_max_nan_ratio
         if max_nan > 0:
@@ -326,6 +352,7 @@ class DataModule(Base.BoundLogger):
                         x_full[key] , self.datas.x[key].feature ,
                         stretch = stretch , **autofill_kw ,
                     )
+        self._memory_mark('loader_static_autofill_end')
 
         self.y_std = self.data_operator.fill_y_zero_no_trade(
             self.labels[:,self.d0:self.d1] ,
@@ -343,13 +370,20 @@ class DataModule(Base.BoundLogger):
         eff_mask = self.data_operator.effective_samples(
             x_input , y_to_check , self.step_idx , x_finite = x_finite ,
         )
+        self._memory_mark(
+            'loader_static_effective_samples_end',
+            effective_shape=list(eff_mask.shape) if eff_mask is not None else None,
+            effective_count=int(eff_mask.sum().item()) if eff_mask is not None else None,
+        )
         
         self.display_loader_static_stats(x_input , eff_mask)
 
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)
         # since in fit stage , step_idx can be larger than 1 , different effective and result may occur
         self.y_std[:,self.step_idx] = y_sampled[:]
+        self._memory_mark('loader_static_materialize_start')
         self.static_dataloader(x_input , y_sampled , w_sampled , eff_mask)
+        self._memory_mark('loader_static_materialize_end')
         
         if self.config.gc_collect_each_model:
             gc.collect() 
@@ -463,9 +497,16 @@ class DataModule(Base.BoundLogger):
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(effective)) , self.step_idx
         sample_index = self.data_operator.split_sample(effective , index0 , index1)
+        self._memory_mark(
+            'static_dataloader_split_end',
+            batches={key: len(value) for key, value in sample_index.items()},
+        )
         self.storage.del_group(self.stage)
         self.loader_dates[self.stage] = []
         for set_key , set_samples in sample_index.items():
+            self._memory_mark(
+                f'static_dataloader_{set_key}_start', batch_count=len(set_samples),
+            )
             assert set_key in ['train' , 'valid' , 'test' , 'predict' , 'retrospective'] , set_key
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_keys : list[str] = []
@@ -495,6 +536,10 @@ class DataModule(Base.BoundLogger):
                     self.loader_dates[set_key].append(self.y_date[int(xindex1[0].item())])
                 
             self.loader_dict[set_key] = StoredTorchFileLoader(self.storage , batch_keys , shuf_opt)
+            self._memory_mark(
+                f'static_dataloader_{set_key}_end', stored_batch_count=len(batch_keys),
+                memory_storage=bool(self.storage.is_mem),
+            )
 
     def batch_data_x(
         self , x : dict[str,torch.Tensor] , 

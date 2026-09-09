@@ -248,16 +248,22 @@ class BaseTrainer(BasePipeline):
         """Main stage of data & fit & test"""
         self.stage_setup()
 
-        if 'data' in self.queue_of_stages:
-            self.stage_data()
+        from src.proj.util.memory_tracker import ProcessMemoryTracker
+        tracker_label = self.config.model_name or self.config.full_module_name
+        with ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker:
+            self.data.memory_tracker = self.memory_tracker
+            self.memory_tracker.mark('trainer_setup_complete')
 
-        if 'fit' in self.queue_of_stages:  
-            self.stage_fit()
+            if 'data' in self.queue_of_stages:
+                self.stage_data()
 
-        if 'test' in self.queue_of_stages: 
-            self.stage_test()
-        
-        self.stage_summary()
+            if 'fit' in self.queue_of_stages:
+                self.stage_fit()
+
+            if 'test' in self.queue_of_stages:
+                self.stage_test()
+
+            self.stage_summary()
 
         return self
 
@@ -276,15 +282,18 @@ class BaseTrainer(BasePipeline):
 
     def stage_data(self):
         """stage of loading model data"""
+        self.memory_tracker.mark('stage_data_start')
         with self.logger.paragraph('Stage [Data]' , 2):
             self.on_data_start_before()
             self.on_data_start()
             self.data.load_data()
             self.on_data_end()
             self.on_data_end_after()
+        self.memory_tracker.mark('stage_data_end')
         
     def stage_fit(self):
         """stage of fitting"""
+        self.memory_tracker.mark('stage_fit_start')
         with FitLock.guard(try_cuda=self.config.try_cuda):
             with self.logger.paragraph('Stage [Fit]' , 2):
                 self.config.log_operation('fit' , 'start')
@@ -304,6 +313,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_test(self):
         """stage of testing"""
+        self.memory_tracker.mark('stage_test_start')
         self.config.apply_inference_device('test')
         with self.logger.paragraph('Stage [Test]' , 2):
             self.config.log_operation('test' , 'start')
@@ -324,6 +334,7 @@ class BaseTrainer(BasePipeline):
 
     def stage_summary(self):
         """stage of summarizing"""
+        self.memory_tracker.mark('stage_summary_start')
         with self.logger.paragraph('Stage [Summary]' , 2):
             self.on_summarize_model()
 
@@ -420,7 +431,13 @@ class BaseTrainer(BasePipeline):
         
     def on_fit_model_start(self):
         self.cached_properties.clear('model_start')
+        self.memory_tracker.mark(
+            'fit_data_setup_start', model_date=int(self.model_date), model_num=int(self.model_num),
+        )
         self.data.setup('fit' , self.model_param , self.model_date)
+        self.memory_tracker.mark(
+            'fit_data_setup_end', model_date=int(self.model_date), model_num=int(self.model_num),
+        )
         self.new_attempt('model')
 
     def on_fit_epoch_end_before(self):
@@ -432,7 +449,13 @@ class BaseTrainer(BasePipeline):
         
     def on_test_model_start(self):
         self.cached_properties.clear('model_start')
+        self.memory_tracker.mark(
+            'test_data_setup_start', model_date=int(self.model_date), model_num=int(self.model_num),
+        )
         self.data.setup('test' , self.model_param , self.model_date)
+        self.memory_tracker.mark(
+            'test_data_setup_end', model_date=int(self.model_date), model_num=int(self.model_num),
+        )
         
     def on_test_submodel_start(self):
         try:
