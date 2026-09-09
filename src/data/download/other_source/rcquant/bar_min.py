@@ -13,7 +13,9 @@ Start date behaviour (daily update):
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
 
 Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
-back to 20110101, independent of ``src_start_date``.
+back to 20110101, independent of ``src_start_date``. Daily update triggers a
+limited backfill (default ``max_days=3``) only after the latest sec 1-min bar
+was freshly downloaded in the same run.
 """
 from __future__ import annotations
 import rqdatac
@@ -35,6 +37,7 @@ __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
 SEC_BACKFILL_FLOOR = 20110101
+SEC_BACKFILL_MAX_DAYS_DEFAULT = 3
 
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
@@ -248,21 +251,27 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         first_n : int = -1 ,
         data_types : Sequence[MinDataType | str] | None = None ,
         overwrite : bool = False ,
+        auto_backfill : bool = True ,
+        max_backfill_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
         **kwargs
     ) -> Base.UpdateFlag:
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
         return updater.download_since_last_data(
             start = start , end = end , first_n = first_n ,
             data_types = data_types , overwrite = overwrite ,
+            auto_backfill = auto_backfill , max_backfill_days = max_backfill_days ,
         )
 
     def download_since_last_data(
         self , start : int , end : int , first_n : int = -1 ,
         data_types : Sequence[MinDataType | str] | None = None ,
         overwrite : bool = False ,
+        auto_backfill : bool = True ,
+        max_backfill_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
     ) -> Base.UpdateFlag:
         flags = Base.UpdateFlagList()
         selected = list(MinDataType) if data_types is None else [MinDataType(dt) for dt in data_types]
+        self._sec_latest_day_downloaded = False
         for data_type in selected:
             try:
                 flags += self.download(start , end , data_type , first_n , overwrite = overwrite)
@@ -270,6 +279,21 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 self.logger.error(f'RcQuant {data_type} minbar failed: {e}')
                 flags += Base.UpdateFlag.FAILED
                 continue
+
+        # Limited historical backfill only after all instrument types finished, and only
+        # when this run freshly downloaded the latest sec 1-min bar (skip/fail/quota: no).
+        if auto_backfill and self._sec_latest_day_downloaded:
+            try:
+                flags += self._backfill_sec_min(
+                    force = True , first_n = first_n , max_days = max_backfill_days ,
+                )
+            except Exception as e:
+                self.logger.error(f'RcQuant sec backfill failed: {e}')
+                flags += Base.UpdateFlag.FAILED
+        elif auto_backfill:
+            self.logger.skipping(
+                'RcQuant sec backfill skipped: latest sec 1-min was not freshly downloaded this run'
+            )
         return flags.summarize()
 
     def download(
@@ -279,6 +303,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         assert data_type is not None , f'data_type is required'
         flags = Base.UpdateFlagList()
         dates = target_dates(data_type , start , end , overwrite = overwrite)
+        latest_day = int(CALENDAR.td(end))
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
             flags += Base.UpdateFlag.SKIPPED
@@ -288,6 +313,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 mark = self.rcquant_bar_min(dt , data_type , first_n)
                 if not mark: 
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
+                elif data_type == MinDataType.SEC and dt == latest_day:
+                    self._sec_latest_day_downloaded = True
                 marks.append(mark)
             if all(marks):
                 self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
@@ -367,17 +394,25 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         return df
 
     @classmethod
-    def backfill_sec_min(cls , * , force : bool = False , first_n : int = -1 , **kwargs) -> Base.UpdateFlag:
+    def backfill_sec_min(
+        cls , * ,
+        force : bool = False ,
+        first_n : int = -1 ,
+        max_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
+        **kwargs
+    ) -> Base.UpdateFlag:
         """Fill missing equity 1-min bars from the day before daily start back to 20110101.
 
-        Runs newest-missing first. Stops immediately on quota exhaustion or at Beijing
-        midnight (no new date after 23:59). ``force`` skips the 23:xx window and the
-        daily_update gate; quota and midnight still apply.
+        Runs newest-missing first, at most ``max_days`` dates per call (default 3).
+        Stops immediately on quota exhaustion. ``force`` skips the hour window and
+        daily_update gate (used by the daily-update hook).
         """
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
-        return updater._backfill_sec_min(force = force , first_n = first_n)
+        return updater._backfill_sec_min(force = force , first_n = first_n , max_days = max_days)
 
-    def _backfill_sec_min(self , * , force : bool , first_n : int) -> Base.UpdateFlag:
+    def _backfill_sec_min(
+        self , * , force : bool , first_n : int , max_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
+    ) -> Base.UpdateFlag:
         started_at = CALENDAR.now(bj_tz = True)
         data_type = MinDataType.SEC
         filled : list[int] = []
@@ -396,6 +431,14 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
+        if max_days <= 0:
+            msg = f'RcQuant sec backfill skipped: max_days={max_days}'
+            self.logger.skipping(msg)
+            conclude_filled(msg)
+            return Base.UpdateFlag.SKIPPED
+
+        # Standalone/cron path still waits for evening window + successful daily_update.
+        # Daily-update hook passes force=True and skips these gates.
         if not force and started_at.hour < 21:
             msg = f'RcQuant sec backfill skipped: BJ hour is {started_at.hour}, window is 21:00-23:59'
             self.logger.skipping(msg)
@@ -408,16 +451,21 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        dates = backfill_sec_dates()
-        if dates.empty:
+        missing = backfill_sec_dates()
+        if missing.empty:
             msg = f'RcQuant sec backfill is complete through {SEC_BACKFILL_FLOOR}'
             self.logger.skipping(msg)
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        self.logger.info(f'RcQuant sec backfill {len(dates)} missing dates, newest first, floor={SEC_BACKFILL_FLOOR}')
+        # Newest-first, capped by max_days so each run only uses a small quota slice.
+        dates = list(reversed(missing))[:max_days]
+        self.logger.info(
+            f'RcQuant sec backfill up to {len(dates)}/{len(missing)} missing dates '
+            f'(max_days={max_days}), newest first, floor={SEC_BACKFILL_FLOOR}'
+        )
         n_fail = 0
-        for dt in reversed(dates):
+        for dt in dates:
             if _backfill_deadline_hit(started_at):
                 msg = f'RcQuant sec backfill hit midnight deadline after {len(filled)} dates'
                 self.logger.alert1(msg)
@@ -443,14 +491,14 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 )
             filled.append(dt)
             self.logger.success(
-                f'Backfill RcQuant sec bar min {dt} ({len(filled)} done, {len(dates) - len(filled) - n_fail} remaining)'
+                f'Backfill RcQuant sec bar min {dt} ({len(filled)}/{len(dates)} this run)'
             )
 
         if n_fail:
             msg = f'RcQuant sec backfill finished with {len(filled)} ok, {n_fail} failed'
             conclude_filled(msg , level = 'warning')
             return Base.UpdateFlag.FAILED
-        msg = f'RcQuant sec backfill filled {len(filled)} dates through {SEC_BACKFILL_FLOOR}'
+        msg = f'RcQuant sec backfill filled {len(filled)} dates (max_days={max_days})'
         self.logger.success(msg)
         conclude_filled(msg)
         return Base.UpdateFlag.SUCCESS

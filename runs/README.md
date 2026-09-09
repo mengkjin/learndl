@@ -126,12 +126,11 @@ $PYTHON_CMD [具体Python脚本路径] [参数]
 - **功能**：自动化执行每周数据更新，支持邮件通知
 - **使用场景**：定时任务、每周维护
 
-### 3. `rcquant_sec_backfill.sh` - RCQuant 股票分钟线夜间补全
-**作用**：在日更成功后、额度刷新前，从 20241101 向前补全 `trade_ts/min` 至 20110101
+### 3. `rcquant_sec_backfill.sh` - RCQuant 股票分钟线补全（可选）
+**作用**：手动限幅向前补全 `trade_ts/min`（默认最多 3 个交易日）。**主路径已并入日更**：`RcquantMinBarDownloader` 在成功下载最新一天 sec 1min（且完成 etf/fut/cb）后自动触发。
 - **目标脚本**：`scripts/1_autorun/5_rcquant_sec_backfill.py`
-- **参数**：`--source=bash --email=1`
-- **门控**：当天 `daily_update` 已成功；北京时间 23:00–23:59；额度超限或 00:00 立即退出
-- **使用场景**：crontab 23:30 定时任务
+- **参数**：`--source=bash --email=1`，可选 `--force True --max_days 3`
+- **使用场景**：日更未触发时的补跑；不再依赖专用 crontab
 
 ### 4. `launch.sh` `launch.bat` - 应用启动脚本
 **作用**：启动learndl的Streamlit应用
@@ -212,8 +211,8 @@ esac
 # 每周日凌晨3点执行
 0 3 * * 0 /path/to/learndl/runs/weekly_update.sh
 
-# 每日 23:30 向前补全 RCQuant sec 分钟线（额度刷新前退出）
-30 23 * * * /home/mengkjin/workspace/learndl/runs/rcquant_sec_backfill.sh
+# （可选）手动限幅补全 RCQuant sec 分钟线；日更已自动限幅补全，一般不需要 crontab
+# 30 21 * * * /home/mengkjin/workspace/learndl/runs/rcquant_sec_backfill.sh
 ```
 
 ## 计算机配置系统详解
