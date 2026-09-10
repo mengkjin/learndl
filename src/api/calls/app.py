@@ -26,7 +26,7 @@ class LaunchApp(DirectCall):
         Shell.open(cmd , cwd=os.getcwd(), **kwargs)
 
 class LaunchTaskMonitor(DirectCall):
-    """Launch the read-only Streamlit monitor for active and recently completed tasks."""
+    """Launch the filtered, read-only Streamlit task monitor."""
     category = 'App'
     def run(self) -> None:
         from src.proj.util.shell import Shell

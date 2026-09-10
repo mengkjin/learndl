@@ -23,6 +23,7 @@ runs_page_url(script_key)
 from __future__ import annotations
 import os , sys , re , time
 import pandas as pd
+import psutil
 from typing import Any , Literal , TypeAlias
 from collections.abc import Sequence
 from dataclasses import dataclass , field , asdict
@@ -119,6 +120,14 @@ class TaskDatabase:
                 """)
             cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_script ON task_records(script)')
             cursor.execute('CREATE INDEX IF NOT EXISTS ix_task_records_status ON task_records(status)')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS ix_task_records_status_effective_start
+                ON task_records(status, COALESCE(start_time, create_time) DESC, task_id DESC)
+            ''')
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS ix_task_records_effective_start
+                ON task_records(COALESCE(start_time, create_time) DESC, task_id DESC)
+            ''')
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS task_exit_files (
@@ -313,14 +322,24 @@ class TaskDatabase:
             cursor.execute('SELECT status FROM task_records WHERE task_id = ?', (task_id,))
             return cursor.fetchone()['status']
 
+    def get_killed_tasks_since(self, since: float) -> list[TaskItem]:
+        """Return killed tasks finalized on or after ``since``."""
+        with self.conn_handler as (conn, cursor):
+            cursor.execute(
+                "SELECT task_id FROM task_records WHERE status = 'killed' AND end_time >= ? ORDER BY end_time",
+                (since,),
+            )
+            task_ids = [row['task_id'] for row in cursor.fetchall()]
+        return [task for task_id in task_ids if (task := self.get_task(task_id)) is not None]
+
     def reconcile_stopped_tasks(self, starting_timeout: float | None = None) -> dict[str, dict[str, Any]]:
         """Persist final state for stopped or never-started recorded tasks.
 
-        This is intentionally safe to call repeatedly.  A task with a retained
-        crash-protector file is finalized as ``killed`` and the file is kept as
-        diagnostic output.  This database-level reconciliation is deliberately
-        quiet: a browser poll must not send email or expose task output outside
-        the host.  The interactive queue retains its existing notification path
+        This is intentionally safe to call repeatedly. A task still recorded as
+        active after its PID exits is finalized as ``killed``; a retained crash
+        file is attached when available. This database-level reconciliation is
+        deliberately quiet. External notification belongs to the independent
+        task watchdog, while the interactive queue retains its existing path
         through :meth:`TaskItem.check_killed`.
         """
         if starting_timeout is None:
@@ -349,38 +368,47 @@ class TaskDatabase:
                 }
                 if crash_protector_paths:
                     updates['exit_files'] = crash_protector_paths
-            elif task.pid is not None and process.check_status(task.pid) in ('complete', 'zombie') and crash_protector_paths:
+            elif task.pid is not None and self._recorded_process_stopped(task):
                 updates = {
                     'status': 'killed',
                     'end_time': timestamp(),
                     'exit_code': 1,
                     'exit_error': (
                         f'Process {task.pid} ended unexpectedly before its recorder could persist completion. '
-                        'See the recovered crash-protector output.'
+                        + ('See the recovered crash-protector output.' if crash_protector_paths else 'No crash-protector output was recovered.')
                     ),
-                    'exit_files': crash_protector_paths,
                 }
-            elif task.pid is not None and process.check_status(task.pid) in ('complete', 'zombie'):
-                updates = {'status': 'complete', 'end_time': timestamp()}
+                if crash_protector_paths:
+                    updates['exit_files'] = crash_protector_paths
             else:
                 continue
             self.update_task(task_id, backend_updated=True, **updates)
             changed[task_id] = updates
         return changed
 
-    def prune_recovered_crash_logs(self, retention_hours: float = 24) -> list[Path]:
-        """Remove recovered crash logs after their monitor retention window.
+    @staticmethod
+    def _recorded_process_stopped(task: TaskItem) -> bool:
+        """Return whether the recorded process ended or its PID was reused."""
+        assert task.pid is not None
+        status = process.check_status(task.pid)
+        if status in ('complete', 'zombie'):
+            return True
+        if task.start_time is None:
+            return False
+        try:
+            process_start = psutil.Process(task.pid).create_time()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+            return True
+        return abs(process_start - task.start_time) > 60
 
-        Only crash-protector files attached to already-ended ``error`` or
-        ``killed`` tasks are eligible.  Active logs and normal task output are
-        never touched.
-        """
+    def recovered_crash_logs_due(self, retention_hours: float = 24) -> list[tuple[str, Path]]:
+        """Return ended crash-protector attachments whose raw retention elapsed."""
         cutoff = timestamp() - retention_hours * 3600
         crash_dir = PATH.runtime.joinpath('crash_protector').resolve()
         with self.conn_handler as (conn, cursor):
             cursor.execute(
                 """
-                SELECT f.id, f.file_path
+                SELECT t.task_id, f.file_path
                 FROM task_exit_files AS f
                 JOIN task_records AS t ON t.task_id = f.task_id
                 WHERE t.status IN ('error', 'killed') AND t.end_time <= ?
@@ -388,19 +416,35 @@ class TaskDatabase:
                 (cutoff,),
             )
             candidates = cursor.fetchall()
-
-        removed: list[Path] = []
+        due: list[tuple[str, Path]] = []
         for candidate in candidates:
             path = Path(candidate['file_path'])
             try:
+                if path.resolve().is_relative_to(crash_dir):
+                    due.append((candidate['task_id'], path))
+            except OSError:
+                continue
+        return due
+
+    def prune_recovered_crash_logs(
+        self, retention_hours: float = 24, *, cached_paths: set[Path] | None = None,
+    ) -> list[Path]:
+        """Remove recovered crash logs after their monitor retention window.
+
+        Only crash-protector files attached to already-ended ``error`` or
+        ``killed`` tasks are eligible.  Active logs and normal task output are
+        never touched.
+        """
+        removed: list[Path] = []
+        allowed = {path.resolve() for path in cached_paths} if cached_paths is not None else None
+        for _, path in self.recovered_crash_logs_due(retention_hours):
+            try:
                 resolved = path.resolve()
-                if not resolved.is_relative_to(crash_dir):
+                if allowed is not None and resolved not in allowed:
                     continue
                 resolved.unlink(missing_ok=True)
             except OSError:
                 continue
-            with self.conn_handler as (conn, cursor):
-                cursor.execute('DELETE FROM task_exit_files WHERE id = ?', (candidate['id'],))
             removed.append(path)
         return removed
 

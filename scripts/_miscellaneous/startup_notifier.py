@@ -3,26 +3,8 @@
 """
 第 2 步：配置脚本
 在运行脚本之前，您必须配置邮件发送相关的参数。
-脚本默认会从环境变量读取配置，如果环境变量不存在，则使用代码中 SMTP_CONFIG 字典里的默认值。为了安全，强烈推荐使用环境变量来存储密码等敏感信息。
-您有两种方式进行配置：
-(推荐) 方式一：通过 systemd 服务文件设置环境变量
-这是一种安全且灵活的方式，您将在下一步创建服务文件时看到如何设置。
-(不推荐) 方式二：直接修改 Python 脚本
-如果您只是快速测试，可以直接编辑 /usr/local/bin/startup_notifier.py 文件中的 SMTP_CONFIG 字典：
-
-# src_runs/4_miscellaneous/startup_notifier.py
-
-# ...
-SMTP_CONFIG = {
-    "server": "smtp.gmail.com",  # 您的 SMTP 服务器 (例如 Gmail)
-    "port": 587,                 # SMTP 端口
-    "sender_email": "your-email@gmail.com", # 您的发件邮箱
-    "receiver_email": "destination-email@example.com", # 收件人邮箱
-    "password": "your_google_app_password" # 您的邮箱密码或应用专用密码
-}
-# ...
-
-> Gmail 用户请注意: 如果您使用 Gmail，需要生成一个 "应用专用密码" (App Password) 而不是使用您的常规登录密码，否则 Google 会阻止登录。
+脚本只从环境变量读取 SMTP 凭据；缺少必需变量时会直接失败。
+不要把邮箱密码写入 Python 脚本或 systemd service 文件。
 第 3 步：部署为 systemd 服务
 为了让脚本在每次开机时自动运行，我们将其设置为一个 systemd 系统服务。
 1. 将脚本移动到标准位置并授予执行权限
@@ -48,13 +30,8 @@ Wants=network-online.target
 # 要执行的脚本路径
 ExecStart=/usr/bin/python3 /usr/local/bin/startup_notifier.py
 
-# (推荐) 在这里设置环境变量，以避免将密码硬编码到代码中
-# 请取消下面的注释并替换为你自己的值
-# Environment="SMTP_SERVER=smtp.gmail.com"
-# Environment="SMTP_PORT=587"
-# Environment="SMTP_SENDER=your-email@gmail.com"
-# Environment="SMTP_RECEIVER=destination-email@example.com"
-# Environment="SMTP_PASSWORD=your_app_password"
+# 从仅 root 可读的文件加载 SMTP 配置
+EnvironmentFile=/etc/learndl/startup-email.env
 
 # 运行服务的用户和组。使用 root 可以确保有权限读取 journalctl 和写入 /var/log
 User=root
@@ -67,7 +44,8 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 
-重要: 如果您选择使用环境变量，请务必取消 Environment=行的注释（删除行首的#）并填入您的真实信息。完成后，按 Ctrl+X，然后按 Y，最后按 Enter 保存并退出。
+重要: 创建 /etc/learndl/startup-email.env，写入 SMTP_SENDER、SMTP_RECEIVER、SMTP_PASSWORD，
+并用 chmod 600 限制其仅 root 可读。SMTP_SERVER 和 SMTP_PORT 是可选项。
 3. 重新加载 systemd 并启用服务
 执行以下命令使服务生效：
 
@@ -79,8 +57,8 @@ enable 命令会创建链接，确保服务在下次启动时自动运行。
 第 4 步：测试
 在重启电脑前，您可以手动测试脚本和服务是否工作正常。
 1. 直接运行脚本测试
-# 这会使用您在脚本中硬编码的配置（或未设置的环境变量）
-sudo python3 /usr/local/bin/startup_notifier.py
+# 从配置文件加载环境变量后运行
+sudo sh -c 'set -a; . /etc/learndl/startup-email.env; exec python3 /usr/local/bin/startup_notifier.py'
 检查您的收件箱是否收到了邮件，并查看终端输出的日志信息。
 2. 测试 systemd 服务
 # 这会使用您在 .service 文件中配置的环境变量来运行
@@ -105,14 +83,22 @@ from email.mime.multipart import MIMEMultipart
 import logging
 import os
 
-# get SMTP config from environment variables
-SMTP_CONFIG = {
-    "server": os.environ.get("SMTP_SERVER","smtp.163.com"),  
-    "port": int(os.environ.get("SMTP_PORT" , 25)),                
-    "sender_email": os.environ.get("SMTP_SENDER","mengkjin@163.com"), 
-    "receiver_email": os.environ.get("SMTP_RECEIVER","mengkjin@163.com"), 
-    "password": os.environ.get("SMTP_PASSWORD","TSkYh33f3pesHP2S") 
-}
+def load_smtp_config():
+    """Load SMTP settings without storing credentials in source code."""
+    required = ("SMTP_SENDER", "SMTP_RECEIVER", "SMTP_PASSWORD")
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            f"missing required SMTP environment variables: {', '.join(missing)}"
+        )
+
+    return {
+        "server": os.environ.get("SMTP_SERVER", "smtp.163.com"),
+        "port": int(os.environ.get("SMTP_PORT", "25")),
+        "sender_email": os.environ["SMTP_SENDER"],
+        "receiver_email": os.environ["SMTP_RECEIVER"],
+        "password": os.environ["SMTP_PASSWORD"],
+    }
 
 # some additional cmds to run after email sent
 ADDITIONAL_CMDS = [
@@ -263,6 +249,12 @@ def run_additional_cmds():
 def main():
     """main function"""
     logging.info("startup notifier script started...")
+
+    try:
+        smtp_config = load_smtp_config()
+    except (RuntimeError, ValueError) as error:
+        logging.error("invalid SMTP configuration: %s", error)
+        return 1
     
     # check if running with root permission, because journalctl and /var/log usually need root permission
     if os.geteuid() != 0:
@@ -290,13 +282,14 @@ this email is sent by startup notifier script automatically.
 """
     
     logging.info("system info collected, preparing to send email.")
-    email_success = send_email(subject, body.strip(), SMTP_CONFIG)
+    email_success = send_email(subject, body.strip(), smtp_config)
     if email_success:
         logging.info("Send mail success , run additional cmd")
         run_additional_cmds()
     else:
         logging.error("Send mail failed!")
     logging.info("script executed.")
+    return 0 if email_success else 1
 
 if __name__ == "__main__":
-    main() 
+    raise SystemExit(main())

@@ -39,7 +39,7 @@ class DirectCallHub(DirectCall):
             'Git Pull': 'Pull the latest code from remote. Clear changes before pulling.',
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
             'Launch Learndl Monitor': (
-                'Open the independent, read-only task monitor for active jobs and tasks completed in the last 24 hours.'
+                'Open the independent, read-only task monitor with status/time filters and on-demand output.'
             ),
             'Train Schedule Model': (
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '

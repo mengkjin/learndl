@@ -1,0 +1,22 @@
+[Unit]
+Description=Learndl watchdog and short-maintenance runner
+Documentation=file:@LEARNDL_ROOT@/runs/systemd/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=@LEARNDL_USER@
+Group=@LEARNDL_GROUP@
+WorkingDirectory=@LEARNDL_ROOT@
+Environment="HOME=@LEARNDL_HOME@"
+Environment="PYTHONPATH=@LEARNDL_ROOT@"
+Environment="LEARNDL_WATCHDOG_UNITS=@LEARNDL_WATCHDOG_UNITS@"
+ExecStart=@LEARNDL_PYTHON@ -m src.api.task_monitor.watchdog
+Nice=10
+OOMScoreAdjust=-900
+MemoryMax=1G
+TimeoutStartSec=45s
+PrivateTmp=true
+NoNewPrivileges=true
+UMask=0077

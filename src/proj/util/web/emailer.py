@@ -85,7 +85,7 @@ class Email(BoundLogger, metaclass=NoInstance):
 
     @classmethod
     def send_with_smtplib(cls , message , recipient : str | None = None , confirmation_message : str | None = None ,
-                          timeout : int = 20):
+                          timeout : int = 20) -> bool:
         import smtplib , ssl
         if cls.smtp_port == 'auto':
             smtp_port = 25 if MACHINE.platform_server else 465
@@ -106,8 +106,10 @@ class Email(BoundLogger, metaclass=NoInstance):
                 server.send_message(message , from_addr=cls.sender, to_addrs=cls.recipient(recipient))
             if confirmation_message:
                 cls.logger.success(f'Send email {confirmation_message}')
+            return True
         except Exception as e:
             cls.logger.error(f'Error : sending email went wrong: {e}')
+            return False
 
     @classmethod
     def send(cls , title : str  , 
@@ -116,14 +118,14 @@ class Email(BoundLogger, metaclass=NoInstance):
              attachments : strPath | list[strPath] | None = None ,
              project_attachments : bool = False ,
              title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
-             confirmation_message = ''):
+             confirmation_message = '') -> bool:
         
         if not MACHINE.emailable:
            cls.logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
-           return
+           return False
 
         message = cls.message(title , body , recipient , attachments = attachments , project_attachments = project_attachments , title_prefix = title_prefix)
-        cls.send_with_smtplib(message , recipient , confirmation_message)
+        return cls.send_with_smtplib(message , recipient , confirmation_message)
 
     @classmethod
     def print_info(cls , server : ServerType = 'netease'):

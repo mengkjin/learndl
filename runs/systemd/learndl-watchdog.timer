@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the Learndl watchdog and due short maintenance every minute
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+AccuracySec=10s
+Unit=learndl-watchdog.service
+
+[Install]
+WantedBy=timers.target

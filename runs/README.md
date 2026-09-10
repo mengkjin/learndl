@@ -11,6 +11,7 @@ runs/
 ├── daily_update.sh        # 每日更新脚本
 ├── weekly_update.sh       # 每周更新脚本
 ├── computer_config.sh     # 计算机配置文件（新增）
+├── install_watchdog.sh    # 系统 watchdog / 高频维护安装器
 └── README.md              # 本说明文档
 ```
 
@@ -214,6 +215,10 @@ esac
 # （可选）手动限幅补全 RCQuant sec 分钟线；日更已自动限幅补全，一般不需要 crontab
 # 30 21 * * * /home/mengkjin/workspace/learndl/runs/rcquant_sec_backfill.sh
 ```
+
+### Learndl Monitor / Watchdog 后台维护
+
+监控页只读任务数据库；任务状态收敛、异常日志缓存和缓存清理均由系统级 watchdog 统一调度。请按 [runs/systemd/README.md](systemd/README.md) 安装 `learndl-watchdog.timer`；不要再为 monitor 添加独立 cron 项。
 
 ## 计算机配置系统详解
 
