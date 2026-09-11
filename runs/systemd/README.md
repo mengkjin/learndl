@@ -90,3 +90,6 @@ should alert on failure but should not use `Restart=on-failure`.
 
 This local watchdog cannot report a complete host, power, or network outage.
 For that case, use a dead-man heartbeat checked from another machine or service.
+Task execution errors handled by Python / `BackendTaskRecorder` are intentionally
+not watchdog alerts: their normal task error email is the single notification.
+Watchdog task alerts are reserved for unexpected process loss (`killed`).

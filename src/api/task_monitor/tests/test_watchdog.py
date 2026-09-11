@@ -69,6 +69,22 @@ class TaskWatchdogTest(unittest.TestCase):
         self.assertEqual(attempts, 2)
         self.assertEqual(json.loads(self.state_path.read_text())['alerts']['pending_tasks'], [])
 
+    def test_python_error_does_not_generate_a_watchdog_email(self) -> None:
+        """A recorder-finalised Python exception already uses the task email."""
+        task = TaskItem(
+            '/project/scripts/train.py', cmd='python train.py', create_time=1,
+            status='error', pid=123, start_time=100.0, end_time=120.0,
+            exit_error='Traceback (most recent call last): ...', task_id='train.py@1',
+        )
+        db = _FakeTaskDatabase({'train.py@1': {'status': 'error'}}, {'train.py@1': task})
+        sender = MagicMock(return_value=True)
+
+        self.assertTrue(self._run(db, sender, now=1_000))
+        sender.assert_not_called()
+        state = json.loads(self.state_path.read_text())
+        self.assertEqual(state['alerts']['pending_tasks'], [])
+        self.assertEqual(state['jobs']['task_lifecycle']['stats']['reconciled_count'], 1)
+
     def test_unit_alert_resets_only_after_recovery(self) -> None:
         db = _FakeTaskDatabase({}, {})
         emails = 0

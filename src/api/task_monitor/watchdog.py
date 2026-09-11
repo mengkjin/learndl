@@ -125,10 +125,18 @@ def _check_unit(unit: str) -> tuple[bool, str]:
 
 
 def _run_task_lifecycle(context: _WatchdogContext) -> JobResult:
+    """Reconcile stale records and alert only on unexpected termination.
+
+    ``BackendTaskRecorder`` owns normal Python exception handling: it records
+    those runs as ``error`` and the script's existing error-email path reports
+    them.  Including ``error`` here would turn one application failure into a
+    second watchdog email.  The watchdog is therefore deliberately limited to
+    lifecycle loss (``killed``), where no orderly recorder completion occurred.
+    """
     changed = context.task_db.reconcile_stopped_tasks()
     pending = {
         task_id for task_id, update in changed.items()
-        if update.get('status') in {'error', 'killed'}
+        if update.get('status') == 'killed'
     }
     pending.update(task.id for task in context.task_db.get_killed_tasks_since(context.previous_check))
     return JobResult(
