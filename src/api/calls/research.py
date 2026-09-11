@@ -62,23 +62,46 @@ class CarryOutScheduleWorkList(DirectCall):
         return max_creation_time > datetime.now() - timedelta(days = days)
 
     @classmethod
-    def _release_gpu_memory(cls) -> None:
-        """Drop cached GPU allocations after a schedule finishes successfully."""
+    def _release_gpu_memory(cls , task: Any | None = None) -> None:
+        """Drop retained training refs and return unused CUDA memory to the driver.
+
+        Always safe to call after success or failure. ``empty_cache`` alone is not
+        enough if ``AutoRunTask.func_return`` still holds large objects.
+        """
         import gc
 
         import torch
 
+        if task is not None and hasattr(task , 'func_return'):
+            task.func_return = None
+
         gc.collect()
         if torch.cuda.is_available():
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
+            if hasattr(torch.cuda , 'ipc_collect'):
+                torch.cuda.ipc_collect()
+
+    @classmethod
+    def _train_one_schedule(cls , main: Callable[..., Any] , **kwargs: Any) -> Any:
+        """Run one schedule training and always release GPU memory afterward."""
+        schedule_name = kwargs.get('schedule_name' , '?')
+        Logger.note(f'Training schedule model: {schedule_name}')
+        task = None
+        try:
+            task = main(**kwargs)
+            return task
+        finally:
+            cls._release_gpu_memory(task)
+            Logger.note(f'Schedule [{schedule_name}] finished; GPU memory released')
 
     def run(self) -> None:
         Logger.critical(f'Training schedule model list {self.schedule_names()} started')
         with as_script_main(self.SCHEDULE_SCRIPT):
             main = self._load_schedule_main()
             for schedule_name in self.get_schedules():
-                Logger.note(f'Training schedule model: {schedule_name}')
-                main(
+                self._train_one_schedule(
+                    main,
                     schedule_name=schedule_name,
                     short_test=None,
                     resume=self.get_schedule_resume_param(),
@@ -86,8 +109,6 @@ class CarryOutScheduleWorkList(DirectCall):
                     end=None,
                     email=True,
                 )
-                self._release_gpu_memory()
-                Logger.note(f'Schedule [{schedule_name}] completed; GPU cache cleared')
         Logger.success('Training schedule model list completed')
 
 class ScheduleModel(DirectCall):
@@ -142,4 +163,4 @@ class ScheduleModel(DirectCall):
 
                 kwargs = flag_kwargs.result
                 Logger.note(f'Training schedule [{schedule_name}] with {kwargs}')
-                main(**kwargs)
+                CarryOutScheduleWorkList._train_one_schedule(main , **kwargs)
