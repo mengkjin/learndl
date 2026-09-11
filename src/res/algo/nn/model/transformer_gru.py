@@ -15,7 +15,7 @@ from .RNN import mod_gru
 class transformer_gru(nn.Module):
     """GRU with intra-day Transformer encoder.  Registry key: ``'transformer_gru'``.
 
-    ``enc_in_dim`` must be divisible by 8 (Transformer ``num_heads=8``).
+    ``enc_in_dim`` must be divisible by 8 (``num_heads = enc_in_dim // 8``, ``head_dim=8``).
     Intra-day bar length is taken from the input tensor shape.
     """
 

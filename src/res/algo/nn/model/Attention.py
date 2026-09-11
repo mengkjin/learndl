@@ -15,8 +15,9 @@ class mod_transformer(nn.Module):
 
     Args:
         input_dim:  Input feature dimension.
-        output_dim: Output (model) dimension.  Must be divisible by 8
-                    (``num_heads=8`` is hard-coded).
+        output_dim: Output (model) dimension.  Must be divisible by 8 so that
+                    ``num_heads = output_dim // 8`` keeps ``head_dim=8``
+                    (required by CUDA Flash/mem-efficient SDPA).
         dropout:    Dropout rate for the encoder layers.
         num_layers: Number of ``TransformerEncoderLayer`` layers (min 2).
 
@@ -26,8 +27,9 @@ class mod_transformer(nn.Module):
     """
     def __init__(self , input_dim , output_dim , dropout=0.0 , num_layers = 2):
         super().__init__()
-        num_heads , ffn_dim = 8 , 4 * output_dim
-        assert output_dim % num_heads == 0 , (output_dim , num_heads)
+        # head_dim=8 avoids CUDA SDPA "invalid configuration argument" (e.g. enc_in_dim=32)
+        assert output_dim % 8 == 0 and output_dim >= 8 , (output_dim,)
+        num_heads , ffn_dim = output_dim // 8 , 4 * output_dim
         num_layers = max(2,num_layers)
         self.fc_in = nn.Sequential(nn.Linear(input_dim, output_dim),nn.Tanh())
         self.pos_enc = PositionalEncoding(output_dim,dropout=dropout)

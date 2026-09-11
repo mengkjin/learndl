@@ -44,7 +44,7 @@ algo:
     hidden_dim:     [64]
     seqlens:        [{'15m': 30}]
     dropout:        [0.1]
-    enc_in_dim:     [32]   # must be divisible by 8 (Transformer heads)
+    enc_in_dim:     [32]   # must be divisible by 8 (head_dim=8 for CUDA SDPA)
     enc_att:        [false]
     enc_layers:     [2]    # intra-day Transformer depth
     rnn_layers:     [2]
