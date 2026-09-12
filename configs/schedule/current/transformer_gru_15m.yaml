@@ -1,3 +1,5 @@
+# Parallel experiment for gru_15m_new (ResNet-GRU): replace only the daily encoder.
+# [B, 30, 16, 6] -> shared daily Transformer -> [B, 30, 32] -> GRU -> [B, 1].
 model:
   # main model configs ----------------------------------------------------------------
   module        : transformer_gru  # intra-day Transformer bar encoder + day GRU
@@ -44,8 +46,9 @@ algo:
     hidden_dim:     [64]
     seqlens:        [{'15m': 30}]
     dropout:        [0.1]
-    enc_in_dim:     [32]   # must be divisible by 8 (head_dim=8 for CUDA SDPA)
+    enc_in_dim:     [32]   # daily representation width, same as the ResNet baseline
     enc_att:        [false]
-    enc_layers:     [2]    # intra-day Transformer depth
-    rnn_layers:     [2]
+    enc_layers:     [2]    # shared Transformer over each day's 16 bars; last token summarizes the day
+    rnn_type:       ['gru']
+    rnn_layers:     [2]    # GRU over 30 daily representations, hidden_dim=64
     which_output:   [0]
