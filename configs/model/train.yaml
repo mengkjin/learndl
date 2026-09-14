@@ -12,6 +12,7 @@ callbacks:
   - LearnRateReset
   - CallbackTimer
   - MemoryOptimization
+  - ActivationCheckpointing
 
 dataloader.sample_method:   sequential # total_shuffle , sequential , both_shuffle , train_shuffle
 dataloader.shuffle_option:  epoch # static , init , epoch

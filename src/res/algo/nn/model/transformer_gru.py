@@ -9,11 +9,12 @@ import torch
 from torch import nn, Tensor
 
 from .. import layer as Layer
+from ..layer.checkpoint import ActivationCheckpointMixin
 from .Attention import TimeWiseAttention, mod_transformer
 from .RNN import mod_gru
 
 
-class transformer_gru(nn.Module):
+class transformer_gru(ActivationCheckpointMixin, nn.Module):
     """GRU with intra-day Transformer encoder.  Registry key: ``'transformer_gru'``.
 
     ``enc_in_dim`` must be divisible by 8 (``num_heads = enc_in_dim // 8``, ``head_dim=8``).
@@ -21,6 +22,8 @@ class transformer_gru(nn.Module):
     The same Transformer encodes each day independently; GRU alone models
     the sequence of days, matching the ResNet-GRU baseline.
     """
+
+    activation_checkpoint_regions = ('encode_day',)
 
     def __init__(
         self,
@@ -61,6 +64,10 @@ class transformer_gru(nn.Module):
         self.fc_hid_out = nn.Sequential(nn.Linear(hidden_dim, hidden_dim), nn.BatchNorm1d(hidden_dim))
         self.fc_map_out = nn.Sequential(Layer.MeanPool(), nn.BatchNorm1d(1))
 
+    def encode_day(self, day: Tensor) -> Tensor:
+        """Pure daily encoding; BatchNorm in the output head stays outside this region."""
+        return self.fc_enc_in(day.contiguous())[:, -1]
+
     def forward(self, x: Tensor) -> tuple[Tensor, dict]:
         """
         in:  [bs x days x bars x feat]
@@ -72,7 +79,7 @@ class transformer_gru(nn.Module):
         # contextual representation summarizes all bars (non-causal attention).
         # Keep days out of the attention batch to avoid stocks * days CUDA grids.
         x = torch.stack([
-            self.fc_enc_in(day.contiguous())[:, -1]
+            self.checkpoint_region('encode_day', day)
             for day in x.unbind(dim=1)
         ], dim=1)  # [bs, 30, enc_in_dim] in chronological order
 

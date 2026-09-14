@@ -42,6 +42,9 @@ class ConsolidateCallBack(BaseCallBack):
     def get_implemented_hook_callables(self , hook : str) -> list[Callable]:
         return [getattr(cb , hook) for cb in self.callbacks if cb.is_hook_implemented(hook)]
 
+    def request_fit_restart(self, exc: BaseException) -> bool:
+        return any(cb.request_fit_restart(exc) for cb in self.callbacks)
+
     @classmethod
     def initialize(cls , trainer_or_config : BaseTrainer | ModelConfig):
         return cls(trainer_or_config)
@@ -53,6 +56,12 @@ class ConsolidateCallBack(BaseCallBack):
 
     def get_callbacks_by_order(self) -> list[BaseCallBack]:
         callback_classes = [self.get_callback_class(cb) for cb in self.config.callbackes]
+        # Explicit opt-in also works with older saved/custom callback lists.
+        activation = self.config.callback_kwargs.get('ActivationCheckpointing', {})
+        if activation.get('enabled', False):
+            cls = self.get_callback_class('ActivationCheckpointing')
+            if cls not in callback_classes:
+                callback_classes.append(cls)
         callback_classes.extend(specific.get_specific_cbs(self.config))
 
         callback_kwargs = self.config.callback_kwargs

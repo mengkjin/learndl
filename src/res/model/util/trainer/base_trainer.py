@@ -4,6 +4,8 @@ Base trainer class for the project
 from __future__ import annotations
 
 import itertools
+import gc
+import torch
 import numpy as np
 
 from functools import wraps
@@ -302,14 +304,61 @@ class BaseTrainer(BasePipeline):
                 for self.status.model_date , self.status.model_num in self.iter_model_num_date():
                     if self.status.model_num == 0:
                         self.on_fit_model_date_start()
-                    self.on_fit_model_start()
-                    self.model.fit()
+                    self.fit_current_model()
                     self.on_fit_model_end()
                     if self.status.model_num == self.config.model_num:
                         self.on_fit_model_date_end()
                 self.on_fit_end()
                 self.on_fit_end_after()
                 self.config.log_operation('fit' , 'end')
+
+    def fit_current_model(self):
+        """Only fit() is recoverable; initialization and committing results are not."""
+        self.fit_model_restart_count = 0
+        self.on_fit_model_start()
+        while True:
+            try:
+                self.model.fit()
+            except Exception as exc:
+                if not self.callback.request_fit_restart(exc):
+                    raise
+                # Do not retain the exception/traceback across cleanup or retry.
+            else:
+                return
+            # Python deletes the exception target on leaving except. Unwound
+            # generators/frames (including a partially completed backward/step)
+            # are collectible here, before allocating the replacement network.
+            self.on_fit_model_restart()
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            self.fit_model_restart_count += 1
+            self.on_fit_model_start()
+
+    def on_fit_model_restart(self):
+        """Discard the current model, keeping completed model records and loaded data."""
+        self.batch_output = BatchOutput()
+        if hasattr(self, 'batch_input'):
+            del self.batch_input
+        if hasattr(self, 'dataloader'):
+            del self.dataloader
+        self.batch_idx = 0
+        self.cached_properties.clear('model_start')
+        # Finish async CPU checkpoint writes before deleting their files.
+        for record in self.checkpoint.epoch_maps.values():
+            if hasattr(record, 'future'):
+                record.future.result()
+        self.checkpoint.clear_all()
+        for submodel in self.config.submodels:
+            self.deposition.clear_stacked_models(self.model_num, self.model_date, submodel)
+        # Replacing these also drops loss modules, partial gradients, SWA and
+        # TorchCompiler's raw/active refs. They are initialized by model_start.
+        self._model = FutureUtils.model(self)
+        self._metrics = FutureUtils.metrics(self)
+        self.status.fitting_epochs.clear()
+        self.status.milestone_epochs.clear()
+        # model_start resets epoch/phase/attempt state and increments this count.
+        self.status.total_models -= 1
 
     def stage_test(self):
         """stage of testing"""

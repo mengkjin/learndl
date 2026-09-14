@@ -47,6 +47,8 @@ class Deposition:
 
     def clear_stacked_models(self , model_num , model_date , submodel = 'best'):
         model_path = self.model_path(model_num , model_date , submodel)
+        if not model_path.exists():
+            return
         for path in model_path.iterdir():
             if path.is_dir():
                 shutil.rmtree(path)

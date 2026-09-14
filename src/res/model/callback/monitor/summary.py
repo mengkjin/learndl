@@ -88,6 +88,9 @@ class SummaryWriter(BaseCallBack):
     @cached_property
     def writer(self):
         model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.attempt_key}'
+        restart = getattr(self.trainer, 'fit_model_restart_count', 0) if self.status.stage == 'fit' else 0
+        if restart:
+            model_key += f'.ac_restart{restart}'
         return TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
 
     @property
@@ -106,7 +109,17 @@ class SummaryWriter(BaseCallBack):
 
     def reset_writer(self):
         if 'writer' in self.__dict__:
+            self.writer.close()
             del self.writer
+
+    def on_fit_model_restart(self):
+        if 'writer' in self.__dict__:
+            self.writer.add_text('Discarded', 'All attempts of this model were discarded after CUDA OOM; '
+                                 'training restarts from epoch 0 with activation checkpointing.')
+        self.reset_writer()
+        if self.HIDDEN_FEATURE_MODE:
+            self.hidden_rankics.clear()
+            self.hidden_correlations.clear()
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
@@ -294,4 +307,3 @@ class SummaryWriter(BaseCallBack):
         msgs = _format_messages(messages , indent = 0)
         self.summary_log_file.write(test_name , *msgs)
         self.logger.note(f'Summary of model {test_name} is saved to {PATH.relative(self.summary_log_file.current_file)}')
-    

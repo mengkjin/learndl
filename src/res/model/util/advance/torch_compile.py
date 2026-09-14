@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 from datetime import datetime
 from torch import nn
+from src.res.algo.nn.layer.checkpoint import is_cuda_oom
 from typing import TYPE_CHECKING , Any , Literal , cast , TypeAlias
 
 from src.proj import MACHINE , Base
@@ -186,7 +187,7 @@ class TorchCompiler:
         try:
             output = self._active(*args, **kwargs)
         except Exception as exc:
-            if not self.is_compile_error(exc):
+            if is_cuda_oom(exc) or not self.is_compile_error(exc):
                 raise
             self.logger.alert2(
                 f'torch.compile set to disabled due to compile error, falling back to eager mode for this model'
@@ -206,4 +207,3 @@ class TorchCompiler:
         self._disabled = True
         self._active = self._raw
         self.model.net = self._raw
-

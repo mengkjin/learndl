@@ -35,6 +35,8 @@ train:
     param: {base_lr: 1.0e-7, step_size_up: 12}
 
 callbacks:
+  ActivationCheckpointing:
+    enabled: true # CUDA OOM restarts this model with checkpointing; sticky for this run
   LearnRateReset:
     num_reset: 2
     trigger: 40

@@ -95,6 +95,7 @@ callbacks.BadAttemptRetrain: {'early_exit' : 10 , 'moderate_early_exit' : 20 , '
 callbacks.StatusDisplay: {}
 callbacks.SummaryWriter: {}
 callbacks.MemoryOptimization: {'batch_interval' : 20}
+callbacks.ActivationCheckpointing: {'enabled': false}
 callbacks.DetailedAlphaAnalysis: {}
 
 conditional.short_test:

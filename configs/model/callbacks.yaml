@@ -6,3 +6,4 @@ StatusDisplay:      {}
 SummaryWriter:      {}
 DetailedAlphaAnalysis:  {}
 MemoryOptimization: {'batch_interval' : 20}
+ActivationCheckpointing: {'enabled': false}

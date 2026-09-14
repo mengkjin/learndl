@@ -37,6 +37,11 @@ class PredictorModel(TrainerPipeline):
             try:
                 output = self.forward(input , *args , **kwargs)
             except Exception as exc:
+                # An opted-in fit must reach the model-level OOM handler,
+                # including when the device policy otherwise permits CPU fallback.
+                if (self.bounded_with_trainer and self.trainer.status.stage == 'fit'
+                        and self.config.callback_kwargs.get('ActivationCheckpointing', {}).get('enabled', False)):
+                    raise
                 device = self.config.device if self.config else None
                 if device is None or device.policy != 'cuda_then_cpu' or not Device.is_cuda_oom(exc):
                     raise

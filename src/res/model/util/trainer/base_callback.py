@@ -43,6 +43,19 @@ class BaseCallBack(TrainerPipeline):
         self.at_exit(self.hook_stack.pop())
     def __bool__(self):
         return True
+
+    def request_fit_restart(self, exc: BaseException) -> bool:
+        """Opt-in recovery decision; exceptions outside model.fit never reach here."""
+        return False
+
+    def on_fit_model_restart(self):
+        """Reconstruct fit/specific callback state; run-level monitors keep their history."""
+        module = type(self).__module__
+        if '.callback.fit.' in module or '.callback.specific.' in module:
+            binder = self.binder
+            kwargs = self.config.callback_kwargs.get(type(self).__name__, {})
+            vars(self).clear()
+            self.__init__(binder, **kwargs)
     def at_enter(self , hook : str , *args , **kwargs):  
         ...
     def at_exit(self , hook : str , *args , **kwargs): 
