@@ -1,0 +1,5 @@
+schedules:
+  rcquant_sec_backfill:
+    task: rcquant_sec_backfill
+    days: daily
+    times: ['21:01']

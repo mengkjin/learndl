@@ -11,7 +11,9 @@ runs/
 ├── daily_update.sh        # 每日更新脚本
 ├── weekly_update.sh       # 每周更新脚本
 ├── computer_config.sh     # 计算机配置文件（新增）
-├── install_watchdog.sh    # 系统 watchdog / 高频维护安装器
+├── install_watchdog.sh    # 统一安装器的兼容入口
+├── install_schedules.sh   # 调度 plan/apply/status/rollback
+├── scheduling/            # 任务、时间、维护和服务器配置
 └── README.md              # 本说明文档
 ```
 
@@ -218,7 +220,7 @@ esac
 
 ### Learndl Monitor / Watchdog 后台维护
 
-监控页只读任务数据库；任务状态收敛、异常日志缓存和缓存清理均由系统级 watchdog 统一调度。请按 [runs/systemd/README.md](systemd/README.md) 安装 `learndl-watchdog.timer`；不要再为 monitor 添加独立 cron 项。
+监控页只读任务数据库；任务状态收敛、异常日志缓存、缓存清理和受管任务超时保护均由 watchdog 调度。请按 [统一调度安装说明](scheduling/README.md) 使用 `install_schedules.sh plan/apply`，配置文件支持保留有效旧 cron 并补充缺失计划。旧 cron 直接启动的任务不自动获得超时保护；新 runner 的日更默认 12 小时、周更 72 小时。不要为同一维护项另加独立 cron。
 
 ## 计算机配置系统详解
 

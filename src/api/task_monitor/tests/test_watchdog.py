@@ -39,6 +39,10 @@ class TaskWatchdogTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.state_path = Path(self.temp_dir.name) / 'state.json'
+        for target in ('src.api.task_monitor.scheduling.runtime.runtime_dir', 'src.api.task_monitor.scheduling.config.runtime_dir'):
+            patcher = patch(target, return_value=Path(self.temp_dir.name) / 'scheduling')
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.task = TaskItem(
             '/project/scripts/train.py', cmd='python train.py', create_time=1,
             status='killed', pid=123, start_time=100.0,
@@ -166,6 +170,32 @@ class TaskWatchdogTest(unittest.TestCase):
             with patch('src.api.util.backend.task.process.check_status', return_value='complete'), patch.object(TaskItem, 'get_crash_protector', return_value=[]):
                 changed = database.reconcile_stopped_tasks()
         self.assertEqual(changed[task.id]['status'], 'killed')
+
+    def test_repeated_overlap_scan_does_not_repeat_successful_email(self) -> None:
+        self.task.end_time = 1_000
+        db = _FakeTaskDatabase({}, {'train.py@1': self.task})
+        send = MagicMock(return_value=True)
+        self.assertTrue(self._run(db, send, now=1_000))
+        self.assertTrue(self._run(db, send, now=1_060))
+        self.assertEqual(send.call_count, 1)
+
+    def test_disabled_installed_jobs_do_not_fall_back(self) -> None:
+        db = _FakeTaskDatabase({'train.py@1': {'status': 'killed'}}, {'train.py@1': self.task})
+        config = {'watchdog': {'jobs': {}, 'units': [], 'tick_seconds': 60}}
+        with patch('src.api.task_monitor.scheduling.config.installed_config', return_value=config):
+            self.assertTrue(self._run(db, MagicMock(return_value=True), now=1_000))
+        self.assertEqual(db.changed, {'train.py@1': {'status': 'killed'}})
+        state = json.loads(self.state_path.read_text())
+        self.assertEqual(state['jobs'], {})
+
+    def test_lifecycle_cursor_does_not_follow_other_job_ticks(self) -> None:
+        self.state_path.write_text(json.dumps({'jobs': {'task_lifecycle': {'last_success_at': 1_000, 'scan_through': 1_000}},
+                                               'alerts': {'last_check_unix': 1_800}}))
+        self.task.end_time = 1_500
+        db = _FakeTaskDatabase({}, {'train.py@1': self.task})
+        send = MagicMock(return_value=True)
+        self.assertTrue(self._run(db, send, now=1_900))
+        self.assertEqual(send.call_count, 1)
 
 
 if __name__ == '__main__':

@@ -158,7 +158,11 @@ class ScriptTool:
                 if 'email' not in self.autorun_task.kwargs and (caller_path := _resolve_script_header_path()) is not None:
                     from src.api.util.backend import ScriptHeader
                     self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
-            new_func = self.backend_recorder(self.script_lock(self.autorun_task(inner)))
+            from src.api.task_monitor.scheduling.runner import inherited_lock
+            task_func = self.autorun_task(inner)
+            if not inherited_lock(self.lock_name or self.task_name):
+                task_func = self.script_lock(task_func)
+            new_func = self.backend_recorder(task_func)
             return new_func(*args , **kwargs)
         return wrapper
 

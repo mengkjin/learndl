@@ -343,6 +343,9 @@ class AutoRunTask(BoundLogger):
 
     def send_email(self):
         """send email with attachment if in server and email is True"""
+        from src.api.task_monitor.scheduling.runtime import termination_requested
+        if termination_requested():
+            return
         if self.email: 
             title = f'{self.execution_status} - {self.task_name.replace("_", " ").title()} - {self.time_str}'
             bodies = [
@@ -372,5 +375,3 @@ class AutoRunTask(BoundLogger):
     def update_to(cls) -> int:
         """return the desired update to date"""
         return CALENDAR.update_to()
-        
-    

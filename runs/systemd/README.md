@@ -23,21 +23,21 @@ to be idempotent.
 From the project root on the Ubuntu server:
 
 ```bash
-bash runs/install_watchdog.sh --remove-legacy-cron
+bash runs/install_schedules.sh plan --host mengkjin-server
+bash runs/install_schedules.sh apply --host mengkjin-server
 ```
 
-To monitor persistent system services too, provide a comma- or space-separated
-list during installation:
+The unified installer and configuration format are documented in
+[scheduling/README.md](../scheduling/README.md). Edit `watchdog.units` in
+`runs/scheduling/maintenance.yaml` to monitor persistent services, then apply:
 
 ```bash
-LEARNDL_WATCHDOG_UNITS="learndl-app.service learndl-worker.service" \
-  bash runs/install_watchdog.sh
+bash runs/install_schedules.sh apply --host mengkjin-server
 ```
 
-Re-run the installer whenever this list, the project location, or the systemd
-templates change. `--remove-legacy-cron` is explicit because it edits the
-current user's crontab; use it once to remove the old monitor-maintenance cron
-entry after upgrading.
+Re-run apply after changing configuration or project location. Existing legacy
+cron remains untouched; comment out old watchdog/maintenance cron before moving
+its trigger to systemd. `--remove-legacy-cron` no longer deletes entries.
 
 ## Verify
 
@@ -56,6 +56,8 @@ task state.
 ## Add a short maintenance job
 
 Register it in `src/api/task_monitor/watchdog.py` through `default_jobs()`.
+Add its allowed ID to the scheduling configuration registry and configure its
+interval/enabled flag in `runs/scheduling/maintenance.yaml`, then apply.
 Each job must be idempotent, bounded (both item count and elapsed work), and
 return JSON-safe statistics. The one-minute watchdog timer invokes due jobs;
 their individual intervals live in the persistent state. A job failure is
@@ -92,4 +94,6 @@ This local watchdog cannot report a complete host, power, or network outage.
 For that case, use a dead-man heartbeat checked from another machine or service.
 Task execution errors handled by Python / `BackendTaskRecorder` are intentionally
 not watchdog alerts: their normal task error email is the single notification.
-Watchdog task alerts are reserved for unexpected process loss (`killed`).
+Watchdog task alerts are reserved for unexpected process loss (`killed`) and
+installer-owned task timeouts. Daily/forced daily runs have a 12-hour limit and
+weekly runs a 72-hour limit. Direct legacy cron is not timeout-protected.

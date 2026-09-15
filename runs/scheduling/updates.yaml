@@ -1,0 +1,13 @@
+schedules:
+  daily_update:
+    task: daily_update
+    days: daily
+    times: ['00:01', '03:50', '18:30', '20:30', '23:20']
+  daily_update_force:
+    task: daily_update_force
+    days: daily
+    times: ['08:00']
+  weekly_update:
+    task: weekly_update
+    days: [sat]
+    times: ['06:00']

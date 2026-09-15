@@ -183,6 +183,12 @@ def _render_dashboard() -> None:
         counts = repository.status_counts(statuses=statuses, window=window)
         lifecycle_health = repository.watchdog_health('task_lifecycle', stale_after_seconds=3 * 60)
         cache_health = repository.watchdog_health('task_monitor_cache', stale_after_seconds=30 * 60)
+        timeout_health = repository.watchdog_health('task_timeouts', stale_after_seconds=3 * 60)
+        for label, health in [('Lifecycle', lifecycle_health), ('Cache maintenance', cache_health), ('Timeout protection', timeout_health)]:
+            if health.payload.get('disabled'):
+                st.caption(f'{label}: disabled')
+        if timeout_health.stale:
+            st.warning('Timeout protection heartbeat is missing or stale; task runtime limits may not be enforced.')
         st_autorefresh(interval=3000 if counts['running'] else 30000, key='monitor-refresh')
 
         if lifecycle_health.stale:
@@ -193,7 +199,7 @@ def _render_dashboard() -> None:
                 f'Task lifecycle is healthy, but monitor-cache maintenance is stale '
                 f'(last success: {_time(cache_health.last_run)}).'
             )
-        else:
+        elif not timeout_health.stale and not all(health.payload.get('disabled') for health in (lifecycle_health, cache_health, timeout_health)):
             st.caption(
                 f'Watchdog healthy · lifecycle {_time(lifecycle_health.last_run)} · '
                 f'cache {_time(cache_health.last_run)}'

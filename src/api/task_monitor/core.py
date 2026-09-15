@@ -271,6 +271,16 @@ class TaskMonitorRepository:
     ) -> WatchdogHealth:
         """Read one watchdog job heartbeat without mutating the task database."""
         heartbeat = self.runtime_dir / 'task_watchdog' / 'state.json'
+        config_path = self.runtime_dir / 'scheduling' / 'installed.json'
+        if config_path.exists():
+            try:
+                maintenance = json.loads(config_path.read_text())['watchdog']
+                options = maintenance['jobs'].get(job_name, {})
+                if not options.get('enabled', False):
+                    return WatchdogHealth(None, False, {'disabled': True})
+                stale_after_seconds = max(3 * maintenance['tick_seconds'], 2 * options['interval_seconds'])
+            except (OSError, ValueError, TypeError, KeyError):
+                return WatchdogHealth(None, True, {'configuration_error': True})
         try:
             payload = json.loads(heartbeat.read_text(encoding='utf-8'))
             job = payload['jobs'][job_name]

@@ -4,11 +4,12 @@ Direct calls related to application operations of this project.
 from __future__ import annotations
 import os
 import psutil
+import subprocess
 
 from src.proj import MACHINE
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['LaunchApp' , 'LaunchTaskMonitor' , 'KillAndRebootApp']
+__all__ = ['LaunchApp' , 'LaunchTaskMonitor' , 'ManageTaskSchedules' , 'KillAndRebootApp']
 
 class LaunchApp(DirectCall):
     """Launch the streamlit app."""
@@ -42,6 +43,26 @@ class LaunchTaskMonitor(DirectCall):
         if not MACHINE.is_macos:
             kwargs['new_on'] = 'tab'
         Shell.open(cmd , cwd=os.getcwd(), **kwargs)
+
+class ManageTaskSchedules(DirectCall):
+    """Preview, inspect, apply or roll back the unified watchdog/schedule installation."""
+
+    category = 'App'
+
+    def run(self) -> None:
+        from src.proj import PATH, Logger
+
+        action = self.kwargs.get('action', 'plan')
+        if action not in {'plan', 'status', 'apply', 'rollback'}:
+            raise ValueError(f'Unknown scheduling operation: {action}')
+        command = ['bash', str(PATH.runs / 'install_schedules.sh'), action]
+        if action == 'plan':
+            command.append('--diff')
+        # Inherit the pane's terminal so sudo can prompt and output stays visible.
+        result = subprocess.run(command, cwd=PATH.main, check=False)
+        if result.returncode:
+            Logger.error(f'Scheduling operation [{action}] exited with code {result.returncode}; see output above.')
+
 
 class KillAndRebootApp(DirectCall):
     """Kill the streamlit app and reboot it."""

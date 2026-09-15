@@ -1,0 +1,26 @@
+tasks:
+  daily_update:
+    entrypoint: daily_update
+    args: []
+    lock_group: daily_update
+    overlap: skip
+    timeout: 12h
+  daily_update_force:
+    entrypoint: daily_update
+    args: [--forfeit_if_done, 'False']
+    lock_group: daily_update
+    overlap: wait
+    wait_timeout_seconds: 1800
+    timeout: 12h
+  weekly_update:
+    entrypoint: weekly_update
+    args: []
+    lock_group: weekly_update
+    overlap: skip
+    timeout: 72h
+  rcquant_sec_backfill:
+    entrypoint: rcquant_sec_backfill
+    args: []
+    lock_group: rcquant_sec_backfill
+    overlap: skip
+    timeout: null

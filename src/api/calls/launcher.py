@@ -14,6 +14,7 @@ _TOP_LEVEL_LABELS = (
     'Git Pull',
     'Launch Streamlit App',
     'Launch Learndl Monitor',
+    'Watchdog / Schedule Management',
     'Train Schedule Model',
     'Non-Research Operations',
     'Research Operations',
@@ -40,6 +41,9 @@ class DirectCallHub(DirectCall):
             'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
             'Launch Learndl Monitor': (
                 'Open the independent, read-only task monitor with status/time filters and on-demand output.'
+            ),
+            'Watchdog / Schedule Management': (
+                'Choose preview, status, install/update, or rollback. Opening this submenu does not install anything.'
             ),
             'Train Schedule Model': (
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '
@@ -226,6 +230,34 @@ class DirectCallHub(DirectCall):
             ScheduleModel.spawn_in_pane(vertical=True, done_action='close')
             return
 
+        if choice == 'Watchdog / Schedule Management':
+            from src.api.calls.app import ManageTaskSchedules
+            from src.proj.util.cli import AskFor
+
+            actions = {
+                'Preview Changes (default)': 'plan',
+                'View Installation Status': 'status',
+                'Install / Update Schedules': 'apply',
+                'Roll Back Last Installation': 'rollback',
+            }
+            flag = AskFor.Options(
+                list(actions), confirm=False, multiple=False, use_checkbox=True,
+                title='Watchdog / Schedule Management — choose an operation',
+                help_description=(
+                    'Preview is selected first. Installation also manages project schedules and may request sudo. '
+                    'Select Back to return without running anything.'
+                ),
+                option_help={
+                    'Preview Changes (default)': 'Read-only preview with detailed cron and systemd differences.',
+                    'View Installation Status': 'Inspect installed schedules and timer status.',
+                    'Install / Update Schedules': 'Apply configured schedules and watchdog settings; preserve existing matching cron.',
+                    'Roll Back Last Installation': 'Restore the previous installation; running business work is not undone.',
+                },
+            )
+            if flag.valid and flag.result in actions:
+                ManageTaskSchedules.spawn_in_pane(action=actions[flag.result])
+            return
+
         if choice == 'Non-Research Operations':
             selected_cls = self._pick_direct_call(
                 self._source_code_entries(),
@@ -279,7 +311,8 @@ class DirectCallHub(DirectCall):
                 title='DirectCall Hub — what do you want to do?',
                 help_description=(
                     'Top-level actions. Git Pull / Streamlit / Monitor / Train Schedule Model run immediately; '
-                    'the other three open a submenu. Selections spawn in a split pane while this hub keeps running. '
+                    'the remaining entries open submenus. Watchdog management defaults to preview. '
+                    'Selections spawn in a split pane while this hub keeps running. '
                     'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                 ),
                 option_help=self._top_level_help(),

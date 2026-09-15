@@ -68,6 +68,7 @@ class _WatchdogContext:
     units: Sequence[str]
     previous_check: float
     unit_checker: Callable[[str], tuple[bool, str]]
+    maintenance: dict[str, Any] = field(default_factory=dict)
 
 
 def _default_state_path() -> Path:
@@ -139,6 +140,8 @@ def _run_task_lifecycle(context: _WatchdogContext) -> JobResult:
         if update.get('status') == 'killed'
     }
     pending.update(task.id for task in context.task_db.get_killed_tasks_since(context.previous_check))
+    from src.api.task_monitor.scheduling.runtime import timeout_task_ids
+    pending.difference_update(timeout_task_ids())
     return JobResult(
         stats={'reconciled_count': len(changed), 'reconciled_task_ids': sorted(changed)},
         pending_tasks=frozenset(pending),
@@ -161,7 +164,8 @@ def _run_task_monitor_cache(context: _WatchdogContext) -> JobResult:
     failures: list[str] = []
     handled = 0
     for task_id, path in due:
-        if handled >= MAX_CACHE_SOURCES_PER_RUN or time.monotonic() - started_at >= MAX_CACHE_SECONDS_PER_RUN:
+        options = context.maintenance.get('jobs', {}).get('task_monitor_cache', {})
+        if handled >= options.get('max_sources', MAX_CACHE_SOURCES_PER_RUN) or time.monotonic() - started_at >= options.get('max_seconds', MAX_CACHE_SECONDS_PER_RUN):
             break
         handled += 1
         try:
@@ -184,13 +188,24 @@ def _run_task_monitor_cache(context: _WatchdogContext) -> JobResult:
     })
 
 
-def default_jobs() -> tuple[WatchdogJob, ...]:
+def _run_task_timeouts(context: _WatchdogContext) -> JobResult:
+    from src.api.task_monitor.scheduling.runtime import inspect_timeouts
+    return JobResult(stats=inspect_timeouts())
+
+
+def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     """Return the registry; future short maintenance belongs here."""
-    return (
+    defaults = (
+        WatchdogJob('task_timeouts', TASK_LIFECYCLE_INTERVAL, _run_task_timeouts),
         WatchdogJob('task_lifecycle', TASK_LIFECYCLE_INTERVAL, _run_task_lifecycle),
         WatchdogJob('systemd_unit_probe', UNIT_PROBE_INTERVAL, _run_unit_probe),
         WatchdogJob('task_monitor_cache', MONITOR_CACHE_INTERVAL, _run_task_monitor_cache),
     )
+    if maintenance is None:
+        return defaults
+    registry = {job.name: job.runner for job in defaults}
+    return tuple(WatchdogJob(name, maintenance['jobs'][name]['interval_seconds'], registry[name])
+                 for name in registry if maintenance['jobs'].get(name, {}).get('enabled', False))
 
 
 def _job_due(job_state: dict[str, Any], interval_seconds: int, now: float) -> bool:
@@ -239,6 +254,12 @@ def _deliver_alerts(
 ) -> bool:
     alerts = state['alerts']
     pending_tasks = set(str(value) for value in alerts.get('pending_tasks', []))
+    from src.api.task_monitor.scheduling.runtime import timeout_task_ids
+    pending_tasks.difference_update(timeout_task_ids())
+    already_alerted = set(alerts.get('task_alerted', []))
+    pending_tasks.difference_update(already_alerted)
+    pending_tasks = {task_id for task_id in pending_tasks
+                     if (task := task_db.get_task(task_id)) is None or task.status == 'killed'}
     unit_alerted = {str(key): bool(value) for key, value in alerts.get('unit_alerted', {}).items()}
     for unit, _ in unit_failures:
         unit_alerted.setdefault(unit, False)
@@ -273,7 +294,7 @@ def _deliver_alerts(
     if sent:
         for unit, _ in new_unit_failures:
             unit_alerted[unit] = True
-        alerts.update({'pending_tasks': [], 'unit_alerted': unit_alerted})
+        alerts.update({'pending_tasks': [], 'unit_alerted': unit_alerted, 'task_alerted': sorted(already_alerted | pending_tasks)})
         _save_state(state_path, state)
         Logger.success('Learndl watchdog alert delivered')
     else:
@@ -295,17 +316,23 @@ def run_watchdog(
     state = _load_state(state_path)
     check_time = time.time() if now is None else now
     alerts = state['alerts']
+    from src.api.task_monitor.scheduling.config import installed_config
+    config = installed_config()
+    maintenance = config['watchdog'] if config else {}
+    if units is None and config:
+        units = maintenance['units']
     try:
-        previous_check = float(alerts.get('last_check_unix', check_time - 600))
+        lifecycle_state = state['jobs'].get('task_lifecycle', {})
+        previous_check = float(lifecycle_state.get('scan_through', lifecycle_state.get('last_success_at', alerts.get('last_check_unix', check_time - 600))))
     except (TypeError, ValueError):
         previous_check = check_time - 600
-    context = _WatchdogContext(task_db, cache, _unit_names(units), previous_check, unit_checker)
+    context = _WatchdogContext(task_db, cache, _unit_names(units), previous_check, unit_checker, maintenance)
     pending_tasks = set(str(value) for value in alerts.get('pending_tasks', []))
     unit_failures: list[tuple[str, str]] = []
     job_errors: list[str] = []
     unit_probe_ran = False
 
-    for job in jobs or default_jobs():
+    for job in jobs if jobs is not None else default_jobs(maintenance if config else None):
         job_state = state['jobs'].setdefault(job.name, {})
         if not _job_due(job_state, job.interval_seconds, check_time):
             continue
@@ -323,6 +350,8 @@ def run_watchdog(
             state, job, started_at=started_at, finished_at=time.time() if now is None else check_time,
             result=result,
         )
+        if job.name == 'task_lifecycle':
+            state['jobs'][job.name]['scan_through'] = started_at
         pending_tasks.update(result.pending_tasks)
         unit_failures.extend(result.unit_failures)
         unit_probe_ran = unit_probe_ran or job.name == 'systemd_unit_probe'
@@ -345,7 +374,12 @@ def run_watchdog(
         task_db=task_db, state=state, unit_failures=unit_failures,
         state_path=state_path, email_sender=email_sender,
     )
-    return delivered and not job_errors
+    from src.api.task_monitor.scheduling.runtime import deliver_timeout_events
+    if email_sender is None:
+        from src.proj.util.web.emailer import Email
+        email_sender = Email.send
+    timeout_delivered = deliver_timeout_events(email_sender)
+    return delivered and timeout_delivered and not job_errors
 
 
 def _parse_args() -> argparse.Namespace:

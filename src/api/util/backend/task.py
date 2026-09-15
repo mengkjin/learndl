@@ -278,6 +278,9 @@ class TaskDatabase:
         """
         if not kwargs or task_id == '': 
             return
+        if 'status' in kwargs:
+            from src.api.task_monitor.scheduling.runtime import timeout_override
+            kwargs.update(timeout_override(task_id))
         with self.conn_handler as (conn, cursor):
             exit_files = kwargs.pop('exit_files' , None)
             query = ' '.join([
@@ -1131,6 +1134,9 @@ class TaskItem:
                 'exit_files': crash_protector_paths,
             }
             self.update(updates , sync = True)
+            from src.api.task_monitor.scheduling.runtime import timeout_task_ids
+            if self.id in timeout_task_ids():
+                return True
             title = f'Process Killed Unexpectedly'
             body = f"""Process {self.id} killed , information includes:
             - Task ID: {self.id}
