@@ -37,7 +37,7 @@ __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
 SEC_BACKFILL_FLOOR = 20110101
-SEC_BACKFILL_MAX_DAYS_DEFAULT = 3
+SEC_BACKFILL_MAX_DAYS_DEFAULT = 5
 
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
