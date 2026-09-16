@@ -136,7 +136,10 @@ def load_config(directory: Path, host: str) -> dict:
         if not isinstance(task['args'], list) or not all(isinstance(arg, str) and '\n' not in arg for arg in task['args']):
             raise ValueError('args must be a list of single-line strings')
         # Only documented, typed options may cross the privileged installation boundary.
-        allowed_args = [[], ['--forfeit_if_done', 'False'], ['--forfeit_if_done', 'True']] if task['entrypoint'] == 'daily_update' else [[]]
+        allowed_args = {
+            'daily_update': [[], ['--forfeit_if_done', 'False'], ['--forfeit_if_done', 'True']],
+            'rcquant_sec_backfill': [[], ['--max_days', 'none']],
+        }.get(task['entrypoint'], [[]])
         if task['args'] not in allowed_args:
             raise ValueError(f'Unsupported arguments for {key}')
         task['timeout_seconds'] = duration(task.pop('timeout', None))

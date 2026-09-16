@@ -14,7 +14,7 @@ Start date behaviour (daily update):
 
 Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
 back to 20110101, independent of ``src_start_date``. Daily update triggers a
-limited backfill (default ``max_days=3``) only after the latest sec 1-min bar
+limited backfill (default ``max_days=5``) only after the latest sec 1-min bar
 was freshly downloaded in the same run.
 """
 from __future__ import annotations
@@ -398,12 +398,13 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         cls , * ,
         force : bool = False ,
         first_n : int = -1 ,
-        max_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
+        max_days : int | str | None = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
         **kwargs
     ) -> Base.UpdateFlag:
         """Fill missing equity 1-min bars from the day before daily start back to 20110101.
 
-        Runs newest-missing first, at most ``max_days`` dates per call (default 3).
+        Runs newest-missing first, at most ``max_days`` dates per call (default 5).
+        None, empty text, "none", and "null" mean unlimited.
         Stops immediately on quota exhaustion. ``force`` skips the hour window and
         daily_update gate (used by the daily-update hook).
         """
@@ -411,7 +412,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         return updater._backfill_sec_min(force = force , first_n = first_n , max_days = max_days)
 
     def _backfill_sec_min(
-        self , * , force : bool , first_n : int , max_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
+        self , * , force : bool , first_n : int , max_days : int | str | None = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
     ) -> Base.UpdateFlag:
         started_at = CALENDAR.now(bj_tz = True)
         data_type = MinDataType.SEC
@@ -431,7 +432,9 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        if max_days <= 0:
+        if isinstance(max_days, str):
+            max_days = None if max_days.strip().lower() in ('', 'none', 'null') else int(max_days)
+        if max_days is not None and max_days <= 0:
             msg = f'RcQuant sec backfill skipped: max_days={max_days}'
             self.logger.skipping(msg)
             conclude_filled(msg)
@@ -458,7 +461,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        # Newest-first, capped by max_days so each run only uses a small quota slice.
+        # Newest-first; None leaves the date count unlimited (quota/deadline still apply).
         dates = list(reversed(missing))[:max_days]
         self.logger.info(
             f'RcQuant sec backfill up to {len(dates)}/{len(missing)} missing dates '

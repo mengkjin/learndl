@@ -36,6 +36,11 @@ class ScheduleConfigTest(unittest.TestCase):
                 duration(value)
         self.assertEqual(default_jobs({'jobs': {}}), ())
 
+    def test_evening_backfill_is_unlimited(self):
+        self.assertEqual(self.config['tasks']['rcquant_sec_backfill']['args'], ['--max_days', 'none'])
+        schedule = self.config['schedules']['rcquant_sec_backfill']
+        self.assertEqual(schedule['times'], ['21:01'])
+
     def test_partial_cron_comment_and_restore(self):
         line = f'30 18 * * * /bin/bash {ROOT}/runs/daily_update.sh\n'
         plan = build_plan(self.config, line, ROOT, Path('/venv/bin/python'), 'Asia/Shanghai')

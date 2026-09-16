@@ -20,7 +20,7 @@ tasks:
     timeout: 72h
   rcquant_sec_backfill:
     entrypoint: rcquant_sec_backfill
-    args: []
+    args: [--max_days, 'none']
     lock_group: rcquant_sec_backfill
     overlap: skip
     timeout: null

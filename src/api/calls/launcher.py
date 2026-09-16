@@ -5,16 +5,13 @@ from __future__ import annotations
 from typing import Type
 
 from src.api.util.backend.script import ScriptRunner, iter_runnable_scripts
-from src.api.util.direct_call import DirectCall
+from src.api.util.direct_call import DirectCall, ProcessReload
 from src.proj import Logger
 
 __all__ = ['DirectCallHub']
 
 _TOP_LEVEL_LABELS = (
     'Git Pull',
-    'Launch Streamlit App',
-    'Launch Learndl Monitor',
-    'Watchdog / Schedule Management',
     'Train Schedule Model',
     'Non-Research Operations',
     'Research Operations',
@@ -37,31 +34,29 @@ class DirectCallHub(DirectCall):
     @classmethod
     def _top_level_help(cls) -> dict[str, str]:
         return {
-            'Git Pull': 'Pull the latest code from remote. Clear changes before pulling.',
-            'Launch Streamlit App': 'Open the Streamlit interactive app in a new pane.',
-            'Launch Learndl Monitor': (
-                'Open the independent, read-only task monitor with status/time filters and on-demand output.'
-            ),
-            'Watchdog / Schedule Management': (
-                'Choose preview, status, install/update, or rollback. Opening this submenu does not install anything.'
-            ),
+            'Git Pull': 'Clear local changes, pull the latest code, then restart this hub.',
             'Train Schedule Model': (
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '
                 'Pick schedule_name, resume, short_test, and optional date range.'
             ),
-            'Non-Research Operations': 'Submenu: tests, lint, preview, and project auto-fix.',
+            'Non-Research Operations': 'Submenu: Streamlit, monitor, watchdog, tests, lint, preview, and project auto-fix.',
             'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
 
     @classmethod
     def _source_code_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
+        from src.api.calls.app import LaunchApp, LaunchTaskMonitor, ManageTaskSchedules
         from src.api.calls.files import ProjectAutoFix
         from src.api.calls.preview import PreviewProjectFile
         from src.api.calls.source_code import CheckCodeIssues
         from src.api.calls.test import TestCode
 
         return [
+            ('Launch Streamlit App', LaunchApp, 'Open the Streamlit interactive app in a new pane.'),
+            ('Launch Learndl Monitor', LaunchTaskMonitor, 'Open the independent, read-only task monitor.'),
+            ('Watchdog / Schedule Management', ManageTaskSchedules,
+             'Choose preview, status, install/update, or rollback; defaults to preview.'),
             (
                 'Test Code',
                 TestCode,
@@ -205,23 +200,9 @@ class DirectCallHub(DirectCall):
         if choice == 'Git Pull':
             from src.api.calls.source_code import GitClearPull
 
-            Logger.note('Spawning [GitClearPull] in new pane')
-            GitClearPull.spawn_in_pane(vertical=True, done_action='close')
-            return
-
-        if choice == 'Launch Streamlit App':
-            from src.api.calls.app import LaunchApp
-
-            Logger.note('Spawning [LaunchApp] in new pane')
-            LaunchApp.spawn_in_pane(vertical=True, done_action='close')
-            return
-
-        if choice == 'Launch Learndl Monitor':
-            from src.api.calls.app import LaunchTaskMonitor
-
-            Logger.note('Spawning [LaunchTaskMonitor] in new pane')
-            LaunchTaskMonitor.spawn_in_pane(vertical=True, done_action='close')
-            return
+            Logger.note('Pulling latest code before restarting the hub')
+            GitClearPull().run()
+            raise ProcessReload('Git Pull completed')
 
         if choice == 'Train Schedule Model':
             from src.api.calls.research import ScheduleModel
@@ -265,12 +246,19 @@ class DirectCallHub(DirectCall):
                 help_description=(
                     'Each choice spawns a DirectCall in a split pane. '
                     'Select « Back (q) » in the menu to return to the hub. '
-                    'Git pull asserts on coding platforms at runtime.'
+                    'Watchdog management opens an operation menu with preview selected first.'
                 ),
             )
             if selected_cls is not None:
-                Logger.note(f'Spawning [{selected_cls.__name__}] in new pane')
-                selected_cls.spawn_in_pane()
+                from src.api.calls.app import LaunchApp, LaunchTaskMonitor, ManageTaskSchedules
+
+                if selected_cls is ManageTaskSchedules:
+                    self._dispatch_top_level('Watchdog / Schedule Management')
+                elif selected_cls in (LaunchApp, LaunchTaskMonitor):
+                    selected_cls.spawn_in_pane(vertical=True, done_action='close')
+                else:
+                    Logger.note(f'Spawning [{selected_cls.__name__}] in new pane')
+                    selected_cls.spawn_in_pane()
             return
 
         if choice == 'Research Operations':
@@ -310,9 +298,8 @@ class DirectCallHub(DirectCall):
                 allow_back=False,
                 title='DirectCall Hub — what do you want to do?',
                 help_description=(
-                    'Top-level actions. Git Pull / Streamlit / Monitor / Train Schedule Model run immediately; '
+                    'Git Pull runs here and restarts the hub on success. Train Schedule Model opens a split pane; '
                     'the remaining entries open submenus. Watchdog management defaults to preview. '
-                    'Selections spawn in a split pane while this hub keeps running. '
                     'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                 ),
                 option_help=self._top_level_help(),

@@ -130,10 +130,11 @@ $PYTHON_CMD [具体Python脚本路径] [参数]
 - **使用场景**：定时任务、每周维护
 
 ### 3. `rcquant_sec_backfill.sh` - RCQuant 股票分钟线补全（可选）
-**作用**：手动限幅向前补全 `trade_ts/min`（默认最多 3 个交易日）。**主路径已并入日更**：`RcquantMinBarDownloader` 在成功下载最新一天 sec 1min（且完成 etf/fut/cb）后自动触发。
+**作用**：手动限幅向前补全 `trade_ts/min`（默认最多 5 个交易日）。**主路径已并入日更**：`RcquantMinBarDownloader` 在成功下载最新一天 sec 1min（且完成 etf/fut/cb）后自动触发。
 - **目标脚本**：`scripts/1_autorun/5_rcquant_sec_backfill.py`
-- **参数**：`--source=bash --email=1`，可选 `--force True --max_days 3`
-- **使用场景**：日更未触发时的补跑；不再依赖专用 crontab
+- **参数**：`--source=bash --email=1`，可选 `--force True --max_days 5`
+- **无限回补**：`--max_days none`（或 `null`、显式空字符串）；仍受配额和午夜截止限制。CLI 参数提示直接回车使用默认值 5。
+- **使用场景**：日更未触发时的补跑；21:01 定时任务显式使用无限天数。
 
 ### 4. `launch.sh` `launch.bat` - 应用启动脚本
 **作用**：启动learndl的Streamlit应用
