@@ -2,7 +2,7 @@
 
 Run the installer **as the ordinary server account**, from the deployed project.
 It uses sudo only to install the fixed project units and reload/enable timers.
-Do not run the complete installer with sudo. No business task is started by apply.
+Do not run the complete installer with sudo. Apply enables timers; enabled idle training can start on a subsequent watchdog check.
 
 ```bash
 bash runs/install_schedules.sh plan --host mengkjin-server
@@ -68,7 +68,7 @@ cron must be commented out before installing the watchdog trigger.
 
 Manual cron edits can create duplicates until the next apply. A shared execution
 lock prevents overlap but does not promise exactly-once execution of two sequential
-triggers. The installer does not create a durable business task queue.
+triggers. Calendar tasks do not use a durable business queue; idle worklist training uses the separate queue described below.
 
 ## Supervision and timeouts
 
@@ -121,3 +121,71 @@ sudo to the task user or execute unreviewed installer code as root.
 Service checks should list persistent services only, not scheduled oneshot units.
 The legacy static watchdog templates in `runs/systemd` are reference material;
 the unified installer generates the active units from the installed configuration.
+
+## Idle worklist training
+
+`maintenance.yaml` enables `idle_worklist` on CUDA Linux servers. Re-run installer
+`plan` and `apply` on the server after pulling this change; an existing installed
+snapshot does not pick up new YAML settings automatically.
+
+Every 900 seconds watchdog checks shared `FitLock` occupancy and **cuda:0 memory
+used / total < 20%** (not GPU compute utilization). Unknown GPU status defers work.
+Inference/tests hold no fit lock but their GPU memory still counts. The shared
+lock covers each trainer's fit stage, including waiting for the NN lock; data
+preparation and evaluation do not hold it. This detects cooperating project
+trainers, not external programs that do not take this lock.
+
+`FitLock` now allows unlimited simultaneous holders for NN and Boost. `FitLockNN`
+retains the old exclusive NN behavior and the `train_fit.lock` filename. Inference
+CPU/GPU fallback consults `FitLockNN`. The preference section is `fit_lock_nn`;
+legacy preference keys remain fallbacks. Existing NN processes are detectable
+through the old lock; an already-running old Boost process cannot acquire the
+new shared lock retroactively. Let those processes finish before enabling idle
+training. OS process exit (including SIGKILL) releases the lock without cleanup.
+
+Watchdog queues at most one schedule, in worklist order. A separate
+`learndl-idle-worklist.service`/timer consumes that request and starts a fresh
+Python process for exactly one schedule. It has its own cgroup and no watchdog
+1 GB memory cap. The cron backend has a separate minutely worker trigger. The
+worker rechecks fit locks, GPU memory and configuration before launch. Completion
+does not immediately start another schedule: the next 15-minute poll decides.
+Manual training arriving after launch does not interrupt the automatic task;
+NN fitting remains serialized by `FitLockNN`.
+
+Success uses the existing `schedule_worklist` record, and actual training also
+writes independent `training_history` provenance. `force: true` runs only once
+for a given successful configuration version in automatic mode; manual worklist
+execution retains its force behavior. Raw worklist edits (including comments or
+reordering) and edits to a schedule create a new version. Unrelated training code
+or data changes do not. Missing recorded directories remain eligible for new
+training. `resume: true` with no recoverable checkpoint is an error. Unrecorded
+legacy directories resume the newest candidate automatically, by creation log
+time, falling back to saved `model.yaml` modification time and then model index;
+manual use still prompts when ambiguous. `resume: false` creates a new directory.
+
+A failed, killed or interrupted automatic attempt is not retried for that version;
+other eligible schedules continue. A configuration version change or explicit
+reset makes it eligible again. Reset preserves past run records:
+
+```bash
+.venv/bin/python -m src.api.task_monitor.scheduling.idle_worklist status
+.venv/bin/python -m src.api.task_monitor.scheduling.idle_worklist reset SCHEDULE_NAME
+```
+
+There is no total training duration limit. By default **12 hours without stdout
+or stderr output** triggers TERM; KILL follows after a 30-second grace period on
+a later watchdog tick if necessary. Business output renews the deadline; watchdog
+heartbeats do not. A repeatedly logging application deadlock cannot be detected
+by this policy. Only the verified automatic session/cgroup is targeted.
+
+Start and finish notifications (success/error/abnormal termination) are persisted
+and emailed by watchdog, with failed deliveries retried. They include the schedule,
+version/Git file commits, log path and available training-history IDs. Script email
+is disabled for these automatic invocations to avoid duplicate reports. After a
+server restart, abnormal-exit notification is delivered when watchdog resumes.
+No idle-poll or watchdog lifecycle mail is sent by this feature.
+
+Queue, attempts, notifications and logs live under `PATH.runtime/scheduling`
+(`runs.sqlite`, `idle_worklist/*.log`). To stop new automatic starts, set
+`idle_worklist.enabled: false` and apply. Running work finishes and remains
+supervised; do not disable `task_timeouts` while automatic work is running.

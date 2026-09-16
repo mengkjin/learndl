@@ -15,7 +15,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache'}
+JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
@@ -162,12 +162,22 @@ def load_config(directory: Path, host: str) -> dict:
         raise ValueError('tick_seconds must be a whole-minute divisor of 3600')
     if not isinstance(watchdog['units'], list) or any(not re.fullmatch(r'[A-Za-z0-9_.@:-]+', unit) for unit in watchdog['units']):
         raise ValueError('Invalid systemd unit list')
-    if any(unit.startswith('learndl-schedule-') or unit == 'learndl-watchdog.service' for unit in watchdog['units']):
+    if any(unit.startswith('learndl-schedule-') or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service'} for unit in watchdog['units']):
         raise ValueError('Scheduled oneshot units cannot be probed as persistent services')
     for key, job in watchdog['jobs'].items():
         if key not in JOB_NAMES:
             raise ValueError(f'Unknown maintenance job: {key}')
-        _keys(job, {'enabled', 'interval_seconds', 'max_sources', 'max_seconds'})
+        _keys(job, {'enabled', 'interval_seconds', 'max_sources', 'max_seconds'} |
+              ({'max_gpu_memory_percent', 'progress_timeout_seconds'} if key == 'idle_worklist' else set()))
+        if key == 'idle_worklist':
+            percent = job.get('max_gpu_memory_percent', 20)
+            limit = job.get('progress_timeout_seconds', 43200)
+            if type(percent) not in (int, float) or not 0 < percent <= 100:
+                raise ValueError('max_gpu_memory_percent must be in (0,100]')
+            if type(limit) is not int or limit <= 0:
+                raise ValueError('progress_timeout_seconds must be positive')
+            if job.get('enabled') and not watchdog['jobs'].get('task_timeouts', {}).get('enabled'):
+                raise ValueError('idle_worklist requires task_timeouts supervision')
         if type(job['enabled']) is not bool or type(job['interval_seconds']) is not int or job['interval_seconds'] < tick or job['interval_seconds'] % 60:
             raise ValueError(f'Invalid maintenance interval/enabled: {key}')
         for option in ('max_sources', 'max_seconds'):

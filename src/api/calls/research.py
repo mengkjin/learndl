@@ -78,7 +78,7 @@ class CarryOutScheduleWorkList(DirectCall):
     def run(self) -> None:
         import portalocker
 
-        from src.api.calls.worklist_state import WorklistState
+        from src.api.calls.worklist_state import AutomaticDeferred, WorklistState
         from src.res.model.util.training_history import collect_training_runs, file_revision
 
         worklist_revision = file_revision(PATH.sched_worklist)
@@ -94,6 +94,10 @@ class CarryOutScheduleWorkList(DirectCall):
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
             schedules = [name for name in schedules if name not in set(missing)]
+        if only_schedule := self.kwargs.get('only_schedule'):
+            if only_schedule not in schedules:
+                raise ValueError(f'Schedule [{only_schedule}] is no longer in worklist')
+            schedules = [only_schedule]
         if not MACHINE.platform_server:
             schedules = schedules[:self.max_test_schedules]
         Logger.critical(f'Training schedule model list {", ".join(schedules)} started')
@@ -106,14 +110,24 @@ class CarryOutScheduleWorkList(DirectCall):
                 try:
                     lock.acquire()
                 except portalocker.exceptions.LockException:
+                    if self.kwargs.get('automatic'):
+                        raise AutomaticDeferred('Schedule lock occupied')
                     Logger.note(f'Skip [{schedule_name}]: another worklist process is running it')
                     continue
                 try:
                     previous = state.read()
                     revisions = state.revisions(schedule_name)
                     revisions['worklist'] = worklist_revision
-                    reason, effective_resume = state.decision(previous, revisions, force=force, resume=resume)
+                    automatic = bool(self.kwargs.get('automatic', False))
+                    if automatic and self.kwargs.get('expected_version'):
+                        from src.api.task_monitor.scheduling.idle_worklist import version
+                        if version(revisions) != self.kwargs['expected_version']:
+                            raise AutomaticDeferred('Configuration changed before training')
+                    effective_force = force and not (automatic and previous and previous.get('status') == 'success' and previous.get('revisions') == revisions)
+                    reason, effective_resume = state.decision(previous, revisions, force=effective_force, resume=resume)
                     if reason == 'completed':
+                        if automatic:
+                            raise AutomaticDeferred('Already completed')
                         Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
                         continue
                     Logger.note(f'Run [{schedule_name}]: {reason}; resume={effective_resume}')
@@ -134,7 +148,8 @@ class CarryOutScheduleWorkList(DirectCall):
                             kwargs = {'base_path': model_path} if effective_resume and model_path else {}
                             task = self._train_one_schedule(
                                 main, schedule_name=schedule_name, short_test=None,
-                                resume=effective_resume, start=None, end=None, email=True, **kwargs,
+                                resume=effective_resume, start=None, end=None, email=not automatic,
+                                resume_selection='latest' if automatic else 'interactive', **kwargs,
                             )
                             if not (task.success and task.execution_success and runs
                                     and all(run['status'] == 'success' for run in runs)):

@@ -139,6 +139,24 @@ class WorklistTest(unittest.TestCase):
         self.assertTrue(self.main.call_args.kwargs['resume'])
         self.assertEqual(self.main.call_args.kwargs['base_path'], str(self.folder.resolve()))
 
+    def test_automatic_runs_one_schedule_and_force_only_once(self):
+        from src.api.calls.worklist_state import AutomaticDeferred
+        from src.api.task_monitor.scheduling.idle_worklist import version
+        self.worklist.write_text('fit: [example, second]\nresume: false\nforce: true\n')
+        expected = version(self.state.revisions('example'))
+        automatic = CarryOutScheduleWorkList(automatic=True, only_schedule='example', expected_version=expected)
+        automatic.run()
+        self.assertEqual(self.main.call_args.kwargs['schedule_name'], 'example')
+        self.assertEqual(self.main.call_args.kwargs['resume_selection'], 'latest')
+        self.assertFalse(self.main.call_args.kwargs['email'])
+        with self.assertRaises(AutomaticDeferred):
+            automatic.run()
+        self.main.assert_called_once()
+        self.schedule.write_text('# changed before launch\n')
+        with self.assertRaises(AutomaticDeferred):
+            automatic.run()
+        self.main.assert_called_once()
+
     def test_missing_directory_starts_new_training(self):
         self.worklist.write_text('fit: [example]\nresume: true\n')
         self.run_hub()

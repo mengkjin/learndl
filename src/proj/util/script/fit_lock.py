@@ -1,60 +1,91 @@
-"""Exclusive lock for NN ``stage_fit``; inference queries ``is_held`` without acquiring."""
+"""Shared fit occupancy for all trainers and a separate exclusive NN fit lock."""
 from __future__ import annotations
 
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
-from typing import Any
 
 import portalocker
 
 from src.proj.env import MACHINE, PATH
-from src.proj.util.script.script_lock import ScriptLock
 
-__all__ = ['FitLock']
+__all__ = ['FitLock', 'FitLockNN']
 
 
-class FitLock:
-    """Serialize NN ``stage_fit`` across processes; expose a non-blocking occupancy probe."""
+def _occupied(path: Path) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('a+') as stream:
+        try:
+            portalocker.lock(stream, portalocker.LOCK_EX | portalocker.LOCK_NB)
+        except (portalocker.LockException, OSError):
+            return True
+        portalocker.unlock(stream)
+        return False
 
-    LOCK_DIR = PATH.runtime.joinpath('script_lock')
+
+class FitLockNN:
+    """Serialize NN/NNBoost fits; retain the old filename for live old processes."""
+
+    LOCK_DIR = PATH.runtime / 'script_lock'
 
     @classmethod
     def enabled(cls) -> bool:
-        return bool(MACHINE.preference('gpu', 'fit_lock/enabled', default=True))
+        return bool(MACHINE.preference('gpu', 'fit_lock_nn/enabled', default=
+                    MACHINE.preference('gpu', 'fit_lock/enabled', default=True)))
 
     @classmethod
     def lock_name(cls) -> str:
-        return str(MACHINE.preference('gpu', 'fit_lock/lock_name', default='train_fit'))
-
-    @classmethod
-    def nn_only(cls) -> bool:
-        return bool(MACHINE.preference('gpu', 'fit_lock/nn_only', default=True))
+        return str(MACHINE.preference('gpu', 'fit_lock_nn/lock_name', default=
+                   MACHINE.preference('gpu', 'fit_lock/lock_name', default='train_fit')))
 
     @classmethod
     def lock_path(cls) -> Path:
-        cls.LOCK_DIR.mkdir(parents=True, exist_ok=True)
-        return cls.LOCK_DIR.joinpath(f'{cls.lock_name()}.lock')
+        return cls.LOCK_DIR / f'{cls.lock_name()}.lock'
 
     @classmethod
-    def guard(cls, try_cuda: bool = True) -> Any:
-        """Context manager: acquire fit lock, or no-op when disabled / non-NN."""
-        if not cls.enabled():
-            return ScriptLock(None)
-        if cls.nn_only() and not try_cuda:
-            return ScriptLock(None)
-        return ScriptLock(cls.lock_name(), timeout=None)
+    def guard(cls, try_cuda: bool = True):
+        if not cls.enabled() or not try_cuda:
+            return nullcontext()
+        return cls._guard()
+
+    @classmethod
+    @contextmanager
+    def _guard(cls):
+        path = cls.lock_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a+') as stream:
+            portalocker.lock(stream, portalocker.LOCK_EX)
+            try:
+                yield
+            finally:
+                portalocker.unlock(stream)
 
     @classmethod
     def is_held(cls) -> bool:
-        """True if another process currently holds the fit lock. Does not acquire."""
-        if not cls.enabled():
-            return False
-        lock_path = cls.lock_path()
-        lock_file = open(lock_path, 'a+')
-        try:
-            portalocker.lock(lock_file, portalocker.LOCK_EX | portalocker.LOCK_NB)
-            portalocker.unlock(lock_file)
-            return False
-        except (portalocker.AlreadyLocked, BlockingIOError, OSError):
-            return True
-        finally:
-            lock_file.close()
+        return _occupied(cls.lock_path())
+
+
+class FitLock:
+    """Unlimited shared fit occupancy; the OS releases it even after SIGKILL."""
+
+    LOCK_DIR = PATH.runtime / 'script_lock'
+
+    @classmethod
+    def lock_path(cls) -> Path:
+        return cls.LOCK_DIR / 'train_fit_active.lock'
+
+    @classmethod
+    @contextmanager
+    def guard(cls):
+        path = cls.lock_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open('a+') as stream:
+            portalocker.lock(stream, portalocker.LOCK_SH)
+            try:
+                yield
+            finally:
+                portalocker.unlock(stream)
+
+    @classmethod
+    def is_held(cls) -> bool:
+        # Old code still holds only the original NN lock during rolling upgrades.
+        return _occupied(cls.lock_path()) or FitLockNN.is_held()

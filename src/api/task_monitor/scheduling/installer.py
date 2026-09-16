@@ -110,7 +110,7 @@ def cron_coverage(text: str, config: dict, root: Path, local_timezone: str) -> t
         candidates = [key for key, task in config['tasks'].items()
                       if f'runs/{task["entrypoint"]}.sh' in line or ENTRYPOINTS[task['entrypoint']] in line]
         if not candidates:
-            if str(root) in line and ('task_monitor.watchdog' in line or 'task_monitor_maintenance' in line):
+            if str(root) in line and ('task_monitor.watchdog' in line or 'task_monitor_maintenance' in line or 'scheduling.idle_worklist' in line):
                 extras.append('Existing watchdog cron requires explicit removal before installing its timer: ' + line)
             continue
         try:
@@ -218,6 +218,15 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
     else:
         invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.watchdog'])
         cron_lines.append(f'*/{tick // 60} * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
+    if config['watchdog']['jobs'].get('idle_worklist', {}).get('enabled'):
+        module = 'src.api.task_monitor.scheduling.idle_worklist'
+        if config['default_backend'] == 'systemd':
+            units['learndl-idle-worklist.service'] = service(root, python, module, ['worker'])
+            units['learndl-idle-worklist.timer'] = ('[Unit]\nDescription=Learndl queued idle training\n[Timer]\n'
+                'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
+        else:
+            invocation = shlex.join([str(python), '-m', module, 'worker'])
+            cron_lines.append(f'* * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
     if any('%' in line for line in cron_lines):
         raise ValueError('Percent signs in cron paths are unsupported')
     new_cron = external_cron(cron).rstrip('\n') + '\n'
@@ -282,6 +291,8 @@ def validate_unit(name: str, contents: str) -> None:
         if not argv or Path(argv[0]).resolve() != Path(sys.executable).resolve():
             raise ValueError('Unexpected service interpreter')
         expected = ['-m', 'src.api.task_monitor.watchdog'] if name == 'learndl-watchdog.service' else ['-m', 'src.api.task_monitor.scheduling.runner', 'run', name.removeprefix(PREFIX).removesuffix('.service')]
+        if name == 'learndl-idle-worklist.service':
+            expected = ['-m', 'src.api.task_monitor.scheduling.idle_worklist', 'worker']
         if argv[1:] != expected:
             raise ValueError('Unexpected service command')
         for values in fields.get('Environment', []):
@@ -304,7 +315,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     manifest_path = directory / 'manifest.json'
     previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
     for name in previous['units']:
-        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog)\.(timer|service)', name):
+        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
@@ -330,7 +341,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
-            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog)\.(timer|service)', name):
+            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name):
                 raise ValueError('Invalid transaction unit name')
             path = UNIT_DIR / name
             if path.exists():
@@ -371,7 +382,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
-    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog)\.(timer|service)', name) for name in names):
+    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name) for name in names):
         raise ValueError('Invalid managed unit name')
     with tempfile.TemporaryDirectory(prefix='learndl-install-') as temp:
         stage = Path(temp)

@@ -193,6 +193,11 @@ def _run_task_timeouts(context: _WatchdogContext) -> JobResult:
     return JobResult(stats=inspect_timeouts())
 
 
+def _run_idle_worklist(context: _WatchdogContext) -> JobResult:
+    from src.api.task_monitor.scheduling.idle_worklist import dispatch
+    return JobResult(stats=dispatch(context.maintenance['jobs']['idle_worklist']))
+
+
 def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     """Return the registry; future short maintenance belongs here."""
     defaults = (
@@ -204,6 +209,7 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     if maintenance is None:
         return defaults
     registry = {job.name: job.runner for job in defaults}
+    registry['idle_worklist'] = _run_idle_worklist
     return tuple(WatchdogJob(name, maintenance['jobs'][name]['interval_seconds'], registry[name])
                  for name in registry if maintenance['jobs'].get(name, {}).get('enabled', False))
 

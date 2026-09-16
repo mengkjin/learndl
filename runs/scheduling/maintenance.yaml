@@ -10,3 +10,8 @@ watchdog:
       interval_seconds: 900
       max_sources: 20
       max_seconds: 20
+    idle_worklist:
+      enabled: true
+      interval_seconds: 900
+      max_gpu_memory_percent: 20
+      progress_timeout_seconds: 43200

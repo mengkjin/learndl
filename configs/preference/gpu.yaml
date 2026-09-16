@@ -1,9 +1,9 @@
-fit_lock:
+fit_lock_nn:
   enabled: true
   lock_name: train_fit
-  nn_only: true          # only NN / NNBoost stage_fit
+  # NN / NNBoost only; all fits also hold the unlimited shared FitLock.
 
-# idle = no training instance; busy = FitLock.is_held()
+# idle = no NN fitting instance; busy = FitLockNN.is_held()
 # values: cuda_then_cpu | cuda_then_raise | cpu_only
 # macos: Device still prefers MPS; cpu_only on Mac is MPS (same as use_device)
 inference:

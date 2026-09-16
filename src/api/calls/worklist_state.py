@@ -10,7 +10,12 @@ import portalocker
 from src.proj import PATH
 from src.res.model.util.training_history import file_revision, now, write_json
 
-__all__ = ['WorklistState']
+__all__ = ['WorklistState', 'AutomaticDeferred']
+
+
+class AutomaticDeferred(Exception):
+    """No automatic training was attempted; reconsider on a later poll."""
+
 
 
 class WorklistState:

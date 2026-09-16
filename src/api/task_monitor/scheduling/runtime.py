@@ -43,6 +43,11 @@ class RunStore:
             rows = connection.execute("SELECT data FROM runs WHERE json_extract(data, '$.phase') IN ('starting','running','terminating','finalizing')").fetchall()
         return [json.loads(row[0]) for row in rows]
 
+    def owned(self, owner: str) -> list[dict]:
+        with self.connect() as connection:
+            rows = connection.execute("SELECT data FROM runs WHERE json_extract(data, '$.owner')=? ORDER BY rowid", (owner,)).fetchall()
+        return [json.loads(row[0]) for row in rows]
+
     def link(self, task_id: str, run_id: str) -> None:
         with self.connect() as connection:
             connection.execute('INSERT OR IGNORE INTO task_links VALUES (?, ?)', (task_id, run_id))
@@ -78,7 +83,7 @@ def timeout_override(task_id: str) -> dict[str, Any]:
         run = json.loads(row[0])
         if run['phase'] in {'killed', 'finalizing'}:
             return {'status': 'killed', 'end_time': run['finished_at'], 'exit_code': -9 if run.get('kill_at') else -15,
-                    'exit_error': f'TIMEOUT: exceeded {run["timeout_seconds"]} seconds; run {run["id"]}'}
+                    'exit_error': timeout_message(run)}
     return {}
 
 
@@ -105,6 +110,17 @@ def in_run_scope(pid: int, run: dict) -> bool:
     return group is not None and (group == run['cgroup'] or group.startswith(run['cgroup'] + '/'))
 
 
+def boot_id() -> str | None:
+    try:
+        return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    except FileNotFoundError:
+        return None
+
+
+def previous_boot(run: dict) -> bool:
+    return bool(run.get('boot_id') and run['boot_id'] != boot_id())
+
+
 def members(run: dict) -> list[psutil.Process]:
     """Verify root identity and discover members of the dedicated session.
 
@@ -112,6 +128,8 @@ def members(run: dict) -> list[psutil.Process]:
     the original session can remain after the root exits; PID creation times
     are checked again by psutil before each signal.
     """
+    if previous_boot(run):
+        return []
     try:
         root = psutil.Process(run['pid'])
         if abs(root.create_time() - run['process_created']) > .01:
@@ -143,6 +161,44 @@ def signal_members(run: dict, processes: list[psutil.Process], sig: signal.Signa
             continue
 
 
+def timeout_message(run: dict) -> str:
+    limit = run.get('progress_timeout_seconds') or run.get('timeout_seconds')
+    condition = 'without output' if run.get('progress_timeout_seconds') else 'elapsed'
+    return f'TIMEOUT: exceeded {limit} seconds {condition}; run {run["id"]}'
+
+
+def timeout_due(run: dict, now: float) -> bool:
+    if 'term_at' in run:
+        return True
+    if limit := run.get('progress_timeout_seconds'):
+        last = run['started_at']
+        if run.get('log_path'):
+            try:
+                last = max(last, Path(run['log_path']).stat().st_mtime)
+            except FileNotFoundError:
+                pass
+        return now - last >= limit
+    limit = run.get('timeout_seconds')
+    return limit is not None and now - run['started_at'] >= limit
+
+
+def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
+    if run.get('owner') != 'idle_worklist':
+        return
+    if run.get('returncode') == 75 and 'term_at' not in run:
+        run['phase'] = 'deferred'
+        store.put(run)
+    # Preserve the outcome context even if a later manual run replaces worklist state.
+    try:
+        from src.api.calls.worklist_state import WorklistState
+        state = WorklistState(run['task']).read()
+        if state and state.get('revisions') == run.get('revisions'):
+            run['completion'] = state
+    except (OSError, ValueError):
+        pass
+    store.event(run, 'finished', detail)
+
+
 def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None) -> dict:
     store = store or RunStore()
     now = time.time() if now is None else now
@@ -154,12 +210,15 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
             if now - run['started_at'] > 60:
                 run.update(phase='error', finished_at=now)
                 store.put(run)
+                finish_idle_event(store, run, 'Launcher exited before registering a child.')
             continue
         checked += 1
+        if run.get('owner') == 'idle_worklist':
+            store.event(run, 'started', 'Automatic schedule process started.')
         try:
             processes = members(run)
             if not processes:
-                if 'returncode' not in run and run.get('runner_pid'):
+                if 'returncode' not in run and run.get('runner_pid') and not previous_boot(run):
                     try:
                         runner = psutil.Process(run['runner_pid'])
                         if abs(runner.create_time() - run['runner_created']) < .01 and runner.status() != psutil.STATUS_ZOMBIE:
@@ -178,14 +237,15 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                             continue
                         database.update_task(task_id, backend_updated=True, **{
                             'status': 'killed', 'end_time': run['finished_at'], 'exit_code': -9 if run.get('kill_at') else -15,
-                            'exit_error': f'TIMEOUT: exceeded {run["timeout_seconds"]} seconds; run {run["id"]}',
+                            'exit_error': timeout_message(run),
                         })
                     run['phase'] = 'killed'
-                    store.event(run, 'terminated', 'Timed out; verified session processes have exited.')
+                    if run.get('owner') != 'idle_worklist':
+                        store.event(run, 'terminated', 'Timed out; verified session processes have exited.')
                     store.put(run)
+                finish_idle_event(store, run, f'Process finished: {run["phase"]}; returncode={run.get("returncode", "unavailable (abnormal exit)")}.')
                 continue
-            limit = run['timeout_seconds']
-            if limit is None or now - run['started_at'] < limit:
+            if not timeout_due(run, now):
                 continue
             if 'term_at' not in run:
                 run.update(phase='terminating', term_at=now)
@@ -199,8 +259,14 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                 if now - run['kill_at'] >= 60:
                     store.event(run, 'failed', 'SIGKILL sent but processes are still present; will retry.')
         except (psutil.Error, OSError, RuntimeError) as exc:
-            if run.get('timeout_seconds') is not None and now - run['started_at'] >= run['timeout_seconds']:
+            if timeout_due(run, now):
                 store.event(run, 'failed', f'Timeout termination could not be verified/completed: {exc}')
+    # Repair event persistence after a crash between storing state and inserting mail.
+    for run in store.owned('idle_worklist'):
+        if run.get('pid'):
+            store.event(dict(run, phase='running'), 'started', 'Automatic schedule process started.')
+        if run['phase'] in {'complete', 'error', 'killed', 'deferred'} and run.get('started_at'):
+            finish_idle_event(store, run, f'Process finished: {run["phase"]}; returncode={run.get("returncode", "unavailable (abnormal exit)")}.')
     return {'checked_runs': checked}
 
 
@@ -220,10 +286,20 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             if task:
                 attachments.extend(Path(path) for path in task.exit_files or [] if Path(path).is_file())
                 attachments.extend(Path(path) for path in task.get_crash_protector() if Path(path).is_file())
+        label = 'Idle Worklist' if run.get('owner') == 'idle_worklist' else 'Timeout'
         message = (f'Task: {run["task"]}\nRun: {run["id"]}\nStarted: {run["started_at"]}\n'
                    f'Limit: {run["timeout_seconds"]} seconds\nElapsed: {time.time() - run["started_at"]:.0f} seconds\n'
-                   f'Phase: {run["phase"]}\n{event["detail"]}')
-        if sender(f'Watchdog Timeout - {run["task"]} - {event["kind"]}', message,
+                   f'Phase: {run["phase"]}\n{event["detail"]}\n'
+                   f'Log: {run.get("log_path", "")}\nVersion: {run.get("version", "")}\n'
+                   f'Progress timeout: {run.get("progress_timeout_seconds", "")} seconds')
+        if run.get('owner') == 'idle_worklist':
+            completion = run.get('completion') or {}
+            message += (f'\nModel directory: {completion.get("model_path", "pending")}\n'
+                        f'Training runs: {completion.get("training_run_ids", [])}\n'
+                        f'Error: {completion.get("error", "")}\n')
+            for name, revision in run.get('revisions', {}).items():
+                message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
+        if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,
                   attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert'):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
@@ -240,4 +316,4 @@ def timeout_task_ids() -> set[str]:
     store = RunStore(path)
     with store.connect() as connection:
         rows = connection.execute('SELECT task_id,data FROM task_links JOIN runs ON runs.id=task_links.run_id').fetchall()
-    return {task_id for task_id, data in rows if 'term_at' in json.loads(data)}
+    return {task_id for task_id, data in rows if 'term_at' in json.loads(data) or json.loads(data).get('owner') == 'idle_worklist'}

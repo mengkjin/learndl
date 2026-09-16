@@ -113,10 +113,12 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
     def __init__(
         self, base_path: ModelPath | Base.strPath | None = None, *,
-        module: str | None = None, schedule_name: str | None = None, override=None, 
+        module: str | None = None, schedule_name: str | None = None, override=None,
+        resume_saved_config: bool = False,
         indent: int = 1 , vb_level: Base.lit.VerbosityLevel = 2, **kwargs,
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self.resume_saved_config = resume_saved_config
         self.base_path = ModelPath(base_path)
         self.start_with_none = not self.base_path
         self.force_module = module
@@ -142,7 +144,8 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         self.Param[key] = value
 
     def resumed_config_param(self) -> Base.FlattenDict | None:
-        if (self.base_path and not self.base_path.is_null_model and not self.short_test):
+        if (self.base_path and not self.base_path.is_null_model
+                and (not self.short_test or self.resume_saved_config)):
             conf_file = self.base_path.conf_file("model")
             return get_config_dict(conf_file) if conf_file.exists() else None
         else:
@@ -870,8 +873,8 @@ class ModelConfig(BaseModelConfig):
         self.set_vb(vb_level , indent)
         self.options = ModelConfigOptions(start, end, stage, resume, selection)
         self.model_config = BaseModelConfig(
-            base_path, module=module, schedule_name=schedule_name, override=override, 
-            indent=indent , vb_level=vb_level, **kwargs)
+            base_path, module=module, schedule_name=schedule_name, override=override,
+            resume_saved_config=resume == 1, indent=indent , vb_level=vb_level, **kwargs)
         self.algo_config = self.model_config.generate_algo_config()
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, \

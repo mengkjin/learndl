@@ -12,7 +12,7 @@ from functools import wraps
 from typing import Any , Literal , TypeAlias , cast , Sized , Callable
 
 from src.proj import Const , Base
-from src.proj.util.script.fit_lock import FitLock
+from src.proj.util.script.fit_lock import FitLock, FitLockNN
 
 from src.proj.bases import FittingEventType
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
@@ -101,8 +101,32 @@ class BaseTrainer(BasePipeline):
         return f'{self.__class__.__name__}(path={self.base_path})'
 
     def init_config(self) -> None:
-        self._config = ModelConfig(**self._config_kwargs , **self._kwargs)
+        config_kwargs = dict(self._config_kwargs)
+        model_kwargs = dict(self._kwargs)
+        schedule_resume = config_kwargs.get('schedule_name') and self._kwargs.get('resume') == 1
+        if schedule_resume:
+            from src.res.model.util.core import ModelPath
+            from ..schedule_resume import select_schedule_run, validate_saved_configs
+
+            selected = config_kwargs.get('base_path')
+            model_path = ModelPath(selected) if selected else select_schedule_run(
+                config_kwargs['schedule_name'], short_test=self._kwargs.get('short_test'),
+                policy=model_kwargs.get('resume_selection', 'interactive'))
+            config_kwargs['base_path'] = model_path
+            model_kwargs['short_test'] = model_path.is_short_test
+            # Save the choice even if validation/setup fails, so retry never picks another run.
+            if self.training_run is not None:
+                self.training_run.data['selected_model_path'] = str(model_path.base.resolve())
+                if model_path.base.is_dir():
+                    self.training_run.data['model_path'] = str(model_path.base.resolve())
+                self.training_run.save()
+            validate_saved_configs(model_path)
+
+        model_kwargs.pop('resume_selection', None)
+        self._config = ModelConfig(**config_kwargs , **model_kwargs)
         try:
+            if schedule_resume and self._config.boost_head_config:
+                validate_saved_configs(self._config.base_path, boost_head=self._config.boost_head_config.model_module)
             self._config.start_model()
         finally:
             if self.training_run is not None:
@@ -312,7 +336,7 @@ class BaseTrainer(BasePipeline):
     def stage_fit(self):
         """stage of fitting"""
         self.memory_tracker.mark('stage_fit_start')
-        with FitLock.guard(try_cuda=self.config.try_cuda):
+        with FitLock.guard(), FitLockNN.guard(try_cuda=self.config.try_cuda):
             with self.logger.paragraph('Stage [Fit]' , 2):
                 self.config.log_operation('fit' , 'start')
                 self.on_fit_start_before()

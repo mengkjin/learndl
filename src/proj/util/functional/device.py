@@ -115,11 +115,11 @@ class Device(BoundLogger):
     def from_inference_stage(cls , stage : str) -> Device:
         """Build a Device from ``configs/preference/gpu.yaml`` and current fit-lock occupancy."""
         from src.proj.env.machine import MACHINE
-        from src.proj.util.script.fit_lock import FitLock
+        from src.proj.util.script.fit_lock import FitLockNN
 
         if stage not in _VALID_STAGES:
             raise ValueError(f'Invalid inference stage {stage}, expected one of {_VALID_STAGES}')
-        occupancy = 'busy' if FitLock.is_held() else 'idle'
+        occupancy = 'busy' if FitLockNN.is_held() else 'idle'
         policy = MACHINE.preference(
             'gpu' , f'inference/{stage}/{occupancy}' , default = 'cuda_then_raise'
         )
