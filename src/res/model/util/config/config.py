@@ -190,7 +190,14 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             "force_module": str(self.force_module).lower().replace(" ", "").replace("/", "@") if self.force_module else None,
             "schedule": self.schedule_name and self.schedule_config.get("model.module", None),
         }
-        assert len(np.unique([v for v in model_module_candidate.values() if v])) <= 1, (
+        def canonical_module(value: str) -> str:
+            value = value.lower().replace(" ", "").replace("/", "@")
+            kind = model_module_type(value)
+            if value == kind:
+                value = self[f"model.module.{kind}"]
+            return value if "@" in value else f"{kind}@{value}"
+
+        assert len({canonical_module(v) for v in model_module_candidate.values() if v}) <= 1, (
             f"only one of base_path , force_module , schedule can be provided, but got {model_module_candidate}"
         )
         model_modules = [v for v in model_module_candidate.values() if v]
@@ -932,6 +939,8 @@ class ModelConfig(BaseModelConfig):
     def start_model(self):
         self.start_time = datetime.now()
         self.process_parser()
+        from src.res.model.util.resume_validation import validate_resume
+        validate_resume(self)
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
@@ -1018,7 +1027,7 @@ class ModelConfig(BaseModelConfig):
             and not self.is_resuming
             and not self.base_path.is_null_model
             and "fit" in self.queue_of_stages
-            and self.base_path.is_resumable
+            and self.base_path.base.exists()
         )
 
 
@@ -1175,13 +1184,14 @@ class ModelConfig(BaseModelConfig):
         0: don't change the base_path
         """
         assert value in [-1, 0], f"initial selection must be -1 or 0, got {value}"
-        candidates = self.base_path.find_resumable_candidates_indices()
+        candidates = self.base_path.find_resumable_candidates_indices(
+            folder_not_exist="fit" in self.queue_of_stages and not self.is_resuming)
         if value == -1:
             if self.short_test or self.base_path.is_null_model:
                 ...
             elif "fit" in self.queue_of_stages and not self.is_resuming:
                 if self.base_path.model_name_index in candidates:
-                    value = self.base_path.find_new_index()
+                    value = self.base_path.find_new_index(folder_not_exist=True)
                     msg = f"ModelPath {self.base_path} is resumable, will create a new ModelPath with index {value} to Train New!"
                     self.logger.note(msg , vb = self.parse_vb)
             else:
@@ -1195,7 +1205,7 @@ class ModelConfig(BaseModelConfig):
                     assert value in candidates, (f"value {value} is not in candidates_indices {candidates}")
         elif value == 0:
             if self.manual_deletion_required:
-                value = self.base_path.find_new_index()
+                value = self.base_path.find_new_index(folder_not_exist=True)
             else:
                 value = -1
 

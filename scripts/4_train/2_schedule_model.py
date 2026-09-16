@@ -31,6 +31,8 @@
 #   path: "{PATH.sched}/{schedule_name}.yaml | {PATH.sched_shared}/{schedule_name}.yaml"
 #   height : 300 # optional
 
+from pathlib import Path
+
 from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
@@ -38,7 +40,8 @@ from src.proj.util.script import ScriptTool
 def main(schedule_name : str | None = None , short_test : bool | None = None , 
          resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
     assert schedule_name is not None , 'schedule_name is required'
-    ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end)
+    ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end ,
+                            **({'base_path': Path(kwargs['base_path'])} if kwargs.get('base_path') else {}))
         
 if __name__ == '__main__':
     main()

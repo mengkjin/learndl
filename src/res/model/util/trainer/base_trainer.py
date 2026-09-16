@@ -19,6 +19,7 @@ from src.res.model.util.core import BatchOutput , BatchData , epoch_key
 from src.res.model.util.config import ModelConfig
 from .pipeline import BasePipeline
 from .future_utils import FutureUtils
+from ..training_history import TrainingRun, record_training
 
 __all__ = ['BaseTrainer']
 
@@ -87,6 +88,9 @@ class BaseTrainer(BasePipeline):
             'indent': indent,
             'vb_level': vb_level,
         }
+        if hasattr(self, '_config'):
+            del self._config
+        self.training_run: TrainingRun | None = None
         self._use_data = use_data
         self._kwargs = kwargs
 
@@ -97,7 +101,16 @@ class BaseTrainer(BasePipeline):
         return f'{self.__class__.__name__}(path={self.base_path})'
 
     def init_config(self) -> None:
-        self._config   = ModelConfig.initialize(**self._config_kwargs , **self._kwargs)
+        self._config = ModelConfig(**self._config_kwargs , **self._kwargs)
+        try:
+            self._config.start_model()
+        finally:
+            if self.training_run is not None:
+                selected_path = self._config.base_path.base
+                self.training_run.data['selected_model_path'] = str(selected_path.resolve())
+                if selected_path.is_dir():
+                    self.training_run.data['model_path'] = str(selected_path.resolve())
+                self.training_run.save()
 
     def init_cores(self) -> None:
         """
@@ -246,6 +259,7 @@ class BaseTrainer(BasePipeline):
     def is_fitting(self): 
         return self.status.stage == 'fit'
     
+    @record_training
     def main_process(self):
         """Main stage of data & fit & test"""
         self.stage_setup()
@@ -277,6 +291,8 @@ class BaseTrainer(BasePipeline):
         """stage of setting up"""
         with self.logger.paragraph('Stage [Setup]' , 2):
             self.init_config()
+            if self.training_run is not None:
+                self.training_run.configured(self.config)
             self.init_cores()
             self.init_utils()
             self.on_configure_model()

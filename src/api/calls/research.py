@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 from collections.abc import Callable
-from datetime import datetime , timedelta
 from typing import Any
 
 from src.proj import MACHINE , PATH , Logger
@@ -17,7 +16,7 @@ class CarryOutScheduleWorkList(DirectCall):
     max_test_schedules = 3
     SCHEDULE_SCRIPT = PATH.scpt.joinpath('4_train' , '2_schedule_model.py')
     @classmethod
-    def get_schedules(cls , exclude_recent_created: bool = True) -> list[str]:
+    def get_schedules(cls) -> list[str]:
         from src.res.model.util.config.config import ScheduleConfig
 
         ret = list(PATH.read_yaml(PATH.sched_worklist)['fit'])
@@ -25,12 +24,10 @@ class CarryOutScheduleWorkList(DirectCall):
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
             ret = [name for name in ret if name not in set(missing)]
-        if exclude_recent_created:
-            ret = [schedule for schedule in ret if not cls._is_schedule_created_recently(schedule)]
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
     @classmethod
     def schedule_names(cls) -> str:
-        schedules = cls.get_schedules(exclude_recent_created = True)
+        schedules = cls.get_schedules()
         return ', '.join(schedules) if schedules else '(none)'
     @classmethod
     def get_schedule_resume_param(cls) -> bool:
@@ -44,23 +41,6 @@ class CarryOutScheduleWorkList(DirectCall):
         for module in dynamic_modules(cls.SCHEDULE_SCRIPT):
             return module.main
         raise FileNotFoundError(f'Schedule model script not found: {cls.SCHEDULE_SCRIPT}')
-    @classmethod
-    def _get_latest_creation_time(cls , schedule_name: str):
-        from src.res.model.util import ModelConfig
-        from src.res.model.util.config.config import ScheduleConfig
-
-        if not ScheduleConfig.check_name_exist(schedule_name):
-            return None
-        config = ModelConfig(schedule_name = schedule_name , vb_level = 'never')
-        return config.base_path.get_creation_time(all_resumables = True)
-
-    @classmethod
-    def _is_schedule_created_recently(cls , schedule_name: str , days: int = 7):
-        max_creation_time = cls._get_latest_creation_time(schedule_name)
-        if max_creation_time is None:
-            return False
-        return max_creation_time > datetime.now() - timedelta(days = days)
-
     @classmethod
     def _release_gpu_memory(cls , task: Any | None = None) -> None:
         """Drop retained training refs and return unused CUDA memory to the driver.
@@ -96,19 +76,89 @@ class CarryOutScheduleWorkList(DirectCall):
             Logger.note(f'Schedule [{schedule_name}] finished; GPU memory released')
 
     def run(self) -> None:
-        Logger.critical(f'Training schedule model list {self.schedule_names()} started')
+        import portalocker
+
+        from src.api.calls.worklist_state import WorklistState
+        from src.res.model.util.training_history import collect_training_runs, file_revision
+
+        worklist_revision = file_revision(PATH.sched_worklist)
+        # Parse the exact bytes fingerprinted above, once per invocation.
+        import yaml
+        worklist = yaml.safe_load(worklist_revision['content'])
+        resume, force = worklist.get('resume', False), worklist.get('force', False)
+        if type(resume) is not bool or type(force) is not bool:
+            raise ValueError('worklist resume and force must be YAML booleans')
+        from src.res.model.util.config.config import ScheduleConfig
+        schedules = list(dict.fromkeys(worklist['fit']))
+        missing = [name for name in schedules if not ScheduleConfig.check_name_exist(name)]
+        if missing:
+            Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
+            schedules = [name for name in schedules if name not in set(missing)]
+        if not MACHINE.platform_server:
+            schedules = schedules[:self.max_test_schedules]
+        Logger.critical(f'Training schedule model list {", ".join(schedules)} started')
+        failed = []
         with as_script_main(self.SCHEDULE_SCRIPT):
             main = self._load_schedule_main()
-            for schedule_name in self.get_schedules():
-                self._train_one_schedule(
-                    main,
-                    schedule_name=schedule_name,
-                    short_test=None,
-                    resume=self.get_schedule_resume_param(),
-                    start=None,
-                    end=None,
-                    email=True,
-                )
+            for schedule_name in schedules:
+                state = WorklistState(schedule_name)
+                lock = state.lock()
+                try:
+                    lock.acquire()
+                except portalocker.exceptions.LockException:
+                    Logger.note(f'Skip [{schedule_name}]: another worklist process is running it')
+                    continue
+                try:
+                    previous = state.read()
+                    revisions = state.revisions(schedule_name)
+                    revisions['worklist'] = worklist_revision
+                    reason, effective_resume = state.decision(previous, revisions, force=force, resume=resume)
+                    if reason == 'completed':
+                        Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
+                        continue
+                    Logger.note(f'Run [{schedule_name}]: {reason}; resume={effective_resume}')
+                    model_path = previous.get('model_path') if previous else None
+                    details: dict[str, Any] = {'revisions': revisions, 'reason': reason, 'resume': effective_resume,
+                               'force': force, 'model_path': model_path, 'training_run_ids': []}
+                    state.save(status='running', **details)
+                    def record_progress(run):
+                        # Persist the chosen directory before training, including hard-kill recovery.
+                        if run['run_id'] not in details['training_run_ids']:
+                            details['training_run_ids'].append(run['run_id'])
+                        if run.get('model_path') or not effective_resume:
+                            details['model_path'] = run.get('model_path')
+                        state.save(status='running', **details)
+
+                    with collect_training_runs(on_update=record_progress) as runs:
+                        try:
+                            kwargs = {'base_path': model_path} if effective_resume and model_path else {}
+                            task = self._train_one_schedule(
+                                main, schedule_name=schedule_name, short_test=None,
+                                resume=effective_resume, start=None, end=None, email=True, **kwargs,
+                            )
+                            if not (task.success and task.execution_success and runs
+                                    and all(run['status'] == 'success' for run in runs)):
+                                raise RuntimeError(f'Schedule [{schedule_name}] did not complete successfully')
+                            # A pull/edit during training must not certify the new configuration.
+                            if state.revisions(schedule_name) != revisions:
+                                raise RuntimeError('Worklist or schedule changed during training; completion not cached')
+                        except BaseException as exc:
+                            details['training_run_ids'] = [run['run_id'] for run in runs]
+                            if runs and runs[-1].get('model_path'):
+                                details['model_path'] = runs[-1]['model_path']
+                            state.save(status='failed', error=f'{type(exc).__name__}: {exc}', **details)
+                            if not isinstance(exc, Exception):
+                                raise
+                            failed.append(schedule_name)
+                            Logger.warning(str(exc))
+                        else:
+                            details['model_path'] = runs[-1]['model_path']
+                            details['training_run_ids'] = [run['run_id'] for run in runs]
+                            state.save(status='success', **details)
+                finally:
+                    lock.release()
+        if failed:
+            raise RuntimeError(f'Training failed for schedules: {", ".join(failed)}')
         Logger.success('Training schedule model list completed')
 
 class ScheduleModel(DirectCall):
