@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import json
 import os
 import sys
 import shlex
@@ -182,8 +183,28 @@ class WezTermOpener(BasicOpener):
         if sock is not None:
             spawn_env = {**os.environ, "WEZTERM_UNIX_SOCKET": sock}
 
+        window_id = None
+        if new_on == 'tab':
+            # Let WezTerm discover its connection too: distro versions can put
+            # GUI sockets outside our runtime-directory heuristic.
+            try:
+                result = subprocess.run(['wezterm', 'cli', 'list', '--format', 'json'],
+                                        env=spawn_env, capture_output=True, text=True, timeout=5, check=True)
+                panes = json.loads(result.stdout)
+                pane_id = os.environ.get('WEZTERM_PANE')
+                current = next((pane for pane in panes if str(pane['pane_id']) == pane_id), None)
+                if current is None and panes:
+                    current = next((pane for pane in panes if pane.get('is_active')), panes[0])
+                if current is not None:
+                    window_id = str(int(current['window_id']))
+            except (subprocess.SubprocessError, OSError, ValueError, KeyError, TypeError) as exc:
+                if sock is not None or os.environ.get('WEZTERM_PANE'):
+                    raise RuntimeError(f'Cannot reach the existing WezTerm window for a new tab: {exc}') from exc
+
         # Cold start: no live GUI — ``wezterm cli`` cannot connect; open first window via ``start``.
-        if sock is None:
+        if sock is None and window_id is None:
+            if new_on == 'tab' and os.environ.get('WEZTERM_PANE'):
+                raise RuntimeError('No existing WezTerm window found; refusing to open an unexpected new window')
             args: list[str] = ["wezterm", "start"]
             if cwd:
                 args.extend(["--cwd", cwd])
@@ -204,6 +225,8 @@ class WezTermOpener(BasicOpener):
             case "tab":
                 activate_wezterm()
                 args = ["wezterm", "cli", "spawn"]
+                if window_id is not None:
+                    args.extend(['--window-id', window_id])
             case _:
                 raise ValueError(f"Invalid new_on: {new_on}")
         if cwd:

@@ -30,7 +30,11 @@ UNIT_DIR = Path('/etc/systemd/system')
 
 
 def command(argv: list[str], *, input_text: str | None = None) -> str:
-    return subprocess.run(argv, input=input_text, text=True, capture_output=True, check=True).stdout
+    result = subprocess.run(argv, input=input_text, text=True, capture_output=True, check=False)
+    if result.returncode:
+        raise RuntimeError(f'Command failed ({result.returncode}): {shlex.join(argv)}\n'
+                           f'{result.stderr.strip()}\n{result.stdout.strip()}'.rstrip())
+    return result.stdout
 
 
 def read_cron() -> str:
@@ -147,10 +151,18 @@ def service(root: Path, python: Path, module: str, args: list[str]) -> str:
     user = pwd.getpwuid(os.getuid())
     executable = ' '.join(unit_quote(str(v)) for v in [python, '-m', module, *args])
     return (f'[Unit]\nDescription=Learndl managed task\nAfter=network-online.target\n'
-            f'[Service]\nType=oneshot\nUser={user.pw_name}\nWorkingDirectory={unit_quote(str(root))}\n'
+            f'[Service]\nType=oneshot\nUser={user.pw_name}\nWorkingDirectory={unit_path(root)}\n'
             f'Environment={unit_quote("HOME=" + user.pw_dir)}\nEnvironment={unit_quote("PYTHONPATH=" + str(root))}\n'
             f'ExecStart={executable}\nTimeoutStartSec=infinity\nTimeoutStopSec=30s\nKillMode=control-group\n'
             'NoNewPrivileges=true\nUMask=0077\n')
+
+
+def unit_path(path: Path) -> str:
+    """WorkingDirectory is a path directive, not a shell/ExecStart argument."""
+    value = str(path)
+    if not path.is_absolute() or any(c in value for c in '\n\r\0') or value.endswith('\\') or value != value.strip():
+        raise ValueError('Unsupported working directory')
+    return value.replace('%', '%%')
 
 
 def next_times(slots: set, timezone: str) -> list[str]:
@@ -261,7 +273,7 @@ def validate_unit(name: str, contents: str) -> None:
             raise ValueError('Unexpected service group')
         if fields.get('NoNewPrivileges') not in (['true'], ['yes']):
             raise ValueError('NoNewPrivileges is required')
-        if [shlex.split(value) for value in fields.get('WorkingDirectory', [])] != [[str(PATH.main)]]:
+        if fields.get('WorkingDirectory') != [unit_path(PATH.main)]:
             raise ValueError('Unexpected working directory')
         starts = fields.get('ExecStart', [])
         if len(starts) != 1:
@@ -471,4 +483,8 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(f'Scheduling installer: {exc}', file=sys.stderr)
+        raise SystemExit(1) from None

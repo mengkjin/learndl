@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import psutil
 
 from src.api.task_monitor.scheduling.config import duration, load_config, schedule_slots
-from src.api.task_monitor.scheduling.installer import apply_plan, build_plan, cron_coverage, external_cron, service, validate_unit
+from src.api.task_monitor.scheduling.installer import apply_plan, build_plan, command, cron_coverage, external_cron, service, validate_unit
 from src.api.task_monitor.scheduling.runtime import RunStore, inspect_timeouts, members
 from src.api.task_monitor.watchdog import default_jobs
 
@@ -90,6 +90,17 @@ class ScheduleConfigTest(unittest.TestCase):
                         valid + 'Group=root\n'):
             with self.assertRaises(ValueError):
                 validate_unit('learndl-schedule-daily_update.service', changed)
+
+    def test_working_directory_is_not_shell_quoted(self):
+        contents = service(Path('/home/user/project with spaces'), Path(sys.executable), 'src.api.task_monitor.watchdog', [])
+        self.assertIn('\nWorkingDirectory=/home/user/project with spaces\n', contents)
+        self.assertNotIn('WorkingDirectory="', contents)
+
+    def test_verification_error_preserves_stderr(self):
+        result = subprocess.CompletedProcess(['systemd-analyze'], 1, '', 'WorkingDirectory= path is not absolute')
+        with patch('src.api.task_monitor.scheduling.installer.subprocess.run', return_value=result):
+            with self.assertRaisesRegex(RuntimeError, 'WorkingDirectory= path is not absolute'):
+                command(['systemd-analyze', 'verify', 'test.service'])
 
 
 class TimeoutTest(unittest.TestCase):

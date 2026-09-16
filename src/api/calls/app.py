@@ -38,10 +38,8 @@ class LaunchTaskMonitor(DirectCall):
         kwargs = {
             'done_action': 'pause',
             'title': 'Learndl Monitor',
-            'as_from_workspace': 'Learndl Monitor',
+            'new_on': 'tab',
         }
-        if not MACHINE.is_macos:
-            kwargs['new_on'] = 'tab'
         Shell.open(cmd , cwd=os.getcwd(), **kwargs)
 
 class ManageTaskSchedules(DirectCall):

@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
-from streamlit_autorefresh import st_autorefresh
 
 from src.api.task_monitor.core import (
     PageCursor, TaskMonitorRepository, TaskSnapshot, TaskStatus, TimeWindow,
@@ -53,9 +52,17 @@ body {{ margin: 0; background: #111827; color: #e5e7eb; font: 12px/1.45 Monaco, 
 
 def _render_output(content: str, style: OutputStyle, *, height: int = 560) -> None:
     if style == 'colored':
-        components.html(_colored_document(content), height=height, scrolling=True)
+        _render_isolated_html(_colored_document(content), height=height)
     else:
         st.code(content, language=None)
+
+
+def _render_isolated_html(document: str, *, height: int) -> None:
+    # st.iframe's own sandbox permits scripts/same-origin. Keep report content
+    # inside a second, strictly sandboxed frame and escape the srcdoc attribute.
+    wrapper = (f'<iframe title="Task output" sandbox="" srcdoc="{escape(document, quote=True)}" '
+               f'style="width:100%;height:{height - 8}px;border:0"></iframe>')
+    st.iframe(wrapper, height=height, width='stretch')
 
 
 def _render_full_html(path: Path) -> None:
@@ -66,7 +73,7 @@ def _render_full_html(path: Path) -> None:
     with st.expander('Full HTML report and download'):
         if size <= MAX_HTML_PREVIEW_BYTES:
             try:
-                components.html(path.read_text(encoding='utf-8', errors='replace'), height=600, scrolling=True)
+                _render_isolated_html(path.read_text(encoding='utf-8', errors='replace'), height=600)
             except OSError as exc:
                 st.caption(f'Unable to preview output: {exc}')
         else:
@@ -161,6 +168,7 @@ def _reset_paging_if_filters_changed(signature: tuple[object, ...]) -> None:
 
 
 def _render_dashboard() -> None:
+    from streamlit_autorefresh import st_autorefresh
     st.title('Learndl Monitor')
     st.caption('Read-only task status and on-demand output. Lifecycle reconciliation is performed by the system watchdog.')
     with st.expander('Filters & results', expanded=False):
@@ -229,15 +237,15 @@ def _render_dashboard() -> None:
                 for task in page.tasks
             ]
             event = st.dataframe(
-                rows, hide_index=True, use_container_width=True, on_select='rerun',
+                rows, hide_index=True, width='stretch', on_select='rerun',
                 selection_mode='single-row', key=f'monitor-table-{signature}-{page_number}',
             )
             nav = st.columns((1, 1, 6))
-            if nav[0].button('Previous', disabled=page_number == 1, use_container_width=True):
+            if nav[0].button('Previous', disabled=page_number == 1, width='stretch'):
                 cursors.pop()
                 st.session_state.pop('monitor-selected-task', None)
                 st.rerun()
-            if nav[1].button('Next', disabled=page.next_cursor is None, use_container_width=True):
+            if nav[1].button('Next', disabled=page.next_cursor is None, width='stretch'):
                 assert page.next_cursor is not None
                 cursors.append(page.next_cursor)
                 st.session_state.pop('monitor-selected-task', None)
@@ -257,5 +265,6 @@ def _render_dashboard() -> None:
         st.caption('Select one table row to load its details and output.')
 
 
-st.set_page_config(page_title='Learndl Monitor', layout='wide')
-_render_dashboard()
+if __name__ == '__main__':
+    st.set_page_config(page_title='Learndl Monitor', layout='wide')
+    _render_dashboard()
