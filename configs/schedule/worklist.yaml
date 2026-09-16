@@ -1,8 +1,6 @@
 fit:
-  # - lgbm_of_hf_20
-  # - lgbm_of_hf_60
-  # - resnet_transformer_15m
-  - resnet_mlp_15m
-  - transformer_gru_15m
+  - gru_day_new_rtn
+  - gru_15m_new
+  - gru_15m_new_rtn
 
-resume: True
+resume: False
