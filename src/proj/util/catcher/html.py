@@ -112,8 +112,11 @@ class HtmlCatcher(OutputCatcher):
             self.__class__.PrimaryInstance = None
 
     def __enter__(self):
+        from src.proj.util.cli.session import git_head
+
         self.set_instance()
         self.start_time = datetime.now()
+        self.git_head = git_head(cwd=PATH.main)
         if self.is_primary:
             self.deflectors = DeflectorGroup(self , self.keep_original).start_catching()
             self.redirect_display_function()
@@ -216,6 +219,7 @@ class HtmlCatcher(OutputCatcher):
         script_infos = {
             'Machine' : MACHINE.name,
             'Python' : f"{platform.python_version()}-{platform.machine()}",
+            'Git HEAD' : self.git_head or 'Unavailable',
             'Command' : ' '.join(sys.argv),
             'Start at' : f'{self.start_time.strftime("%Y-%m-%d %H:%M:%S")}',
             'Finish at' : f'{finish_time.strftime("%Y-%m-%d %H:%M:%S")}',

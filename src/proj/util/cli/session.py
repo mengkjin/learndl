@@ -42,15 +42,17 @@ class ProcessQuit(ProcessMagicInput):
     """Signal that the current process should exit cleanly."""
 
 
-def git_head() -> str | None:
-    """Return current git HEAD hash, or None if unavailable."""
+def git_head(cwd: str | os.PathLike[str] | None = None) -> str | None:
+    """Return the repository's HEAD hash, or None if unavailable."""
     try:
         return subprocess.check_output(
             ['git', 'rev-parse', 'HEAD'],
             text=True,
             stderr=subprocess.DEVNULL,
+            cwd=cwd,
+            timeout=5,
         ).strip()
-    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+    except (subprocess.SubprocessError, OSError):
         return None
 
 
