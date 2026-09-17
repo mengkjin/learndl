@@ -148,7 +148,7 @@ class CarryOutScheduleWorkList(DirectCall):
                             kwargs = {'base_path': model_path} if effective_resume and model_path else {}
                             task = self._train_one_schedule(
                                 main, schedule_name=schedule_name, short_test=None,
-                                resume=effective_resume, start=None, end=None, email=not automatic,
+                                resume=effective_resume, start=None, end=None, email=True,
                                 resume_selection='latest' if automatic else 'interactive', **kwargs,
                             )
                             if not (task.success and task.execution_success and runs

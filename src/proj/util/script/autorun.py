@@ -69,12 +69,17 @@ class AutoRunCatchers:
     def enter(self , title : str , category : str , init_time : datetime):
         from src.proj.util.catcher import OutputCatcher , CrashProtectorCatcher , HtmlCatcher , MarkdownCatcher , WarningCatcher
         self.catchers : list[OutputCatcher | WarningCatcher] = []
+        crash_protector = None
         if self.crash_protector_catcher:
-            self.catchers.append(CrashProtectorCatcher(self.task_id))
+            crash_protector = CrashProtectorCatcher(self.task_id)
+            self.catchers.append(crash_protector)
         if self.html_catcher:
             self.catchers.append(HtmlCatcher(title , category , init_time))
         if self.markdown_catcher:
-            self.catchers.append(MarkdownCatcher(title , category , init_time , add_time_to_title=True , to_share_folder=True))
+            self.catchers.append(MarkdownCatcher(
+                title , category , init_time , add_time_to_title=True , to_share_folder=True,
+                crash_protector=crash_protector,
+            ))
         if self.warning_catcher:
             raise_warnings = MACHINE.preference('project' , 'raise_warnings' , default = None)
             ignore_warnings = MACHINE.preference('project' , 'ignore_warnings' , default = None)
@@ -363,7 +368,10 @@ class AutoRunTask(BoundLogger):
                 self.exit_message ,
             ]
             from src.proj.util.web.emailer import Email
-            Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
+            sent = Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
+            if sent:
+                from src.api.task_monitor.scheduling.runtime import record_script_email
+                record_script_email(success=self.execution_status == 'Success')
 
     @classmethod
     def get_value(cls , key : str) -> Any:

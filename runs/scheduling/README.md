@@ -178,12 +178,18 @@ a later watchdog tick if necessary. Business output renews the deadline; watchdo
 heartbeats do not. A repeatedly logging application deadlock cannot be detected
 by this policy. Only the verified automatic session/cgroup is targeted.
 
-Start and finish notifications (success/error/abnormal termination) are persisted
-and emailed by watchdog, with failed deliveries retried. They include the schedule,
-version/Git file commits, log path and available training-history IDs. Script email
-is disabled for these automatic invocations to avoid duplicate reports. After a
-server restart, abnormal-exit notification is delivered when watchdog resumes.
-No idle-poll or watchdog lifecycle mail is sent by this feature.
+The training script sends its own success and handled-error reports, including
+its usual attachments. Watchdog sends the start notification and acts as a
+fallback for abnormal exits (signals, timeout, reboot, launcher failure, or a
+Python failure whose script error email was not delivered). A successful SMTP
+send records an error-mail receipt, preventing a duplicate watchdog error report.
+A success report cannot suppress a later abnormal failure. Successful completion
+and deferred/skipped work do not generate watchdog finish mail.
+
+Watchdog notifications are durable and retry failed delivery. They include the
+schedule, version/Git file commits, log path and available training-history IDs.
+After server restart, abnormal-exit notification is delivered when watchdog
+resumes. No idle-poll or watchdog lifecycle mail is sent by this feature.
 
 Queue, attempts, notifications and logs live under `PATH.runtime/scheduling`
 (`runs.sqlite`, `idle_worklist/*.log`). To stop new automatic starts, set

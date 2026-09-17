@@ -1,7 +1,10 @@
 """Stdout/stderr capture to memory, logs, HTML, markdown, and warning interception."""
 from __future__ import annotations
 
+import shutil
 from datetime import datetime
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Literal , TypeAlias
 
 from src.proj.env import PATH
@@ -36,6 +39,7 @@ class CrashProtectorCatcher(OutputCatcher):
     
         self.kwargs = kwargs
         self.seperating_by = seperating_by
+        self.retain_file = False
 
     def keyword_repr(self):
         return f'task_id="{self.task_id}"'
@@ -54,7 +58,8 @@ class CrashProtectorCatcher(OutputCatcher):
             return
         self.deflectors.end_catching()
         self.logger.remark(f"{self.keyword_repr()}, Capturing Finished, Cost {Since(self.start_time)}")
-        self.logger.footnote(f"crash protector file {self.filename} removed")
+        action = 'retained' if self.retain_file else 'removed'
+        self.logger.footnote(f"crash protector file {self.filename} {action}")
         self.is_catching = False
     
     def open_markdown_file(self):
@@ -77,7 +82,27 @@ class CrashProtectorCatcher(OutputCatcher):
 
     def get_contents(self):
         return ''
+
+    def export_to(self, filename: Path) -> bool:
+        """Archive the local log before cleanup, preserving it if export fails."""
+        temporary = None
+        try:
+            self.markdown_file.flush()
+            filename.parent.mkdir(exist_ok=True, parents=True)
+            with NamedTemporaryFile(dir=filename.parent, prefix=f'.{filename.name}.', suffix='.tmp', delete=False) as output:
+                temporary = Path(output.name)
+            shutil.copyfile(self.filename, temporary)
+            temporary.replace(filename)
+        except OSError as e:
+            self.retain_file = True
+            self.logger.error(f"Failed to copy {self.filename} to {filename}: {e}")
+            return False
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        return True
         
     def close(self):
         self.markdown_file.close()
-        self.filename.unlink(missing_ok=True)
+        if not self.retain_file:
+            self.filename.unlink(missing_ok=True)

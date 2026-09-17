@@ -148,7 +148,7 @@ class WorklistTest(unittest.TestCase):
         automatic.run()
         self.assertEqual(self.main.call_args.kwargs['schedule_name'], 'example')
         self.assertEqual(self.main.call_args.kwargs['resume_selection'], 'latest')
-        self.assertFalse(self.main.call_args.kwargs['email'])
+        self.assertTrue(self.main.call_args.kwargs['email'])
         with self.assertRaises(AutomaticDeferred):
             automatic.run()
         self.main.assert_called_once()

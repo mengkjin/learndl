@@ -103,7 +103,7 @@ class IdleTest(unittest.TestCase):
             self.assertEqual(launch.call_args.args[0]['task'], 'first')
             self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
 
-    def test_launch_registration_gate_and_terminal_mail_retry(self):
+    def test_launch_registration_gate_and_start_mail_retry(self):
         idle.dispatch(self.options, self.store)
         request = self.store.owned(idle.OWNER)[0]
         popen = subprocess.Popen
@@ -122,10 +122,80 @@ class IdleTest(unittest.TestCase):
             self.assertFalse(runtime.deliver_timeout_events(send, self.store))
             send.return_value = True
             self.assertTrue(runtime.deliver_timeout_events(send, self.store))
-            self.assertEqual(send.call_count, 4)  # Start/end, each failed once and then retried.
+            self.assertEqual(send.call_count, 2)  # Only start; success is mailed by the script.
             runtime.inspect_timeouts(self.store)
             runtime.deliver_timeout_events(send, self.store)
-            self.assertEqual(send.call_count, 4)
+            self.assertEqual(send.call_count, 2)
+
+    def test_script_mail_receipts_and_watchdog_fallback(self):
+        from datetime import datetime
+        from src.proj.util.script.autorun import AutoRunTask
+        from src.proj.util.web.emailer import Email
+        for status, delivered, code, expected in [
+            ('Success', True, 0, False), ('Success', False, 0, False),
+            ('Error', True, 1, False), ('Error', False, 1, True),
+            ('Success', True, 1, True), ('Error', True, -9, True),
+        ]:
+            with self.subTest(status=status, delivered=delivered, code=code):
+                run = dict(id=f'{status}-{delivered}-{code}', owner=idle.OWNER, task='first',
+                           phase='complete' if code == 0 else 'error', pid=os.getpid(),
+                           returncode=code, started_at=10, timeout_seconds=None)
+                self.store.put(run)
+                task = SimpleNamespace(email=True, execution_status=status, task_name='schedule',
+                                       time_str='now', source='py', task_full_name='schedule',
+                                       init_time=datetime.now(), end_time=datetime.now(), status=status,
+                                       error_message='', exit_message='', exit_files=[])
+                with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), \
+                     patch.object(Email, 'send', return_value=delivered):
+                    AutoRunTask.send_email(task)
+                self.assertEqual(runtime.idle_exit_needs_email(self.store, run), expected)
+                runtime.finish_idle_event(self.store, run, 'exit')
+                send = Mock(return_value=True)
+                with patch('src.api.util.backend.task.TaskDatabase'):
+                    runtime.deliver_timeout_events(send, self.store)
+                    runtime.finish_idle_event(self.store, run, 'exit again')
+                    runtime.deliver_timeout_events(send, self.store)
+                self.assertEqual(send.call_count, int(expected))
+
+    def test_smtp_exception_leaves_error_for_watchdog_and_timeout_bypasses_receipt(self):
+        from src.proj.util.script.autorun import AutoRunTask
+        from src.proj.util.web.emailer import Email
+        from datetime import datetime
+        run = dict(id='mail-failed', owner=idle.OWNER, task='first', phase='error', pid=os.getpid(),
+                   returncode=1, started_at=10, timeout_seconds=None)
+        self.store.put(run)
+        task = SimpleNamespace(email=True, execution_status='Error', task_name='schedule',
+                               time_str='now', source='py', task_full_name='schedule',
+                               init_time=datetime.now(), end_time=datetime.now(), status='Error',
+                               error_message='', exit_message='', exit_files=[])
+        with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), \
+             patch.object(Email, 'send', side_effect=OSError('SMTP unavailable')):
+            with self.assertRaises(OSError):
+                AutoRunTask.send_email(task)
+            self.assertTrue(runtime.idle_exit_needs_email(self.store, run))
+            runtime.record_script_email(success=False)
+        run.update(phase='killed', term_at=20)
+        self.assertTrue(runtime.idle_exit_needs_email(self.store, run))
+        self.store.put(run)
+        with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), patch.object(Email, 'send') as send:
+            AutoRunTask.send_email(task)
+            send.assert_not_called()
+
+    def test_pending_old_success_and_reported_error_mails_are_suppressed(self):
+        for phase, code in [('complete', 0), ('deferred', 75), ('error', 1)]:
+            run = dict(id=phase, owner=idle.OWNER, task='first', phase=phase, pid=os.getpid(),
+                       returncode=code, started_at=10, timeout_seconds=None)
+            self.store.put(run)
+            self.store.event(run, 'finished', 'old pending event')
+            if phase == 'error':
+                with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}):
+                    runtime.record_script_email(success=False)
+        with patch('src.api.util.backend.task.TaskDatabase'):
+            send = Mock(return_value=True)
+            self.assertTrue(runtime.deliver_timeout_events(send, self.store))
+            send.assert_not_called()
+        with self.store.connect() as connection:
+            self.assertEqual(connection.execute('SELECT count(*) FROM events WHERE sent=-1').fetchone()[0], 3)
 
     def test_no_output_timeout_then_term_and_kill(self):
         output = self.root / 'output.log'

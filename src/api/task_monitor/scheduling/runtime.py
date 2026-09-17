@@ -23,6 +23,10 @@ class RunStore:
                 CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS task_links (task_id TEXT PRIMARY KEY, run_id TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, body TEXT NOT NULL, sent INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS script_mail (
+                    run_id TEXT NOT NULL, outcome TEXT NOT NULL, sent_at REAL NOT NULL,
+                    PRIMARY KEY(run_id, outcome)
+                );
                 CREATE INDEX IF NOT EXISTS runs_phase ON runs(json_extract(data, '$.phase'));
             ''')
 
@@ -60,6 +64,37 @@ class RunStore:
         body = json.dumps({'run': run, 'detail': detail, 'kind': kind})
         with self.connect() as connection:
             connection.execute('INSERT OR IGNORE INTO events(id,body) VALUES (?,?)', (f'{run["id"]}:{kind}', body))
+
+
+def record_script_email(*, success: bool) -> None:
+    """Receipt after SMTP success, separate from concurrently updated run state."""
+    run_id = os.getenv('LEARNDL_MANAGED_RUN')
+    if not run_id:
+        return
+    store = RunStore()
+    run = store.get(run_id)
+    if run.get('owner') != 'idle_worklist' or run.get('pid') != os.getpid():
+        return
+    with store.connect() as connection:
+        connection.execute('INSERT OR REPLACE INTO script_mail VALUES (?, ?, ?)',
+                           (run_id, 'success' if success else 'error', time.time()))
+
+
+def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
+    """Watchdog owns abnormal exits, not successful/deferred or reported errors."""
+    if run['phase'] in {'complete', 'deferred'}:
+        return False
+    # Signals, reboot, launcher failure and watchdog termination are distinct
+    # from an ordinary Python failure which the script may already have mailed.
+    code = run.get('returncode')
+    if 'term_at' in run or code is None or code < 0:
+        return True
+    if code in (0, 75):
+        return False
+    with store.connect() as connection:
+        receipt = connection.execute("SELECT 1 FROM script_mail WHERE run_id=? AND outcome='error'",
+                                     (run['id'],)).fetchone()
+    return receipt is None
 
 
 def register_task(task_id: str) -> None:
@@ -188,6 +223,8 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     if run.get('returncode') == 75 and 'term_at' not in run:
         run['phase'] = 'deferred'
         store.put(run)
+    if not idle_exit_needs_email(store, run):
+        return
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
         from src.api.calls.worklist_state import WorklistState
@@ -278,6 +315,14 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     for event_id, body in rows:
         event = json.loads(body)
         run = event['run']
+        if run.get('owner') == 'idle_worklist' and event['kind'] == 'finished':
+            # Also suppress old queued success mails and errors reported since
+            # this event was created; retain the event for audit (sent=-1).
+            current = store.get(run['id']) or run
+            if not idle_exit_needs_email(store, current):
+                with store.connect() as connection:
+                    connection.execute('UPDATE events SET sent=-1 WHERE id=?', (event_id,))
+                continue
         from src.api.util.backend.task import TaskDatabase
         database = TaskDatabase()
         attachments = []
