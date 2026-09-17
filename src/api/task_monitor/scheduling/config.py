@@ -15,7 +15,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist'}
+JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'git_auto_update'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
@@ -169,6 +169,8 @@ def load_config(directory: Path, host: str) -> dict:
             raise ValueError(f'Unknown maintenance job: {key}')
         _keys(job, {'enabled', 'interval_seconds', 'max_sources', 'max_seconds'} |
               ({'max_gpu_memory_percent', 'progress_timeout_seconds'} if key == 'idle_worklist' else set()))
+        if key == 'git_auto_update' and (type(job.get('max_seconds', 45)) is not int or not 10 <= job.get('max_seconds', 45) <= 60):
+            raise ValueError('git_auto_update max_seconds must be between 10 and 60')
         if key == 'idle_worklist':
             percent = job.get('max_gpu_memory_percent', 20)
             limit = job.get('progress_timeout_seconds', 43200)

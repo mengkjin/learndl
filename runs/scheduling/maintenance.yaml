@@ -15,3 +15,7 @@ watchdog:
       interval_seconds: 900
       max_gpu_memory_percent: 20
       progress_timeout_seconds: 43200
+    git_auto_update:
+      enabled: true
+      interval_seconds: 300
+      max_seconds: 45

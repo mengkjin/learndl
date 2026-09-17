@@ -199,3 +199,51 @@ Queue, attempts, notifications and logs live under `PATH.runtime/scheduling`
 (`runs.sqlite`, `idle_worklist/*.log`). To stop new automatic starts, set
 `idle_worklist.enabled: false` and apply. Running work finishes and remains
 supervised; do not disable `task_timeouts` while automatic work is running.
+
+## Automatic master updates
+
+`git_auto_update` runs every 300 seconds, on server platforms only, at the end of
+watchdog after health checks and notification delivery. Enable/configure it in
+`maintenance.yaml` and publish that configuration with installer plan/apply.
+Each check has a 45-second Git command budget; errors wait until the next poll.
+Only the existing `origin` remote's `master` is fetched. A successful update queues and immediately attempts one email containing the host,
+update time, before/after commit hashes, changed files and required follow-up.
+Failed delivery is retried on subsequent watchdog ticks from a persistent outbox
+in `runs.sqlite`; already delivered commit transitions are not mailed again.
+Unchanged, deferred and failed pulls do not produce success mail. SMTP cannot
+promise exactly-once delivery if the process dies after sending but before saving
+its receipt. Normal checks send no additional email. Inspect `PATH.runtime/task_watchdog/state.json`, job
+`git_auto_update`, for outcome, before/after hashes, changed files and follow-up
+requirements. A failed fetch/update also makes the watchdog invocation fail.
+
+Automatic replacement requires the current branch to be `master`, no tracked,
+staged or untracked changes (ignored runtime files do not count), no in-progress
+Git operation, and a fast-forward with no local-only commits. It uses fetch plus
+`merge --ff-only` to the exact fetched hash. It never resets, cleans, rebases,
+stashes, changes branches or force-updates the working tree. Git hooks are not
+executed and a newly tracked path cannot overwrite an ignored local file.
+
+Running project training/evaluation pipelines hold a shared update lock for their
+whole recorded lifecycle, including loading and final saves. This does not
+serialize training or change FitLock/NN rules. The automatic updater acquires the
+exclusive side of that lock. Active managed tasks, existing FitLock holders and
+live training-history records also defer checkout, covering older recorded
+pipelines that have not acquired the new lock. A malformed/unreadable record
+blocks automatic updates until investigated. Existing training without any record
+or lock cannot be reliably detected. Let such old processes finish before enabling.
+
+A fresh watchdog process uses the new code on the next tick. Existing CLI, web,
+prediction or other long-running processes are not restarted; imports performed
+before a process acquires the lifecycle guard can still belong to the old code.
+This is an in-place update, not an atomic versioned deployment. Manual Git commands
+and external file editors do not cooperate with the update lock; avoid using them
+concurrently. Killing Git during checkout can leave a partial/dirty checkout that
+requires inspection; no automatic reset/rollback is attempted.
+
+Dependencies are not installed and systemd settings are not applied automatically.
+Changes to dependency/runtime files or scheduling definitions are recorded as
+follow-up items. New master code can contain bugs or require newer dependencies;
+it can even prevent the next watchdog from starting, removing timeout and mail
+coverage until repaired. Use a tested master and retain an external way to inspect
+systemd failures. Updating worklist/schedule contents also invalidates completion
+versions and can cause future idle training to run again, per worklist policy.

@@ -180,17 +180,19 @@ def record_training(func):
     """Record the shared training lifecycle; failure must propagate to ScriptTool."""
     @wraps(func)
     def wrapped(self, *args, **kwargs):
-        run = TrainingRun(self)
-        self.training_run = run
-        try:
-            result = func(self, *args, **kwargs)
-            Save.async_wait_all(caller_name='training_history')
-        except BaseException as exc:
-            run.finish('interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', exc)
-            raise
-        else:
-            run.finish('success')
-            return result
-        finally:
-            self.training_run = None
+        from src.proj.util.script.code_update_lock import training_code_guard
+        with training_code_guard():
+            run = TrainingRun(self)
+            self.training_run = run
+            try:
+                result = func(self, *args, **kwargs)
+                Save.async_wait_all(caller_name='training_history')
+            except BaseException as exc:
+                run.finish('interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', exc)
+                raise
+            else:
+                run.finish('success')
+                return result
+            finally:
+                self.training_run = None
     return wrapped

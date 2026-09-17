@@ -198,6 +198,11 @@ def _run_idle_worklist(context: _WatchdogContext) -> JobResult:
     return JobResult(stats=dispatch(context.maintenance['jobs']['idle_worklist']))
 
 
+def _run_git_auto_update(context: _WatchdogContext) -> JobResult:
+    from src.api.task_monitor.scheduling.git_update import check_and_update
+    return JobResult(stats=check_and_update(context.maintenance['jobs']['git_auto_update']))
+
+
 def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     """Return the registry; future short maintenance belongs here."""
     defaults = (
@@ -210,13 +215,14 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
         return defaults
     registry = {job.name: job.runner for job in defaults}
     registry['idle_worklist'] = _run_idle_worklist
+    registry['git_auto_update'] = _run_git_auto_update
     return tuple(WatchdogJob(name, maintenance['jobs'][name]['interval_seconds'], registry[name])
                  for name in registry if maintenance['jobs'].get(name, {}).get('enabled', False))
 
 
 def _job_due(job_state: dict[str, Any], interval_seconds: int, now: float) -> bool:
     try:
-        last_success = float(job_state.get('last_success_at', 0))
+        last_success = float(job_state.get('last_attempt_completed_at', job_state.get('last_success_at', 0)))
     except (TypeError, ValueError):
         return True
     return now - last_success >= interval_seconds
@@ -338,7 +344,10 @@ def run_watchdog(
     job_errors: list[str] = []
     unit_probe_ran = False
 
-    for job in jobs if jobs is not None else default_jobs(maintenance if config else None):
+    selected_jobs = tuple(jobs if jobs is not None else default_jobs(maintenance if config else None))
+    for job in selected_jobs:
+        if job.name == 'git_auto_update':
+            continue  # Updating code must be the very last operation in this process.
         job_state = state['jobs'].setdefault(job.name, {})
         if not _job_due(job_state, job.interval_seconds, check_time):
             continue
@@ -385,7 +394,31 @@ def run_watchdog(
         from src.proj.util.web.emailer import Email
         email_sender = Email.send
     timeout_delivered = deliver_timeout_events(email_sender)
-    return delivered and timeout_delivered and not job_errors
+    from src.api.task_monitor.scheduling.git_update import deliver_update_emails
+    git_mail_delivered = deliver_update_emails(email_sender)
+    for job in selected_jobs:
+        if job.name != 'git_auto_update' or not _job_due(state['jobs'].get(job.name, {}), job.interval_seconds, check_time):
+            continue
+        started_at = time.time() if now is None else check_time
+        try:
+            result = job.runner(context)
+            error = None
+        except Exception as exc:
+            result, error = None, exc
+        _record_job(state, job, started_at=started_at, finished_at=time.time() if now is None else check_time,
+                    result=result, error=error)
+        # Failures of this optional network job obey its configured interval too.
+        state['jobs'][job.name]['last_attempt_completed_at'] = time.time() if now is None else check_time
+        if error is not None or (result and result.stats.get('status') == 'error'):
+            reason = str(error) if error is not None else str(result.stats.get('reason') if result is not None else 'unknown failure')
+            state['jobs'][job.name]['last_error'] = reason
+            job_errors.append(f'{job.name}: {reason}')
+        state['last_job_errors'] = job_errors
+        _save_state(state_path, state)
+        if result is not None and result.stats.get('notification_id'):
+            sent = deliver_update_emails(email_sender, notice_id=str(result.stats['notification_id']))
+            git_mail_delivered = git_mail_delivered and sent
+    return delivered and timeout_delivered and git_mail_delivered and not job_errors
 
 
 def _parse_args() -> argparse.Namespace:
