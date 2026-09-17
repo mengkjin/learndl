@@ -184,7 +184,11 @@ fallback for abnormal exits (signals, timeout, reboot, launcher failure, or a
 Python failure whose script error email was not delivered). A successful SMTP
 send records an error-mail receipt, preventing a duplicate watchdog error report.
 A success report cannot suppress a later abnormal failure. Successful completion
-and deferred/skipped work do not generate watchdog finish mail.
+and deferred/skipped work do not generate watchdog finish mail for new workers.
+For rolling upgrades, workers record `script_email_enabled: true` at launch.
+Older runs without that marker retain watchdog success mail unless a script
+success-mail receipt exists, so a training already running with `email=False`
+keeps its result notification without restart.
 
 Watchdog notifications are durable and retry failed delivery. They include the
 schedule, version/Git file commits, log path and available training-history IDs.

@@ -124,6 +124,7 @@ def _launch(request: dict, store: RunStore) -> int:
     log = runtime_dir() / 'idle_worklist' / f'{request["id"]}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     request.update(phase='starting', started_at=time.time(), uid=os.getuid(), log_path=str(log),
+                   script_email_enabled=True,
                    runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), boot_id=boot_id())
     store.put(request)
     read_fd, write_fd = os.pipe()

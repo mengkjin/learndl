@@ -81,16 +81,25 @@ def record_script_email(*, success: bool) -> None:
 
 
 def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
-    """Watchdog owns abnormal exits, not successful/deferred or reported errors."""
-    if run['phase'] in {'complete', 'deferred'}:
+    """Keep legacy no-script-mail runs covered across a rolling code update."""
+    if run['phase'] == 'deferred':
         return False
     # Signals, reboot, launcher failure and watchdog termination are distinct
     # from an ordinary Python failure which the script may already have mailed.
     code = run.get('returncode')
     if 'term_at' in run or code is None or code < 0:
         return True
-    if code in (0, 75):
+    if code == 75:
         return False
+    if code == 0 or run['phase'] == 'complete':
+        if run.get('script_email_enabled'):
+            return False
+        # Old workers launched training with email=False. Missing metadata must
+        # therefore retain their watchdog result mail unless the script sent it.
+        with store.connect() as connection:
+            receipt = connection.execute("SELECT 1 FROM script_mail WHERE run_id=? AND outcome='success'",
+                                         (run['id'],)).fetchone()
+        return receipt is None
     with store.connect() as connection:
         receipt = connection.execute("SELECT 1 FROM script_mail WHERE run_id=? AND outcome='error'",
                                      (run['id'],)).fetchone()
@@ -234,6 +243,12 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     except (OSError, ValueError):
         pass
     store.event(run, 'finished', detail)
+    if not run.get('script_email_enabled'):
+        # Recover legacy completion mail suppressed by the brief prior policy;
+        # sent=1 is never reset, so delivered notifications remain deduplicated.
+        with store.connect() as connection:
+            connection.execute('UPDATE events SET sent=0 WHERE id=? AND sent=-1',
+                               (f'{run["id"]}:finished',))
 
 
 def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None) -> dict:
@@ -316,7 +331,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
         event = json.loads(body)
         run = event['run']
         if run.get('owner') == 'idle_worklist' and event['kind'] == 'finished':
-            # Also suppress old queued success mails and errors reported since
+            # Suppress new-policy success mails and errors reported since
             # this event was created; retain the event for audit (sent=-1).
             current = store.get(run['id']) or run
             if not idle_exit_needs_email(store, current):

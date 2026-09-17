@@ -138,7 +138,7 @@ class IdleTest(unittest.TestCase):
         ]:
             with self.subTest(status=status, delivered=delivered, code=code):
                 run = dict(id=f'{status}-{delivered}-{code}', owner=idle.OWNER, task='first',
-                           phase='complete' if code == 0 else 'error', pid=os.getpid(),
+                           phase='complete' if code == 0 else 'error', pid=os.getpid(), script_email_enabled=True,
                            returncode=code, started_at=10, timeout_seconds=None)
                 self.store.put(run)
                 task = SimpleNamespace(email=True, execution_status=status, task_name='schedule',
@@ -181,9 +181,9 @@ class IdleTest(unittest.TestCase):
             AutoRunTask.send_email(task)
             send.assert_not_called()
 
-    def test_pending_old_success_and_reported_error_mails_are_suppressed(self):
+    def test_pending_new_success_and_reported_error_mails_are_suppressed(self):
         for phase, code in [('complete', 0), ('deferred', 75), ('error', 1)]:
-            run = dict(id=phase, owner=idle.OWNER, task='first', phase=phase, pid=os.getpid(),
+            run = dict(id=phase, owner=idle.OWNER, task='first', phase=phase, pid=os.getpid(), script_email_enabled=True,
                        returncode=code, started_at=10, timeout_seconds=None)
             self.store.put(run)
             self.store.event(run, 'finished', 'old pending event')
@@ -196,6 +196,43 @@ class IdleTest(unittest.TestCase):
             send.assert_not_called()
         with self.store.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM events WHERE sent=-1').fetchone()[0], 3)
+
+    def test_legacy_running_task_keeps_result_mail_and_delivery_retry(self):
+        run = dict(id='legacy', owner=idle.OWNER, task='first', phase='running', pid=100,
+                   returncode=0, started_at=10, timeout_seconds=None)
+        self.store.put(run)
+        with patch.object(runtime, 'members', return_value=[]), patch('src.api.util.backend.task.TaskDatabase'):
+            runtime.inspect_timeouts(self.store, now=100)
+            send = Mock(side_effect=[True, False, True])  # Start succeeds, result retries.
+            self.assertFalse(runtime.deliver_timeout_events(send, self.store))
+            self.assertTrue(runtime.deliver_timeout_events(send, self.store))
+            runtime.inspect_timeouts(self.store, now=101)
+            runtime.deliver_timeout_events(send, self.store)
+            self.assertEqual(send.call_count, 3)
+            self.assertIn('finished', send.call_args.args[0])
+
+    def test_legacy_result_mail_suppressed_only_when_script_already_sent(self):
+        run = dict(id='legacy-receipt', owner=idle.OWNER, task='first', phase='complete',
+                   pid=os.getpid(), returncode=0, started_at=10, timeout_seconds=None)
+        self.store.put(run)
+        self.assertTrue(runtime.idle_exit_needs_email(self.store, run))
+        with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}):
+            runtime.record_script_email(success=True)
+        self.assertFalse(runtime.idle_exit_needs_email(self.store, run))
+
+    def test_legacy_previously_suppressed_result_is_recovered_once(self):
+        run = dict(id='legacy-suppressed', owner=idle.OWNER, task='first', phase='complete',
+                   returncode=0, started_at=10, timeout_seconds=None)
+        self.store.put(run)
+        self.store.event(run, 'finished', 'legacy result')
+        with self.store.connect() as connection:
+            connection.execute('UPDATE events SET sent=-1')
+        with patch('src.api.util.backend.task.TaskDatabase'):
+            send = Mock(return_value=True)
+            for _ in range(2):
+                runtime.inspect_timeouts(self.store, now=100)
+                runtime.deliver_timeout_events(send, self.store)
+            send.assert_called_once()
 
     def test_no_output_timeout_then_term_and_kill(self):
         output = self.root / 'output.log'
