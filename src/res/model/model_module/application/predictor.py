@@ -55,6 +55,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
+        self._strict_hidden_source = False
         if isinstance(model_input , PredictorPath):
             self.path = model_input
         else:
@@ -76,22 +77,15 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     @classmethod
     def from_model_str(cls , model_str : str):
+        """Load an exact hidden source; missing model/number/checkpoint is an error.
+
+        Preferred: gru@gru_day_new_rtn@1@0@best (directory 1, model number 0).
+        Legacy gru@gru_day_new_rtn@0@best means the unnumbered directory only.
         """
-        Initialize from a model string
-        the model string is like 'gru@gru_avg@0@best' , where @ separates model_path_input , model_num , model_submodel
-        """
-        args = model_str.rsplit('@' , 2)
-        assert len(args) in [2,3] , f'Invalid model string: {model_str} , {args}'
-        if len(args) == 2:
-            model_path_input , model_num = args
-            submodel = 'best'
-        elif args[-1] not in ['best' , 'swalast' , 'swabest'] and args[-1].isdigit():
-            model_path_input = '@'.join(args[:-1])
-            model_num = args[-1]
-            submodel = 'best'
-        else:
-            model_path_input , model_num , submodel = args
-        return cls(model_path_input , int(model_num) , submodel)
+        from src.res.model.util.hidden_source import hidden_source_path
+        instance = cls(hidden_source_path(model_str))
+        instance._strict_hidden_source = True
+        return instance
 
     @property
     def model_name(self) -> str:
@@ -116,7 +110,12 @@ class ArchivedPredictorModel(Base.BoundLogger):
     @cached_property
     def config(self) -> ModelConfig:
         with Proj.silence:
-            return ModelConfig(self.model_name , stage=2 , resume=1).start_model()
+            if not self._strict_hidden_source:
+                return ModelConfig(self.model_name, stage=2, resume=1).start_model()
+            if not self.path.base.is_dir():
+                raise FileNotFoundError(f'Prediction model directory does not exist: {self.path.base}')
+            return ModelConfig(self.path.base, stage=2, resume=1, selection=0,
+                               short_test=self.path.is_short_test).start_model()
 
     @cached_property
     def model(self) -> PredictorModel:
@@ -124,6 +123,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     @cached_property
     def model_dates(self) -> np.ndarray:
+        if self._strict_hidden_source:
+            # Other model numbers can have different archive dates.
+            return self.path.sub_dirs(self.path.archive(int(self.path.use_model_nums[0])), as_int=True)
         return self.path.model_dates
 
     @cached_property

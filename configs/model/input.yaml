@@ -20,9 +20,11 @@ verify.x.autofill:
   vol_price: forward
   vol_other: forward
 
-hidden.types: # list of hidden states , use if input_type is hidden
-  - gru_day_V0.0.best
-  - gru_day_V0.1.best
+# Exact source: module@name@directory_index@model_num@submodel.
+# Directory 1 is the unnumbered folder; 2 means name@2. No fallback or prompts.
+hidden.types: # missing directory/model number/checkpoint raises an error
+  - gru@gru_day_V0@1@0@best
+  - gru@gru_day_V0@1@1@best
 
 factor.types: # list of category1 , use if input_type is factor
   fundament:  [quality]

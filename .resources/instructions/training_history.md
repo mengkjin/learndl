@@ -45,3 +45,30 @@ SIGKILL/断电无法执行退出逻辑，磁盘记录可能保留 `running`。wo
 读取统一历史时可用 `TrainingRun.read(path)`，它通过 PID 和进程创建时间把已退出进程标为 `interrupted`。
 
 记录以临时文件、fsync 和原子替换落盘；在训练目录选定后立即更新，不等训练结束才登记目录。
+
+
+## Hidden 数据源必须固定模型
+
+`input.hidden.types` 推荐写完整的 `模块@模型名@目录编号@参数编号@子模型`，例如：
+
+```yaml
+input:
+  type: hidden
+  hidden.types:
+    - gru@gru_day_new_rtn@1@0@best
+```
+
+这里目录编号 `1` 指 `models/nn/gru@gru_day_new_rtn`（没有编号后缀）；
+目录编号 `2` 指 `models/nn/gru@gru_day_new_rtn@2`。参数编号从 `0` 开始，
+上面的引用读取该目录 `archive/0/<训练日期>/best/state_dict.pt`。
+如需第 2 次训练的结果，必须显式写 `gru@gru_day_new_rtn@2@0@best`。
+
+旧式 `gru@gru_day_new_rtn@0@best` 为兼容保存的配置仍可使用，但严格指向
+目录编号 1、参数编号 0，不会自动选择唯一候选或最新目录。
+模块、模型名、参数编号、子模型必须填写。目录、保存的配置、参数编号或
+所选子模型的 checkpoint 缺失时直接报错；交互和非交互训练行为一致。
+每个 hidden 来源使用自己选定参数编号下的训练日期，不借用其他参数编号的日期。
+
+`gru_day_lgbm` 和 `gru_day_xgboost` 现均固定使用
+`gru@gru_day_new_rtn@0@best`（未带编号后缀的目录，参数编号 0）。更新配置不会改变已经启动的训练；若恢复旧
+训练，仍以其保存的配置为准。要采用新的来源，请使用新的训练配置启动。

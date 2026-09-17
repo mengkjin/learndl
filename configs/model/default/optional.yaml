@@ -29,8 +29,8 @@ model.special.global2top: False
 
 input.data.types: day
 input.hidden.types:
-  - gru_day_V0.0.best
-  - gru_day_V0.1.best
+  - gru@gru_day_V0@1@0@best
+  - gru@gru_day_V0@1@1@best
 input.factor.types:
   fundament: [quality]
 input.combo.types: [data , factor]
