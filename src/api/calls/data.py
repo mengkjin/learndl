@@ -42,7 +42,7 @@ class ReconstructPreprocessedData(DirectCall):
                     option_help={
                         'fit': 'Rebuild fit frame used for model training.',
                         'predict': 'Rebuild predict frame used at inference time.',
-                        'both': 'Rebuild fit then predict (fit skipped on coding machines).',
+                        'both': 'Rebuild fit then predict.',
                     },
                 )
                 if not loop.set_flag(flag_type) or flag_type.result is None:
@@ -50,15 +50,16 @@ class ReconstructPreprocessedData(DirectCall):
                 data_type = flag_type.result
                 if MACHINE.platform_coding and flag_type.result != 'predict':
                     Logger.alert1('This is a coding machine, fit data reconstruction costs a lot of time.')
-                if flag_type.result == 'fit':
-                    PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
-                elif flag_type.result == 'predict':
-                    PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True)
-                elif flag_type.result == 'both':
-                    PrePros.get_processor(flag_key.result, frame = 'fit').build(reconstruct = True)
-                    PrePros.get_processor(flag_key.result, frame = 'predict').build(reconstruct = True , confirm = False)
-                else:
+                if data_type not in ('fit', 'predict', 'both'):
                     raise ValueError(f'Invalid data type: {data_type}')
+                confirmation = AskFor.Confirmation(title='Are you sure to reconstruct the preprocessed data?')
+                if not confirmation.valid:
+                    continue
+                from src.api.task_monitor.interactive import reconstruction
+                for frame in (('fit', 'predict') if data_type == 'both' else (data_type,)):
+                    processor = PrePros.get_processor(flag_key.result, frame=frame)
+                    with reconstruction(processor):
+                        processor.build(reconstruct=True, confirm=False)
 
 class RecalculateHistNorm(DirectCall):
     """Recalculate the historical normalisation statistics."""

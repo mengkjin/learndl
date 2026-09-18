@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Any , Callable , cast
 
@@ -49,7 +50,7 @@ def hwm_bytes() -> int | None:
 
 
 def mesh4d_bytes(n : int , t : int , i : int , f : int) -> int:
-    """Bytes of 8 int64 ``(N,T,I,F)`` meshgrid tensors (4 target + 4 source)."""
+    """Logical bytes if eight int64 grids were materialized, NOT actual storage."""
     return int(n) * int(t) * int(i) * int(f) * 8 * 8
 
 
@@ -92,12 +93,12 @@ def describe(obj : Any) -> str:
     if isinstance(obj , (int , float , np.integer , np.floating)):
         return fmt_bytes(int(obj))
     if isinstance(obj , torch.Tensor):
-        return f'{fmt_bytes(nbytes_of(obj))}{tuple(obj.shape)},{obj.dtype}'
+        return f'logical={fmt_bytes(nbytes_of(obj))},storage={fmt_bytes(obj.untyped_storage().nbytes())}{tuple(obj.shape)},{obj.dtype}'
     if isinstance(obj , np.ndarray):
         return f'{fmt_bytes(obj.nbytes)}{obj.shape},{obj.dtype}'
     values = getattr(obj , 'values' , None)
     if isinstance(values , torch.Tensor) and hasattr(obj , 'shape'):
-        return f'{fmt_bytes(nbytes_of(obj))}{tuple(obj.shape)},{values.dtype}'
+        return f'logical={fmt_bytes(nbytes_of(obj))},storage={fmt_bytes(values.untyped_storage().nbytes())}{tuple(obj.shape)},{values.dtype}'
     if hasattr(obj , 'estimated_size') and hasattr(obj , 'shape'):
         rows , cols = obj.shape
         return f'{fmt_bytes(nbytes_of(obj))}pl({rows},{cols})'
@@ -108,9 +109,24 @@ def describe(obj : Any) -> str:
 
 def log_mem(logger : Any , tag : str , **objects : Any) -> None:
     """Write RSS (and optional HWM) plus named object sizes at verbosity 2."""
-    parts = [f'rss={fmt_bytes(rss_bytes())}']
+    parts = [f'time={datetime.now().astimezone().isoformat(timespec="milliseconds")}',
+             f'pid={os.getpid()}', f'rss={fmt_bytes(rss_bytes())}']
     hwm = hwm_bytes()
     if hwm is not None:
         parts.append(f'hwm={fmt_bytes(hwm)}')
-    parts.extend(f'{name}={describe(obj)}' for name , obj in objects.items())
+    parts.extend(f'{"mesh_logical_estimate" if name == "mesh4d" else name}={describe(obj)}' for name , obj in objects.items())
     logger.stdout(f'mem {tag}: ' + ' | '.join(parts) , vb = 2 , add_prefix = False)
+
+
+def trace_stage(tag: str, **objects: Any) -> None:
+    """Opt-in probes for shared DataBlock operations, enabled by CLI reconstruction."""
+    if os.environ.get('LEARNDL_MEMORY_TRACE') == '1':
+        log_mem(_DiagnosticLog, tag, **objects)
+
+
+class _DiagnosticLog:
+    @staticmethod
+    def stdout(message: str, **kwargs: Any) -> None:
+        # Explicit diagnostics must survive normal verbosity filtering. The
+        # reconstruction's tee still captures this without buffering in memory.
+        print(message, flush=True)

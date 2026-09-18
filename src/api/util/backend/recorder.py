@@ -54,14 +54,18 @@ class BackendTaskRecorder:
         - AutoRunTask object
         - any other type (converted to str)
     """
-    def __init__(self , **kwargs) -> None:
-        """Store kwargs; task DB registration happens in :meth:`_resolve_task_id` / :meth:`__enter__`."""
-        parsed_kwargs = self.parse_kwargs(kwargs)
+    def __init__(self , *, parse_cli: bool = True, **kwargs) -> None:
+        """Store kwargs; ``parse_cli=False`` isolates programmatic callers from argv.
+
+        Task DB registration happens in :meth:`resolve_task_id` / :meth:`__enter__`.
+        """
+        parsed_kwargs = self.parse_kwargs(kwargs) if parse_cli else dict(kwargs)
         task_id : str | None = parsed_kwargs.pop('task_id' , None)
         self._task_id = task_id or ''
         self._pending_source = parsed_kwargs.get('source' , None)
         self.task_db : TaskDatabase | None = None
         self.update_msg : dict[str , Any] = {}
+        self.exit_msg = self.ExitMessage()
         self.params = parsed_kwargs
         if 'email' in self.params:
             self.params['email'] = bool(self.params['email'])
@@ -159,7 +163,7 @@ class BackendTaskRecorder:
             self.update_msg['status'] = 'error'
             self.update_msg['exit_code'] = 1
             self.update_msg['exit_message'] = str(exc_value)
-            self.update_msg['exit_error'] = traceback.format_exception(exc_type, exc_value, exc_traceback)
+            self.update_msg['exit_error'] = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
         self.task_db.update_task(self.task_id, backend_updated = True, **self.update_msg)
 
     @dataclass(slots = True)

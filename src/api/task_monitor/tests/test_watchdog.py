@@ -73,6 +73,15 @@ class TaskWatchdogTest(unittest.TestCase):
         self.assertEqual(attempts, 2)
         self.assertEqual(json.loads(self.state_path.read_text())['alerts']['pending_tasks'], [])
 
+    def test_cli_kill_uses_interactive_outbox_without_generic_duplicate(self) -> None:
+        self.task.source = 'cli-reconstruct'
+        db = _FakeTaskDatabase({'train.py@1': {'status': 'killed'}}, {'train.py@1': self.task})
+        sender = MagicMock(return_value=True)
+        with patch('src.api.task_monitor.interactive.maintain', return_value=True) as maintain:
+            self.assertTrue(self._run(db, sender, now=1000))
+        maintain.assert_called_once_with(db, sender)
+        sender.assert_not_called()
+
     def test_python_error_does_not_generate_a_watchdog_email(self) -> None:
         """A recorder-finalised Python exception already uses the task email."""
         task = TaskItem(

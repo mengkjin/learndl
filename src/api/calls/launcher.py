@@ -24,6 +24,30 @@ class DirectCallHub(DirectCall):
 
     category = 'Basic'
 
+    def __call__(self):
+        from src.api.task_monitor.cli_recovery import register, stop
+        from src.proj import PATH
+        recovering = self.kwargs.pop('_recovery', False)
+        if not register(PATH.main):
+            if recovering:
+                Logger.note('A registered DirectCall Hub is already running.')
+                return
+            Logger.note('This additional menu leaves CLI recovery ownership with the existing Hub.')
+        try:
+            result = super().__call__()
+        except SystemExit as exc:
+            if exc.code in (None, 0):
+                stop()
+            raise
+        else:
+            stop()
+            return result
+
+    def _handle_reload(self, reason: str) -> None:
+        from src.api.task_monitor.cli_recovery import stop
+        stop(reload=True)
+        super()._handle_reload(reason)
+
     @classmethod
     def get_description(cls, **kwargs) -> str:
         return (

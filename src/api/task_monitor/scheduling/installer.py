@@ -29,6 +29,26 @@ PREFIX = 'learndl-schedule-'
 UNIT_DIR = Path('/etc/systemd/system')
 
 
+def desktop_path() -> Path:
+    from src.proj import PATH
+    name = hashlib.sha256(str(PATH.main.resolve()).encode()).hexdigest()[:12]
+    return Path.home() / '.config' / 'autostart' / f'learndl-cli-{name}.desktop'
+
+
+def desktop_entry(root: Path, python: Path) -> str:
+    def quote(value: str) -> str:
+        if any(c in value for c in '\n\r\0'):
+            raise ValueError('Invalid desktop argument')
+        for char in ('\\', '"', '`', '$'):
+            value = value.replace(char, '\\' + char)
+        return '"' + value.replace('%', '%%') + '"'
+    argv = [str(python), str(root / 'src/api/task_monitor/cli_recovery.py'), 'login',
+            '--state', str(runtime_dir().parent / 'cli_recovery/state.json')]
+    return ('[Desktop Entry]\nType=Application\nName=Learndl CLI recovery\n'
+            'Comment=Refresh the desktop session for an opted-in Learndl menu\n'
+            'Terminal=false\nExec=' + ' '.join(quote(arg) for arg in argv) + '\n')
+
+
 def command(argv: list[str], *, input_text: str | None = None) -> str:
     result = subprocess.run(argv, input=input_text, text=True, capture_output=True, check=False)
     if result.returncode:
@@ -232,7 +252,8 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
     new_cron = external_cron(cron).rstrip('\n') + '\n'
     if cron_lines:
         new_cron += BEGIN + '\n' + '\n'.join(cron_lines) + '\n' + END + '\n'
-    return {'config': config, 'units': units, 'cron': new_cron, 'report': report,
+    desktop = desktop_entry(root, python) if config['watchdog']['jobs'].get('cli_recovery', {}).get('enabled') else None
+    return {'config': config, 'units': units, 'cron': new_cron, 'report': report, 'desktop_autostart': desktop,
             'conflicts': conflicts, 'global_conflicts': global_conflicts,
             'input_hash': hashlib.sha256(cron.encode()).hexdigest()}
 
@@ -314,6 +335,15 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         raise ValueError('\n'.join(plan['global_conflicts']))
     manifest_path = directory / 'manifest.json'
     previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
+    transaction_path = directory / 'transaction.json'
+    transaction = json.loads(transaction_path.read_text()) if transaction_path.exists() else {}
+    recovering = transaction.get('phase') not in {None, 'complete'}
+    desktop = desktop_path()
+    actual_desktop = desktop.read_text() if desktop.exists() else None
+    desired_desktop = plan.get('desktop_autostart')
+    interrupted_desktop = transaction.get('plan', {}).get('desktop_autostart') if recovering else None
+    if actual_desktop is not None and actual_desktop not in (previous.get('desktop_autostart'), desired_desktop, interrupted_desktop):
+        raise RuntimeError(f'Desktop autostart was externally changed: {desktop}')
     for name in previous['units']:
         if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
@@ -335,9 +365,6 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         path = UNIT_DIR / name
         if name not in previous['units'] and path.exists():
             previous['units'][name] = path.read_text()
-    transaction_path = directory / 'transaction.json'
-    transaction = json.loads(transaction_path.read_text()) if transaction_path.exists() else {}
-    recovering = transaction.get('phase') not in {None, 'complete'}
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
@@ -373,11 +400,12 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     for key in plan['conflicts']:
         if not old_config or key not in old_config['tasks']:
             plan['config']['tasks'][key]['enabled'] = False
-    snapshot = {'cron': original_cron, 'manifest': previous, 'config': old_config}
+    snapshot = {'cron': original_cron, 'manifest': previous, 'config': old_config,
+                'desktop_autostart': actual_desktop}
     previous['timer_states'] = {name: timer_state(name) for name in previous['units'] if name.endswith('.timer')}
     files_match = all((UNIT_DIR / name).exists() and (UNIT_DIR / name).read_text() == contents for name, contents in plan['units'].items())
     timers_match = all(timer_state(name).get('ActiveState') == 'active' and timer_state(name).get('UnitFileState') == 'enabled' for name in plan['units'] if name.endswith('.timer'))
-    if not recovering and files_match and timers_match and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
+    if not recovering and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
         print('Already up to date')
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
@@ -409,6 +437,14 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         for name in sorted(changed & set(plan['units'])):
             command(['sudo', 'install', '-m', '0644', str(stage / name), str(UNIT_DIR / name)])
         # Snapshot publication precedes activation; running tasks keep their own policy.
+        if desired_desktop is None:
+            desktop.unlink(missing_ok=True)
+        else:
+            desktop.parent.mkdir(parents=True, exist_ok=True)
+            temporary = desktop.with_suffix('.tmp')
+            temporary.write_text(desired_desktop)
+            temporary.chmod(0o600)
+            temporary.replace(desktop)
         if plan['config'] is None:
             old_config_path.unlink(missing_ok=True)
         else:
@@ -427,7 +463,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
                 else:
                     command(['sudo', 'systemctl', 'enable' if restore_state.get('UnitFileState') == 'enabled' else 'disable', name])
                     command(['sudo', 'systemctl', 'start' if restore_state.get('ActiveState') == 'active' else 'stop', name])
-        atomic_json(manifest_path, {'units': plan['units'], 'cron': plan['cron']})
+        atomic_json(manifest_path, {'units': plan['units'], 'cron': plan['cron'], 'desktop_autostart': desired_desktop})
         atomic_json(directory / 'transaction.json', {'phase': 'complete'})
 
 
@@ -454,7 +490,11 @@ def main() -> int:
     else:
         plan = {}
     if args.action in {'plan', 'status'}:
-        print(json.dumps({key: value for key, value in plan.items() if key not in {'config', 'units', 'cron'}}, indent=2))
+        print(json.dumps({key: value for key, value in plan.items() if key not in {'config', 'units', 'cron', 'desktop_autostart'}}, indent=2))
+        desktop = desktop_path()
+        actual_desktop = desktop.read_text() if desktop.exists() else None
+        print(json.dumps({'desktop_autostart': str(desktop),
+                          'desktop_autostart_changes': actual_desktop != plan.get('desktop_autostart')}))
         manifest_path = runtime_dir() / 'manifest.json'
         previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
         print(json.dumps({'add_units': sorted(set(plan['units']) - set(previous['units'])),
@@ -462,10 +502,14 @@ def main() -> int:
                           'update_units': sorted(name for name in set(plan['units']) & set(previous['units']) if plan['units'][name] != previous['units'][name]),
                           'cron_changes': plan['cron'] != cron}, indent=2))
         if args.diff:
+            print(''.join(difflib.unified_diff((actual_desktop or '').splitlines(True),
+                      (plan.get('desktop_autostart') or '').splitlines(True), fromfile=str(desktop), tofile='planned autostart')))
             print(''.join(difflib.unified_diff(cron.splitlines(True), plan['cron'].splitlines(True), fromfile='current crontab', tofile='planned crontab')))
             for name in sorted(set(previous['units']) | set(plan['units'])):
                 print(''.join(difflib.unified_diff(previous['units'].get(name, '').splitlines(True), plan['units'].get(name, '').splitlines(True), fromfile='current/' + name, tofile='planned/' + name)))
         if args.action == 'status':
+            from src.api.task_monitor.cli_recovery import load, state_path
+            print(json.dumps({'cli_recovery': load(state_path())}, indent=2))
             directory = runtime_dir()
             manifest = json.loads((directory / 'manifest.json').read_text()) if (directory / 'manifest.json').exists() else {}
             print(json.dumps({'installed': bool(manifest), 'cron_matches': manifest.get('cron') == cron,
@@ -485,6 +529,7 @@ def main() -> int:
             if cron not in {backup['cron'], expected}:
                 raise RuntimeError('External cron changed; inspect and resolve before rollback')
             plan = {'config': backup['config'], 'units': backup['manifest']['units'], 'cron': backup['cron'], 'conflicts': {}, 'global_conflicts': [], 'report': {},
+                    'desktop_autostart': backup.get('desktop_autostart'),
                     'timer_states': backup['manifest'].get('timer_states', {})}
         apply_plan(plan, cron, directory)
     if plan['conflicts']:

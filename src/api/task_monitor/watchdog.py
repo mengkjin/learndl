@@ -140,6 +140,10 @@ def _run_task_lifecycle(context: _WatchdogContext) -> JobResult:
         if update.get('status') == 'killed'
     }
     pending.update(task.id for task in context.task_db.get_killed_tasks_since(context.previous_check))
+    # CLI reconstructions have their own durable outbox for both exceptions and
+    # external kills. Do not send a second generic killed-task email.
+    pending = {task_id for task_id in pending
+               if (task := context.task_db.get_task(task_id)) is None or task.source != 'cli-reconstruct'}
     from src.api.task_monitor.scheduling.runtime import timeout_task_ids
     pending.difference_update(timeout_task_ids())
     return JobResult(
@@ -203,6 +207,11 @@ def _run_git_auto_update(context: _WatchdogContext) -> JobResult:
     return JobResult(stats=check_and_update(context.maintenance['jobs']['git_auto_update']))
 
 
+def _run_cli_recovery(context: _WatchdogContext) -> JobResult:
+    from src.api.task_monitor.cli_recovery import tick
+    return JobResult(stats=tick())
+
+
 def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     """Return the registry; future short maintenance belongs here."""
     defaults = (
@@ -210,6 +219,7 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
         WatchdogJob('task_lifecycle', TASK_LIFECYCLE_INTERVAL, _run_task_lifecycle),
         WatchdogJob('systemd_unit_probe', UNIT_PROBE_INTERVAL, _run_unit_probe),
         WatchdogJob('task_monitor_cache', MONITOR_CACHE_INTERVAL, _run_task_monitor_cache),
+        WatchdogJob('cli_recovery', UNIT_PROBE_INTERVAL, _run_cli_recovery),
     )
     if maintenance is None:
         return defaults
@@ -394,6 +404,10 @@ def run_watchdog(
         from src.proj.util.web.emailer import Email
         email_sender = Email.send
     timeout_delivered = deliver_timeout_events(email_sender)
+    from src.api.task_monitor.interactive import maintain
+    from src.api.task_monitor.cli_recovery import deliver as deliver_cli_alerts
+    interactive_delivered = maintain(task_db, email_sender)
+    cli_delivered = deliver_cli_alerts(email_sender)
     from src.api.task_monitor.scheduling.git_update import deliver_update_emails
     git_mail_delivered = deliver_update_emails(email_sender)
     for job in selected_jobs:
@@ -418,7 +432,7 @@ def run_watchdog(
         if result is not None and result.stats.get('notification_id'):
             sent = deliver_update_emails(email_sender, notice_id=str(result.stats['notification_id']))
             git_mail_delivered = git_mail_delivered and sent
-    return delivered and timeout_delivered and git_mail_delivered and not job_errors
+    return delivered and timeout_delivered and git_mail_delivered and interactive_delivered and cli_delivered and not job_errors
 
 
 def _parse_args() -> argparse.Namespace:

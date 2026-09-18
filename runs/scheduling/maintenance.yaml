@@ -5,6 +5,7 @@ watchdog:
     task_lifecycle: {enabled: true, interval_seconds: 60}
     task_timeouts: {enabled: true, interval_seconds: 60}
     systemd_unit_probe: {enabled: true, interval_seconds: 60}
+    cli_recovery: {enabled: true, interval_seconds: 60}
     task_monitor_cache:
       enabled: true
       interval_seconds: 900

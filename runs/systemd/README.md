@@ -97,3 +97,74 @@ not watchdog alerts: their normal task error email is the single notification.
 Watchdog task alerts are reserved for unexpected process loss (`killed`) and
 installer-owned task timeouts. Daily/forced daily runs have a 12-hour limit and
 weekly runs a 72-hour limit. Direct legacy cron is not timeout-protected.
+# CLI recovery and reconstruction diagnostics
+
+The `cli_recovery` watchdog job restores the registered **DirectCall Hub only**
+on Linux/WezTerm. It never reruns a failed reconstruction. Install/update the
+schedules as the ordinary desktop user:
+
+```bash
+bash runs/install_schedules.sh plan --diff
+bash runs/install_schedules.sh apply
+bash runs/install_schedules.sh status
+```
+
+Open the CLI once from the server's remote desktop after updating the code.
+This records the desktop session and opts that project into recovery. `/quit`
+or a normal menu exit clears recovery intent; closing the window or killing
+the process leaves it enabled. A registered live Hub is not opened twice by
+recovery. Explicitly opened additional menus still work and leave recovery
+ownership with the registered Hub.
+`/reload` hands off registration to the new process.
+
+The installer also manages a project-specific file under
+`~/.config/autostart/learndl-cli-*.desktop`. It refreshes desktop credentials
+on the next graphical login, but never opts an unregistered project in.
+Its contents participate in installation preview, status and rollback.
+Recovery requires a live X11/Wayland `XDG_SESSION_ID` and a functioning
+`systemd --user` manager; no display number is guessed. A disconnected but
+still-running remote desktop can retain its session; a logged-out session
+waits until login. The system watchdog dispatches a separate user service,
+so finishing the watchdog cannot terminate the recovered window.
+
+```bash
+uv run --frozen python -m src.api.task_monitor.cli_recovery status
+uv run --frozen python -m src.api.task_monitor.cli_recovery pause
+uv run --frozen python -m src.api.task_monitor.cli_recovery resume
+```
+
+Failed launches back off; three failures pause recovery and create a retryable
+email notification. Correct the desktop/user-bus problem before `resume`.
+The normal check interval is 60 seconds plus watchdog runtime.
+
+Each confirmed CLI reconstruction creates a Monitor task with source
+`cli-reconstruct` and a unique virtual `_interactive/reconstruct-*.py` label
+(not a runnable pipeline script). `both` records fit and predict separately.
+Task artifacts live in `PATH.runtime/interactive_runs/<run-id>/`:
+
+- `run.json`: inputs, dates, revision, host, process identity and sampler mode.
+- `output.log`: continuously flushed Python stdout/stderr and traceback.
+- `memory.jsonl`: independent two-second process-tree, system, swap and cgroup samples.
+- `evidence.json`: bounded kernel/oomd journal evidence after an unexpected exit.
+- `pending.json` / `notified.json`: durable failure notification delivery state.
+
+The sampler tries a separate user service. If unavailable, it uses a detached
+process and records that it may still share the terminal's cgroup. Missing
+journal permissions and unsupported metrics are reported as unavailable,
+not evidence that no OOM occurred. An ancestor cgroup OOM or whole-machine
+failure can still kill both the worker and sampler; watchdog attempts to
+recover journal evidence afterwards. Buffered native-library output is not
+guaranteed to survive SIGKILL.
+
+Failure emails include a bounded log tail and artifact paths, not multi-GB
+attachments. Success is recorded without sending email. Failed deliveries
+are retried by watchdog. Closed logs are retained for 30 days; live runs and
+unsent failure notices are never pruned. Existing scheduled script notification
+ownership is unchanged. This release does not optimize the reconstruction
+algorithm, restart tasks, or provide computation checkpoints.
+
+Server acceptance: close/kill a disposable Hub, confirm exactly one replacement;
+verify `/quit` stays closed; log out/in with a pending recovery; kill a tiny
+reconstruction and verify Monitor history, persisted output and one failure
+email. Test small inputs before the full minc/mincr rebuild. GUI/user-service
+behavior requires Linux acceptance even when local mocked tests pass.

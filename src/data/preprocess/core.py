@@ -397,7 +397,14 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         del extentions
         if chunk_years > 0:
             if self.ChunkFillNan is not None:
-                block = block.fillna(self.ChunkFillNan).mask_values(mask = self.mask)
+                if self.MemTrace:
+                    log_mem(self.logger, f'{self.key} before-final-fill', block=block)
+                block = block.fillna(self.ChunkFillNan)
+                if self.MemTrace:
+                    log_mem(self.logger, f'{self.key} before-final-mask', block=block)
+                block = block.mask_values(mask=self.mask)
+                if self.MemTrace:
+                    log_mem(self.logger, f'{self.key} after-final-mask', block=block)
             gc.collect()
         if self.MemTrace:
             log_mem(self.logger , f'{self.key} load-done' , block = block)
@@ -452,7 +459,11 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         self.logger.stdout(f'{status.upper()} Preprocessed ({self.frame}) of [{self.key.upper()}] start...' , vb = 2 , add_prefix = False)
         data_block = self.load_with_extension(dates_for_query = None , reconstruct = reconstruct , rollback_date = rollback_date)
         
+        if self.MemTrace:
+            log_mem(self.logger, f'{self.key} before-save', block=data_block)
         self.save_dump(data_block)
+        if self.MemTrace:
+            log_mem(self.logger, f'{self.key} after-save', block=data_block)
         self.save_norm(data_block)
         
         # gc.collect()

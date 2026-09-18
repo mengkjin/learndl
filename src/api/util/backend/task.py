@@ -289,7 +289,8 @@ class TaskDatabase:
                 "WHERE task_id = ?"
             ])
             params = list(kwargs.values()) + [task_id]
-            cursor.execute(query, params)
+            if kwargs:
+                cursor.execute(query, params)
             
             if exit_files:
                 cursor.execute("DELETE FROM task_exit_files WHERE task_id = ?", (task_id,))

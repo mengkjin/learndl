@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import pandas as pd
 import polars as pl
+import os
 
 from copy import deepcopy
 
@@ -24,6 +25,12 @@ from src.func.basic import (
 )
 
 __all__ = ['DataBlock']
+
+
+def _trace(tag: str, **objects) -> None:
+    if os.environ.get('LEARNDL_MEMORY_TRACE') == '1':
+        from src.data.preprocess.mem_trace import trace_stage
+        trace_stage(tag, **objects)
 
 INDAY_MARK_COLUMNS : tuple[str,...] = ('inday' , 'minute')
 FREQUENT_DBS : tuple[str,...] = ('trade_ts.day' , 'trade_ts.day_val' , 'models.tushare_cne5_exp')
@@ -345,10 +352,10 @@ class DataBlock:
         Merge multiple blocks into one block.
 
         Copies overlapping ``(secid, date, inday, feature)`` cells via
-        ``intersect_copy``.  ``copy_method='auto'`` measures the int64 meshgrid
-        volume per source block and uses ``meshgrid`` when it fits in
-        ``mesh_max_bytes`` (faster on small panels), otherwise 1-D broadcast
-        indexers.  If ``inplace`` is True, merge into the first block.
+        ``intersect_copy``. ``copy_method='auto'`` compares logical int64 grid
+        volume against ``mesh_max_bytes``; negative thresholds force broadcast.
+        This estimate is not physical storage or peak RSS. If ``inplace`` is
+        True, merge into the first block.
         """
         blocks = [*block_list]
         if inplace:
@@ -369,6 +376,7 @@ class DataBlock:
         feature = index_merge([blk.feature for blk in merge_blocks] , method = feature_method)
 
         proto = merge_blocks[0].values
+        _trace('merge before-allocation', sources=merge_blocks)
         values = torch.full(
             (len(secid) , len(date) , len(inday) , len(feature)) ,
             torch.nan ,
@@ -376,6 +384,7 @@ class DataBlock:
             device = proto.device ,
         )
         dst_axes = [secid , date , inday , feature]
+        _trace('merge allocated', destination=values)
         method = copy_method
         if method == 'auto':
             mesh_peak = max(
@@ -384,10 +393,12 @@ class DataBlock:
             )
             method = 'mesh' if mesh_peak <= mesh_max_bytes else 'broadcast'
         for blk in merge_blocks:
+            _trace(f'merge before-copy {method}', source=blk, destination=values)
             intersect_copy(
                 values , dst_axes , blk.values , [blk.secid , blk.date , blk.inday , blk.feature] ,
                 method = method , mesh_max_bytes = mesh_max_bytes ,
             )
+            _trace(f'merge after-copy {method}', destination=values)
 
         target_block.update(values = values , secid = secid , date = date , feature = feature)
         return target_block
@@ -614,6 +625,7 @@ class DataBlock:
         Returns a new block with features from all input blocks stacked in order.
         """
         blocks = [blk for blk in block_list if isinstance(blk , cls) and blk.initiated] 
+        _trace('concat-feature before-copy', sources=blocks)
         new_blk = DataBlock()
         for i , blk in enumerate(blocks): 
             if i == 0:
@@ -624,6 +636,7 @@ class DataBlock:
                 new_blk.feature = np.concatenate([new_blk.feature , blk.feature])
                 new_blk.values  = torch.concatenate([new_blk.values  , blk.values] , dim=-1)
         new_blk.on_change_feature()
+        _trace('concat-feature done', result=new_blk)
         return new_blk
 
     @classmethod
@@ -631,6 +644,8 @@ class DataBlock:
         """convert polars dataframe to DataBlock"""
         if df is None or df.is_empty(): 
             return cls()
+
+        _trace(f'from-polars input rows={df.height}', df=df)
 
         # 1. Define the unique keys (keep these eager for the shape)
         assert 'secid' in df.columns and 'date' in df.columns , f'{df.columns} must contain secid and date'
@@ -650,14 +665,19 @@ class DataBlock:
         # 2. Use the Lazy API for the heavy lifting
         # This creates a "Plan" that Polars will optimize before running
         grid_lazy = secid.to_frame().join(date.to_frame(), how="cross").join(inday.to_frame(), how="cross").lazy()
+        _trace(f'from-polars before-join N={secid.len()} T={date.len()} I={inday.len()} F={len(feature)}', df=df)
         values = (
             grid_lazy
             .join(df.lazy(), on=['secid', 'date' , 'inday'], how="left")
             .sort(['secid', 'date' , 'inday']) 
             .select(feature)
             .collect()
-        ).to_numpy()
+        )
+        _trace('from-polars joined', dense=values)
+        values = values.to_numpy()
+        _trace('from-polars numpy', array=values)
         values = torch.from_numpy(values).reshape(secid.len(), date.len(), inday.len(), len(feature))
+        _trace('from-polars tensor', tensor=values)
         block = cls(values , secid.to_numpy() , date.to_numpy() , feature)
         return block
 
@@ -824,7 +844,9 @@ class DataBlock:
         """Replace all NaN values in ``values`` with the given scalar."""
         if self.empty:
             return self
+        _trace('fillna before', block=self)
         self.values = self.values.nan_to_num(value)
+        _trace('fillna after', block=self)
         return self
 
     def autofill(
@@ -1060,6 +1082,7 @@ class DataBlock:
         """
         if not mask or self.empty: 
             return self
+        _trace('mask before', block=self)
         mask_pos = torch.full_like(self.values , fill_value=False , dtype=torch.bool)
         if mask_list_dt := mask.get('list_dt'):
             from src.data.util.stock_info import INFO
@@ -1086,6 +1109,7 @@ class DataBlock:
 
         assert (~mask_pos).sum() > 0 , 'all values are masked'
         self.values[mask_pos] = torch.nan
+        _trace('mask after', block=self, mask=mask_pos)
         return self
 
     def extend_to(

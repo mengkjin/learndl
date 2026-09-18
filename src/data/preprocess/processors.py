@@ -486,12 +486,16 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
                 f'{self.key} load {self.DB_SRC}/{db_key} ({len(features)} cols) {load_start}-{end}' ,
                 vb = 2 , add_prefix = False ,
             )
+            if self.MemTrace:
+                log_mem(self.logger, f'{self.key} {db_key} before-read', retained_tables=blocks)
             df = DB.loads_pl(
                 self.DB_SRC , db_key , start = load_start , end = end ,
                 key_column = None , vb_level = self.vb_level ,
             )
             if df.is_empty():
                 continue
+            if self.MemTrace:
+                log_mem(self.logger, f'{self.key} {db_key} all-columns-read', df=df)
             if secid is not None:
                 df = df.filter(pl.col('secid').is_in(secid))
             missing = [c for c in features if c not in df.columns]

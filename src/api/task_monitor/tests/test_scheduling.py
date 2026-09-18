@@ -214,7 +214,8 @@ class InstallerTransactionTest(unittest.TestCase):
         self.state.mkdir()
         self.cron = '# unrelated\n0 20 * * * /home/user/bin/check_onedrive.sh\n'
         self.calls = []
-        for name, value in [('UNIT_DIR', self.units), ('read_cron', lambda: self.cron), ('command', self.execute)]:
+        for name, value in [('UNIT_DIR', self.units), ('read_cron', lambda: self.cron), ('command', self.execute),
+                            ('desktop_path', lambda: self.root / 'autostart/learndl.desktop')]:
             patcher = patch('src.api.task_monitor.scheduling.installer.' + name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -243,6 +244,7 @@ class InstallerTransactionTest(unittest.TestCase):
     def test_apply_idempotence_and_first_install_rollback(self):
         original = self.cron
         apply_plan(self.plan(), self.cron, self.state)
+        self.assertTrue((self.root / 'autostart/learndl.desktop').exists())
         count = len(self.calls)
         apply_plan(self.plan(), self.cron, self.state)
         self.assertEqual(len(self.calls), count)
@@ -252,6 +254,7 @@ class InstallerTransactionTest(unittest.TestCase):
         apply_plan(rollback, self.cron, self.state)
         self.assertEqual(self.cron, original)
         self.assertFalse((self.state / 'installed.json').exists())
+        self.assertFalse((self.root / 'autostart/learndl.desktop').exists())
         self.assertFalse(list(self.units.glob('*.timer')))
         self.assertTrue(list(self.units.glob('*.learndl-disabled')))
 
@@ -282,6 +285,23 @@ class InstallerTransactionTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'changed'):
             apply_plan(plan, original, self.state)
         self.assertFalse(list(self.units.iterdir()))
+
+    def test_rollback_after_desktop_written_but_activation_failed(self):
+        execute = self.execute
+        def fail_activate(argv, **kwargs):
+            if argv[:3] == ['sudo', 'systemctl', 'daemon-reload']:
+                raise RuntimeError('activation interrupted')
+            return execute(argv, **kwargs)
+        with patch('src.api.task_monitor.scheduling.installer.command', side_effect=fail_activate):
+            with self.assertRaisesRegex(RuntimeError, 'activation interrupted'):
+                apply_plan(self.plan(), self.cron, self.state)
+        self.assertTrue((self.root / 'autostart/learndl.desktop').exists())
+        backup = json.loads((self.state / 'rollback.json').read_text())
+        rollback = {'config': backup['config'], 'units': backup['manifest']['units'],
+                    'cron': backup['cron'], 'conflicts': {}, 'global_conflicts': [], 'report': {},
+                    'desktop_autostart': backup.get('desktop_autostart')}
+        apply_plan(rollback, self.cron, self.state)
+        self.assertFalse((self.root / 'autostart/learndl.desktop').exists())
 
 
 class RunnerTest(unittest.TestCase):

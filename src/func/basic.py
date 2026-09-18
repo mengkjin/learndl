@@ -17,9 +17,9 @@ IndexMergeMethod : TypeAlias = Literal['union' , 'intersect' , 'check' , 'stack'
 IntersectCopyMethod : TypeAlias = Literal['auto' , 'mesh' , 'broadcast']
 FillNaMethod : TypeAlias = Literal['auto' , 'loop' , 'vector']
 
-# Use ``torch.meshgrid`` when both int64 index volumes fit; else 1-D broadcast.
-# 256MiB ≈ 4e6 cartesian cells × 8 axes (4 target + 4 source) × 8 bytes.
-INTERSECT_MESH_MAX_BYTES : int = -1 # 256 * 1024 * 1024 , negative means use boardcast always
+# This threshold uses logical grid volume, not measured storage or peak RSS.
+# Negative selects broadcast unconditionally; meshgrid itself can share storage.
+INTERSECT_MESH_MAX_BYTES : int = -1 # 256 * 1024 * 1024 , negative means use broadcast always
 
 
 def alert_message(message : str , color : str = 'yellow'):
@@ -668,7 +668,8 @@ def intersect_mesh_bytes(
     """Bytes of both ``meshgrid`` tuples if they were materialised.
 
     Each mesh is ``K`` int64 tensors of shape equal to the cartesian product of
-    per-axis intersect lengths.  Peak is ``2 * K * product(n_k) * itemsize``.
+    per-axis intersect lengths.  Logical volume is ``2 * K * product(n_k) * itemsize``.
+    Expanded views may share storage; this is not a peak-memory measurement.
     """
     n_cells = 1
     k = len(target_indices)
@@ -692,9 +693,9 @@ def intersect_copy(
     """
     Scatter ``src`` into ``dst`` on the cartesian intersect of paired axes.
 
-    ``meshgrid`` materialises ``K`` int64 tensors of the full product shape and
-    is typically faster for small panels.  Broadcast 1-D indexers use
-    ``O(sum n_k)`` extra RAM and stay correct when the mesh would OOM.
+    ``meshgrid`` creates ``K`` full-shape views, which can share 1-D storage.
+    Broadcast explicitly uses 1-D indexers. Both paths may allocate temporary
+    payloads during advanced indexing; logical grid bytes do not measure RSS.
 
     ``method='auto'`` uses meshgrid when ``intersect_mesh_bytes`` fits in
     ``mesh_max_bytes``, otherwise broadcast.  Axes may be a prefix of the
