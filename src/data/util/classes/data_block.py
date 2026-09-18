@@ -18,7 +18,10 @@ from typing import Any , Literal , TypeAlias , get_args
 from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
-from src.func.basic import match_slice , forward_fillna , index_merge , intersect_meshgrid , intersect_pos_slice , IndexMergeMethod
+from src.func.basic import (
+    match_slice , forward_fillna , index_merge , intersect_copy , intersect_mesh_bytes ,
+    intersect_pos_slice , INTERSECT_MESH_MAX_BYTES , IndexMergeMethod , IntersectCopyMethod ,
+)
 
 __all__ = ['DataBlock']
 
@@ -241,6 +244,17 @@ class DataBlock:
         return None if self.values is None else self.values.dtype
 
     @property
+    def nbytes(self) -> int:
+        """Payload bytes of ``values`` plus index arrays; 0 if empty."""
+        if self.empty or not isinstance(self.values , torch.Tensor):
+            return 0
+        n = int(self.values.numel() * self.values.element_size())
+        for arr in (self.secid , self.date , self.feature):
+            if arr is not None:
+                n += int(np.asarray(arr).nbytes)
+        return n
+
+    @property
     def ndim(self):
         """Number of dimensions (always 4 when initiated)."""
         return None if self.values is None else self.values.ndim
@@ -319,13 +333,23 @@ class DataBlock:
     
     @classmethod
     def merge(
-        cls , block_list : Iterable[DataBlock] , * , inplace = False , 
-        secid_method : IndexMergeMethod = 'union' , 
-        date_method : IndexMergeMethod = 'union' , 
-        inday_method : IndexMergeMethod = 'check' , 
-        feature_method : IndexMergeMethod = 'stack'
+        cls , block_list : Iterable[DataBlock] , * , inplace = False ,
+        secid_method : IndexMergeMethod = 'union' ,
+        date_method : IndexMergeMethod = 'union' ,
+        inday_method : IndexMergeMethod = 'check' ,
+        feature_method : IndexMergeMethod = 'stack' ,
+        copy_method : IntersectCopyMethod = 'auto' ,
+        mesh_max_bytes : int = INTERSECT_MESH_MAX_BYTES ,
     ):
-        """merge multiple blocks into one block , if inplace is True, merge into the first block"""
+        """
+        Merge multiple blocks into one block.
+
+        Copies overlapping ``(secid, date, inday, feature)`` cells via
+        ``intersect_copy``.  ``copy_method='auto'`` measures the int64 meshgrid
+        volume per source block and uses ``meshgrid`` when it fits in
+        ``mesh_max_bytes`` (faster on small panels), otherwise 1-D broadcast
+        indexers.  If ``inplace`` is True, merge into the first block.
+        """
         blocks = [*block_list]
         if inplace:
             assert blocks , 'merge: inplace is True, but block_list is empty'
@@ -333,23 +357,37 @@ class DataBlock:
         else:
             target_block = cls()
         merge_blocks = [blk for blk in blocks if isinstance(blk , cls) and not blk.empty]
-        if not merge_blocks or (len(merge_blocks) == 1 and (merge_blocks[0] is target_block)): 
+        if not merge_blocks or (len(merge_blocks) == 1 and (merge_blocks[0] is target_block)):
             return target_block
         elif target_block.empty and len(merge_blocks) == 1:
             target_block.update(**merge_blocks[0].to_dict())
             return target_block
-        
-            
+
         secid   = index_merge([blk.secid   for blk in merge_blocks] , method = secid_method)
         date    = index_merge([blk.date    for blk in merge_blocks] , method = date_method)
         inday   = index_merge([blk.inday   for blk in merge_blocks] , method = inday_method)
         feature = index_merge([blk.feature for blk in merge_blocks] , method = feature_method)
 
-        values = torch.full((len(secid),len(date),len(inday),len(feature)) , torch.nan)
-        
-        for i , blk in enumerate(merge_blocks): 
-            tar_grid , src_grid = intersect_meshgrid([secid , date , inday , feature] , [blk.secid , blk.date , blk.inday , blk.feature] , )
-            values[*tar_grid] = blk.values[*src_grid].to(values)
+        proto = merge_blocks[0].values
+        values = torch.full(
+            (len(secid) , len(date) , len(inday) , len(feature)) ,
+            torch.nan ,
+            dtype = proto.dtype ,
+            device = proto.device ,
+        )
+        dst_axes = [secid , date , inday , feature]
+        method = copy_method
+        if method == 'auto':
+            mesh_peak = max(
+                intersect_mesh_bytes(dst_axes , [blk.secid , blk.date , blk.inday , blk.feature])
+                for blk in merge_blocks
+            )
+            method = 'mesh' if mesh_peak <= mesh_max_bytes else 'broadcast'
+        for blk in merge_blocks:
+            intersect_copy(
+                values , dst_axes , blk.values , [blk.secid , blk.date , blk.inday , blk.feature] ,
+                method = method , mesh_max_bytes = mesh_max_bytes ,
+            )
 
         target_block.update(values = values , secid = secid , date = date , feature = feature)
         return target_block
@@ -485,9 +523,7 @@ class DataBlock:
             return self.align_date(date = date, inplace = True).align_secid(secid = secid, inplace = True)
         else:
             values = torch.full((len(secid),len(date),*self.shape[2:]) , np.nan).to(self.values)
-            tar_grid , src_grid = intersect_meshgrid([secid , date] , [self.secid , self.date])
-            values[*tar_grid] = self.values[*src_grid]
-            
+            intersect_copy(values , [secid , date] , self.values , [self.secid , self.date])
             return self.update(values = values , secid = secid , date = date)
     
     def align_feature(

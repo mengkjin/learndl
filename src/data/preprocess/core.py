@@ -24,9 +24,11 @@ from functools import cached_property
 from typing import Any , cast , get_args
 
 from src.proj import CALENDAR , Const , Base , Dates
+from src.func.basic import INTERSECT_MESH_MAX_BYTES
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 from .date_chunk import calendar_year_spans
+from .mem_trace import log_mem , mesh4d_bytes
 
 __all__ = ['PreProcessor' , 'FactorPreProcessor' , 'TradePreProcessor' , 'MicellaneousPreProcessor']
 
@@ -129,12 +131,14 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         dumps remain loadable.
     DateChunkYears : int
         If ``> 0``, ``load_with_extension`` splits missing date spans into
-        calendar-year groups of this length, computes each group, then merges.
-        Cuts peak RAM on wide/long miscellaneous blocks (e.g. ``minc``).
-        ``0`` disables chunking (default).
+        calendar-year groups of this length, computes each group, then merges
+        along date.  ``0`` disables chunking (default).
     ChunkFillNan : float | None
         After date-chunk merges, replace union-alignment NaNs then re-apply
         ``mask``.  ``None`` leaves merge NaNs as-is.
+    MemTrace : bool
+        Temporary: log process RSS and named object sizes after each chunk
+        step so unexpected RAM growth is visible in real time.
     """
     key = _PPKey()
     
@@ -149,6 +153,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     ENABLED : bool = True
     DateChunkYears : int = 0
     ChunkFillNan : float | None = None
+    MemTrace : bool = False
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
@@ -349,11 +354,29 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                         f'{self.key} chunk {chunk_start}-{chunk_end} (load from {span_load_start})' ,
                         vb = 2 , add_prefix = False ,
                     )
+                    if self.MemTrace:
+                        log_mem(self.logger , f'{self.key} chunk-start {chunk_start}-{chunk_end}' , acc = extentions[-1] if extentions else None)
                 ext = self.pre_process(span_load_start , chunk_end , secid = secid).slice_date(chunk_start , chunk_end)
                 if ext.empty:
                     continue
+                if self.MemTrace:
+                    log_mem(self.logger , f'{self.key} chunk-year {chunk_start}-{chunk_end}' , year = ext)
                 if chunk_years > 0 and extentions:
                     prev = extentions.pop()
+                    if self.MemTrace:
+                        n = len(np.union1d(prev.secid , ext.secid))
+                        t = len(np.union1d(prev.date , ext.date))
+                        i = max(int(prev.shape[2]) , int(ext.shape[2]))
+                        f = len(prev.feature)
+                        elem = int(prev.values.element_size()) if isinstance(prev.values , torch.Tensor) else 4
+                        mesh_b = mesh4d_bytes(n , t , i , f)
+                        copy_kind = 'mesh' if mesh_b <= INTERSECT_MESH_MAX_BYTES else 'broadcast'
+                        log_mem(
+                            self.logger , f'{self.key} chunk-merge-{copy_kind} {chunk_start}' ,
+                            prev = prev , year = ext ,
+                            union = n * t * i * f * elem ,
+                            mesh4d = mesh_b ,
+                        )
                     ext = DataBlock.merge(
                         [prev , ext] ,
                         inplace = False ,
@@ -363,6 +386,8 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                     )
                     del prev
                     gc.collect()
+                    if self.MemTrace:
+                        log_mem(self.logger , f'{self.key} chunk-acc {chunk_start}' , acc = ext)
                 extentions.append(ext)
         if not extentions:
             return block 
@@ -374,6 +399,8 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             if self.ChunkFillNan is not None:
                 block = block.fillna(self.ChunkFillNan).mask_values(mask = self.mask)
             gc.collect()
+        if self.MemTrace:
+            log_mem(self.logger , f'{self.key} load-done' , block = block)
         return block
 
     def should_be_skipped(self , force_update : bool = False) -> bool:

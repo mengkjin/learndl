@@ -17,7 +17,7 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Logger , Base
-from src.func.basic import index_merge , match_slice , intersect_meshgrid
+from src.func.basic import index_merge , match_slice , intersect_copy
 from src.func.metric import rankic_2d , ic_2d
 from src.func.tensor import rank_pct , standardize , standardize_mad
 
@@ -592,15 +592,12 @@ class BoostInput:
         x = torch.full((len(secid) , len(date) , len(feature)) , fill_value=torch.nan)
         y = torch.full((len(secid) , len(date)) , fill_value=torch.nan)
         w = None if all(blk.w is None for blk in blocks) else torch.ones_like(y)
-        for i , blk in enumerate(blocks): 
-            tar_grid , src_grid = intersect_meshgrid([secid , date , feature] , [blk.secid , blk.date , blk.feature])
-            x[*tar_grid] = blk.x[*src_grid]
-
-            tar_grid , src_grid = intersect_meshgrid([secid , date] , [blk.secid , blk.date])
+        for blk in blocks:
+            intersect_copy(x , [secid , date , feature] , blk.x , [blk.secid , blk.date , blk.feature])
             if blk.y is not None:
-                y[*tar_grid] = blk.y[*src_grid]
+                intersect_copy(y , [secid , date] , blk.y , [blk.secid , blk.date])
             if blk.w is not None and w is not None:
-                w[*tar_grid] = blk.w[*src_grid]
+                intersect_copy(w , [secid , date] , blk.w , [blk.secid , blk.date])
         if y.isnan().all():
             y = None
         new_binput = cls(x , y , w , secid , date , feature ,

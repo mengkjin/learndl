@@ -36,6 +36,7 @@ from src.data.util import DataBlock
 from src.data.loader import BlockLoader
 
 from .core import PreProcessor , FactorPreProcessor , TradePreProcessor , MicellaneousPreProcessor
+from .mem_trace import log_mem , mesh4d_bytes
 
 __all__ = [
     'PrePros' ,
@@ -462,6 +463,7 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
     RANK_THEN_CS = False
     DateChunkYears = 1
     ChunkFillNan = 0.0
+    MemTrace = True
 
     def pre_process(
         self , start : int | None = None , end : int | None = None , * ,
@@ -496,15 +498,32 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
             if missing:
                 raise ValueError(f'{self.DB_SRC}/{db_key} missing selected columns: {missing}')
             df = df.select(['secid' , 'date'] + features)
+            if self.MemTrace:
+                log_mem(self.logger , f'{self.key} {db_key} loaded' , df = df)
             blk = self._transform_chunks(df , features)
             del df
+            if self.MemTrace:
+                log_mem(self.logger , f'{self.key} {db_key} transformed' , blk = blk)
             if not blk.empty:
                 blocks.append(blk)
             del blk
         if not blocks:
             return DataBlock()
+        if self.MemTrace:
+            n = len(np.unique(np.concatenate([b.secid for b in blocks])))
+            t = len(np.unique(np.concatenate([b.date for b in blocks])))
+            i = max(int(b.shape[2]) for b in blocks)
+            f = sum(len(b.feature) for b in blocks)
+            log_mem(
+                self.logger , f'{self.key} tables-merge' ,
+                tables = blocks ,
+                union = n * t * i * f * 4 ,
+                mesh4d = mesh4d_bytes(n , t , i , f) ,
+            )
         block = DataBlock.merge(blocks , inplace = True).slice_date(start , end).fillna(0)
         del blocks
+        if self.MemTrace:
+            log_mem(self.logger , f'{self.key} year-block' , block = block)
         if not self.DateChunkYears:
             block = block.mask_values(mask = self.mask)
         return block
@@ -523,6 +542,8 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
                 continue
             acc = chunk if acc.empty else DataBlock.concat_feature([acc , chunk])
             del chunk
+            if self.MemTrace:
+                log_mem(self.logger , f'{self.key} feat-chunk {sub[0]}..{sub[-1]}' , acc = acc)
         return acc
 
     def _rolling_pct_rank(self , lf : pl.LazyFrame , features : list[str]) -> pl.LazyFrame:

@@ -14,7 +14,12 @@ T = TypeVar('T')
 ArrayAny : TypeAlias = np.ndarray | Any
 ArrayTensorAny : TypeAlias = np.ndarray | torch.Tensor | Any
 IndexMergeMethod : TypeAlias = Literal['union' , 'intersect' , 'check' , 'stack']
+IntersectCopyMethod : TypeAlias = Literal['auto' , 'mesh' , 'broadcast']
 FillNaMethod : TypeAlias = Literal['auto' , 'loop' , 'vector']
+
+# Use ``torch.meshgrid`` when both int64 index volumes fit; else 1-D broadcast.
+# 256MiB ≈ 4e6 cartesian cells × 8 axes (4 target + 4 source) × 8 bytes.
+INTERSECT_MESH_MAX_BYTES : int = 256 * 1024 * 1024
 
 
 def alert_message(message : str , color : str = 'yellow'):
@@ -650,12 +655,103 @@ def intersect_meshgrid(target_indices : list[ArrayTensorAny] , source_indices : 
     Raises:
         AssertionError: If list lengths differ.
     """
-    assert len(target_indices) == len(source_indices) , f'target_indices and source_indices must have the same length , but got {len(target_indices)} and {len(source_indices)}'
-    target_pos = []
-    source_pos = []
-    for target_index , source_index in zip(target_indices, source_indices):
+    target_pos , source_pos = _intersect_pos_lists(target_indices , source_indices)
+    return torch.meshgrid(*target_pos, indexing='ij'), torch.meshgrid(*source_pos, indexing='ij')
+
+
+def intersect_mesh_bytes(
+    target_indices : list[ArrayTensorAny] ,
+    source_indices : list[ArrayTensorAny] ,
+    * ,
+    itemsize : int = 8 ,
+) -> int:
+    """Bytes of both ``meshgrid`` tuples if they were materialised.
+
+    Each mesh is ``K`` int64 tensors of shape equal to the cartesian product of
+    per-axis intersect lengths.  Peak is ``2 * K * product(n_k) * itemsize``.
+    """
+    n_cells = 1
+    k = len(target_indices)
+    assert k == len(source_indices) , f'target_indices and source_indices must have the same length , but got {k} and {len(source_indices)}'
+    for target_index , source_index in zip(target_indices , source_indices):
+        n_cells *= int(np.intersect1d(target_index , source_index).size)
+        if n_cells == 0:
+            return 0
+    return n_cells * itemsize * k * 2
+
+
+def intersect_copy(
+    dst : torch.Tensor ,
+    dst_axes : list[ArrayTensorAny] ,
+    src : torch.Tensor ,
+    src_axes : list[ArrayTensorAny] ,
+    * ,
+    method : IntersectCopyMethod = 'auto' ,
+    mesh_max_bytes : int = INTERSECT_MESH_MAX_BYTES ,
+) -> None:
+    """
+    Scatter ``src`` into ``dst`` on the cartesian intersect of paired axes.
+
+    ``meshgrid`` materialises ``K`` int64 tensors of the full product shape and
+    is typically faster for small panels.  Broadcast 1-D indexers use
+    ``O(sum n_k)`` extra RAM and stay correct when the mesh would OOM.
+
+    ``method='auto'`` uses meshgrid when ``intersect_mesh_bytes`` fits in
+    ``mesh_max_bytes``, otherwise broadcast.  Axes may be a prefix of the
+    tensor rank (remaining dims are taken in full).
+    """
+    target_pos , source_pos = _intersect_pos_lists(dst_axes , src_axes)
+    if any(p.numel() == 0 for p in target_pos):
+        return
+    k = len(target_pos)
+    n_cells = 1
+    for pos in target_pos:
+        n_cells *= int(pos.numel())
+    mesh_bytes = n_cells * 8 * k * 2
+    if method == 'mesh':
+        use_mesh = True
+    elif method == 'broadcast':
+        use_mesh = False
+    else:
+        use_mesh = mesh_bytes <= mesh_max_bytes
+
+    target_pos = [p.to(device = dst.device , dtype = torch.long) for p in target_pos]
+    source_pos = [p.to(device = src.device , dtype = torch.long) for p in source_pos]
+    if use_mesh:
+        tar_grid = torch.meshgrid(*target_pos , indexing = 'ij')
+        src_grid = torch.meshgrid(*source_pos , indexing = 'ij')
+        dst[tar_grid] = src[src_grid].to(dtype = dst.dtype , device = dst.device)
+        return
+
+    def _view(pos : torch.Tensor , dim : int) -> torch.Tensor:
+        shape = [1] * k
+        shape[dim] = int(pos.numel())
+        return pos.reshape(shape)
+
+    t_idx = tuple(_view(p , i) for i , p in enumerate(target_pos))
+    src_full = all(
+        int(p.numel()) == src.shape[i]
+        and bool(torch.equal(p , torch.arange(src.shape[i] , device = p.device)))
+        for i , p in enumerate(source_pos)
+    )
+    payload = src if src_full else src[tuple(_view(p , i) for i , p in enumerate(source_pos))]
+    dst[t_idx] = payload.to(dtype = dst.dtype , device = dst.device)
+
+
+def _intersect_pos_lists(
+    target_indices : list[ArrayTensorAny] ,
+    source_indices : list[ArrayTensorAny] ,
+) -> tuple[list[torch.Tensor] , list[torch.Tensor]]:
+    """1-D intersect positions for each paired axis; empty if any axis misses."""
+    assert len(target_indices) == len(source_indices) , (
+        f'target_indices and source_indices must have the same length , '
+        f'but got {len(target_indices)} and {len(source_indices)}'
+    )
+    target_pos : list[torch.Tensor] = []
+    source_pos : list[torch.Tensor] = []
+    for target_index , source_index in zip(target_indices , source_indices):
         tarpos , srcpos = intersect_pos_tensor(target_index , source_index)
         target_pos.append(tarpos)
         source_pos.append(srcpos)
-    return torch.meshgrid(*target_pos, indexing='ij'), torch.meshgrid(*source_pos, indexing='ij')
+    return target_pos , source_pos
 

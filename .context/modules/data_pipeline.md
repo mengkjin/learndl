@@ -310,7 +310,7 @@ PrePros.get_processor('day', type='fit')  # instantiate a specific processor
 | `mincr` | All selected `min_chars` columns — rolling pct_rank then CS z-score, NaN→0 (`DateChunkYears=1`) |
 
 ### Incremental update via `load_with_extension`
-Processors load existing dumps and only compute new date spans, merging with an `EXTENSION_OVERLAY` overlap to avoid edge discontinuities. Set class attr ``DateChunkYears`` (e.g. `1`) to compute missing spans one calendar year at a time and merge, cutting peak RAM.
+Processors load existing dumps and only compute new date spans, merging with an `EXTENSION_OVERLAY` overlap to avoid edge discontinuities. Set class attr ``DateChunkYears`` (e.g. `1`) to compute missing spans one calendar year at a time, then merge along date. ``DataBlock.merge`` uses ``torch.meshgrid`` when the int64 index volume fits in ``INTERSECT_MESH_MAX_BYTES`` (256MiB), otherwise 1-D broadcast indexers.
 
 ---
 
