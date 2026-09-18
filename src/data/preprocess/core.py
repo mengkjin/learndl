@@ -14,6 +14,7 @@ PreProcessor               — abstract base; handles incremental extension/cach
 """
 from __future__ import annotations
 
+import gc
 import torch
 import numpy as np
 
@@ -25,6 +26,7 @@ from typing import Any , cast , get_args
 from src.proj import CALENDAR , Const , Base , Dates
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
+from .date_chunk import calendar_year_spans
 
 __all__ = ['PreProcessor' , 'FactorPreProcessor' , 'TradePreProcessor' , 'MicellaneousPreProcessor']
 
@@ -125,6 +127,14 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     ENABLED : bool
         If False, ``build`` / batch ``PreProcessorTask`` skip this key. Existing
         dumps remain loadable.
+    DateChunkYears : int
+        If ``> 0``, ``load_with_extension`` splits missing date spans into
+        calendar-year groups of this length, computes each group, then merges.
+        Cuts peak RAM on wide/long miscellaneous blocks (e.g. ``minc``).
+        ``0`` disables chunking (default).
+    ChunkFillNan : float | None
+        After date-chunk merges, replace union-alignment NaNs then re-apply
+        ``mask``.  ``None`` leaves merge NaNs as-is.
     """
     key = _PPKey()
     
@@ -137,6 +147,8 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     CalculationWindow : int = 1  # can be set slightly larger than the calculation window of the factor
     AllowInactive : bool = True
     ENABLED : bool = True
+    DateChunkYears : int = 0
+    ChunkFillNan : float | None = None
 
     def __init__(
         self , frame : Base.lit.DataBlockTimeFrame = 'fit' , * , 
@@ -327,17 +339,41 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                 span_tuples.append((CALENDAR.td(block_end , -self.ExtentionOverlay + 1).td , end))
 
         extentions : list[DataBlock] = []
+        chunk_years = int(self.DateChunkYears or 0)
         for span_start , span_end in span_tuples:
-            span_load_start = CALENDAR.td(span_start , -self.CalculationWindow + 1).td
-            ext = self.pre_process(span_load_start , span_end , secid = secid).slice_date(span_start , span_end)
-            if not ext.empty:
-                extentions.append(ext) 
+            chunks = calendar_year_spans(span_start , span_end , chunk_years) if chunk_years > 0 else [(span_start , span_end)]
+            for chunk_start , chunk_end in chunks:
+                span_load_start = CALENDAR.td(chunk_start , -self.CalculationWindow + 1).td
+                if chunk_years > 0:
+                    self.logger.stdout(
+                        f'{self.key} chunk {chunk_start}-{chunk_end} (load from {span_load_start})' ,
+                        vb = 2 , add_prefix = False ,
+                    )
+                ext = self.pre_process(span_load_start , chunk_end , secid = secid).slice_date(chunk_start , chunk_end)
+                if ext.empty:
+                    continue
+                if chunk_years > 0 and extentions:
+                    prev = extentions.pop()
+                    ext = DataBlock.merge(
+                        [prev , ext] ,
+                        inplace = False ,
+                        secid_method = 'union' ,
+                        date_method = 'union' ,
+                        feature_method = 'stack' ,
+                    )
+                    del prev
+                    gc.collect()
+                extentions.append(ext)
         if not extentions:
             return block 
 
         with self.logger.timer(f'{self.key} blocks merging' , vb = 2):
             block = block.merge_others(*extentions , inplace = True).slice_date(start , end)
-
+        del extentions
+        if chunk_years > 0:
+            if self.ChunkFillNan is not None:
+                block = block.fillna(self.ChunkFillNan).mask_values(mask = self.mask)
+            gc.collect()
         return block
 
     def should_be_skipped(self , force_update : bool = False) -> bool:

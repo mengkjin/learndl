@@ -451,6 +451,8 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
 
     Subclasses choose the transform: cross-sectional z-score only, or per-secid
     rolling pct_rank then cross-sectional z-score.  Non-finite values → 0.
+
+    ``DateChunkYears=1`` so fit reconstruct processes one calendar year at a time.
     """
     FEATURE_CHUNK_SIZE = 20
     fit_start = 20100101
@@ -458,6 +460,8 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
     DB_SRC = 'min_chars'
     MIN_SAMPLES = 90
     RANK_THEN_CS = False
+    DateChunkYears = 1
+    ChunkFillNan = 0.0
 
     def pre_process(
         self , start : int | None = None , end : int | None = None , * ,
@@ -476,6 +480,10 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
         secid = Base.ensure_secid(secid)
         blocks : list[DataBlock] = []
         for db_key , features in grouped.items():
+            self.logger.stdout(
+                f'{self.key} load {self.DB_SRC}/{db_key} ({len(features)} cols) {load_start}-{end}' ,
+                vb = 2 , add_prefix = False ,
+            )
             df = DB.loads_pl(
                 self.DB_SRC , db_key , start = load_start , end = end ,
                 key_column = None , vb_level = self.vb_level ,
@@ -487,23 +495,35 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
             missing = [c for c in features if c not in df.columns]
             if missing:
                 raise ValueError(f'{self.DB_SRC}/{db_key} missing selected columns: {missing}')
-            blocks.extend(self._transform_chunks(df , features))
+            df = df.select(['secid' , 'date'] + features)
+            blk = self._transform_chunks(df , features)
             del df
+            if not blk.empty:
+                blocks.append(blk)
+            del blk
         if not blocks:
             return DataBlock()
         block = DataBlock.merge(blocks , inplace = True).slice_date(start , end).fillna(0)
-        return block.mask_values(mask = self.mask)
+        del blocks
+        if not self.DateChunkYears:
+            block = block.mask_values(mask = self.mask)
+        return block
 
-    def _transform_chunks(self , df : pl.DataFrame , features : list[str]) -> list[DataBlock]:
-        out : list[DataBlock] = []
+    def _transform_chunks(self , df : pl.DataFrame , features : list[str]) -> DataBlock:
+        """Z-score (and optional rolling rank) in feature chunks; concat along feature."""
+        acc = DataBlock()
         for i in range(0 , len(features) , self.FEATURE_CHUNK_SIZE):
             sub = features[i : i + self.FEATURE_CHUNK_SIZE]
             lf = df.lazy().select(['secid' , 'date'] + sub)
             if self.RANK_THEN_CS:
                 lf = self._rolling_pct_rank(lf , sub)
             lf = self._cs_zscore_fill0(lf , sub)
-            out.append(DataBlock.from_polars(lf.collect()))
-        return out
+            chunk = DataBlock.from_polars(lf.collect())
+            if chunk.empty:
+                continue
+            acc = chunk if acc.empty else DataBlock.concat_feature([acc , chunk])
+            del chunk
+        return acc
 
     def _rolling_pct_rank(self , lf : pl.LazyFrame , features : list[str]) -> pl.LazyFrame:
         """Per-secid rolling rank / window length, same definition as ``PrePro_dfl2``."""
@@ -533,7 +553,7 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
                 (pl.col(feat) - pl.col(feat).mean().over('date'))
                 / (pl.col(feat).std().over('date') + 1e-6)
             )
-            exprs.append(pl.when(z.is_finite()).then(z).otherwise(0.0).alias(feat))
+            exprs.append(pl.when(z.is_finite()).then(z).otherwise(0.0).cast(pl.Float32).alias(feat))
         return lf.with_columns(exprs)
 
 class PrePro_minc(_MinCharsPreProcessor):

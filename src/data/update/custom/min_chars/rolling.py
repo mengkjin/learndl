@@ -94,6 +94,7 @@ TRAIL_SPECS : tuple[tuple[str , str , int , str], ...] = (
 )
 
 _TRAIL_OUT : tuple[str, ...] = tuple(spec[3] for spec in TRAIL_SPECS)
+_TRAIL_SRC_COLS : tuple[str, ...] = tuple(dict.fromkeys(spec[0] for spec in TRAIL_SPECS))
 _assert_unique = len(_TRAIL_OUT) == len(set(_TRAIL_OUT))
 if not _assert_unique:
     raise ValueError('TRAIL_SPECS output names must be unique')
@@ -142,6 +143,15 @@ def _trail_reduce(col : pl.Expr , how : str) -> pl.Expr:
     if how == 'cv':
         return safe_div(col.std() , col.mean())
     raise ValueError(f'unknown trail agg {how}')
+
+
+def _trail_daily_pl(date : int) -> pl.DataFrame:
+    """One date of daily chars, keeping only trail source columns."""
+    raw = load_daily_chars(date)
+    if raw.empty:
+        return pl.DataFrame()
+    keep = [c for c in ('secid' , *_TRAIL_SRC_COLS) if c in raw.columns]
+    return pl.from_pandas(raw.loc[: , keep]).with_columns(pl.lit(int(date)).alias('date'))
 
 
 def _agg_pool(panel : pl.DataFrame) -> pl.DataFrame:
@@ -197,14 +207,8 @@ def calc_min_chars_roll(date : int , window : int = ROLL_WINDOW) -> pd.DataFrame
         return pd.DataFrame(columns = list(ROLL_COLUMNS))
     min_frames = [load_ret_panel(d) for d in days]
     min_frames = [f for f in min_frames if f.height > 0]
-    daily_frames = []
-    for d in days:
-        one = load_daily_chars(d)
-        if one.empty:
-            continue
-        one = one.copy()
-        one['date'] = int(d)
-        daily_frames.append(pl.from_pandas(one))
+    daily_frames = [_trail_daily_pl(d) for d in days]
+    daily_frames = [f for f in daily_frames if f.height > 0]
     pool = _agg_pool(pl.concat(min_frames) if min_frames else pl.DataFrame())
     trail = _agg_trail(pl.concat(daily_frames) if daily_frames else pl.DataFrame())
     return _join_roll(pool , trail , int(date))
@@ -270,13 +274,7 @@ class MinCharsRollUpdater(MinCharsSchedule , BasicCustomUpdater):
                 if min_cache[d].height > 0:
                     min_frames.append(min_cache[d])
                 if d not in daily_cache:
-                    raw = load_daily_chars(d)
-                    if raw.empty:
-                        daily_cache[d] = pl.DataFrame()
-                    else:
-                        raw = raw.copy()
-                        raw['date'] = int(d)
-                        daily_cache[d] = pl.from_pandas(raw)
+                    daily_cache[d] = _trail_daily_pl(d)
                 if daily_cache[d].height > 0:
                     daily_frames.append(daily_cache[d])
             if not min_frames or not daily_frames:

@@ -306,11 +306,11 @@ PrePros.get_processor('day', type='fit')  # instantiate a specific processor
 | `momentum`, `volatility`, `correlation`, `liquidity`, `holding`, `trading` | Further factor groups |
 | `dfl2` | Dongfang L2 characteristics — rolling rank (**frozen**, `ENABLED=False`) |
 | `dfl2cs` | Dongfang L2 characteristics — cross-sectional z-score (**frozen**, `ENABLED=False`) |
-| `minc` | All selected `min_chars` columns — CS z-score, NaN→0 |
-| `mincr` | All selected `min_chars` columns — rolling pct_rank then CS z-score, NaN→0 |
+| `minc` | All selected `min_chars` columns — CS z-score, NaN→0 (`DateChunkYears=1`) |
+| `mincr` | All selected `min_chars` columns — rolling pct_rank then CS z-score, NaN→0 (`DateChunkYears=1`) |
 
 ### Incremental update via `load_with_extension`
-Processors load existing dumps and only compute new date spans, merging with an `EXTENSION_OVERLAY` overlap to avoid edge discontinuities.
+Processors load existing dumps and only compute new date spans, merging with an `EXTENSION_OVERLAY` overlap to avoid edge discontinuities. Set class attr ``DateChunkYears`` (e.g. `1`) to compute missing spans one calendar year at a time and merge, cutting peak RAM.
 
 ---
 

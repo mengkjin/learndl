@@ -120,8 +120,17 @@ def load_ret_panel(date : int) -> pl.DataFrame:
     """Load one date of ``secid/ret/volume/amount``; empty frame if min is missing."""
     raw = DB.load(DB_MIN_SRC , MIN_KEY , date , use_alt = True , vb_level = 'never')
     if raw.empty:
-        return pl.DataFrame(schema = {c : pl.Float64 if c != 'secid' else pl.Int64 for c in RET_PANEL_COLS})
-    return prepare_ret_bars(raw).select(list(RET_PANEL_COLS))
+        return pl.DataFrame(schema = {
+            'secid' : pl.Int64 ,
+            'ret' : pl.Float32 ,
+            'volume' : pl.Float32 ,
+            'amount' : pl.Float32 ,
+        })
+    return (
+        prepare_ret_bars(raw)
+        .select(list(RET_PANEL_COLS))
+        .with_columns(pl.col(['ret' , 'volume' , 'amount']).cast(pl.Float32 , strict = False))
+    )
 
 
 def min_dates() -> Dates:
