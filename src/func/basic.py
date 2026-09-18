@@ -19,7 +19,7 @@ FillNaMethod : TypeAlias = Literal['auto' , 'loop' , 'vector']
 
 # Use ``torch.meshgrid`` when both int64 index volumes fit; else 1-D broadcast.
 # 256MiB ≈ 4e6 cartesian cells × 8 axes (4 target + 4 source) × 8 bytes.
-INTERSECT_MESH_MAX_BYTES : int = 256 * 1024 * 1024
+INTERSECT_MESH_MAX_BYTES : int = -1 # 256 * 1024 * 1024 , negative means use boardcast always
 
 
 def alert_message(message : str , color : str = 'yellow'):
