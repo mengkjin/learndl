@@ -379,7 +379,9 @@ class TaskDatabase:
                     'exit_code': 1,
                     'exit_error': (
                         f'Process {task.pid} ended unexpectedly before its recorder could persist completion. '
-                        + ('See the recovered crash-protector output.' if crash_protector_paths else 'No crash-protector output was recovered.')
+                        + ('See the recovered crash-protector output.' if crash_protector_paths else
+                           'See the registered task output files.' if any(Path(p).is_file() for p in task.exit_files or []) else
+                           'No persisted task output was recovered.')
                     ),
                 }
                 if crash_protector_paths:

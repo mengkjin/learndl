@@ -35,6 +35,9 @@ class ScheduleConfigTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 duration(value)
         self.assertEqual(default_jobs({'jobs': {}}), ())
+        old = {'jobs': {'task_lifecycle': {'enabled': True, 'interval_seconds': 60}}}
+        self.assertEqual([job.name for job in default_jobs(old)], ['task_lifecycle', 'cli_recovery'])
+        self.assertEqual(default_jobs({'jobs': {'cli_recovery': {'enabled': False}}}), ())
 
     def test_evening_backfill_is_unlimited(self):
         self.assertEqual(self.config['tasks']['rcquant_sec_backfill']['args'], ['--max_days', 'none'])

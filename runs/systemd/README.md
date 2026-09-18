@@ -121,7 +121,9 @@ The installer also manages a project-specific file under
 `~/.config/autostart/learndl-cli-*.desktop`. It refreshes desktop credentials
 on the next graphical login, but never opts an unregistered project in.
 Its contents participate in installation preview, status and rollback.
-Recovery requires a live X11/Wayland `XDG_SESSION_ID` and a functioning
+Recovery checks a live X11/Wayland login session, falling back to the previously
+captured local display socket when `XDG_SESSION_ID` is absent or its type is
+unspecified (common in remote desktops). It also requires a functioning
 `systemd --user` manager; no display number is guessed. A disconnected but
 still-running remote desktop can retain its session; a logged-out session
 waits until login. The system watchdog dispatches a separate user service,
@@ -168,3 +170,8 @@ verify `/quit` stays closed; log out/in with a pending recovery; kill a tiny
 reconstruction and verify Monitor history, persisted output and one failure
 email. Test small inputs before the full minc/mincr rebuild. GUI/user-service
 behavior requires Linux acceptance even when local mocked tests pass.
+
+Recovery launch output is appended to `runtime/cli_recovery/recovery.log`.
+The state file records the latest status, check time and recovery unit name.
+Existing nonempty watchdog job configurations automatically include CLI recovery
+unless it is explicitly disabled; a CLI must still register recovery intent.

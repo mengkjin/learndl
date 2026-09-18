@@ -153,6 +153,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
     ENABLED : bool = True
     DateChunkYears : int = 0
     ChunkFillNan : float | None = None
+    MaxAllocationBytes : int | None = None
     MemTrace : bool = False
 
     def __init__(
@@ -363,6 +364,13 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                     log_mem(self.logger , f'{self.key} chunk-year {chunk_start}-{chunk_end}' , year = ext)
                 if chunk_years > 0 and extentions:
                     prev = extentions.pop()
+                    if self.MaxAllocationBytes is not None:
+                        from .memory_guard import check_allocation
+                        union_shape = (len(np.union1d(prev.secid, ext.secid)), len(np.union1d(prev.date, ext.date)),
+                                       int(prev.shape[2]), len(np.union1d(prev.feature, ext.feature)))
+                        union_bytes = int(np.prod(union_shape)) * prev.values.element_size()
+                        check_allocation(union_bytes + max(prev.values.numel(), ext.values.numel()) * prev.values.element_size(),
+                                         f'{self.key} year merge {chunk_start} union={union_shape}', limit=self.MaxAllocationBytes)
                     if self.MemTrace:
                         n = len(np.union1d(prev.secid , ext.secid))
                         t = len(np.union1d(prev.date , ext.date))
@@ -397,6 +405,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         del extentions
         if chunk_years > 0:
             if self.ChunkFillNan is not None:
+                if self.MaxAllocationBytes is not None:
+                    from .memory_guard import check_allocation
+                    check_allocation(block.values.numel() * block.values.element_size(),
+                                     f'{self.key} final fill', limit=self.MaxAllocationBytes)
                 if self.MemTrace:
                     log_mem(self.logger, f'{self.key} before-final-fill', block=block)
                 block = block.fillna(self.ChunkFillNan)

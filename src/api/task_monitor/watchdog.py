@@ -226,8 +226,13 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     registry = {job.name: job.runner for job in defaults}
     registry['idle_worklist'] = _run_idle_worklist
     registry['git_auto_update'] = _run_git_auto_update
-    return tuple(WatchdogJob(name, maintenance['jobs'][name]['interval_seconds'], registry[name])
-                 for name in registry if maintenance['jobs'].get(name, {}).get('enabled', False))
+    options = dict(maintenance['jobs'])
+    # A code update can precede reinstalling the scheduling snapshot. Recovery
+    # is still opt-in through Hub registration; preserve an explicit disable.
+    if options:  # An explicitly empty registry continues to mean "disable all".
+        options.setdefault('cli_recovery', {'enabled': True, 'interval_seconds': UNIT_PROBE_INTERVAL})
+    return tuple(WatchdogJob(name, options[name]['interval_seconds'], registry[name])
+                 for name in registry if options.get(name, {}).get('enabled', False))
 
 
 def _job_due(job_state: dict[str, Any], interval_seconds: int, now: float) -> bool:
