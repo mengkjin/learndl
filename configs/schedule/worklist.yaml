@@ -1,9 +1,4 @@
 fit:
-  - gru_day_new_rtn
-  - gru_15m_new
-  - gru_15m_new_rtn
-  - gru_day_lgbm
-  - gru_day_xgboost
   - gru_minc
   - gru_mincr
 

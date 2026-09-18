@@ -30,13 +30,13 @@ def available_bytes() -> int:
     return available
 
 
-def check_allocation(size: int, label: str, *, limit: int = 32 * 1024**3) -> None:
+def check_allocation(size: int, label: str, *, limit: int | None = 32 * 1024**3) -> None:
     """Fail before allocation; this is a conservative preflight, not an OOM guarantee."""
-    budget = min(limit, int(available_bytes() * .8))
+    budget = min(limit or float('inf'), int(available_bytes() * .8))
     if size > budget:
         raise MemoryError(
             f'{label}: refusing {size / 1024**3:.2f} GiB allocation; '
             f'budget={budget / 1024**3:.2f} GiB (80% of current system/cgroup headroom, '
-            f'capped at {limit / 1024**3:.0f} GiB). Existing tensors are still live. '
+            f'capped at {limit / 1024**3:.0f} GiB). Existing tensors are still live. ' if limit else ''
             'Inspect the secid universe and task memory log before retrying.'
         )
