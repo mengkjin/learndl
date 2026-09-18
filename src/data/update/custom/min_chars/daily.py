@@ -9,6 +9,7 @@ import pandas as pd
 import polars as pl
 
 from src.proj import DB , Base , Dates
+from src.data.util.minchars_stock import stock_rows
 from src.data.update.custom.basic import BasicCustomUpdater
 from src.data.update.custom.min_chars._common import (
     DB_MIN_SRC ,
@@ -311,7 +312,7 @@ def calc_min_chars(date : int) -> pd.DataFrame:
     pandas.DataFrame
         Columns ``OUTPUT_COLUMNS``.  Empty if no 1-minute bars exist.
     """
-    raw = DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never')
+    raw = stock_rows(DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
     if raw.empty:
         return pd.DataFrame(columns = list(OUTPUT_COLUMNS))
 

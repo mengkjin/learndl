@@ -34,7 +34,8 @@ def load_selected(path: Path, features: list[str], known: np.ndarray, secid=None
         df = pl.read_parquet(path, columns=columns)
     else:
         raise ValueError(f'Unsupported min_chars file: {path}')
-    df = dfHandler.default_mapper(df)
+    from src.data.util.minchars_stock import stock_rows
+    df = stock_rows(dfHandler.default_mapper(df), known, source=str(path))
     if secid is not None:
         df = df.filter(pl.col('secid').is_in(pl.Series(secid).implode()))
     validate_keys(df, known, str(path))

@@ -14,6 +14,7 @@ import polars as pl
 
 from src.proj import DB , Dates , CALENDAR , Base
 from src.func.basic import DIV_TOL
+from src.data.util.minchars_stock import stock_rows
 
 N_SESS = 8
 MAX_MINUTE = 239
@@ -118,7 +119,7 @@ def prepare_ret_bars(raw : pd.DataFrame) -> pl.DataFrame:
 
 def load_ret_panel(date : int) -> pl.DataFrame:
     """Load one date of ``secid/ret/volume/amount``; empty frame if min is missing."""
-    raw = DB.load(DB_MIN_SRC , MIN_KEY , date , use_alt = True , vb_level = 'never')
+    raw = stock_rows(DB.load(DB_MIN_SRC , MIN_KEY , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
     if raw.empty:
         return pl.DataFrame(schema = {
             'secid' : pl.Int64 ,
@@ -159,7 +160,7 @@ def trailing_aligned_dates(date : int , n : int , *extra_keys : str) -> list[int
 
 def load_daily_chars(date : int) -> pd.DataFrame:
     """Load one date of ``min_chars/min_chars``; empty if missing."""
-    return DB.load(DB_SRC , 'min_chars' , date , vb_level = 'never')
+    return stock_rows(DB.load(DB_SRC , 'min_chars' , date , vb_level = 'never'), source=f'daily chars {date}')
 
 
 def follow_source_dates(
@@ -192,6 +193,7 @@ def save_stage_df(
     vb_level : int ,
 ) -> bool:
     """Save ``df``; return False when empty so the caller can skip without raising."""
+    df = stock_rows(df, source=f'{db_key} save {date}')
     if df.empty:
         return False
     DB.save(df , DB_SRC , db_key , int(date) , indent = indent , vb_level = vb_level)

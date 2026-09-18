@@ -10,6 +10,18 @@ spec.loader.exec_module(audit)
 
 
 class AuditMinCharsTest(unittest.TestCase):
+    def test_sample_dates_and_missing_observations(self):
+        paths = [Path(f'min_chars.202201{i:02d}.feather') for i in range(1, 31)]
+        sampled = audit.sample_paths(paths, 5)
+        self.assertEqual(len(sampled), 5)
+        self.assertEqual(sampled[0], paths[0])
+        self.assertEqual(sampled[-1], paths[-1])
+        self.assertEqual(audit.sample_paths(paths, dates=[20220105, 20230101]), [paths[4]])
+        self.assertEqual(audit.sample_paths(paths, 0), paths)
+        frame = pl.DataFrame({'secid': [1], 'date': [20220101]})
+        self.assertEqual(audit.inspect_keys(frame, 20220101, {1, 2}, lambda x: x)[0]['issues'], [])
+        self.assertEqual(audit.inspect_keys(frame.head(0), 20220101, {1, 2}, lambda x: x)[0]['issues'], [])
+
     def test_raw_mapping_distinction(self):
         df = pl.DataFrame({'secid': [900001, 2], 'date': [20220101, 20220101]})
         def mapper(x):

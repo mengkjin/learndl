@@ -489,11 +489,9 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
             )
             if self.MemTrace:
                 log_mem(self.logger, f'{self.key} {db_key} before-read', retained_tables=blocks)
-            from src.data.util.stock_info import INFO
+            from src.data.util.minchars_stock import historical_stock_ids
             from .minchars_input import load_selected
-            known = INFO.get_secid()  # all historical stocks, including delisted names
-            if len(known) == 0:
-                raise ValueError('Historical stock metadata is empty; cannot validate min_chars universe')
+            known = historical_stock_ids()
             paths = DB.paths(self.DB_SRC, db_key, start=load_start, end=end)
             frames = []
             for path in paths:

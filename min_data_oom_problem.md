@@ -360,3 +360,33 @@ unknown 本身不能证明证券种类错误。7000 行仅为可调诊断阈值�
 CLI 恢复方面，用户提供的已登记环境缺少 `XDG_SESSION_ID`，旧逻辑因此拒绝恢复。
 新逻辑允许探测已登记的本地 X11/Wayland socket；增加 recovery.log 与状态记录。
 用户手动启动后的 watchdog `alive` 只证明当前 CLI 存活，不证明之前自动恢复成功。
+
+## 12. 股票范围过滤与历史清理（后续修正）
+
+用户确认分钟源包含非股票证券，现按历史股票 description 限定 min_chars 范围，
+不再沿用第 11 节的“不自动过滤未知证券”策略。统一使用无日期限制的历史股票集合，
+保留已退市股票；有效股票没有分钟数据是正常情况，不补齐也不判异常。
+
+- daily/tag 的分钟输入、roll 的分钟及历史 daily 输入均先过滤；保存前再次过滤。
+- minc/mincr 的 DataBlock 输入逐文件按默认 secid 映射后过滤，记录删除行数，
+  再检查有效股票的重复键和日期类型。原始 min_chars 文件不会被读取流程改写。
+- 历史文件清理脚本覆盖 min_chars、min_chars_roll、min_chars_tag；只删除多余行，
+  不重算特征。用映射后的 ID 判断成员，但保留有效行原始 secid、列类型、NaN 和元数据。
+  逐文件备份、验证临时文件后原子替换；不要与 min_chars 更新任务同时运行。
+
+```bash
+# 全历史清理预览，不修改数据
+uv run python scripts/0_check/clean_min_chars.py
+# 执行清理：备份和逐文件日志放在打印出的 runtime/min_chars_cleanup/<时间>/ 下
+uv run python scripts/0_check/clean_min_chars.py --apply
+# 默认每张表在整个时间范围均匀抽样最多 12 个日期，包含最早和最新日期
+uv run python scripts/0_check/audit_min_chars.py
+# 也可指定日期；缺少某股票数据或指定日期无文件均不视为异常
+uv run python scripts/0_check/audit_min_chars.py --dates 20101124 20221230 20260918
+```
+
+审计仅报告抽样日期的证券并集和首次出现位置，不代表全历史证券总数。
+需显式全量检查时传 `--sample-size 0`；可用 `--sample-size N` 调整抽样数量。
+清理脚本支持 `--start/--end`，默认 dry run，只有 `--apply` 才修改历史文件。
+如果基础信息集合为空会停止，避免误删全部文件。备份以原始字节保存，可按日志路径恢复。
+已有预处理 minc/mincr 缓存不会随原始文件清理自动更新，后续需要重新构建。

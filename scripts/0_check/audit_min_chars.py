@@ -32,8 +32,6 @@ def inspect_keys(df, expected_date, known, mapper, max_rows=7000):
             issues.append(f'missing_{col}')
         elif not df.schema[col].is_integer() or df[col].null_count():
             issues.append(f'invalid_{col}')
-    if df.height == 0:
-        issues.append('empty_file')
     if df.height > max_rows:
         issues.append('row_count_above_threshold')
     if any(x.startswith(('missing_', 'invalid_')) for x in issues):
@@ -45,7 +43,7 @@ def inspect_keys(df, expected_date, known, mapper, max_rows=7000):
                   duplicate_rows=df.height - df.unique(['secid', 'date']).height)
     if report['duplicate_rows']:
         issues.append('duplicate_keys')
-    if dates != [expected_date]:
+    if dates and dates != [expected_date]:
         issues.append('date_mismatch')
     raw_unknown = raw - known
     report.update(raw_unknown=len(raw_unknown), raw_unknown_sample=sorted(raw_unknown)[:30])
@@ -72,27 +70,50 @@ def inspect_keys(df, expected_date, known, mapper, max_rows=7000):
     return report, raw, mapped, changes
 
 
+def sample_paths(paths, sample_size=12, dates=None):
+    """Deterministic dates spread across the range, including both endpoints."""
+    by_date = {}
+    for path in paths:
+        match = re.search(r'\.(\d{8})\.(?:feather|parquet)$', path.name)
+        if not match:
+            raise ValueError(f'unrecognized daily filename: {path}')
+        by_date.setdefault(int(match[1]), []).append(path)
+    available = sorted(by_date)
+    if dates is not None:
+        selected = sorted(set(dates) & set(available))
+    elif sample_size == 0 or len(available) <= sample_size:
+        selected = available
+    elif sample_size == 1:
+        selected = available[-1:]
+    else:
+        selected = [available[i * (len(available) - 1) // (sample_size - 1)] for i in range(sample_size)]
+    return [p for d in selected for p in by_date[d]]
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--start', type=int, default=20100101)
     parser.add_argument('--end', type=int, default=20991231)
+    parser.add_argument('--sample-size', type=int, default=12, help='Dates per table; 0 explicitly scans all dates')
+    parser.add_argument('--dates', type=int, nargs='+', help='Explicit dates instead of automatic sampling')
     parser.add_argument('--max-rows', type=int, default=7000,
                         help='Diagnostic threshold only; historical files need not have exactly 5000 rows')
     parser.add_argument('--output', type=Path, help='New report directory; existing directory is never overwritten')
     args = parser.parse_args(argv)
-    if args.start > args.end or args.max_rows < 1:
+    if args.start > args.end or args.max_rows < 1 or args.sample_size < 0:
         parser.error('invalid date range or row threshold')
     # Use the same machine mapping and historical stock reference as reconstruction.
     from src.proj import DB, PATH
     from src.proj.db.basic.df_handler import dfHandler
-    from src.data.util.stock_info import INFO
+    from src.data.util.minchars_stock import historical_stock_ids
 
-    known = set(map(int, INFO.get_secid()))
+    known = set(map(int, historical_stock_ids()))
     if not known:
         raise RuntimeError('Historical stock reference is empty')
     output = args.output or PATH.runtime / 'min_chars_audit' / datetime.now().strftime('%Y%m%d-%H%M%S-%f')
     output.mkdir(parents=True, exist_ok=False)
     summary = {'start': args.start, 'end': args.end, 'known_historical_secids': len(known),
+               'sample_size': args.sample_size, 'requested_dates': args.dates, 'scope': 'sampled dates only unless --sample-size 0',
                'max_rows': args.max_rows, 'files': 0, 'anomalous_files': 0, 'errors': 0,
                'tables': {}, 'output': str(output.resolve())}
     print(f'Reports: {output.resolve()}', flush=True)
@@ -103,14 +124,14 @@ def main(argv=None):
         mapping_writer = csv.writer(mapping_file)
         mapping_writer.writerow(['table', 'raw_secid', 'mapped_secid', 'first_file'])
         for key in KEYS:
-            paths = sorted(DB.paths('min_chars', key, start=args.start, end=args.end))
+            available = sorted(DB.paths('min_chars', key, start=args.start, end=args.end))
+            paths = sample_paths(available, args.sample_size, args.dates)
             seen = {'raw': set(), 'mapped': set()}
             years, mapping_seen, daily_seen = {}, set(), {}
-            table = {'file_count': len(paths), 'first_anomaly': None, 'years': {}}
+            table = {'available_files': len(available), 'file_count': len(paths), 'first_anomaly': None, 'years': {}}
             summary['tables'][key] = table
             if not paths:
-                summary['errors'] += 1
-                table['error'] = 'no_files_in_requested_range'
+                table['note'] = 'no_files_for_selected_dates'  # Missing observations are normal.
             for path in paths:
                 row = {'table': key, 'file': str(path)}
                 try:

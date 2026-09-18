@@ -11,6 +11,7 @@ import pandas as pd
 import polars as pl
 
 from src.proj import DB , Base , Dates
+from src.data.util.minchars_stock import stock_rows
 from src.data.update.custom.basic import BasicCustomUpdater
 from src.data.update.custom.min_chars._common import (
     DB_MIN_SRC ,
@@ -92,8 +93,8 @@ def calc_min_chars_tag(date : int) -> pd.DataFrame:
     pandas.DataFrame
         Columns ``TAG_COLUMNS``.  Empty if min or roll is missing.
     """
-    raw = DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never')
-    roll = DB.load(DB_SRC , 'min_chars_roll' , date , vb_level = 'never')
+    raw = stock_rows(DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
+    roll = stock_rows(DB.load(DB_SRC , 'min_chars_roll' , date , vb_level = 'never'), source=f'roll chars {date}')
     if raw.empty or roll.empty:
         return pd.DataFrame(columns = list(TAG_COLUMNS))
 
