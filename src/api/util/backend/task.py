@@ -396,16 +396,25 @@ class TaskDatabase:
     def _recorded_process_stopped(task: TaskItem) -> bool:
         """Return whether the recorded process ended or its PID was reused."""
         assert task.pid is not None
-        status = process.check_status(task.pid)
+        try:
+            status = process.check_status(task.pid)
+        except psutil.NoSuchProcess:
+            return True
+        except (psutil.AccessDenied, OSError):
+            return False  # An unavailable probe is not evidence of termination.
         if status in ('complete', 'zombie'):
             return True
         if task.start_time is None:
             return False
         try:
             process_start = psutil.Process(task.pid).create_time()
-        except (psutil.NoSuchProcess, psutil.AccessDenied, OSError):
+        except psutil.NoSuchProcess:
             return True
-        return abs(process_start - task.start_time) > 60
+        except (psutil.AccessDenied, OSError):
+            return False
+        # An interactive task starts inside an already-running CLI process.
+        # Only a process born AFTER this task started indicates PID reuse.
+        return process_start - task.start_time > 60
 
     def recovered_crash_logs_due(self, retention_hours: float = 24) -> list[tuple[str, Path]]:
         """Return ended crash-protector attachments whose raw retention elapsed."""

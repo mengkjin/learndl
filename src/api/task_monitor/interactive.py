@@ -109,18 +109,19 @@ def reconstruction(processor):
     db.update_task(task.id, cmd=f'reconstruct {processor.key} --frame {processor.frame}', exit_files=files)
     recorder = BackendTaskRecorder(task_id=task.id, parse_cli=False)
     recorder.task_db = db
-    previous_trace = os.environ.get('LEARNDL_MEMORY_TRACE')
+    trace_enabled = os.environ.get('LEARNDL_MEMORY_TRACE') == '1'
     with recorder:
         with log.open('a', buffering=1) as output, redirect_stdout(Tee(sys.stdout, output)), redirect_stderr(Tee(sys.stderr, output)):
-            print(json.dumps(metadata, ensure_ascii=False))
+            if trace_enabled:
+                print(json.dumps(metadata, ensure_ascii=False))
             try:
-                os.environ['LEARNDL_MEMORY_TRACE'] = '1'
                 try:
                     metadata['sampling'] = start_sampler(directory, metadata['process'])
                 except (OSError, subprocess.SubprocessError) as exc:
                     metadata['sampling'] = {'unavailable': str(exc)}
                 atomic_json(directory / 'run.json', metadata)
-                print('Memory sampler:', metadata['sampling'])
+                if trace_enabled:
+                    print('Memory sampler:', metadata['sampling'])
                 yield task.id
             except BaseException:
                 traceback.print_exc()
@@ -128,11 +129,6 @@ def reconstruction(processor):
                 raise
             else:
                 atomic_json(directory / 'finished.json', {'status': 'complete', 'time': time.time()})
-            finally:
-                if previous_trace is None:
-                    os.environ.pop('LEARNDL_MEMORY_TRACE', None)
-                else:
-                    os.environ['LEARNDL_MEMORY_TRACE'] = previous_trace
 
 
 def maintain(task_db, email_sender, *, directory: Path | None = None, now: float | None = None) -> bool:
@@ -152,6 +148,10 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
             meta = json.loads(path.read_text())
             task = task_db.get_task(meta['task_id'])
             if task is None or task.status not in {'error', 'killed', 'complete'}:
+                continue
+            # Older watchdogs could mark a live, long-running CLI as killed.
+            # Match the persisted PID AND process creation time before sending.
+            if task.status == 'killed' and alive(meta['process']):
                 continue
             ended = task.end_time or now
             if task.status in {'error', 'killed'} and not (folder / 'notified.json').exists():

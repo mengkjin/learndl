@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,43 @@ class InteractiveTest(unittest.TestCase):
         sender = MagicMock()
         self.assertTrue(interactive.maintain(TaskDatabase(), sender))
         sender.assert_not_called()
+
+    def test_long_lived_cli_remains_running_and_stale_killed_email_is_suppressed(self):
+        with patch.object(interactive, 'start_sampler', return_value={'mode': 'test'}):
+            with interactive.reconstruction(self.processor) as task_id:
+                db = TaskDatabase()
+                task = db.get_task(task_id)
+                # A subsequent reconstruction starts long after the CLI was born.
+                with patch('src.api.util.backend.task.process.check_status', return_value='running'), patch('src.api.util.backend.task.psutil.Process') as process_class:
+                    process_class.return_value.create_time.return_value = task.start_time - 3600
+                    self.assertEqual(db.reconcile_stopped_tasks(), {})
+                self.assertEqual(db.get_task(task_id).status, 'running')
+                db.update_task(task_id, status='killed', end_time=time.time())
+                sender = MagicMock()
+                with patch.object(interactive, 'alive', return_value=True), patch.object(interactive, 'evidence') as probe:
+                    self.assertTrue(interactive.maintain(db, sender))
+                    sender.assert_not_called()
+                    probe.assert_not_called()
+                self.assertFalse(list((self.root / 'runs').glob('*/notified.json')))
+        self.assertEqual(TaskDatabase().get_task(task_id).status, 'complete')
+
+    def test_memory_trace_is_opt_in_and_environment_is_preserved(self):
+        from src.data.util import DataBlock
+        import polars as pl
+        frame = pl.DataFrame({'secid': [1], 'date': [20220101], 'x': [1.]})
+        for value in (None, '0', '1'):
+            with self.subTest(value=value), patch.dict(os.environ), patch.object(interactive, 'start_sampler', return_value={'mode': 'test'}):
+                if value is None:
+                    os.environ.pop('LEARNDL_MEMORY_TRACE', None)
+                else:
+                    os.environ['LEARNDL_MEMORY_TRACE'] = value
+                with interactive.reconstruction(self.processor) as task_id:
+                    self.assertEqual(os.environ.get('LEARNDL_MEMORY_TRACE'), value)
+                    DataBlock.from_polars(frame)
+                    task = TaskDatabase().get_task(task_id)
+                    log = Path(next(p for p in task.exit_files if p.endswith('output.log')))
+                self.assertEqual(os.environ.get('LEARNDL_MEMORY_TRACE'), value)
+                self.assertEqual('mem from-polars' in log.read_text(), value == '1')
 
     def test_exception_is_durable_retried_and_deduplicated(self):
         with patch.object(interactive, 'start_sampler', return_value={'mode': 'test'}):

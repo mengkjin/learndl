@@ -1,7 +1,7 @@
 """Temporary RSS / object-size probes for large PrePro jobs.
 
-Enable with ``PreProcessor.MemTrace = True`` (on for ``minc`` / ``mincr``).
-Remove once year-chunk RAM is confirmed stable.
+Disabled by default. Start with ``LEARNDL_MEMORY_TRACE=1`` to enable minc/mincr
+and DataBlock probes, or set ``PreProcessor.MemTrace = True`` for stage probes.
 """
 from __future__ import annotations
 

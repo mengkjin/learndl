@@ -25,6 +25,7 @@ Registered preprocessors
 """
 from __future__ import annotations
 
+import os
 import torch
 import numpy as np
 import pandas as pd
@@ -463,7 +464,7 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
     RANK_THEN_CS = False
     DateChunkYears = 1
     ChunkFillNan = 0.0
-    MemTrace = True
+    MemTrace = os.environ.get('LEARNDL_MEMORY_TRACE') == '1'
     MaxAllocationBytes = 32 * 1024**3
 
     def pre_process(

@@ -111,3 +111,17 @@ class TaskMonitorRepositoryTest(unittest.TestCase):
             with patch('src.api.util.backend.task.psutil.Process') as process_class:
                 process_class.return_value.create_time.return_value = 1000
                 self.assertTrue(TaskDatabase._recorded_process_stopped(task))
+
+    def test_existing_cli_process_is_not_pid_reuse(self) -> None:
+        task = TaskItem('a.py', status='running', pid=123, start_time=1000)
+        with patch('src.api.util.backend.task.process.check_status', return_value='running'), patch('src.api.util.backend.task.psutil.Process') as process_class:
+            process_class.return_value.create_time.return_value = 100
+            self.assertFalse(TaskDatabase._recorded_process_stopped(task))
+
+    def test_unavailable_process_probe_is_not_death(self) -> None:
+        import psutil
+        task = TaskItem('a.py', status='running', pid=123, start_time=1000)
+        with patch('src.api.util.backend.task.process.check_status', side_effect=psutil.AccessDenied(123)):
+            self.assertFalse(TaskDatabase._recorded_process_stopped(task))
+        with patch('src.api.util.backend.task.process.check_status', return_value='running'), patch('src.api.util.backend.task.psutil.Process', side_effect=psutil.AccessDenied(123)):
+            self.assertFalse(TaskDatabase._recorded_process_stopped(task))

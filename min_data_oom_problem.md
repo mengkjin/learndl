@@ -390,3 +390,35 @@ uv run python scripts/0_check/audit_min_chars.py --dates 20101124 20221230 20260
 清理脚本支持 `--start/--end`，默认 dry run，只有 `--apply` 才修改历史文件。
 如果基础信息集合为空会停止，避免误删全部文件。备份以原始字节保存，可按日志路径恢复。
 已有预处理 minc/mincr 缓存不会随原始文件清理自动更新，后续需要重新构建。
+
+## 13. mincr 仍在运行却收到 killed 邮件：生命周期误判
+
+用户报告在版本 8cd105ea 中收到 mincr/fit killed 通知，但 WezTerm 内计算持续。
+检查发现 `_recorded_process_stopped` 使用
+`abs(process_create_time - task_start_time) > 60` 判断 PID 复用。
+交互重建复用长生命周期 CLI，进程启动早于任务启动是正常情况，原条件会误报。
+
+已修改：只有进程创建时间晚于任务开始超过容差时，才据此判定 PID 复用；
+权限不足/探测不可用不作为退出证据；交互 killed 邮件发送前再核对 run.json
+中的 PID 与进程创建时间，仍存活则不发邮件。真实进程退出和 PID 复用仍检测。
+正常计算结束时记录器会写入 complete；不因这封误报重启或重复计算。
+
+此次邮件尾部 RSS 约 2.7 GiB，HWM 57.8 GiB 是同一进程生命周期内的历史峰值，
+不能认定为 mincr 当时的占用，更不能据邮件直接确认 OOM。
+重复 lookback 是另一个待核查问题，本轮不修改计算窗口或数值结果。
+
+## 14. 完成验证后关闭默认详细内存输出
+
+用户确认服务器 mincr 计算正常完成，之前 killed 邮件确为误判。
+默认关闭 minc/mincr 的逐阶段 RSS/HWM、DataBlock 读写拷贝内存输出，
+交互重建也不再强制设置 LEARNDL_MEMORY_TRACE。保留常规进度、错误、
+持久任务日志、后台 memory.jsonl 采样和故障邮件。
+
+需要再次诊断时，在启动新 CLI 前显式开启：
+
+```bash
+LEARNDL_MEMORY_TRACE=1 uv run cli.py
+```
+
+常规启动 `uv run cli.py` 默认不输出详细内存探针（如 shell 曾 export 该变量，
+先 `unset LEARNDL_MEMORY_TRACE`）。设置在启动时生效，已运行的 CLI 需下次启动才加载新代码。
