@@ -11,7 +11,7 @@ model:
     - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
-    global2top: true # false
+    global2top: false # false
 
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
@@ -26,9 +26,9 @@ train:
 
 algo:
   gru:
-    hidden_dim:     [64 , 64] #  2**5
+    hidden_dim:     [64] #  2**5
     dropout:        [0.1]
-    enc_in:         [false , true]
+    enc_in:         [true]
     enc_att:        [false]
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
