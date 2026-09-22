@@ -20,7 +20,7 @@ input:
   type: hidden # [data , hidden , factor] , specify below
 
   hidden.types: # list of hidden states , use if input_type is hidden
-    - gru@gru_day_new_rtn@0@best
+    - gru@gru_day_new_rtn@2@0@best # directory @2, model number 0
 
 train:
   boost:

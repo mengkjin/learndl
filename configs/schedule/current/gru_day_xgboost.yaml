@@ -20,7 +20,7 @@ input:
   type: hidden # [data , hidden , factor] , specify below
 
   hidden.types: # list of hidden states , use if input_type is hidden
-    - gru@gru_day_new_rtn@0@best
+    - gru@gru_day_new_rtn@2@0@best # directory @2, model number 0
 
 train:
   boost:
@@ -41,3 +41,14 @@ train:
 algo:
   xgboost:
     seqlens:        [{day: 1}]
+    learning_rate:  [0.05]
+    num_boost_round: [2000]
+    early_stopping: [100]
+    max_depth:      [4]
+    min_child_weight: [200] # minimum sum of Hessians, not a row count
+    reg_lambda:     [10.0]
+    reg_alpha:      [0.1]
+    subsample:      [0.8]
+    colsample_bytree: [0.8]
+    tree_method:    [hist]
+    max_bin:        [127]

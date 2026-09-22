@@ -1,6 +1,7 @@
 fit:
-  - gru_minc
-  - gru_mincr
+  - mincr
+  - gru_day_lgbm
+  - gru_day_xgboost
 
 resume: False
 force: True

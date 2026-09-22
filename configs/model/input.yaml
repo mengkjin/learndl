@@ -25,6 +25,7 @@ verify.x.autofill:
 hidden.types: # missing directory/model number/checkpoint raises an error
   - gru@gru_day_V0@1@0@best
   - gru@gru_day_V0@1@1@best
+special.hidden.include_pred: true # append source predictions; cache separately by checkpoint
 
 factor.types: # list of category1 , use if input_type is factor
   fundament:  [quality]

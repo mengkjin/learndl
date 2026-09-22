@@ -31,6 +31,7 @@ input.data.types: day
 input.hidden.types:
   - gru@gru_day_V0@1@0@best
   - gru@gru_day_V0@1@1@best
+input.special.hidden.include_pred: true
 input.factor.types:
   fundament: [quality]
 input.combo.types: [data , factor]

@@ -462,6 +462,11 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return dict(val)
 
     @property
+    def input_hidden_include_pred(self) -> bool:
+        """Append checkpoint-specific predictions to each hidden input block."""
+        return bool(self.Param.get('input.special.hidden.include_pred', True))
+
+    @property
     def input_hidden_types(self) -> list[str]:
         if self.input_type == "hidden" or (self.input_type == "combo" and "hidden" in self["input.combo.types"]):
             return self.unwrap_inputs(self["input.hidden.types"])
@@ -1269,6 +1274,8 @@ class ModelConfig(BaseModelConfig):
                     info_strs.append((1, "Factor Names", f"{self.input_factor_names}"))
             elif self.input_type == "combo":
                 info_strs.append((1, "Combo Types", f"{self.input_combo_types}"))
+            if self.input_hidden_types:
+                info_strs.append((1, "Hidden Include Pred", f"{self.input_hidden_include_pred}"))
             info_strs.append((0, "Labels", f"{self.labels}"))
             info_strs.append((0, "Period", f"{self.beg_date} ~ {self.end_date}"))
             info_strs.append((0, "Interval", f"{self.interval} days"))

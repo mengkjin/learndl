@@ -62,7 +62,7 @@ class Lgbm(BasicBoostModel):
         'zero_as_missing' : False ,
         'ndcg_eval_at' : 100,
         'label_gain': list(range(101)) ,
-        'lambdarank_truncation_target' : 100,
+        'lambdarank_truncation_level' : 100,
         'device_type': 'cpu',
         'seed': 42,
         'n_bins' : None,
@@ -76,13 +76,14 @@ class Lgbm(BasicBoostModel):
         if self.train_param['objective'] == 'rank':
             self.train_param['objective'] = 'lambdarank'
             self.train_param['metric'] = 'ndcg'
-            self.train_param['ndcg_eval_at'] = [100]
-            self.train_param['lambdarank_truncation_target'] = self.get_param('rank_target_size' , 100)
+            target_size = self.get_param('rank_target_size' , 100)
+            self.train_param['ndcg_eval_at'] = [target_size]
+            self.train_param['lambdarank_truncation_level'] = target_size
         else:
             self.train_param['objective'] = 'mse'
             self.train_param['metric'] = None
             self.train_param['ndcg_eval_at'] = None
-            self.train_param['lambdarank_truncation_target'] = None
+            self.train_param['lambdarank_truncation_level'] = None
         return self
 
     def fit(

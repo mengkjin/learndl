@@ -201,7 +201,9 @@ class DataModule(Base.BoundLogger):
                     
                 for hd_model_date , hd_dates in hd_model_hd_dates.items():
                     hd_dates = np.unique(hd_dates)
-                    hd_model.hidden_values(hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False)
+                    hd_model.hidden_values(
+                        hd_dates , hd_model_date , silent = False , print_dates = True , async_save = False ,
+                        include_pred = self.config.input_hidden_include_pred)
                     hd_model.data.storage.del_all()
                     gc.collect()
                     torch.cuda.empty_cache()
@@ -312,7 +314,9 @@ class DataModule(Base.BoundLogger):
             assert hd_model.model_dates.size > 0 , f'hidden model {hd_key} has no model dates'
             assert hd_model.model_dates[0] <= self.model_date , f'hidden model {hd_key} has no model date before {self.model_date}'
             model_date = hd_model.model_dates[hd_model.model_dates <= self.model_date][-1]
-            bd_block = hd_model.hidden_block(hd_dates , model_date , align_secid = self.datas.secid , align_date = self.datas.date)
+            bd_block = hd_model.hidden_block(
+                hd_dates , model_date , align_secid = self.datas.secid , align_date = self.datas.date ,
+                include_pred = self.config.input_hidden_include_pred)
             self.datas.x[hd_key] = bd_block
         self.config.update_data_param(self.datas.x)
     

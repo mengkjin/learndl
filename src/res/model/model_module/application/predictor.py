@@ -277,6 +277,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         start = None , end = None , step : int = 1 ,
         model_num : int | None = None , submodel : str | None = None , 
         load_first = True , silent = True , print_dates = False , async_save = True , 
+        include_pred : bool = False ,
     ) -> pl.DataFrame:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -288,62 +289,104 @@ class ArchivedPredictorModel(Base.BoundLogger):
             step : int = 1, the step size
             model_num : int | None = None, the model number of the model archive, None use default model number
             submodel : str | None = None, the model submodel, None use default model submodel
-            feature_prefix : bool = True, whether to add feature prefix to the column names
+            include_pred : bool = False, join separately cached output scores by secid/date
             load_first : bool = True, whether to load the first batch data to get the hidden block
             silent : bool = True, whether to silence the warning
         Returns:
             pl.DataFrame of hiddens
         """
-        model_num , submodel = self._get_model_num_and_submodel(model_num , submodel)
-        dates = self._get_dates(dates , start , end , step)
+        values = self._cached_representation_values(
+            dates, model_date, kinds=('hidden', 'pred') if include_pred else ('hidden',),
+            start=start, end=end, step=step, model_num=model_num, submodel=submodel,
+            load_first=load_first, silent=silent, print_dates=print_dates, async_save=async_save)
+        hidden = values['hidden']
+        if not include_pred or hidden.is_empty():
+            return hidden
+        pred = values['pred']
+        if pred.is_empty():
+            raise ValueError(f'No prediction values available for hidden source {self.path} at {model_date}')
+        return hidden.join(pred, on=['secid', 'date'], how='left', validate='1:1')
+
+    def pred_values(
+        self, dates: Base.alias.DateType, model_date: int, *,
+        start=None, end=None, step: int = 1,
+        model_num: int | None = None, submodel: str | None = None,
+        load_first=True, silent=True, print_dates=False, async_save=True,
+    ) -> pl.DataFrame:
+        """Return all output scores from one fixed checkpoint, without labels.
+
+        Unlike rolling/deployed predictions, historical dates are all evaluated
+        using ``model_date``. Missing dates are computed and cached independently
+        of hidden values. ``load_first=False`` refreshes only requested dates.
+        """
+        return self._cached_representation_values(
+            dates, model_date, kinds=('pred',), start=start, end=end, step=step,
+            model_num=model_num, submodel=submodel, load_first=load_first,
+            silent=silent, print_dates=print_dates, async_save=async_save)['pred']
+
+    def _cached_representation_values(
+        self, dates, model_date, *, kinds, start=None, end=None, step=1,
+        model_num=None, submodel=None, load_first=True, silent=True,
+        print_dates=False, async_save=True,
+    ) -> dict[str, pl.DataFrame]:
+        """Fill independent hidden/pred caches in a single forward pass per missing date."""
+        model_num, submodel = self._get_model_num_and_submodel(model_num, submodel)
+        dates = self._get_dates(dates, start, end, step)
         if dates.empty:
-            return pl.DataFrame()
+            return {kind: pl.DataFrame() for kind in kinds}
+        paths = {
+            kind: (self.hidden_values_path if kind == 'hidden' else self.pred_values_path)(
+                model_num, model_date, submodel)
+            for kind in kinds
+        }
+        frames: dict[str, list[pl.DataFrame]] = {}
+        missing: dict[str, set[int]] = {}
+        requested = dates.dates.tolist()
+        for kind, path in paths.items():
+            saved = Load.polars(path)
+            if saved.height and (not {'date', 'secid'}.issubset(saved.columns)
+                                 or not any(col.startswith(f'{kind}.') for col in saved.columns)):
+                self.logger.warning(f'Ignore malformed {kind} values at {path}')
+                saved = pl.DataFrame()
+            if not load_first and saved.height:
+                saved = saved.filter(~pl.col('date').is_in(requested))
+            frames[kind] = [saved] if saved.height else []
+            existing = saved['date'].unique().to_list() if saved.height else []
+            missing[kind] = set(requested).difference(existing)
 
-        hidden_path = self.hidden_values_path(model_num , model_date , submodel)
-        hidden_dfs : list[pl.DataFrame] = []
+        pending = sorted(set().union(*missing.values()))
+        if print_dates and pending:
+            self.logger.stdout(f'Model {self.model_name} {"/".join(kinds)} values of '
+                               f'Model Date {model_date} have {len(pending)} dates awaiting')
+        updated = set()
+        if pending:
+            try:
+                for batch_data in self.iter_batch_data(
+                    pending, model_date, model_num=model_num, submodel=submodel,
+                    require_grad=False, silent=silent,
+                ):
+                    if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
+                        continue
+                    for kind in kinds:
+                        if batch_data.batch_date not in missing[kind]:
+                            continue
+                        frame = (batch_data.hidden_df_pl() if kind == 'hidden'
+                                 else pl.from_pandas(batch_data.pred_df(label=False)))
+                        frames[kind].append(frame)
+                        updated.add(kind)
+            finally:
+                self.data.storage.del_group('retrospective')
 
-        saved_hidden_df = Load.polars(hidden_path)
-        required_cols = {'date' , 'secid'}
-        if saved_hidden_df.height > 0 and not required_cols.issubset(set(saved_hidden_df.columns)):
-            self.logger.warning(
-                f'Ignore malformed hidden values at {hidden_path}: '
-                f'missing {sorted(required_cols - set(saved_hidden_df.columns))}'
-            )
-            saved_hidden_df = pl.DataFrame()
-
-        if not load_first and saved_hidden_df.height > 0:
-            saved_hidden_df = saved_hidden_df.filter(~pl.col('date').is_in(dates.dates))
-        if saved_hidden_df.height > 0:
-            hidden_dfs.append(saved_hidden_df)
-        if saved_hidden_df.height > 0 and 'date' not in saved_hidden_df.columns:
-            self.logger.error(f'date column not found in {hidden_path}')
-            self.logger.display(saved_hidden_df)
-            raise ValueError(f'date column not found in {hidden_path}')
-        existing_dates = saved_hidden_df['date'].unique() if 'date' in saved_hidden_df.columns else np.array([], dtype=int)
-        dates = dates.diff(existing_dates , inplace = False)
-        if print_dates and len(dates) > 0:
-            self.logger.stdout(f'Model {self.model_name} Hiddens of Model Date {model_date} has {len(dates)} dates awaiting')
-            self.logger.stdout(f'Dates: {dates}' , idt = 1)
-            
-        batch_data_iterator = self.iter_batch_data(
-            dates , model_date , model_num = model_num , 
-            submodel = submodel , require_grad = False , silent = silent)
-        for batch_data in batch_data_iterator:
-            if batch_data.output.empty or batch_data.batch_date in self.data.early_test_dates:
-                continue
-            assert batch_data.batch_date not in existing_dates , f'batch_data.batch_date {batch_data.batch_date} already in {existing_dates}'
-            hidden_dfs.append(batch_data.hidden_df_pl())
-        self.data.storage.del_group('retrospective')
-        df = pl.concat(hidden_dfs , how = 'vertical_relaxed')
-        if df.height > 0 and dates:
-            df = df.sort(['date','secid'])
-            Save.df(
-                df , hidden_path , 
-                async_save = async_save , overwrite = True , 
-                prefix = f'{self.pred_name} Hidden Values' , 
-                indent = self.indent + 1 , vb_level = self.vb_level + 1
-            )
-        return df
+        result = {}
+        for kind in kinds:
+            frame = pl.concat(frames[kind], how='vertical_relaxed') if frames[kind] else pl.DataFrame()
+            if kind in updated:
+                frame = frame.sort(['date', 'secid'])
+                Save.df(frame, paths[kind], async_save=async_save, overwrite=True,
+                        prefix=f'{self.pred_name} {kind.title()} Values',
+                        indent=self.indent + 1, vb_level=self.vb_level + 1)
+            result[kind] = frame
+        return result
 
     def hidden_block(
         self , 
@@ -352,6 +395,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         model_num : int | None = None , submodel : str | None = None , feature_prefix : bool = True , 
         align_secid : Base.alias.SecidType = None , align_date : Base.alias.DateType = None ,
         load_first = True , silent = True , async_save = True , 
+        include_pred : bool = False ,
     ) -> DataBlock:
         """
         Iterate hidden block of a given model number, model date, start date, and end date
@@ -364,6 +408,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             model_num : int | None = None, the model number of the model archive, None use default model number
             submodel : str | None = None, the model submodel, None use default model submodel
             feature_prefix : bool = True, whether to add feature prefix to the column names
+            include_pred : bool = False, append all output scores as input features
             load_first : bool = True, whether to load the first batch data to get the hidden block
             silent : bool = True, whether to silence the warning
         Returns:
@@ -373,7 +418,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         df = self.hidden_values(
             dates , model_date , start = start , end = end , step = step , 
             model_num = model_num , submodel = submodel , silent = silent , 
-            load_first = load_first , async_save = async_save , 
+            load_first = load_first , async_save = async_save , include_pred = include_pred ,
         )
         if df.height == 0:
             return DataBlock()
@@ -393,6 +438,9 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     def hidden_values_path(self , model_num : int , model_date : int , submodel : str):
         return self.path.snapshot('hidden_values' , f'{model_num}.{model_date}.{submodel}.feather')
+
+    def pred_values_path(self , model_num : int , model_date : int , submodel : str):
+        return self.path.snapshot('pred_values' , f'{model_num}.{model_date}.{submodel}.feather')
 
     def predict_dates(self , dates : Base.alias.DateType) -> Self:
         """predict recent days"""
