@@ -30,6 +30,14 @@ force: false
 每个项目结束后立即保存状态。训练期间 Git Pull 或配置编辑不会把新配置误记为已经完成。
 项目失败后继续执行后续项目，最后汇总报错；中断信号直接退出。
 
+Watchdog 每次闲时 worklist 检查都会先核对所有 schedule 名称，即使当前有训练或显存繁忙。
+名称必须是 schedule YAML 文件名去掉 `.yaml`，例如 `gru_mincr`，不能填写其数据类型 `mincr`。
+无法找到配置时，在 watchdog 状态的 `missing_schedules` 中列出名称，并发送
+`Watchdog Idle Worklist - configuration error` 邮件，包含缺失名称、查找目录和 worklist 的 Git 版本。
+同一 worklist 版本、同一组缺失名称只通知一次；通知持久化到现有邮件队列，发送失败会在后续
+watchdog 轮询重试，重启不会丢失。其他有效 schedule 仍可按闲时条件执行；修正名称或补上配置后
+自动重新检查。此错误不创建训练记录，也不计作训练失败，不会阻止修复后的首次训练。
+
 ## 两套独立的本机记录
 
 均使用 `PATH.lc_machine`，即 `.local_resources/<机器名>/`，不会进入 Git。

@@ -67,8 +67,9 @@ def idle_reason(options: dict) -> str | None:
     return None
 
 
-def candidate(store: RunStore, *, only: str | None = None) -> dict | None:
-    from src.proj import PATH
+def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
+    """Validate every name and durably report missing configs, even while busy."""
+    from src.proj import MACHINE, PATH
     from src.api.calls.worklist_state import WorklistState
     from src.res.model.util.training_history import file_revision
     worklist_revision = file_revision(PATH.sched_worklist)
@@ -76,15 +77,44 @@ def candidate(store: RunStore, *, only: str | None = None) -> dict | None:
     resume, force = worklist.get('resume', False), worklist.get('force', False)
     if type(resume) is not bool or type(force) is not bool:
         raise ValueError('worklist resume and force must be YAML booleans')
-    attempts = store.owned(OWNER)
+    schedules, missing = {}, []
     for name in dict.fromkeys(worklist['fit']):
-        if only is not None and name != only:
-            continue
         try:
             revisions = WorklistState.revisions(name)
         except FileNotFoundError:
+            missing.append(name)
             continue
         revisions['worklist'] = worklist_revision
+        schedules[name] = revisions
+    if missing:
+        key = version({'worklist': worklist_revision, 'missing': sorted(missing)})
+        detail = (f'Host: {MACHINE.name}\nWorklist: {PATH.sched_worklist}\n'
+                  f'Git commit: {worklist_revision["git_commit"]}\n'
+                  f'Worklist SHA256: {worklist_revision["sha256"]}\n'
+                  f'Missing schedule configs: {", ".join(missing)}\n'
+                  f'Searched directories:\n{PATH.sched}\n{PATH.sched_shared}\n'
+                  'Worklist entries must match schedule filenames without .yaml, '
+                  'not model modules or input data types.\n'
+                  'These schedules cannot start, even with force: true. '
+                  'Correct the names or add the missing config files. '
+                  'Other valid schedules remain eligible for idle training.')
+        # Notification-only event: never create a fictitious training run.
+        store.event({'id': f'worklist-config-{key}', 'owner': OWNER}, 'configuration_error', detail)
+    return worklist, schedules, missing
+
+
+def candidate(store: RunStore, *, only: str | None = None) -> dict | None:
+    worklist, schedules, _ = worklist_schedules(store)
+    return _candidate(store, worklist, schedules, only=only)
+
+
+def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None) -> dict | None:
+    from src.api.calls.worklist_state import WorklistState
+    resume, force = worklist.get('resume', False), worklist.get('force', False)
+    attempts = store.owned(OWNER)
+    for name, revisions in schedules.items():
+        if only is not None and name != only:
+            continue
         key = version(revisions)
         if any(run['task'] == name and run['version'] == key and
                run['phase'] not in {'deferred', 'complete'} and not run.get('retry_allowed')
@@ -106,17 +136,19 @@ def candidate(store: RunStore, *, only: str | None = None) -> dict | None:
 def dispatch(options: dict, store: RunStore | None = None) -> dict:
     store = store or RunStore()
     with queue_lock():
+        worklist, schedules, missing = worklist_schedules(store)
+        diagnostics = {'missing_schedules': missing} if missing else {}
         if any(run['phase'] in ACTIVE for run in store.owned(OWNER)):
-            return {'idle_worklist': 'queued or active'}
+            return {'idle_worklist': 'queued or active', **diagnostics}
         if reason := idle_reason(options):
-            return {'idle_worklist': reason}
-        request = candidate(store)
+            return {'idle_worklist': reason, **diagnostics}
+        request = _candidate(store, worklist, schedules)
         if request is None:
-            return {'idle_worklist': 'no eligible schedules'}
+            return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
                        progress_timeout_seconds=options.get('progress_timeout_seconds', 43200), timeout_seconds=None)
         store.put(request)
-        return {'queued': request['task'], 'version': request['version']}
+        return {'queued': request['task'], 'version': request['version'], **diagnostics}
 
 
 def _launch(request: dict, store: RunStore) -> int:

@@ -1,5 +1,5 @@
 fit:
-  - mincr
+  - gru_mincr
 
 resume: False
 force: True

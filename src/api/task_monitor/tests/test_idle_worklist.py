@@ -48,6 +48,71 @@ class IdleTest(unittest.TestCase):
     def save_success(self, name='first'):
         WorklistState(name).save(status='success', revisions=WorklistState.revisions(name), model_path=str(self.folder))
 
+    def test_missing_schedules_after_valid_candidate_are_all_reported(self):
+        self.worklist.write_text('fit: [first, mincr, missing, mincr]\nforce: true\n')
+        with patch.object(ScheduleConfig, 'find_path', side_effect=lambda name: self.schedule if name == 'first' else None):
+            result = idle.dispatch(self.options, self.store)
+        self.assertEqual(result['queued'], 'first')
+        self.assertEqual(result['missing_schedules'], ['mincr', 'missing'])
+        self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
+        sender = Mock(return_value=True)
+        with patch('src.api.util.backend.task.TaskDatabase') as database:
+            self.assertTrue(runtime.deliver_timeout_events(sender, self.store))
+            database.assert_not_called()
+        sender.assert_called_once()
+        subject, body = sender.call_args.args
+        self.assertIn('configuration error', subject)
+        for detail in ('mincr, missing', str(self.worklist), 'test-commit', str(PATH.sched), str(PATH.sched_shared)):
+            self.assertIn(detail, body)
+
+    def test_missing_schedule_reports_while_gpu_busy_or_another_run_active(self):
+        for active in (False, True):
+            with self.subTest(active=active):
+                if active:
+                    self.store.put(dict(id='existing', owner=idle.OWNER, task='old', phase='running'))
+                with patch.object(ScheduleConfig, 'find_path', return_value=None), \
+                     patch.object(idle, 'idle_reason', return_value='GPU memory busy: 30.0%'):
+                    result = idle.dispatch(self.options, self.store)
+                self.assertEqual(result['missing_schedules'], ['first', 'second'])
+                self.assertEqual(result['idle_worklist'], 'queued or active' if active else 'GPU memory busy: 30.0%')
+        sender = Mock(return_value=True)
+        self.assertTrue(runtime.deliver_timeout_events(sender, self.store))
+        sender.assert_called_once()
+
+    def test_missing_schedule_mail_retries_and_deduplicates_across_restart(self):
+        with patch.object(ScheduleConfig, 'find_path', return_value=None):
+            idle.dispatch(self.options, self.store)
+            sender = Mock(side_effect=[False, OSError('SMTP unavailable'), True])
+            self.assertFalse(runtime.deliver_timeout_events(sender, self.store))
+            self.assertFalse(runtime.deliver_timeout_events(sender, self.store))
+            restarted = runtime.RunStore(self.store.path)
+            idle.dispatch(self.options, restarted)
+            self.assertTrue(runtime.deliver_timeout_events(sender, restarted))
+            idle.dispatch(self.options, restarted)
+            self.assertTrue(runtime.deliver_timeout_events(sender, restarted))
+            self.assertEqual(sender.call_count, 3)
+            self.assertEqual(restarted.owned(idle.OWNER), [])
+            # A new worklist revision can notify again if it is still invalid.
+            self.worklist.write_text(self.worklist.read_text() + '# new revision\n')
+            idle.dispatch(self.options, restarted)
+            sender.side_effect = None
+            sender.return_value = True
+            self.assertTrue(runtime.deliver_timeout_events(sender, restarted))
+            self.assertEqual(sender.call_count, 4)
+
+    def test_adding_missing_config_allows_training_without_failure_suppression(self):
+        self.worklist.write_text('fit: [first]\n')
+        with patch.object(ScheduleConfig, 'find_path', return_value=None):
+            result = idle.dispatch(self.options, self.store)
+        self.assertEqual(result['missing_schedules'], ['first'])
+        sender = Mock(return_value=True)
+        runtime.deliver_timeout_events(sender, self.store)
+        result = idle.dispatch(self.options, self.store)
+        self.assertEqual(result['queued'], 'first')
+        self.assertNotIn('missing_schedules', result)
+        runtime.deliver_timeout_events(sender, self.store)
+        sender.assert_called_once()
+
     def test_one_queued_task_no_duplicate_and_force_once(self):
         self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'first')
         self.assertIn('idle_worklist', idle.dispatch(self.options, self.store))

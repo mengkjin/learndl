@@ -330,6 +330,19 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     for event_id, body in rows:
         event = json.loads(body)
         run = event['run']
+        if run.get('owner') == 'idle_worklist' and event['kind'] == 'configuration_error':
+            # Missing schedules have no process/task record or result email.
+            try:
+                sent = sender('Watchdog Idle Worklist - configuration error', event['detail'],
+                              confirmation_message='Learndl worklist configuration alert')
+            except Exception:
+                sent = False
+            if sent:
+                with store.connect() as connection:
+                    connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
+            else:
+                success = False
+            continue
         if run.get('owner') == 'idle_worklist' and event['kind'] == 'finished':
             # Suppress new-policy success mails and errors reported since
             # this event was created; retain the event for audit (sent=-1).
