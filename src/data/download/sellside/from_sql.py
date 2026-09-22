@@ -38,8 +38,8 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'huayuan.scores_v3'  : (('huayuan'  , 'scores_v3'  , 'trade_dt'    , 20260101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v3_fast'   : (('huayuan' , 'scores_v3_fast'   , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v4_style'  : (('huayuan' , 'scores_v4_style'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
-    'huayuan.scores_v5' : (('huayuan' , 'pred_alpha'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
-    'huayuan.cmm'       : (('huayuan' , 'scores_v1'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
+    'huayuan.scores_v5' : (('huayuan' , 'pred_alpha'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {'local_name' : 'scores_v5'}) ,
+    'huayuan.cmm'       : (('huayuan' , 'scores_v1'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {'local_name' : 'cmm'}) ,
     'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
     'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
@@ -160,11 +160,14 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         self , factor_src : str , factor_set : str , date_col : str , 
         start_date : int , end_date : int = 99991231 , date_fmt : str | None = None , 
         sub_factors : list | None = None , connection_key : str = '' , * , 
+        local_name : str | None = None ,
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.factor_src = factor_src
         self.factor_set = factor_set
+        # Keep the remote SQL table separate from the local key/value column.
+        self.local_name = local_name or factor_set
         self.date_col = date_col
         self.start_date = start_date
         self.end_date = end_date
@@ -191,7 +194,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
 
     @property
     def db_key(self) -> str:
-        return f'{self.factor_src}.{self.factor_set}'
+        return f'{self.factor_src}.{self.local_name}'
 
     @property
     def use_connection_key(self) -> str:
@@ -383,7 +386,7 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             assert isinstance(df_input , pd.DataFrame) , f'dongfang {type(df_input)} is not a pd.DataFrame'
         elif self.factor_src == 'huayuan':
             assert isinstance(df_input , pd.DataFrame) , f'huayuan {type(df_input)} is not a pd.DataFrame'
-            df = df.rename(columns = {'factor_value':self.factor_set})
+            df = df.rename(columns = {'factor_value':self.local_name})
             
         elif self.factor_src == 'kaiyuan':
             assert isinstance(df_input , dict) , f'kaiyuan {type(df_input)} is not a dict'
