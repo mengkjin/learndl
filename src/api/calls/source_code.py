@@ -46,7 +46,10 @@ class GitCommitSync(DirectCall):
             Logger.stdout(f"Commit message: {prefixes}")
 
 class GitClearPull(DirectCall):
-    """Clear local changes and pull latest code. Args: verbose_level: 0: no output, 1: only success, 2: all output"""
+    """Clear local changes and pull latest code.
+
+    verbose_level: 0 no output, 1 head summary and file counts, 2 also pull stdout.
+    """
     category = 'Codes'
     def __init__(self , verbose_level : Base.lit._0_3 = 1 , **kwargs):
         self.kwargs = kwargs | {'verbose_level': verbose_level}
@@ -54,20 +57,57 @@ class GitClearPull(DirectCall):
     def verbose_level(self) -> Base.lit._0_3:
         verbose_level = self.kwargs['verbose_level']
         return cast(Base.lit._0_3, verbose_level)
+    @staticmethod
+    def _git_out(*args: str) -> str:
+        completed = subprocess.run(['git', *args], capture_output=True, text=True, check=True)
+        return completed.stdout.strip()
+    @classmethod
+    def _rev_label(cls, rev: str) -> str:
+        """Short hash and subject, so the log identifies the commit without a file list."""
+        return cls._git_out('log', '-1', '--format=%h  %s', rev)
+    @staticmethod
+    def _nlines(text: str) -> int:
+        return sum(1 for line in text.splitlines() if line.strip())
     def run(self) -> None:
         import shutil
         assert not MACHINE.platform_coding, "Git Pull is not available on coding platform"
 
-        # clean local changes
-        subprocess.run(['git', 'reset', '--hard', 'HEAD'], check=True)
-        subprocess.run(['git', 'clean', '-fd'], check=True)
-        if self.verbose_level >= 1:
-            Logger.success(f"Clean local changes done")
-        
-        # pull latest code
+        local_branch = self._git_out('rev-parse', '--abbrev-ref', 'HEAD')
+        local_sha = self._git_out('rev-parse', 'HEAD')
+        local_head = self._rev_label('HEAD')
+        # porcelain -uall: tracked edits plus every untracked file reset/clean will drop
+        n_cleared = self._nlines(self._git_out('status', '--porcelain', '--untracked-files=all'))
+
+        subprocess.run(['git', 'fetch'], capture_output=True, text=True, check=True)
+        remote_branch = self._git_out('rev-parse', '--abbrev-ref', '@{u}')
+        remote_sha = self._git_out('rev-parse', '@{u}')
+        remote_head = self._rev_label('@{u}')
+        n_behind = int(self._git_out('rev-list', '--count', 'HEAD..@{u}'))
+        # triple-dot: files incoming commits touch, excluding commits that exist only locally
+        n_pulled = self._nlines(self._git_out('diff', '--name-only', 'HEAD...@{u}'))
+        if local_sha == remote_sha:
+            update = 'up to date'
+        elif n_behind:
+            update = f'{n_behind} commits'
+        else:
+            update = 'none, local is ahead'
+
+        # discard worktree and untracked files; commit history is left for pull to reconcile
+        subprocess.run(['git', 'reset', '--hard', 'HEAD'], capture_output=True, text=True, check=True)
+        subprocess.run(['git', 'clean', '-fd'], capture_output=True, text=True, check=True)
         result = subprocess.run(['git', 'pull'], capture_output=True, text=True, check=True)
         if self.verbose_level >= 1:
-            Logger.success(f"Pull latest code done")
+            Logger.stdout_pairs(
+                {
+                    f'Local HEAD ({local_branch})': local_head,
+                    f'Remote HEAD ({remote_branch})': remote_head,
+                    'Remote update': update,
+                    'Pulled files': n_pulled,
+                    'Local files cleared': n_cleared,
+                },
+                title='Git clear and pull',
+            )
+            Logger.success('Clear local changes and pull done')
         if self.verbose_level >= 2:
             Logger.stdout(result.stdout)
         
