@@ -39,7 +39,7 @@ factor_settings : dict[str,tuple[tuple[Any,...],dict[str,Any]]] = {
     'huayuan.scores_v3_fast'   : (('huayuan' , 'scores_v3_fast'   , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v4_style'  : (('huayuan' , 'scores_v4_style'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {}) ,
     'huayuan.scores_v5' : (('huayuan' , 'pred_alpha'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {'local_name' : 'scores_v5'}) ,
-    'huayuan.cmm'       : (('huayuan' , 'scores_v1'  , 'trade_dt' , 20260101 , 99991231 , '%Y-%m-%d') , {'local_name' : 'cmm'}) ,
+    'huayuan.cmm'       : (('huayuan' , 'scores_v1'  , 'trade_dt' , 20171229 , 99991231 , '%Y-%m-%d') , {'local_name' : 'cmm'}) ,
     'huatai.dl_factors'        : (('huatai' , 'dl_factors'        , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {'sub_factors' : ['price_volume_nn','text_fadt_bert']}) ,
     'huatai.master_combined'   : (('huatai' , 'master_combined'   , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,
     'huatai.fundamental_value' : (('huatai' , 'fundamental_value' , 'datetime' , 20170101 , 99991231 , '%Y-%m-%d') , {}) ,

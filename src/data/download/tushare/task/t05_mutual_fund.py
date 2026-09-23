@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 from src.proj import MACHINE , Dates
-from src.data.download.tushare.basic import TS , InfoFetcher , TushareFetcher , DayFetcher
+from src.data.download.tushare.basic import TS , InfoFetcher , TushareFetcher , DayFetcher , IterateFetchPageLimit
 
 __all__ = ['FundInfo' , 'FundPortfolioFetcher' , 'ETFDailyQuote']
 
@@ -49,7 +49,22 @@ class FundPortfolioFetcher(TushareFetcher):
             limit , max_fetch_times = 3000 , 500
         else:
             limit , max_fetch_times = 1000 , 2000
-        df = self.iterate_fetch(self.api.fund_portfolio , limit = limit , period = str(date) , max_fetch_times=max_fetch_times , breakpoint = True)
+        # One quarter of fund holdings can exceed a single page cap (500 * 3000 rows
+        # on UTC+8). Each cap saves a breakpoint; keep pulling until the API returns
+        # an empty page. 20 rounds is a runaway guard, not an expected data size.
+        max_rounds = 20
+        df = pd.DataFrame()
+        for round_idx in range(max_rounds):
+            try:
+                df = self.iterate_fetch(
+                    self.api.fund_portfolio , limit = limit , period = str(date) ,
+                    max_fetch_times = max_fetch_times , breakpoint = True)
+                break
+            except IterateFetchPageLimit as exc:
+                if round_idx == max_rounds - 1:
+                    raise IterateFetchPageLimit(
+                        f'{self} fund_portfolio period={date} exceeded {max_rounds * max_fetch_times} pages') from exc
+                self.logger.warning(f'{exc} , resume breakpoint')
         if df.empty: 
             return df
         df = TS.code_to_secid(df.rename(columns=renamer) , code_col='symbol' , drop_old = False)

@@ -21,6 +21,7 @@ Concrete fetcher base classes
 ``RollingFetcher``     — range-fetch with per-date splitting
 """
 from __future__ import annotations
+import shutil
 import time
 import numpy as np
 import pandas as pd
@@ -36,12 +37,16 @@ from src.proj.util.functional.handler import retry_call
 from .core import TS
 
 __all__ = [
+    'IterateFetchPageLimit' ,
     'TushareFetcher' , 'InfoFetcher' , 'TimeSeriesFetcher' , 
     'TradeDataFetcher' , 'DayFetcher' , 'WeekFetcher' , 'MonthFetcher' , 
     'FinaFetcher' , 'RollingFetcher']
 
 T = TypeVar('T')
 TushareDbTarget : TypeAlias = Literal['info' , 'time_series' , 'date' , 'fina' , 'rolling' , 'fundport' , '']
+
+class IterateFetchPageLimit(Exception):
+    """Paginated fetch stored ``max_fetch_times`` frames and the next page is still non-empty."""
 
 class TushareFetcherMeta(ABCMeta):
     """meta class of TushareFetcher , check if the subclass is valid and register all subclasses without abstract methods"""
@@ -79,6 +84,8 @@ class TushareIterateFetcher(Base.BoundLogger):
     ``.feather`` files.  On the next invocation the breakpoint metadata is
     checked: if the saved data is not older than ``survival_time`` hours,
     the offset picks up where it left off rather than re-fetching from page 1.
+    Older breakpoint directories under the cache root, including other
+    parameter folders, are deleted instead of left on disk.
 
     Typical use: pass as a helper inside a ``TushareFetcher.get_data(date)``
     implementation to handle large paginated tables (e.g. analyst reports).
@@ -102,7 +109,9 @@ class TushareIterateFetcher(Base.BoundLogger):
         limit : int
             Page size for each paginated API call.
         max_fetch_times : int
-            Cap on the total number of pages (``-1`` = unlimited).
+            Cap on pages stored in this call. Pages restored from a breakpoint
+            do not count. ``-1`` means unlimited. Hitting the cap saves the
+            breakpoint and raises ``IterateFetchPageLimit``; the next call resumes.
         breakpoint : bool
             Enable breakpoint/resume (default True).
         """
@@ -115,6 +124,7 @@ class TushareIterateFetcher(Base.BoundLogger):
         self.kwargs = kwargs
 
         self.breakpoint = breakpoint
+        self.cache_root = self.base_path
 
         self.api_name = TS.get_func_name(self.tushare_api)
         kwargs_str = '_'.join([f'{k}={v}' for k, v in sorted(self.kwargs.items() , key = lambda x: x[0])])
@@ -148,19 +158,66 @@ class TushareIterateFetcher(Base.BoundLogger):
         self.breakpoint_path.mkdir(parents=True, exist_ok=True)
 
     def remove_path(self):
-        self.clear_breakpoint()
-        if self.breakpoint_path.exists():
-            self.breakpoint_path.rmdir()
+        """Delete this breakpoint directory and any empty parent folders."""
+        if not self.breakpoint:
+            return
+        self._remove_tree(self.breakpoint_path)
+        self._prune_empty(self.cache_root)
 
-    def clear_breakpoint(self):
-        if self.breakpoint_path.exists():
-            [file.unlink() for file in self.breakpoint_path.glob('*')]
+    @staticmethod
+    def _remove_tree(path : Path):
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
 
-    def check_expiration(self):
-        metadata = self.load_metadata()
-        if not metadata or ('expiration_date' in metadata and metadata['expiration_date'] < CALENDAR.now().timestamp()):
-            self.clear_breakpoint()
-            self.init_metadata()
+    @classmethod
+    def _prune_empty(cls , root : Path):
+        """Remove empty directories under ``root`` without removing ``root`` itself."""
+        if not root.exists():
+            return
+        directories = sorted(
+            (path for path in root.rglob('*') if path.is_dir()) ,
+            key = lambda path: len(path.parts) , reverse = True)
+        for directory in directories:
+            try:
+                directory.rmdir()
+            except OSError:
+                continue
+
+    @classmethod
+    def sweep_expired(cls , cache_root : Path | None = None):
+        """Delete breakpoint folders older than ``survival_time``.
+
+        A folder is stale when its ``expiration_date`` has passed, its metadata
+        cannot be read, or it has page files but no metadata and every file is
+        older than ``survival_time``. Empty parent folders are removed too.
+        """
+        root = cache_root or cls.base_path
+        if not root.exists():
+            return
+        now = CALENDAR.now().timestamp()
+        for metadata_path in list(root.rglob('metadata.json')):
+            directory = metadata_path.parent
+            if not directory.exists():
+                continue
+            try:
+                metadata = PATH.read_json(metadata_path)
+            except Exception as exc:
+                cls.logger.error(f'Unreadable breakpoint metadata {metadata_path}: {exc}')
+                metadata = None
+            expiration = metadata.get('expiration_date') if isinstance(metadata , dict) else None
+            if expiration is None or float(expiration) < now:
+                cls._remove_tree(directory)
+        horizon = now - cls.survival_time * 3600
+        for feather in list(root.rglob('bkpt.*.feather')):
+            directory = feather.parent
+            if not directory.exists() or (directory / 'metadata.json').exists():
+                continue
+            mtimes = [path.stat().st_mtime for path in directory.iterdir() if path.is_file()]
+            if mtimes and max(mtimes) < horizon:
+                cls._remove_tree(directory)
+        cls._prune_empty(root)
 
     def init_metadata(self):
         create_time = CALENDAR.now().timestamp()
@@ -173,8 +230,13 @@ class TushareIterateFetcher(Base.BoundLogger):
     def save_breakpoint(self , datas : dict[Any , pd.DataFrame] , next_offset : int):
         if not self.breakpoint:
             return
+        self.init_path()
+        keep_names = {f'bkpt.{offset}.feather' for offset in datas}
+        for path in self.breakpoint_path.glob('bkpt.*.feather'):
+            if path.name not in keep_names:
+                path.unlink()
         for offset , df in datas.items():
-            Save.df(df , self.breakpoint_path.joinpath(f'bkpt.{offset}.feather'))
+            Save.df(df , self.breakpoint_path.joinpath(f'bkpt.{offset}.feather') , vb_level = 'never')
         metadata = {
             'save_time' : CALENDAR.now().timestamp(),
             'next_offset' : next_offset,
@@ -185,52 +247,74 @@ class TushareIterateFetcher(Base.BoundLogger):
 
     def load_breakpoint(self) -> tuple[int , dict[int , pd.DataFrame]]:
         """return the offset and data of the breakpoint"""
+        if not self.breakpoint:
+            return 0 , {}
+        self.sweep_expired(self.cache_root)
         self.init_path()
-        self.check_expiration()
         metadata = self.load_metadata()
+        if not metadata:
+            self.init_metadata()
+            return 0 , {}
         if 'next_offset' in metadata and 'breakpoints' in metadata:
             try:
                 dfs = {}
                 for bkpt in metadata['breakpoints']:
                     p = self.breakpoint_path.joinpath(f'bkpt.{bkpt}.feather')
                     dfs[int(bkpt)] = Load.df(p)
-                self.logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={metadata['next_offset']}')
-                return metadata['next_offset'] , dfs
+                next_offset = int(metadata['next_offset'])
+                if dfs:
+                    last = max(dfs)
+                    expected = last + self.limit
+                    if next_offset != expected:
+                        # A previous cap handler stored offset + limit and skipped one page.
+                        self.logger.warning(
+                            f'{self} resume offset {next_offset} does not follow last page {last} , use {expected}')
+                        next_offset = expected
+                self.logger.success(f'Loaded {self} from {self.breakpoint_path} , next_offset={next_offset}')
+                return next_offset , dfs
             except Exception as e:
                 self.logger.error(f'Error loading breakpoint: {e}')
+                self._remove_tree(self.breakpoint_path)
+                self.init_path()
+                self.init_metadata()
                 return 0 , {}
-        else:
-            return 0 , {}
+        return 0 , {}
 
     def fetch(self) -> pd.DataFrame:
         """iterate fetch from tushare"""
-        offset , dfs = self.load_breakpoint()
+        if self.breakpoint:
+            offset , dfs = self.load_breakpoint()
+        else:
+            self.sweep_expired(self.cache_root)
+            offset , dfs = 0 , {}
+        fetched = 0
         while True:
-            if self.max_fetch_times <= 0 or len(dfs) < self.max_fetch_times:
+            # Count pages stored in this call. Restored breakpoint frames must not
+            # consume the cap, otherwise a resume raises before the next page.
+            if self.max_fetch_times > 0 and fetched >= self.max_fetch_times:
+                self.save_breakpoint(dfs , offset)
+                raise IterateFetchPageLimit(f'{self} got more than {self.max_fetch_times} dfs')
+            try:
                 ret = retry_call(TS.locked(self.tushare_api) , () , self.kwargs | {'offset' : offset , 'limit' : self.limit})
-                if not isinstance(ret , pd.DataFrame):
-                    raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
-            else:
-                ret = Exception(f'{self} got more than {self.max_fetch_times} dfs')
-            if isinstance(ret , pd.DataFrame):
-                if ret.empty:
-                    break
-                ret = ret.dropna(axis=1, how='all')
-                if not ret.empty: 
-                    dfs[offset] = ret
-            elif isinstance(ret , Exception):
-                self.save_breakpoint(dfs , offset + self.limit)
-                raise ret
-            else:
-                raise Exception(f'{self} must return a pd.DataFrame or Exception, but got {ret}')
+            except Exception:
+                self.save_breakpoint(dfs , offset)
+                raise
+            if not isinstance(ret , pd.DataFrame):
+                raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
+            if ret.empty:
+                break
+            ret = ret.dropna(axis=1, how='all')
+            if not ret.empty:
+                dfs[offset] = ret
+                fetched += 1
             offset += self.limit
         if dfs:
             all_df = pd.concat([df for df in dfs.values() if not df.empty])
             all_df = all_df.reset_index([idx for idx in all_df.index.names if idx is not None] , drop = False).reset_index(drop = True)
             self.remove_path()
             return all_df
-        else:
-            return pd.DataFrame()
+        self.remove_path()
+        return pd.DataFrame()
 
 class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""

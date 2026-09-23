@@ -1,31 +1,121 @@
-"""Backfill huayuan.cmm and huayuan.scores_v5 using configured remote tables.
+# coding: utf-8
+# author: jinmeng
+# date: 2026-09-23
+# description: Backfill huayuan sellside history
+# content: |
+#   按远端表补全 sellside/huayuan.cmm 与 sellside/huayuan.scores_v5。
+#   cmm 从配置起点 20260101 起，scores_v5 从 20171229 起，结束日默认今天。
+#   默认只写本地缺失的日期；overwrite=True 才覆盖已有日期文件。
+#   中断后直接再跑即可续补，已落盘日期会跳过。
+#   与日常 sellside 更新分开跑，避免同时写同一库。
+# email: True
+# mode: shell
+# parameters:
+#   start:
+#       type: int
+#       desc: inclusive start yyyyMMdd; 0 = each factor's configured start_date
+#       required: False
+#       default: 0
+#   end:
+#       type: int
+#       desc: inclusive end yyyyMMdd; 0 = today, clamped to factor end_date
+#       required: False
+#       default: 0
+#   batch_dates:
+#       type: int
+#       desc: remote query batch size in dates
+#       required: False
+#       default: 20
+#   keys:
+#       type: str
+#       desc: comma-separated subset of huayuan.cmm,huayuan.scores_v5
+#       required: False
+#       default: huayuan.cmm,huayuan.scores_v5
+#   overwrite:
+#       type: [True, False]
+#       desc: replace existing date files; False only fills missing dates
+#       required: False
+#       default: False
+#   dry_run:
+#       type: [True, False]
+#       desc: list remote and pending dates without writing
+#       required: False
+#       default: False
 
-From the server repository root:
-    .venv/bin/python scripts/2_data/6_backfill_huayuan.py --dry-run
-    .venv/bin/python scripts/2_data/6_backfill_huayuan.py
-
-Default: fill missing dates from configured start through today. --overwrite
-also replaces existing dates (useful for previously misconfigured scores_v5).
-Run separately from the regular sellside update to avoid concurrent writes.
-"""
 from __future__ import annotations
 
-import argparse
 import sys
 from datetime import datetime
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from src.proj.util.script import ScriptTool
+
 KEYS = ('huayuan.cmm', 'huayuan.scores_v5')
+DEFAULT_KEYS = ','.join(KEYS)
 
 
-def date_arg(value):
-    try:
-        if len(value) != 8 or not value.isdigit():
-            raise ValueError('Expected YYYYMMDD')
-        datetime.strptime(value, '%Y%m%d')
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError(str(exc)) from exc
-    return int(value)
+def _optional_date(value: int | str | None) -> int | None:
+    """Return yyyyMMdd, or None when *value* is omitted (0 / empty)."""
+    if value is None or value == '':
+        return None
+    text = str(value).strip()
+    if text in {'0', 'None'}:
+        return None
+    if len(text) != 8 or not text.isdigit():
+        raise ValueError(f'Expected YYYYMMDD, got {value!r}')
+    datetime.strptime(text, '%Y%m%d')
+    return int(text)
+
+
+def _as_bool(value: bool | str | None) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'y'}
+    return bool(value)
+
+
+def _normalize_keys(keys: str | list[str] | tuple[str, ...] | None) -> list[str]:
+    if keys is None or keys == '':
+        selected = list(KEYS)
+    elif isinstance(keys, str):
+        selected = [part.strip() for part in keys.split(',') if part.strip()]
+    else:
+        selected = [str(part).strip() for part in keys if str(part).strip()]
+    unknown = [key for key in selected if key not in KEYS]
+    if unknown or not selected:
+        raise ValueError(f'keys must be a non-empty subset of {KEYS}, got {keys!r}')
+    return [str(key) for key in selected]
+
+
+def _normalize_argv(argv: list[str]) -> list[str]:
+    """Accept the original hyphen flags alongside header parameter names."""
+    out: list[str] = []
+    index = 0
+    while index < len(argv):
+        token = argv[index]
+        if token == '--dry-run':
+            out.extend(['--dry_run', 'True'])
+        elif token.startswith('--dry-run='):
+            out.append('--dry_run=' + token.split('=', 1)[1])
+        elif token == '--batch-dates':
+            if index + 1 >= len(argv):
+                raise SystemExit('--batch-dates requires a value')
+            out.extend(['--batch_dates', argv[index + 1]])
+            index += 1
+        elif token.startswith('--batch-dates='):
+            out.append('--batch_dates=' + token.split('=', 1)[1])
+        elif token == '--overwrite':
+            nxt = argv[index + 1] if index + 1 < len(argv) else None
+            if nxt is None or nxt.startswith('--'):
+                out.extend(['--overwrite', 'True'])
+            else:
+                out.extend(['--overwrite', nxt])
+                index += 1
+        else:
+            out.append(token)
+        index += 1
+    return out
 
 
 def backfill(downloader, db, start=None, end=None, batch_dates=20,
@@ -85,28 +175,37 @@ def backfill(downloader, db, start=None, end=None, batch_dates=20,
         connection.close()
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--start', type=date_arg)
-    parser.add_argument('--end', type=date_arg)
-    parser.add_argument('--batch-dates', type=int, default=20)
-    parser.add_argument('--keys', nargs='+', choices=KEYS, default=list(KEYS))
-    parser.add_argument('--overwrite', action='store_true')
-    parser.add_argument('--dry-run', action='store_true', help='List remote/pending dates without writing')
-    args = parser.parse_args()
-    if args.batch_dates < 1 or (args.start and args.end and args.start > args.end):
-        parser.error('Require start <= end and batch-dates >= 1')
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+@ScriptTool('backfill_huayuan')
+def main(
+    start: int = 0,
+    end: int = 0,
+    batch_dates: int = 20,
+    keys: str = DEFAULT_KEYS,
+    overwrite: bool = False,
+    dry_run: bool = False,
+    **kwargs,
+):
+    """Fill missing huayuan sellside dates; overwrite only when explicitly requested."""
+    del kwargs
+    start_i = _optional_date(start)
+    end_i = _optional_date(end)
+    batch = int(batch_dates)
+    overwrite_i = _as_bool(overwrite)
+    dry_run_i = _as_bool(dry_run)
+    if batch < 1 or (start_i and end_i and start_i > end_i):
+        raise ValueError('Require start <= end and batch_dates >= 1')
     from src.data.download.sellside.from_sql import SellsideSQLDownloader
     from src.proj import DB
 
-    for key, downloader in SellsideSQLDownloader.default_factors(args.keys).items():
+    for key, downloader in SellsideSQLDownloader.default_factors(_normalize_keys(keys)).items():
         if downloader.db_key != key:
             raise RuntimeError(f'Local key mismatch: {key} -> {downloader.db_key}')
-        backfill(downloader, DB, args.start, args.end, args.batch_dates,
-                 args.overwrite, args.dry_run)
-    print('Dry run complete.' if args.dry_run else 'Backfill complete.', flush=True)
+        backfill(downloader, DB, start_i, end_i, batch, overwrite_i, dry_run_i)
+    print('Dry run complete.' if dry_run_i else 'Backfill complete.', flush=True)
 
 
 if __name__ == '__main__':
-    main()
+    sys.argv = [sys.argv[0], *_normalize_argv(sys.argv[1:])]
+    task = main()
+    if getattr(task, 'status', 'Success') == 'Error':
+        raise SystemExit(1)

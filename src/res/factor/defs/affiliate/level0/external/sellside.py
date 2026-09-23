@@ -50,3 +50,21 @@ class ht_master_combined(SellsideFactor):
 
     def calc_factor(self , date : int):
         return self.load_factor(date)
+
+class hy_scores_v5(SellsideFactor):
+    init_date = 20180101
+    description = '华源金工,scores_v5'
+    load_db_key = 'huayuan.scores_v5'
+    load_db_col = 'scores_v5'
+
+    def calc_factor(self , date : int):
+        return self.load_factor(date)
+
+class hy_cmm(SellsideFactor):
+    init_date = 20180101
+    description = '华源金工,cmm'
+    load_db_key = 'huayuan.cmm'
+    load_db_col = 'cmm'
+
+    def calc_factor(self , date : int):
+        return self.load_factor(date)
