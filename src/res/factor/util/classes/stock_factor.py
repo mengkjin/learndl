@@ -94,6 +94,13 @@ def melt_frame(df : pd.DataFrame) -> pd.DataFrame:
     else:
         return df.melt(var_name = 'factor_name' , ignore_index = False).set_index('factor_name' , append=True)
 
+def _pivot_named_stat(df : pd.DataFrame , value : str , column : str , prefix : str) -> pd.DataFrame:
+    """Pivot a long stats frame. An empty frame has no groups to spread."""
+    if df.empty or value not in df.columns or column not in df.columns:
+        return pd.DataFrame()
+    return df.pivot_table(index = ['date'] , values = value , columns = column , observed = True).\
+        rename(columns = lambda x: f'{prefix}{x}')
+
 def pivot_frame(df : pd.DataFrame) -> pd.DataFrame:
     """
     pivot the dataframe from long to wide
@@ -111,6 +118,9 @@ def whiten(df : dfAny, ffmv_weighted = False , pivot = True) -> pd.DataFrame:
     whiten the factors by date / factor_name , weight can be ffmv or not
     """
     df = melt_frame(df)
+    if df.empty:
+        # An all-missing cross-section has no dispersion to standardize.
+        return pivot_frame(df) if pivot else df
     if ffmv_weighted:
         df = append_ffmv(df)
         # df = df.groupby(by=['date' , 'factor_name'] , group_keys=False).apply(lambda x:whiten(x['value'] , weight = x['weight']))
@@ -127,6 +137,10 @@ def winsor(df : dfAny , pivot = True , **kwargs) -> pd.DataFrame:
     winsorize the factors by date / factor_name
     """
     df = melt_frame(df)
+    if df.empty:
+        # No finite observations left, so there is no cross-section to clip.
+        # pandas groupby.transform concatenates group results and raises on an empty list.
+        return pivot_frame(df) if pivot else df
     df = df.groupby(by=['date' , 'factor_name']).transform(winsorize , **kwargs)
     if isinstance(df , pd.Series): 
         df = df.to_frame()
@@ -234,6 +248,7 @@ def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod 
     if None in df.index.names:
         df = df.reset_index([None] , drop=True)
     assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
+    factor_cols = list(df.columns)
     for step in order:
         if step == 'fillna':   
             df = fillna(df , fill_method = fill_method , pivot = False)
@@ -243,6 +258,8 @@ def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod 
             df = whiten(df , ffmv_weighted = weighted_whiten , pivot = False)
         else:
             raise ValueError(f'step {step} not supported')
+        if df.empty:
+            return pd.DataFrame(columns=['date' , 'secid' , *factor_cols])
     df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True).rename_axis(None , axis = 1)
     return df
 
@@ -1132,15 +1149,13 @@ class StockFactor:
         """
         ic = self.eval_ic(nday, lag , ic_type = 'pearson').rename(columns = lambda x:f'ic')
         rankic = self.eval_ic(nday, lag , ic_type = 'spearman').rename(columns = lambda x:f'rankic')
-        
-        gp = self.eval_group_perf(nday, lag).\
-            pivot_table(index = ['date'] , values = 'group_ret' , columns = 'group' , observed=True).\
-            rename(columns = lambda x:f'group@{x}')
-        ii = self.eval_ic_indus(nday, lag).\
-            pivot_table(index = ['date'] , values = 'ic_indus' , columns = 'industry' , observed=True).\
-            rename(columns = lambda x:f'ic_indus@{x}')
+        gp = _pivot_named_stat(self.eval_group_perf(nday, lag) , value = 'group_ret' , column = 'group' , prefix = 'group@')
+        ii = _pivot_named_stat(self.eval_ic_indus(nday, lag) , value = 'ic_indus' , column = 'industry' , prefix = 'ic_indus@')
         cv = self.coverage().rename(columns = lambda x:f'coverage')
-        return ic.join(rankic).join(gp).join(ii).join(cv).reset_index(drop=False)
+        out = ic.join(rankic).join(gp).join(ii).join(cv)
+        if out.empty:
+            return pd.DataFrame(columns=['date'])
+        return out.reset_index(drop=False)
 
     def daily_stats(self) -> pd.DataFrame:
         """
