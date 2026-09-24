@@ -1,96 +1,46 @@
 # coding: utf-8
 # author: jinmeng
 # date: 2026-09-24
-# description: Build sellside valid-date index
+# description: Build sellside valid-value stats
 # content: |
-#   扫描已落盘的 sellside 日文件，生成有效日索引。
-#   有限值个数大于 0 的日期写入索引；全空日保留原文件，不进入索引。
-#   默认 dry_run 只打印，不覆盖已有索引。
+#   扫描全部 sellside key 的已落盘日文件，写入
+#   DB_sellside/.data_stats/valid_values/{db_key}.feather。
+#   每行记录 date、secid_count、nan_count、is_valid。
 # email: False
 # mode: shell
-# parameters:
-#   keys:
-#       type: str
-#       desc: comma-separated sellside db keys, or all
-#       required: False
-#       default: huayuan.scores_v5
-#   dry_run:
-#       type: [True, False]
-#       desc: print the split without writing the index
-#       required: False
-#       default: True
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from src.proj import DB, Logger
+from src.proj import Logger
 from src.proj.util.script import ScriptTool
 from src.data.download.sellside.from_sql import factor_settings
-from src.data.download.sellside.valid_dates import finite_value_count, write_index, index_path
-
-
-def _as_bool(value: bool | str | None) -> bool:
-    if isinstance(value, str):
-        return value.strip().lower() in {'1', 'true', 'yes', 'y'}
-    return bool(value)
-
-
-def _selected_keys(keys: str) -> list[str]:
-    text = (keys or '').strip()
-    if text.lower() == 'all':
-        return list(factor_settings)
-    selected = [part.strip() for part in text.split(',') if part.strip()]
-    unknown = [key for key in selected if key not in factor_settings]
-    if unknown or not selected:
-        raise ValueError(f'keys must be "all" or a subset of {tuple(factor_settings)}, got {keys!r}')
-    return selected
-
-
-def _split_dates(db_key: str) -> tuple[np.ndarray, np.ndarray]:
-    stored = DB.dates('sellside', db_key)
-    if len(stored) == 0:
-        empty = np.array([], dtype=np.int64)
-        return empty, empty
-    valid: list[int] = []
-    unusable: list[int] = []
-    for day in stored.dates:
-        frame = DB.load('sellside', db_key, int(day), vb_level='never')
-        if finite_value_count(frame) > 0:
-            valid.append(int(day))
-        else:
-            unusable.append(int(day))
-    return np.array(valid, dtype=np.int64), np.array(unusable, dtype=np.int64)
+from src.data.download.sellside.valid_dates import (
+    backfill_valid_values , read_valid_values , valid_values_path ,
+)
 
 
 @ScriptTool('build_sellside_valid_dates')
-def main(keys: str = 'huayuan.scores_v5', dry_run: bool = True, **kwargs):
-    """Scan stored sellside days and write the valid-date index."""
+def main(**kwargs):
+    """Rebuild valid-value stats for every sellside key."""
     del kwargs
-    dry_run_i = _as_bool(dry_run)
-    for db_key in _selected_keys(keys):
-        valid, unusable = _split_dates(db_key)
+    for db_key in factor_settings:
+        written = backfill_valid_values(db_key , full = True)
+        frame = read_valid_values(valid_values_path(db_key))
+        if frame is None or frame.empty:
+            Logger.stdout(f'{db_key}: stored=0, wrote {valid_values_path(db_key)}')
+            continue
+        valid_n = int(frame['is_valid'].sum())
+        unusable = frame.loc[~frame['is_valid'] , 'date']
         Logger.stdout(
-            f'{db_key}: stored={len(valid) + len(unusable)}, '
-            f'valid={len(valid)}, all_null_or_empty={len(unusable)}'
+            f'{db_key}: stored={len(frame)}, valid={valid_n}, '
+            f'all_null_or_empty={len(frame) - valid_n}, scanned={written}'
         )
         if len(unusable):
-            sample = ', '.join(str(int(day)) for day in unusable[:20])
-            Logger.stdout(f'  excluded dates: {sample}')
+            sample = ', '.join(str(int(day)) for day in unusable.iloc[:20])
+            Logger.stdout(f'  is_valid=False dates: {sample}')
             if len(unusable) > 20:
                 Logger.stdout(f'  ... {len(unusable) - 20} more')
-        if dry_run_i:
-            Logger.stdout(f'  dry_run, index not written ({index_path(db_key)})')
-            continue
-        write_index(index_path(db_key), valid)
-        Logger.success(f'  wrote {len(valid)} valid dates to {index_path(db_key)}')
-    if dry_run_i:
-        Logger.stdout('Dry run complete. Pass --dry_run False to write indexes.')
+        Logger.success(f'  wrote {len(frame)} rows to {valid_values_path(db_key)}')
 
 
 if __name__ == '__main__':

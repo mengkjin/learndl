@@ -16,7 +16,9 @@ from typing import Any , ClassVar , Literal , TypeAlias , overload
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
-from src.data.download.sellside.valid_dates import apply_validity , finite_value_count
+from src.data.download.sellside.valid_dates import (
+    backfill_valid_values , cross_section_stats , upsert_valid_values ,
+)
 
 __all__ = ['SellsideSQLDownloader']
 
@@ -188,6 +190,8 @@ class SellsideSQLDownloader(Base.BasicUpdater):
         cls , * , indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 ,
         keys = None , **kwargs
     ) -> Base.UpdateFlag:
+        for downloader in cls.factors_downloaders(keys).values():
+            downloader.ensure_valid_values()
         return cls.update_since(trace = 0 , keys = keys)
 
     def __repr__(self):
@@ -425,26 +429,33 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             return 0
         data = data.sort_values(['date' , 'secid']).set_index('date')
         status = 0
-        validity : dict[int , bool] = {}
+        rows : list[dict[str , int | bool]] = []
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
             day = int(d)
             # Keep the file even when the cross-section is all-null so date diffs
-            # treat the vendor day as already stored.
-            n_finite = finite_value_count(data_at_d)
+            # treat the vendor day as already stored. Stats still record the day.
+            stats = cross_section_stats(data_at_d , day)
             DB.save(data_at_d , self.DB_SRC , self.db_key , day , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-            validity[day] = n_finite > 0
-            if n_finite == 0:
+            rows.append(stats)
+            if not stats['is_valid']:
                 self.logger.alert1(
                     f'{self.db_key} at {day} has no finite factor values; '
-                    'file kept, date excluded from the valid-date index'
+                    'file kept and marked is_valid=False'
                 )
             status += 1
-        if validity:
-            apply_validity(self.db_key , validity , self.DB_SRC)
+        if rows:
+            upsert_valid_values(self.db_key , pd.DataFrame(rows) , self.DB_SRC)
         return status
+
+    def ensure_valid_values(self) -> int:
+        """Backfill stats when the file is missing or stored dates are absent from it."""
+        filled = backfill_valid_values(self.db_key , self.DB_SRC , full = False)
+        if filled:
+            self.logger.stdout(f'{self.db_key} valid_values filled {filled} stored dates')
+        return filled
 
     @classmethod
     def default_factors(cls , keys : Base.alias.NamesType = None) -> dict[str,SellsideSQLDownloader]:

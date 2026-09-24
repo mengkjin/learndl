@@ -1095,13 +1095,12 @@ class SellsideFactor(AffiliateFactorCalculator):
 
     @classmethod
     def _valid_indexes(cls) -> list[tuple[dict[Literal['src' , 'key' , 'col'] , str] , np.ndarray]]:
-        """Per-database valid dates. Missing index files are omitted, not treated as empty."""
+        """Per-database valid dates. A missing stats file is built before the read."""
         from src.data.download.sellside.valid_dates import load_valid_dates
         indexed : list[tuple[dict[Literal['src' , 'key' , 'col'] , str] , np.ndarray]] = []
         for db in cls.full_dbs():
-            valid = load_valid_dates(str(db['key']) , str(db['src']))
-            if valid is not None:
-                indexed.append((db , valid))
+            valid = load_valid_dates(str(db['key']) , str(db['src']) , required = True)
+            indexed.append((db , valid if valid is not None else np.array([] , dtype = np.int64)))
         return indexed
 
     @classmethod
@@ -1140,11 +1139,11 @@ class SellsideFactor(AffiliateFactorCalculator):
             sort_values(['secid' , 'date']).reset_index(drop = True)
 
     def load_factor(self , date : int , closest = False) -> pd.DataFrame:
-        """Return the as-of cross-section for ``date`` once a valid-date index exists."""
+        """Return the as-of cross-section. A missing stats file is built first."""
         from src.data.download.sellside.valid_dates import asof_map , load_valid_dates
         indexed = False
         for db in self.full_dbs():
-            valid = load_valid_dates(str(db['key']) , str(db['src']))
+            valid = load_valid_dates(str(db['key']) , str(db['src']) , required = True)
             if valid is None:
                 continue
             indexed = True

@@ -10,11 +10,14 @@ import pandas as pd
 from src.proj import Dates
 from src.data.download.sellside.from_sql import SellsideSQLDownloader
 from src.data.download.sellside.valid_dates import (
-    apply_validity,
     asof_map,
+    backfill_valid_values,
     finite_value_count,
     load_valid_dates,
+    read_valid_values,
     stamp_asof,
+    upsert_valid_values,
+    write_valid_values,
 )
 
 
@@ -30,8 +33,11 @@ class SellsideValidDatesTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
 
-            def fake_index_path(db_key, db_src='sellside'):
-                return root / db_src / db_key / 'valid_dates.feather'
+            stats_path = root / 'sellside' / '.data_stats' / 'valid_values' / 'huayuan.scores_v5.feather'
+
+            def fake_values_path(db_key, db_src='sellside'):
+                del db_key, db_src
+                return stats_path
 
             downloader = SellsideSQLDownloader(
                 'huayuan', 'pred_alpha', 'trade_dt', 20171229, 99991231, '%Y-%m-%d',
@@ -43,14 +49,21 @@ class SellsideValidDatesTest(unittest.TestCase):
                 'scores_v5': [0.4, np.nan, np.nan],
             })
             with patch('src.data.download.sellside.from_sql.DB.save', fake_save), \
-                    patch('src.data.download.sellside.valid_dates.index_path', fake_index_path):
+                    patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path):
                 written = downloader.save_data(frame)
                 indexed = load_valid_dates('huayuan.scores_v5')
+                table = read_valid_values(stats_path)
             self.assertEqual(written, 2)
             self.assertEqual(saved, [20260105, 20260106])
             self.assertIsNotNone(indexed)
             assert indexed is not None
             self.assertEqual(indexed.tolist(), [20260105])
+            self.assertIsNotNone(table)
+            assert table is not None
+            self.assertEqual(table['date'].tolist(), [20260105, 20260106])
+            self.assertEqual(table['secid_count'].tolist(), [1, 2])
+            self.assertEqual(table['nan_count'].tolist(), [0, 2])
+            self.assertEqual(table['is_valid'].tolist(), [True, False])
             # dates-mode missing set is file dates, so the empty day is not fetched again.
             pending = Dates([20260105, 20260106]).diff(saved)
             self.assertEqual(len(pending), 0)
@@ -58,18 +71,34 @@ class SellsideValidDatesTest(unittest.TestCase):
     def test_overwriting_a_valid_day_with_nulls_drops_the_index_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             path_root = Path(tmp)
+            stats_path = path_root / 'valid_values.feather'
 
-            def fake_index_path(db_key, db_src='sellside'):
+            def fake_values_path(db_key, db_src='sellside'):
                 del db_key, db_src
-                return path_root / 'valid_dates.feather'
+                return stats_path
 
-            with patch('src.data.download.sellside.valid_dates.index_path', fake_index_path):
-                apply_validity('huayuan.scores_v5', {20260105: True, 20260106: True})
-                apply_validity('huayuan.scores_v5', {20260106: False})
+            def row(date, secid_count, nan_count, is_valid):
+                return pd.DataFrame([{
+                    'date': date,
+                    'secid_count': secid_count,
+                    'nan_count': nan_count,
+                    'is_valid': is_valid,
+                }])
+
+            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path):
+                upsert_valid_values('huayuan.scores_v5', pd.concat([
+                    row(20260105, 1, 0, True), row(20260106, 2, 0, True),
+                ], ignore_index=True))
+                upsert_valid_values('huayuan.scores_v5', row(20260106, 2, 2, False))
                 indexed = load_valid_dates('huayuan.scores_v5')
+                table = read_valid_values(stats_path)
             self.assertIsNotNone(indexed)
             assert indexed is not None
             self.assertEqual(indexed.tolist(), [20260105])
+            self.assertIsNotNone(table)
+            assert table is not None
+            self.assertEqual(table['date'].tolist(), [20260105, 20260106])
+            self.assertEqual(bool(table.loc[table['date'] == 20260106, 'is_valid'].iloc[0]), False)
 
     def test_asof_does_not_look_forward_and_shares_one_source(self):
         valid = np.array([20260105, 20260108], dtype=np.int64)
@@ -96,6 +125,46 @@ class SellsideValidDatesTest(unittest.TestCase):
         frame.loc[0, 'scores_v5'] = 1.0
         self.assertEqual(finite_value_count(frame), 1)
 
+    def test_missing_file_scans_history_and_a_gap_scans_only_the_gap(self):
+        frames = {
+            20260105: pd.DataFrame({'secid': [1], 'scores_v5': [0.4]}),
+            20260106: pd.DataFrame({'secid': [1, 2], 'scores_v5': [np.nan, np.nan]}),
+        }
+        loaded: list[int] = []
+
+        class _Stored:
+            dates = np.array([20260105, 20260106], dtype=np.int64)
+
+            def __len__(self):
+                return 2
+
+        def fake_load(src, key, date, **kwargs):
+            del src, key, kwargs
+            loaded.append(int(date))
+            return frames[int(date)]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            stats_path = Path(tmp) / 'valid_values.feather'
+
+            def fake_values_path(db_key, db_src='sellside'):
+                del db_key, db_src
+                return stats_path
+
+            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path), \
+                    patch('src.data.download.sellside.valid_dates.DB.dates', return_value=_Stored()), \
+                    patch('src.data.download.sellside.valid_dates.DB.load', fake_load):
+                self.assertEqual(backfill_valid_values('huayuan.scores_v5'), 2)
+                self.assertEqual(loaded, [20260105, 20260106])
+                loaded.clear()
+                self.assertEqual(backfill_valid_values('huayuan.scores_v5'), 0)
+                self.assertEqual(loaded, [])
+                table = read_valid_values(stats_path)
+                assert table is not None
+                kept = table.loc[table['date'] == 20260105]
+                write_valid_values(stats_path, kept)
+                self.assertEqual(backfill_valid_values('huayuan.scores_v5'), 1)
+                self.assertEqual(loaded, [20260106])
+
 
 class SellsideFactorAsofTest(unittest.TestCase):
     def test_loads_reads_each_source_once_and_stamps_request_dates(self):
@@ -103,8 +172,8 @@ class SellsideFactorAsofTest(unittest.TestCase):
 
         calls: list[list[int]] = []
 
-        def fake_valid(db_key, db_src='sellside'):
-            del db_key, db_src
+        def fake_valid(db_key, db_src='sellside', required=False):
+            del db_key, db_src, required
             return np.array([20260105], dtype=np.int64)
 
         def fake_loads(cls, src, key, dates, col=None, closest=False):
@@ -122,6 +191,67 @@ class SellsideFactorAsofTest(unittest.TestCase):
         self.assertEqual(calls, [[20260105]])
         self.assertEqual(sorted(out['date'].unique().tolist()), [20260105, 20260106, 20260107])
         self.assertEqual(len(out), 6)
+
+    def test_missing_valid_values_is_built_then_used_for_asof(self):
+        from src.res.factor.defs.affiliate.level0.external.sellside import hy_scores_v5
+        from src.data.download.sellside.valid_dates import load_valid_dates, write_valid_values
+
+        frames = {
+            20260105: pd.DataFrame({'secid': [1], 'scores_v5': [0.4]}),
+            20260106: pd.DataFrame({'secid': [1], 'scores_v5': [np.nan]}),
+        }
+        scanned: list[int] = []
+        loaded_sources: list[list[int]] = []
+
+        class _Stored:
+            dates = np.array([20260105, 20260106], dtype=np.int64)
+
+            def __len__(self):
+                return 2
+
+        def fake_scan(src, key, date, **kwargs):
+            del src, key, kwargs
+            scanned.append(int(date))
+            return frames[int(date)]
+
+        def fake_loads(cls, src, key, dates, col=None, closest=False):
+            del cls, src, key, col, closest
+            loaded_sources.append([int(day) for day in Dates(dates).dates])
+            return pd.DataFrame({
+                'secid': [1],
+                'date': [20260105],
+                'hy_scores_v5': [0.4],
+            })
+
+        with tempfile.TemporaryDirectory() as tmp:
+            stats_path = Path(tmp) / 'huayuan.scores_v5.feather'
+
+            def fake_values_path(db_key, db_src='sellside'):
+                del db_key, db_src
+                return stats_path
+
+            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path), \
+                    patch('src.data.download.sellside.valid_dates.DB.dates', return_value=_Stored()), \
+                    patch('src.data.download.sellside.valid_dates.DB.load', fake_scan), \
+                    patch.object(hy_scores_v5, 'loads_from_db', classmethod(fake_loads)):
+                out = hy_scores_v5.Loads([20260106, 20260107])
+                self.assertEqual(scanned, [20260105, 20260106])
+                valid = load_valid_dates('huayuan.scores_v5', required=True)
+                self.assertEqual(scanned, [20260105, 20260106])
+                scanned.clear()
+                write_valid_values(stats_path, pd.DataFrame([{
+                    'date': 20260105, 'secid_count': 1, 'nan_count': 0, 'is_valid': True,
+                }]))
+                again = load_valid_dates('huayuan.scores_v5', required=True)
+        self.assertEqual(scanned, [])
+        self.assertEqual(loaded_sources, [[20260105]])
+        self.assertEqual(out['date'].tolist(), [20260106, 20260107])
+        self.assertIsNotNone(valid)
+        assert valid is not None
+        self.assertEqual(valid.tolist(), [20260105])
+        self.assertIsNotNone(again)
+        assert again is not None
+        self.assertEqual(again.tolist(), [20260105])
 
 
 if __name__ == '__main__':
