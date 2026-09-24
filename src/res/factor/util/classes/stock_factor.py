@@ -249,6 +249,8 @@ def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod 
         df = df.reset_index([None] , drop=True)
     assert 'date' in df.index.names and 'secid' in df.index.names , f'df must have date and secid as index : {df}'
     factor_cols = list(df.columns)
+    observed_dates = df.index.get_level_values('date')
+    date_note = f'{int(observed_dates.min())}..{int(observed_dates.max())} ({observed_dates.nunique()} dates)'
     for step in order:
         if step == 'fillna':   
             df = fillna(df , fill_method = fill_method , pivot = False)
@@ -259,6 +261,12 @@ def normalize_df(df : pd.DataFrame , fill_method : Base.lit.FactorFillNanMethod 
         else:
             raise ValueError(f'step {step} not supported')
         if df.empty:
+            # An all-missing cross-section cannot be winsorized; pandas groupby.transform
+            # raises "No objects to concatenate". Report it and continue the update.
+            Logger.error(
+                f'All factor values are missing after {step} for {factor_cols} on {date_note}; '
+                'normalization skipped so the update can continue'
+            )
             return pd.DataFrame(columns=['date' , 'secid' , *factor_cols])
     df = pivot_frame(df).reset_index(['date' , 'secid']).reset_index(drop=True).rename_axis(None , axis = 1)
     return df

@@ -1,5 +1,6 @@
 """All-missing factor cross-sections must not crash normalization or first stats."""
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -23,13 +24,18 @@ def _indexed(values: list[float], name: str = 'hy_scores_v5') -> pd.DataFrame:
 class FactorNormalizeEmptyTest(unittest.TestCase):
     def test_all_nan_cross_section_returns_empty_schema(self):
         df = _indexed([np.nan] * 4)
-        out = normalize_df(df, fill_method='drop')
+        with patch('src.res.factor.util.classes.stock_factor.Logger.error') as err:
+            out = normalize_df(df, fill_method='drop')
         self.assertTrue(out.empty)
         self.assertEqual(list(out.columns), ['date', 'secid', 'hy_scores_v5'])
+        err.assert_called_once()
+        self.assertIn('All factor values are missing', err.call_args.args[0])
 
     def test_partial_nan_still_normalizes(self):
         df = _indexed([np.nan, 1.0, 2.0, np.nan, 3.0, 4.0])
-        out = normalize_df(df, fill_method='drop')
+        with patch('src.res.factor.util.classes.stock_factor.Logger.error') as err:
+            out = normalize_df(df, fill_method='drop')
+        err.assert_not_called()
         self.assertEqual(len(out), 4)
         self.assertTrue(np.isfinite(out['hy_scores_v5']).all())
 

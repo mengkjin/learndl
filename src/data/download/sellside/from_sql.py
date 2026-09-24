@@ -16,6 +16,7 @@ from typing import Any , ClassVar , Literal , TypeAlias , overload
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
+from src.data.download.sellside.valid_dates import apply_validity , finite_value_count
 
 __all__ = ['SellsideSQLDownloader']
 
@@ -424,12 +425,25 @@ class SellsideSQLDownloader(Base.BasicUpdater):
             return 0
         data = data.sort_values(['date' , 'secid']).set_index('date')
         status = 0
+        validity : dict[int , bool] = {}
         for d in data.index.unique():
             data_at_d = data.loc[d]
             if len(data_at_d) == 0: 
                 continue
-            DB.save(data_at_d , self.DB_SRC , self.db_key , d , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            day = int(d)
+            # Keep the file even when the cross-section is all-null so date diffs
+            # treat the vendor day as already stored.
+            n_finite = finite_value_count(data_at_d)
+            DB.save(data_at_d , self.DB_SRC , self.db_key , day , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            validity[day] = n_finite > 0
+            if n_finite == 0:
+                self.logger.alert1(
+                    f'{self.db_key} at {day} has no finite factor values; '
+                    'file kept, date excluded from the valid-date index'
+                )
             status += 1
+        if validity:
+            apply_validity(self.db_key , validity , self.DB_SRC)
         return status
 
     @classmethod
