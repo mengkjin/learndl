@@ -1,5 +1,7 @@
 fit:
-  - gru_mincr
+  - astgnn_day
+  - astgnn_15m
+  - astgnn_mincr
 
 resume: False
 force: True

@@ -250,7 +250,7 @@ class ABCMLoss(BaseLoss):
         return pen
 
     def turnover_loss(self, betas : torch.Tensor , betas_peer : torch.Tensor , **kwargs):
-        """L2 distance between current beta factors and peer (lagged) betas."""
+        """L2 distance between current beta factors and peer betas."""
         return (betas - betas_peer).norm()
 
 class SoftTopKLoss(BaseLoss):
