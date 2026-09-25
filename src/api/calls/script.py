@@ -1,15 +1,17 @@
-"""Direct calls for running pipeline scripts."""
+"""Direct calls for running and stopping pipeline scripts."""
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from src.api.util.backend.script import ScriptRunner, iter_runnable_scripts
 from src.api.util.direct_call import DirectCall
 from src.proj import Logger
 
-__all__ = ['RunPipelineScript']
+__all__ = ['KillRunningScript', 'RunPipelineScript']
 
 
 class RunPipelineScript(DirectCall):
@@ -98,3 +100,113 @@ class RunPipelineScript(DirectCall):
         for module in dynamic_modules(runner.script):
             return module.main
         raise FileNotFoundError(f'Script main not found: {runner.script}')
+
+
+class KillRunningScript(DirectCall):
+    """Kill one running project script task after an explicit confirmation."""
+
+    category = 'Basic'
+    _REFRESH_LABEL = 'Refresh'
+    # Listing must not call TaskItem.refresh(): a dead PID can be marked killed and emailed.
+    _ALIVE_PROCESS_STATUSES = frozenset({'running', 'sleeping', 'disk-sleep'})
+
+    @classmethod
+    def get_description(cls, **kwargs) -> str:
+        return (
+            'List running project script tasks (PID, file name, start time) and kill a selected one. '
+            'Refresh reloads the menu. Kill asks for confirmation and defaults to No.'
+        )
+
+    def run(self) -> None:
+        from src.api.util.backend.task import TaskDatabase, TaskItem, timestamp
+        from src.proj.util.cli import AskFor
+        from src.proj.util.shell import process
+
+        db = TaskDatabase()
+        while True:
+            with db.conn_handler as (_, cursor):
+                cursor.execute(
+                    """
+                    SELECT task_id FROM task_records
+                    WHERE status IN ('running', 'starting')
+                    ORDER BY COALESCE(start_time, create_time), task_id
+                    """
+                )
+                task_ids = [row['task_id'] for row in cursor.fetchall()]
+
+            tasks: list[TaskItem] = []
+            for task_id in task_ids:
+                item = TaskItem.load(task_id, db)
+                if item.pid is None or item.pid == os.getpid() or not item.is_running:
+                    continue
+                if process.check_status(item.pid) not in self._ALIVE_PROCESS_STATUSES:
+                    continue
+                tasks.append(item)
+
+            if not tasks:
+                Logger.note('No running script tasks to kill.')
+
+            labels = [self._REFRESH_LABEL]
+            label_to_task: dict[str, TaskItem] = {}
+            option_help = {self._REFRESH_LABEL: 'Reload running script tasks and redraw this menu.'}
+            for item in tasks:
+                filename = Path(item.script).name
+                label = f'PID {item.pid} | {filename} | {item.time_str("start")}'
+                if label in label_to_task:
+                    label = f'{label} | {item.id}'
+                labels.append(label)
+                label_to_task[label] = item
+                option_help[label] = f'{item.script_key} | {item.id}'
+
+            flag = AskFor.Options(
+                labels,
+                confirm=False,
+                multiple=False,
+                title='Kill a running script?',
+                help_description=(
+                    'Refresh reloads this menu. Selecting a script asks for confirmation; '
+                    'the default answer is No. « Back (q) » leaves this pane.'
+                ),
+                option_help=option_help,
+            )
+            if flag.exit:
+                return
+            if not flag.valid or flag.result is None or flag.result == self._REFRESH_LABEL:
+                continue
+
+            selected = label_to_task[flag.result]
+            filename = Path(selected.script).name
+            confirm = AskFor.Confirmation(
+                title=f'Kill PID {selected.pid} ({filename})?',
+                help_description='Default is No. Yes terminates the process, then kills it if it is still alive.',
+            )
+            if not confirm.valid:
+                Logger.note(f'Kill cancelled for PID {selected.pid}')
+                continue
+
+            current = TaskItem.load(selected.id, db)
+            still_alive = (
+                current.id == selected.id
+                and current.pid == selected.pid
+                and current.pid is not None
+                and current.pid != os.getpid()
+                and current.is_running
+                and process.check_status(current.pid) in self._ALIVE_PROCESS_STATUSES
+            )
+            if not still_alive:
+                Logger.error(f'Task [{selected.id}] is no longer the same running process; kill skipped.')
+                continue
+            if not current.kill():
+                Logger.error(f'Failed to kill PID {current.pid} ({filename})')
+                continue
+            if current.is_running:
+                current.update(
+                    {
+                        'status': 'killed',
+                        'end_time': timestamp(),
+                        'exit_code': 1,
+                        'exit_error': 'Killed by operator from CLI',
+                    },
+                    sync=True,
+                )
+            Logger.note(f'Killed PID {selected.pid} ({filename})')

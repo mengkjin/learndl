@@ -744,7 +744,9 @@ class AlgoConfig(Base.BoundLogger , Base.CacheProps):
         return path if path.exists() else default_path
 
     def override_params(self):
-        self.Param.update(self.schedule_config.get(f"algo.{self.model_module}", {}))
+        # Schedule keys such as beta_into_pred are absent from the algo yaml.
+        # relevant_only would drop them, so the true/false sweep never expands n_model.
+        self.Param.update(self.schedule_config.get(f"algo.{self.model_module}", {}), relevant_only=False)
         self.Param.update(self.override)
         return self
 
@@ -1232,6 +1234,26 @@ class ModelConfig(BaseModelConfig):
             self.logger.error(msg)
             raise Exception(f"{self.base_path} resumable but choose not to resume!")
 
+    def _displayed_metric(self, kind: Literal["loss", "accuracy"]) -> str:
+        """Show ``model specific`` when the NN class supplies the training hook.
+
+        ``LossFunction`` / ``AccuracyFunction`` prefer ``net.loss`` / ``net.accuracy``
+        over ``train.criterion.*``. The config print happens before the module
+        is built, so the check is on the registered class.
+        """
+        from src.res.algo.nn.api import get_nn_module
+        from src.res.model.util.metric.functions import AccuracyFunction, LossFunction
+
+        names = LossFunction.SearchList if kind == "loss" else AccuracyFunction.SearchList
+        fallback = self.criterion_loss if kind == "loss" else self.criterion_accuracy
+        try:
+            module_cls = get_nn_module(self.model_module)
+        except KeyError:
+            return f"{fallback}"
+        if any(callable(getattr(module_cls, name, None)) for name in names):
+            return "model specific"
+        return f"{fallback}"
+
     def print_out(self, color: str | None = None, vb_level: Base.lit.VerbosityLevel = 2, min_key_len: int = -1):
         info_strs: list[tuple[int, str, str]] = []  # indent , key , value
 
@@ -1281,8 +1303,8 @@ class ModelConfig(BaseModelConfig):
             info_strs.append((0, "Interval", f"{self.interval} days"))
             info_strs.append((0, "Window", f"{self.window} days"))
             if self.module_type == "nn":
-                info_strs.append((0, "Loss", f"{self.criterion_loss}"))
-                info_strs.append((0, "Accuracy", f"{self.criterion_accuracy}"))
+                info_strs.append((0, "Loss", self._displayed_metric("loss")))
+                info_strs.append((0, "Accuracy", self._displayed_metric("accuracy")))
             info_strs.append((0, "Sampling", f"{self.sample_method}"))
             info_strs.append((0, "Shuffling", f"{self.shuffle_option}"))
             info_strs.append((0, "Random Seed", f"{self.random_seed}"))

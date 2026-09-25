@@ -38,7 +38,10 @@ class SchedulingMenuTest(unittest.TestCase):
 
     def test_operations_are_grouped_in_non_research_menu(self):
         labels = {label for label, _, _ in DirectCallHub._source_code_entries()}
-        for label in ('Launch Streamlit App', 'Launch Learndl Monitor', 'Watchdog / Schedule Management'):
+        for label in (
+            'Launch Streamlit App', 'Launch Learndl Monitor', 'Watchdog / Schedule Management',
+            'Kill Running Script',
+        ):
             self.assertNotIn(label, _TOP_LEVEL_LABELS)
             self.assertIn(label, labels)
         with patch.object(DirectCallHub, '_pick_direct_call', return_value=ManageTaskSchedules), \

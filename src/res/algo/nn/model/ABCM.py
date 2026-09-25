@@ -38,8 +38,8 @@ class _AstgnnLoss(nn.Module):
         """
         assert label.shape[-1] == 2 , label.shape
         mse = F.mse_loss(pred.squeeze() , label[...,:1].squeeze())
-        rsquare = self.rsquare_loss(alphas , label[...,1])
-        corr = self.corr_loss(betas)
+        rsquare = self.rsquare_loss(betas , label[...,1])
+        corr = self.corr_loss(torch.concat([alphas, betas] , dim = -1))
         turnover = self.turnover_loss(betas , betas_peer)
         all_losses = {
             'mse': mse,
@@ -65,7 +65,7 @@ class _AstgnnLoss(nn.Module):
 
     def turnover_loss(self, betas : torch.Tensor , betas_peer : torch.Tensor , **kwargs):
         """L2 distance between window-end and window-start betas."""
-        return (betas - betas_peer).norm()
+        return (betas - betas_peer).square().mean()
 
 
 class Astgnn(_AstgnnLoss):
@@ -114,14 +114,8 @@ class Astgnn(_AstgnnLoss):
         rnn_kwargs = {'input_dim':enc_in_dim,'output_dim':hidden_dim,'num_layers':rnn_layers, 'dropout':dropout}
         self.fc_rnn = mod_gru(**rnn_kwargs)
 
-        self.alpha_net = nn.Sequential(
-            nn.Linear(hidden_dim , alpha_num), 
-            Layer.Act.get_activation_fn(act_type), 
-        )
-        self.beta_net = nn.Sequential(
-            nn.Linear(hidden_dim , beta_num), 
-            Layer.Act.get_activation_fn(act_type), 
-        )
+        self.alpha_net = nn.Linear(hidden_dim , alpha_num)
+        self.beta_net = nn.Linear(hidden_dim , beta_num)
         self.alpha_map_out = Layer.MeanPool()
         self.beta_into_pred = beta_into_pred
         if beta_into_pred:
@@ -221,14 +215,8 @@ class AstgnnIdiosyncratic(_AstgnnLoss):
         self.alpha_fc_rnn = mod_gru(**rnn_kwargs)
         self.beta_fc_rnn = mod_gru(**rnn_kwargs)
 
-        self.alpha_net = nn.Sequential(
-            nn.Linear(hidden_dim , alpha_num), 
-            Layer.Act.get_activation_fn(act_type), 
-        )
-        self.beta_net = nn.Sequential(
-            nn.Linear(hidden_dim , beta_num), 
-            Layer.Act.get_activation_fn(act_type), 
-        )
+        self.alpha_net = nn.Linear(hidden_dim , alpha_num)
+        self.beta_net = nn.Linear(hidden_dim , beta_num)
         self.alpha_map_out = Layer.MeanPool()
         self.beta_into_pred = beta_into_pred
         if beta_into_pred:

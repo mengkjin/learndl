@@ -11,6 +11,7 @@ import traceback
 import uuid
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from pathlib import Path
+from typing import TextIO, cast
 
 from .diagnostic_sampler import alive, atomic_json, evidence, identity
 
@@ -24,10 +25,10 @@ def runtime_dir() -> Path:
 
 class Tee:
     """Stream to disk first, without retaining output or depending on a live terminal."""
-    def __init__(self, original, output):
+    def __init__(self, original: TextIO, output: TextIO) -> None:
         self.original, self.output = original, output
 
-    def write(self, text):
+    def write(self, text: str) -> int:
         self.output.write(text)
         self.output.flush()
         try:
@@ -37,10 +38,10 @@ class Tee:
             pass
         return len(text)
 
-    def flush(self):
+    def flush(self) -> None:
         self.output.flush()
 
-    def isatty(self):
+    def isatty(self) -> bool:
         return self.original.isatty()
 
     def __getattr__(self, name):
@@ -111,7 +112,7 @@ def reconstruction(processor):
     recorder.task_db = db
     trace_enabled = os.environ.get('LEARNDL_MEMORY_TRACE') == '1'
     with recorder:
-        with log.open('a', buffering=1) as output, redirect_stdout(Tee(sys.stdout, output)), redirect_stderr(Tee(sys.stderr, output)):
+        with log.open('a', buffering=1) as output, redirect_stdout(cast(TextIO, Tee(sys.stdout, output))), redirect_stderr(cast(TextIO, Tee(sys.stderr, output))):
             if trace_enabled:
                 print(json.dumps(metadata, ensure_ascii=False))
             try:

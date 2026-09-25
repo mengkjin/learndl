@@ -63,7 +63,10 @@ class DirectCallHub(DirectCall):
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '
                 'Pick schedule_name, resume, short_test, and optional date range.'
             ),
-            'Non-Research Operations': 'Submenu: Streamlit, monitor, watchdog, tests, lint, preview, and project auto-fix.',
+            'Non-Research Operations': (
+                'Submenu: Streamlit, monitor, watchdog, tests, lint, preview, project auto-fix, '
+                'and kill running scripts.'
+            ),
             'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
@@ -73,6 +76,7 @@ class DirectCallHub(DirectCall):
         from src.api.calls.app import LaunchApp, LaunchTaskMonitor, ManageTaskSchedules
         from src.api.calls.files import ProjectAutoFix
         from src.api.calls.preview import PreviewProjectFile
+        from src.api.calls.script import KillRunningScript
         from src.api.calls.source_code import CheckCodeIssues
         from src.api.calls.test import TestCode
 
@@ -100,6 +104,11 @@ class DirectCallHub(DirectCall):
                 'Project AutoFix',
                 ProjectAutoFix,
                 'Config fixes, WezTerm template sync, and outdated log cleanup.',
+            ),
+            (
+                'Kill Running Script',
+                KillRunningScript,
+                KillRunningScript.get_description(),
             ),
         ]
 
