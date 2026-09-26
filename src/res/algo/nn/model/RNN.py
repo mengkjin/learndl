@@ -151,7 +151,7 @@ class rnn_univariate(nn.Module):
         dec_mlp_dim     = None,
         num_output      = 1 ,
         output_as_factors  = True,
-        hidden_as_factors  = True,
+        hidden_as_factors  = False,
         **kwargs
     ):
         super().__init__()
@@ -230,7 +230,7 @@ class rnn_multivariate(nn.Module):
         dec_mlp_dim     = None,
         num_output      = 1 ,
         output_as_factors   = True,
-        hidden_as_factors   = True,
+        hidden_as_factors   = False,
         **kwargs,
     ):
         super().__init__()
@@ -332,7 +332,7 @@ class uni_rnn_decoder(nn.Module):
     Applies ``dec_mlp_layers`` fully-connected + activation + dropout layers,
     then projects to a ``hidden_dim``-sized output (or scalar when
     ``map_to_one=True``).  Optional ``BatchNorm1d`` when
-    ``hidden_as_factors=True``.
+    ``hidden_as_factors=False``.
 
     Shapes:
         Input:  ``[bs, hidden_dim]``
@@ -373,11 +373,10 @@ class uni_rnn_mapping(nn.Module):
     """
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
-        fc_map_out = nn.Sequential()
         if hidden_as_factors:
-            fc_map_out.append(Layer.MeanPool())
+            fc_map_out = nn.Sequential(Layer.MeanPool())
         else:
-            fc_map_out.append(nn.Linear(hidden_dim, 1))
+            fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))
         if output_as_factors:
             fc_map_out.append(nn.BatchNorm1d(1))
         self.fc_map_out = fc_map_out
