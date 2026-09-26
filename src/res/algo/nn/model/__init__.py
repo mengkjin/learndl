@@ -16,7 +16,7 @@ Sub-modules:
     MoE        — Mixture-of-Experts GRU with market-aware expert
     RiskAttGRU — GRU with risk-factor cross-attention
     TFT        — Temporal Fusion Transformer
-    ABCM       — Alpha-Beta Co-Mining GRU
+    gnn        — Alpha-Beta Co-Mining GRU (Astgnn)
     ResNetGru  — ResNet-GRU
     TransformerGru — Intra-day Transformer + day GRU
     ResNetTransformer — ResNet bar encoder + day Transformer
@@ -25,6 +25,6 @@ Sub-modules:
 from . import (
     CNN, TFT , ModernTCN , PatchTST , PLE , RNN , RiskAttGRU , MoE ,
     TSMixer , TRA , FactorVAE ,
-    Attention , ABCM , resnet_gru ,
+    Attention , gnn , resnet_gru ,
     transformer_gru , resnet_transformer , resnet_mlp ,
 )

@@ -151,7 +151,7 @@ class rnn_univariate(nn.Module):
         dec_mlp_dim     = None,
         num_output      = 1 ,
         output_as_factors  = True,
-        hidden_as_factors  = False,
+        hidden_as_factors  = True,
         **kwargs
     ):
         super().__init__()
@@ -230,7 +230,7 @@ class rnn_multivariate(nn.Module):
         dec_mlp_dim     = None,
         num_output      = 1 ,
         output_as_factors   = True,
-        hidden_as_factors   = False,
+        hidden_as_factors   = True,
         **kwargs,
     ):
         super().__init__()
@@ -373,9 +373,15 @@ class uni_rnn_mapping(nn.Module):
     """
     def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
         super().__init__()
-        self.fc_map_out = nn.Sequential(Layer.MeanPool()) if hidden_as_factors else nn.Sequential(nn.Linear(hidden_dim, 1))
-        if output_as_factors: 
-            self.fc_map_out.append(nn.BatchNorm1d(1))
+        fc_map_out = nn.Sequential()
+        if hidden_as_factors:
+            fc_map_out.append(Layer.MeanPool())
+        else:
+            fc_map_out.append(nn.Linear(hidden_dim, 1))
+        if output_as_factors:
+            fc_map_out.append(nn.BatchNorm1d(1))
+        self.fc_map_out = fc_map_out
+
     def forward(self , x : Tensor) -> Tensor:
         """
         in: [bs x hidden_dim]

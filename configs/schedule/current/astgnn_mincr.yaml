@@ -1,6 +1,6 @@
 model:
   # main model configs ----------------------------------------------------------------
-  module        : astgnn_idio  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
+  module        : astgnn  # any of [nn defined in src/algo/nn/api.py] or ['boost' , 'lgbm' , 'ada' , 'xgboost' , 'catboost']
   submodels     : [best] # subset of ['best' , 'swalast' , 'swabest'] , but for boost , only use best
 
   # labels specification ------------------------------------------------------------
@@ -23,7 +23,9 @@ train:
     fit:    'polar'
 
 algo:
-  astgnn_idio:
+  astgnn:
+    ab_split_input: true
+    ab_split_pos: 1
     resnet_projector: false
     beta_into_pred: [true, false]
   

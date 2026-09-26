@@ -62,7 +62,8 @@ class IdleTest(unittest.TestCase):
         sender.assert_called_once()
         subject, body = sender.call_args.args
         self.assertIn('configuration error', subject)
-        for detail in ('mincr, missing', str(self.worklist), 'test-commit', str(PATH.sched), str(PATH.sched_shared)):
+        for detail in ('mincr, missing', str(self.worklist), 'test-commit', str(PATH.sched),
+                       str(PATH.sched_shared), 'Rerun mark: none'):
             self.assertIn(detail, body)
 
     def test_missing_schedule_reports_while_gpu_busy_or_another_run_active(self):
@@ -118,10 +119,32 @@ class IdleTest(unittest.TestCase):
         self.assertIn('idle_worklist', idle.dispatch(self.options, self.store))
         self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
         request = self.store.owned(idle.OWNER)[0]
+        self.assertEqual(request['rerun_mark'], 'none')
         request.update(phase='complete')
         self.store.put(request)
         self.save_success()
         self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'second')
+
+    def test_rerun_mark_change_retrains_and_appears_in_mail(self):
+        self.worklist.write_text('fit: [first]\nresume: false\nforce: false\nrerun_mark: 0\n')
+        self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'first')
+        request = self.store.owned(idle.OWNER)[0]
+        self.assertEqual(request['rerun_mark'], '0')
+        request.update(phase='complete')
+        self.store.put(request)
+        self.save_success()
+        self.assertIn('idle_worklist', idle.dispatch(self.options, self.store))
+        self.worklist.write_text('fit: [first]\nresume: false\nforce: false\nrerun_mark: 1\n')
+        self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'first')
+        request = [run for run in self.store.owned(idle.OWNER) if run['phase'] == 'queued'][0]
+        self.assertEqual(request['rerun_mark'], '1')
+        request.update(started_at=10, timeout_seconds=None)
+        self.store.put(request)
+        self.store.event(request, 'started', 'Automatic schedule process started.')
+        sender = Mock(return_value=True)
+        with patch('src.api.util.backend.task.TaskDatabase'):
+            self.assertTrue(runtime.deliver_timeout_events(sender, self.store))
+        self.assertIn('Rerun mark: 1', sender.call_args.args[1])
 
     def test_failure_suppression_reset_and_configuration_change(self):
         idle.dispatch(self.options, self.store)

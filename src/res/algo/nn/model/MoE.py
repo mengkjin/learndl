@@ -109,14 +109,11 @@ class moe_gru(nn.Module):
         num_output : int = 1 ,
         output_as_factors : bool = True ,
         hidden_as_factors = False ,
-        hidden_as_factor = None ,
         load_balance_weight : float = 0.01 ,
         diversity_weight : float = 0.001 ,
         **kwargs ,
     ) -> None:
         super().__init__()
-        if hidden_as_factor is not None:
-            hidden_as_factors = hidden_as_factor
         if isinstance(input_dim , (list , tuple)):
             stock_dim , market_dim = int(input_dim[0]) , int(input_dim[1])
         else:

@@ -5,6 +5,6 @@ rnn_layers:     [2]
 indus_dim:      [8]
 indus_embed:    [False] 
 
-hidden_as_factor:    [true]
+hidden_as_factors:    [true]
 
 model.submodels: [best]

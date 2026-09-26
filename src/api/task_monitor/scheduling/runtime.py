@@ -369,7 +369,8 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             completion = run.get('completion') or {}
             message += (f'\nModel directory: {completion.get("model_path", "pending")}\n'
                         f'Training runs: {completion.get("training_run_ids", [])}\n'
-                        f'Error: {completion.get("error", "")}\n')
+                        f'Error: {completion.get("error", "")}\n'
+                        f'Rerun mark: {run.get("rerun_mark", "none")}\n')
             for name, revision in run.get('revisions', {}).items():
                 message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
         if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,

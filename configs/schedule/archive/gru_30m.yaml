@@ -36,5 +36,5 @@ algo:
     num_output:     [1]
     which_output:   [0]
     resnet_blocks:  [1 , 2 , 3]
-    hidden_as_factor:    [true]
+    hidden_as_factors:    [true]
   

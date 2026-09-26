@@ -41,6 +41,16 @@ class WorklistState:
         return {'worklist': file_revision(PATH.sched_worklist), 'schedule': file_revision(path)}
 
     @staticmethod
+    def rerun_mark(worklist: dict | None) -> str:
+        """Symbolic token for mail; missing or null is displayed as ``none``."""
+        if not worklist or worklist.get('rerun_mark') is None:
+            return 'none'
+        value = worklist['rerun_mark']
+        if isinstance(value, (dict, list)):
+            raise ValueError('worklist rerun_mark must be a YAML scalar')
+        return str(value)
+
+    @staticmethod
     def decision(previous, revisions, *, force: bool, resume: bool):
         """Return run/skip reason and effective resume; no time-based policy."""
         if force:

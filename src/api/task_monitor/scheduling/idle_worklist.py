@@ -77,6 +77,7 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
     resume, force = worklist.get('resume', False), worklist.get('force', False)
     if type(resume) is not bool or type(force) is not bool:
         raise ValueError('worklist resume and force must be YAML booleans')
+    rerun_mark = WorklistState.rerun_mark(worklist)
     schedules, missing = {}, []
     for name in dict.fromkeys(worklist['fit']):
         try:
@@ -97,7 +98,8 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
                   'not model modules or input data types.\n'
                   'These schedules cannot start, even with force: true. '
                   'Correct the names or add the missing config files. '
-                  'Other valid schedules remain eligible for idle training.')
+                  'Other valid schedules remain eligible for idle training.\n'
+                  f'Rerun mark: {rerun_mark}')
         # Notification-only event: never create a fictitious training run.
         store.event({'id': f'worklist-config-{key}', 'owner': OWNER}, 'configuration_error', detail)
     return worklist, schedules, missing
@@ -129,7 +131,8 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
         except portalocker.LockException:
             continue
         if reason != 'completed':
-            return {'task': name, 'version': key, 'revisions': revisions}
+            return {'task': name, 'version': key, 'revisions': revisions,
+                    'rerun_mark': WorklistState.rerun_mark(worklist)}
     return None
 
 

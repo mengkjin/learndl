@@ -1,13 +1,14 @@
 # 训练历史与 worklist 完成记录
 
-`configs/schedule/worklist.yaml` 支持 `fit`、`resume` 和 `force`。
-`force` 缺省为 `false`；`resume`、`force` 必须是 YAML 布尔值。
+`configs/schedule/worklist.yaml` 支持 `fit`、`resume`、`force` 和 `rerun_mark`。
+`force` 缺省为 `false`；`rerun_mark` 缺省或 null 在邮件中显示为 `none`；`resume`、`force` 必须是 YAML 布尔值。
 
 ```yaml
 fit:
   - gru_day_new_rtn
 resume: false
 force: false
+rerun_mark: 0
 ```
 
 ## Worklist 执行规则
@@ -18,6 +19,7 @@ force: false
 - 未登记、失败、中断或上次仍停留在 running：按 `resume` 执行。
 - 记录中的训练目录已不存在：改为新训练（`resume: false`）。
 - `force: true`：忽略上述完成判断，严格按 `resume` 执行；不会绕过正在运行的 worklist 项目锁。
+- `rerun_mark`：纯象征字段，不参与完成判断。改它的值（例如 `0` → `1`）会改变 worklist 字节，形成新版本并触发自动重训；这是在模型代码已改、配置未改时请求再跑一遍的预期做法。Watchdog 闲时训练邮件会带 `Rerun mark: <值>`。
 - 普通代码提交、数据更新、时间流逝不触发重训。不再使用原来的 7 天目录创建时间判断。
 
 配置变化决定是否进入执行；`resume` 决定执行方式。恢复已登记的训练时，明确使用记录中的实际目录。

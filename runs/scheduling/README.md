@@ -155,10 +155,12 @@ NN fitting remains serialized by `FitLockNN`.
 Success uses the existing `schedule_worklist` record, and actual training also
 writes independent `training_history` provenance. `force: true` runs only once
 for a given successful configuration version in automatic mode; manual worklist
-execution retains its force behavior. Raw worklist edits (including comments or
-reordering) and edits to a schedule create a new version. Unrelated training code
-or data changes do not. Missing recorded directories remain eligible for new
-training. `resume: true` with no recoverable checkpoint is an error. Unrecorded
+execution retains its force behavior. Raw worklist edits (including comments,
+reordering, or `rerun_mark`) and edits to a schedule create a new version.
+`rerun_mark` is symbolic: bump it when model code changed but the schedule YAML
+did not. Watchdog idle-training mail includes `Rerun mark: <value>` (`none` if
+absent). Unrelated training code or data changes do not. Missing recorded
+directories remain eligible for new training. `resume: true` with no recoverable checkpoint is an error. Unrecorded
 legacy directories resume the newest candidate automatically, by creation log
 time, falling back to saved `model.yaml` modification time and then model index;
 manual use still prompts when ambiguous. `resume: false` creates a new directory.

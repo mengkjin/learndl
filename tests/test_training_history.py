@@ -129,7 +129,17 @@ class WorklistTest(unittest.TestCase):
         self.run_hub()
         self.schedule.write_text('model.module: gru\n# new revision\n')
         self.run_hub()
-        self.assertEqual(self.main.call_count, 3)
+        self.worklist.write_text('fit: [example]\nresume: false\nforce: false\nrerun_mark: 1\n')
+        self.run_hub()
+        self.assertEqual(self.main.call_count, 4)
+
+    def test_rerun_mark_display(self):
+        self.assertEqual(WorklistState.rerun_mark(None), 'none')
+        self.assertEqual(WorklistState.rerun_mark({}), 'none')
+        self.assertEqual(WorklistState.rerun_mark({'rerun_mark': None}), 'none')
+        self.assertEqual(WorklistState.rerun_mark({'rerun_mark': 0}), '0')
+        with self.assertRaises(ValueError):
+            WorklistState.rerun_mark({'rerun_mark': [1]})
 
     def test_force_always_runs_and_preserves_resume(self):
         self.worklist.write_text('fit: [example]\nresume: true\nforce: true\n')

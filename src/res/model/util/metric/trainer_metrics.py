@@ -100,7 +100,7 @@ class TrainerMetrics(TrainerPipeline):
     @cached_property
     def ignore_loss(self) -> list[str]:
         ignore_loss = []
-        if (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors' , False):
+        if (self.config.nn_category == 'tra') or self.model_param.get('hidden_as_factors' , True):
             ignore_loss.extend(['hidden_corr' , 'hidden_corr_deprecated'])
         return ignore_loss
     @cached_property
