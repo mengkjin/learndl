@@ -12,7 +12,7 @@ from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 from typing import Any
 
-from src.proj import Proj , PATH , Save , Base
+from src.proj import Proj , PATH , Base
 from src.res.model.util import BaseCallBack
 
 __all__ = ['SummaryWriter']
@@ -200,21 +200,18 @@ class SummaryWriter(BaseCallBack):
         prefix = self.TSBOARD_PREFIXIS['gradients']
         [self.writer.add_histogram(f'{prefix}/Histogram/{name}' , param.grad , self.step_batch) for name , param in self.named_parameters() if param.grad is not None]
 
-    def pack_tensorboard_dir(self):
-        # overwrite current run folder
+    def sync_latest_tensorboard(self):
+        """Copy this run's tensorboard snapshot onto ``PATH.tsboard/run``.
+
+        Historical curves stay in the model ``snapshot/tensorboard`` directory and
+        move with the model folder on archive. A separate tar is not written.
+        """
         ts_folder = self.config.base_path.snapshot('tensorboard')
         if not ts_folder.exists() or not any(ts_folder.iterdir()):
             return
         run_folder = PATH.tsboard.joinpath('run')
         shutil.rmtree(run_folder , ignore_errors=True)
         shutil.copytree(ts_folder, run_folder)
-
-        # pack run folder to tar file
-        tar_filename = PATH.tsboard.joinpath(f'{self.base_path.full_name}_{self.init_time.strftime("%Y%m%d%H%m")}.tar')
-        Save.pack(
-            ts_folder, tar_filename , overwrite = True , async_save = True ,
-            prefix = f'{self.__class__.__name__} Tensorboard Dir' , 
-            indent = self.indent + 1 , vb_level = self.vb_level + 1)
 
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:
@@ -273,10 +270,10 @@ class SummaryWriter(BaseCallBack):
             self.writer.add_text('Model Info' , self.texts.model_summary)
 
     def on_fit_end_after(self):
-        self.pack_tensorboard_dir()
+        self.sync_latest_tensorboard()
 
     def on_summarize_model(self):
-        """pack tensorboard dir and export test summary to json"""
+        """Export the test summary to the summary log."""
         test_summary = self.container.dataframes['test_summary']
         if test_summary.empty: 
             return

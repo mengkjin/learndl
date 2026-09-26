@@ -51,7 +51,7 @@ class DashboardAPI:
     @classmethod
     def tensorboard(cls):
         """
-        CLI menu to launch TensorBoard for local runs, packed archives, or trained-model logs.
+        CLI menu to launch TensorBoard for local runs, trained models, archived models, or packed archives.
 
         ``**kwargs`` reserved for future options; currently uses ``stdin`` prompts.
 
@@ -182,6 +182,61 @@ class OptunaDBAPI:
         for loop in AskFor.LoopTillExit(False):
             loop.set_flag(cls.launch_option_menu(open_browser = open_browser))
 
+def _tensorboard_snapshot_ready(tb_dir : Path) -> bool:
+    """True when a tensorboard snapshot has a run folder with more than one file."""
+    if not tb_dir.is_dir():
+        return False
+    for sub in tb_dir.iterdir():
+        if sub.is_dir() and len(list(sub.glob('*'))) > 1:
+            return True
+    return False
+
+def _archived_model_keys(name : str) -> tuple[str , str] | None:
+    """Split ``{full_name}.{14-digit stamp}`` into ``(module, model_name)``.
+
+    ``module`` is ``{module_type}@{module_name}``, with an ``st@`` prefix for short tests.
+    ``model_name`` appends ``@{index}`` only when the index is at least 2.
+    """
+    from src.res.model.util.core.basic import split_full_name
+
+    stem , sep , stamp = name.rpartition('.')
+    if sep != '.' or len(stamp) != 14 or not stamp.isdigit():
+        return None
+    try:
+        st , module_type , module_name , model_clean_name , index = split_full_name(stem)
+    except ValueError:
+        return None
+    if not module_type or not module_name or not model_clean_name:
+        return None
+    module = f'{module_type}@{module_name}'
+    if st:
+        module = f'{st}@{module}'
+    model_name = f'{model_clean_name}@{index}' if index and int(index) >= 2 else model_clean_name
+    return module , model_name
+
+def archived_tensorboard_index(root : Path) -> dict[str , dict[str , list[Path]]]:
+    """Group archived model dirs that still contain tensorboard logs.
+
+    Returns ``module -> model_name -> archive paths``, newest stamp first within each model.
+    Directories whose names are not ``{full_name}.{YYYYMMDDHHMMSS}`` are skipped.
+    """
+    grouped : dict[str , dict[str , list[Path]]] = {}
+    if not root.is_dir():
+        return grouped
+    entries : list[tuple[str , str , str , Path]] = []
+    for path in root.iterdir():
+        if not path.is_dir():
+            continue
+        keys = _archived_model_keys(path.name)
+        if keys is None or not _tensorboard_snapshot_ready(path.joinpath('snapshot' , 'tensorboard')):
+            continue
+        module , model_name = keys
+        entries.append((module , model_name , path.name.rpartition('.')[2] , path))
+    entries.sort(key = lambda item: item[2] , reverse = True)
+    for module , model_name , _stamp , path in entries:
+        grouped.setdefault(module , {}).setdefault(model_name , []).append(path)
+    return grouped
+
 class TSBoardAPI:
     """API for launching TensorBoard."""
     @classmethod
@@ -226,17 +281,8 @@ class TSBoardAPI:
         """
         from src.api.pkgs.model import ModelAPI
         from src.res.model.util import ModelPath
-        def predicate(model : ModelPath) -> bool:
-            """predicate to check if a model has tensorboard logs and at least one subfolder with more than one file"""
-            if not model.snapshot('tensorboard').is_dir():
-                return False
-            for sub in model.snapshot('tensorboard').iterdir():
-                if sub.is_dir():
-                    if len(list(sub.glob('*'))) > 1:
-                        return True
-            return False
         candidates = [ModelPath(model) for model in ModelAPI.available_models(include_short_test = True)]
-        candidates = [model for model in candidates if predicate(model)]
+        candidates = [model for model in candidates if _tensorboard_snapshot_ready(model.snapshot('tensorboard'))]
         if len(candidates) == 0:
             Logger.alert1("No available models with tensorboard logs found")
             return
@@ -249,6 +295,47 @@ class TSBoardAPI:
         if flag.result is None:
             return
         cls.call_tensorboard(ModelPath(flag.result).snapshot('tensorboard') , open_browser = open_browser)
+
+    @classmethod
+    def run_archived_models_tensorboard(cls , * , open_browser : bool = False , **kwargs):
+        """
+        Pick an archived model by module, model name, then archive folder, and launch TensorBoard.
+        """
+        grouped = archived_tensorboard_index(PATH.model_archive)
+        if not grouped:
+            Logger.alert1("No archived models with tensorboard logs found")
+            return
+        modules = sorted(grouped)
+        while True:
+            flag = AskFor.Options(
+                modules , multiple=False , confirm=False , allow_back=True ,
+                title = 'Choose module of archived models:',
+                help_description='Archived models under PATH.model_archive that still contain snapshot/tensorboard.',
+            )
+            if not flag.valid or flag.result is None:
+                return
+            module = flag.result
+            model_names = sorted(grouped[module])
+            while True:
+                flag = AskFor.Options(
+                    model_names , multiple=False , confirm=False , allow_back=True ,
+                    title = f'Choose model name under {module}:',
+                    help_description='Model names archived under the selected module.',
+                )
+                if not flag.valid or flag.result is None:
+                    break
+                model_name = flag.result
+                archives = grouped[module][model_name]
+                flag = AskFor.Options(
+                    [path.name for path in archives] , multiple=False , confirm=False , allow_back=True ,
+                    title = f'Choose archive of {module} / {model_name}:',
+                    help_description='Full archive folder name, newest timestamp first.',
+                )
+                if not flag.valid or flag.result is None:
+                    continue
+                chosen = next(path for path in archives if path.name == flag.result)
+                cls.call_tensorboard(chosen.joinpath('snapshot' , 'tensorboard') , open_browser = open_browser)
+                return
 
     @classmethod
     def run_packed_tensorboard(cls , * , open_browser : bool = False , **kwargs):
@@ -298,7 +385,7 @@ class TSBoardAPI:
     @classmethod
     def launch_option_menu(cls , * , open_browser : bool = False):
         """
-        launch TensorBoard CLI menu for local runs, packed archives, or trained-model logs.
+        launch TensorBoard CLI menu for local runs, trained models, archived models, or packed archives.
         """
         os.chdir(PATH.main)
         Logger.success("Will launch TensorBoard for the following options:")
@@ -306,13 +393,13 @@ class TSBoardAPI:
         options = {
             "Latest Tensorboard logs in run folder" : cls.run_local_tensorboard ,
             "Trained Models Tensorboard logs" : cls.run_trained_models_tensorboard ,
-            "Packed Tensorboard tar files (all past trainings)" : cls.run_packed_tensorboard ,
+            "Archived Models Tensorboard logs" : cls.run_archived_models_tensorboard ,
             "Delete TensorBoard logs" : cls.choose_to_delete_tensorboard_record ,
         }
         option_help = {
             "Latest Tensorboard logs in run folder": 'Serve PATH.tensorboard/run (current training session).',
             "Trained Models Tensorboard logs": 'Pick a model checkpoint tree with saved TB snapshots.',
-            "Packed Tensorboard tar files (all past trainings)": 'Unpack a historical .tar archive then serve.',
+            "Archived Models Tensorboard logs": 'Pick an archived model by module, model name, then archive folder.',
             "Delete TensorBoard logs": 'Remove packed .tar archives from PATH.tsboard.',
         }
         flag = AskFor.Options(
