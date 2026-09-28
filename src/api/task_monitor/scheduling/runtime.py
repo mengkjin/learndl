@@ -334,7 +334,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             # Missing schedules have no process/task record or result email.
             try:
                 sent = sender('Watchdog Idle Worklist - configuration error', event['detail'],
-                              confirmation_message='Learndl worklist configuration alert')
+                              confirmation_message='Learndl worklist configuration alert', queue_on_failure=False)
             except Exception:
                 sent = False
             if sent:
@@ -374,7 +374,8 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             for name, revision in run.get('revisions', {}).items():
                 message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
         if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,
-                  attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert'):
+                  attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert',
+                  queue_on_failure=False):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
         else:

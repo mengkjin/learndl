@@ -59,7 +59,7 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
         body += '\nFollow-up: ' + ('; '.join(data.get('follow_up', [])) or 'none detected')
         try:
             sent = sender(f'Watchdog Git Updated - {data["host"]} - {data["after"][:12]}', body,
-                          confirmation_message='Learndl automatic Git update')
+                          confirmation_message='Learndl automatic Git update', queue_on_failure=False)
         except Exception:
             sent = False
         if sent:

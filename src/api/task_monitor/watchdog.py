@@ -317,6 +317,7 @@ def _deliver_alerts(
         f'Watchdog Alert - {len(pending_tasks) + len(new_unit_failures)} Learndl failure(s)',
         body, attachments=list(dict.fromkeys(attachments)),
         confirmation_message='Learndl watchdog alert',
+        queue_on_failure=False,
     )
     if sent:
         for unit, _ in new_unit_failures:

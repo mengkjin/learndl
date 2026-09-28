@@ -51,6 +51,7 @@ class PATH:
     cache       = lc_machine.joinpath('cache')
     optuna      = lc_machine.joinpath('optuna')
     tsboard     = lc_machine.joinpath('tensorboard')
+    email_outbox = lc_machine.joinpath('email_outbox')
 
     sched          = conf.joinpath('schedule' , 'current')
     sched_archive  = conf.joinpath('schedule' , 'archive')

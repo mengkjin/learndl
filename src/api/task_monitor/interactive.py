@@ -176,7 +176,8 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
                 atomic_json(folder / 'pending.json', {'task_id': task.id, 'status': task.status, 'body': body})
                 try:
                     sent = email_sender(f'Learndl reconstruction {task.status}: {meta["key"]}/{meta["frame"]}',
-                                        body, attachments=[], confirmation_message='Interactive reconstruction alert')
+                                        body, attachments=[], confirmation_message='Interactive reconstruction alert',
+                                        queue_on_failure=False)
                 except Exception:
                     sent = False
                 if sent:
