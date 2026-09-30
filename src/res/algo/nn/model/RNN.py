@@ -131,6 +131,7 @@ class rnn_univariate(nn.Module):
                           each head's scalar output.
         hidden_as_factors: If True, project hidden state to factors instead
                           of direct scalar regression.
+        hidden_mean_pool: If True, apply ``MeanPool`` to the hidden state instead of ``Linear``.
 
     Shapes:
         Input:  ``[bs, seq_len, input_dim]``
@@ -152,6 +153,7 @@ class rnn_univariate(nn.Module):
         num_output      = 1 ,
         output_as_factors  = True,
         hidden_as_factors  = False,
+        hidden_mean_pool  = False,
         **kwargs
     ):
         super().__init__()
@@ -172,6 +174,7 @@ class rnn_univariate(nn.Module):
             'num_output':       num_output,
             'hidden_as_factors':hidden_as_factors,
             'output_as_factors':output_as_factors,
+            'hidden_mean_pool':hidden_mean_pool,
             **kwargs,
         }
 
@@ -231,6 +234,7 @@ class rnn_multivariate(nn.Module):
         num_output      = 1 ,
         output_as_factors   = True,
         hidden_as_factors   = False,
+        hidden_mean_pool    = False,
         **kwargs,
     ):
         super().__init__()
@@ -254,6 +258,7 @@ class rnn_multivariate(nn.Module):
             'num_output':       num_output,
             'hidden_as_factors':hidden_as_factors,
             'output_as_factors':output_as_factors,
+            'hidden_mean_pool':hidden_mean_pool,
             'num_rnn':          self.num_rnn,
             **kwargs,
         }
@@ -363,7 +368,7 @@ class uni_rnn_decoder(nn.Module):
 class uni_rnn_mapping(nn.Module):
     """Final scalar mapping head for a single output.
 
-    Maps ``hidden_dim`` → scalar (1).  When ``hidden_as_factors``, uses
+    Maps ``hidden_dim`` → scalar (1).  When ``hidden_mean_pool``, uses
     temporal mean pooling instead of Linear.  When ``output_as_factors``,
     applies ``BatchNorm1d(1)`` for cross-sectional normalization.
 
@@ -371,9 +376,9 @@ class uni_rnn_mapping(nn.Module):
         Input:  ``[bs, hidden_dim]``
         Output: ``[bs, 1]``
     """
-    def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
+    def __init__(self,hidden_dim,hidden_mean_pool,output_as_factors,**kwargs):
         super().__init__()
-        if hidden_as_factors:
+        if hidden_mean_pool:
             fc_map_out = nn.Sequential(Layer.MeanPool())
         else:
             fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))
@@ -453,9 +458,9 @@ class multi_rnn_mapping(nn.Module):
         Input:  ``[bs, hidden_dim]``
         Output: ``[bs, 1]``
     """
-    def __init__(self,hidden_dim,hidden_as_factors,output_as_factors,**kwargs):
+    def __init__(self,hidden_dim,hidden_mean_pool,output_as_factors,**kwargs):
         super().__init__()
-        if hidden_as_factors: 
+        if hidden_mean_pool: 
             self.fc_map_out = nn.Sequential(Layer.MeanPool())
         else:
             self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim, 1))

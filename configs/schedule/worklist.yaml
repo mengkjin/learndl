@@ -5,7 +5,6 @@ fit:
   - gru_15m_new_rtn
   - gru_week_new
   
-  - gru_minc
   - gru_mincr
   
   - gru_day_lgbm

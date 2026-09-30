@@ -28,6 +28,8 @@ class resnet_gru(nn.Module):
         rnn_type        = 'gru',
         rnn_layers      = 2,
         loss_corr_lamb = 0.1,
+        hidden_as_factors = True,
+        hidden_mean_pool = False,
         **kwargs
     ):
         super().__init__()
@@ -52,9 +54,14 @@ class resnet_gru(nn.Module):
         else:
             self.fc_enc_att = None
         
-        self.fc_hid_out = nn.Sequential(nn.Linear(hidden_dim , hidden_dim) , nn.BatchNorm1d(hidden_dim)) 
-        self.fc_map_out = nn.Sequential(Layer.MeanPool() , nn.BatchNorm1d(1))
-
+        self.fc_hid_out = nn.Sequential(nn.Linear(hidden_dim , hidden_dim))
+        if hidden_as_factors:
+            self.fc_hid_out.append(nn.BatchNorm1d(hidden_dim)) 
+        if hidden_mean_pool:
+            self.fc_map_out = nn.Sequential(Layer.MeanPool())
+        else:
+            self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim , 1))
+        self.fc_map_out.append(nn.BatchNorm1d(1))
         
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         """

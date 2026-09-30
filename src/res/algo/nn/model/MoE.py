@@ -108,6 +108,7 @@ class moe_gru(nn.Module):
         num_market_aware_experts : int = 1 ,
         num_output : int = 1 ,
         output_as_factors : bool = True ,
+        hidden_mean_pool : bool = False ,
         hidden_as_factors = False ,
         load_balance_weight : float = 0.01 ,
         diversity_weight : float = 0.001 ,
@@ -128,7 +129,7 @@ class moe_gru(nn.Module):
         self.load_balance_weight = load_balance_weight
         self.diversity_weight = diversity_weight
         self.hidden_as_factors = hidden_as_factors
-
+        self.hidden_mean_pool = hidden_mean_pool
         encoder_kwargs = {
             'hidden_dim': hidden_dim,
             'dropout': dropout,
@@ -158,12 +159,14 @@ class moe_gru(nn.Module):
             'dec_mlp_dim': dec_mlp_dim,
             'dropout': dropout,
             'hidden_as_factors': hidden_as_factors,
+            'hidden_mean_pool': hidden_mean_pool,
         }
         self.decoder = uni_rnn_decoder(**decoder_kwargs)
         self.mapping = uni_rnn_mapping(
             hidden_dim = hidden_dim ,
             hidden_as_factors = hidden_as_factors ,
             output_as_factors = output_as_factors ,
+            hidden_mean_pool = hidden_mean_pool,
         )
 
     def _expert_hiddens(self , stock : Tensor , market : Tensor) -> list[Tensor]:

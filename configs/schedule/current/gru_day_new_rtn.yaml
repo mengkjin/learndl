@@ -36,7 +36,7 @@ algo:
     num_output:     [1]
     which_output:   [null]
     kernel_size:    [3] # for tcn
-    hidden_as_factors:    [true]
+    hidden_as_factors: [true]
 
   
 

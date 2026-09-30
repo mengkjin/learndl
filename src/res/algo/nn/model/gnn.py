@@ -128,6 +128,8 @@ class Astgnn(_AstgnnLoss):
         ab_split_input: bool = False,
         ab_split_pos: int = 1,
         resnet_projector: bool = False,
+        hidden_as_factors: bool = True,
+        hidden_mean_pool: bool = False,
         fit_loss: str = 'mse',
         **kwargs,
     ):
@@ -148,11 +150,21 @@ class Astgnn(_AstgnnLoss):
             self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim), nn.Tanh())
             self.fc_rnn = mod_gru(**rnn_kwargs)
 
-        self.alpha_net = nn.Linear(hidden_dim, alpha_num)
-        self.beta_net = nn.Linear(hidden_dim, beta_num)
-        self.alpha_map_out = Layer.MeanPool()
+        self.alpha_net = nn.Sequential(nn.Linear(hidden_dim, alpha_num))
+        self.beta_net = nn.Sequential(nn.Linear(hidden_dim, beta_num))
+        if hidden_as_factors:
+            self.alpha_net.append(nn.BatchNorm1d(alpha_num))
+            self.beta_net.append(nn.BatchNorm1d(beta_num))
+
+        if hidden_mean_pool:
+            self.alpha_map_out = Layer.MeanPool()
+        else:
+            self.alpha_map_out = nn.Linear(alpha_num, 1)
+
         self.beta_into_pred = beta_into_pred
         self.beta_map_out = nn.Linear(beta_num, 1) if beta_into_pred else None
+
+        self.pred_batchnorm = nn.BatchNorm1d(1)
 
     def _init_split_encoders(self, input_dim, enc_in_dim: int, rnn_kwargs: dict, kwargs: dict) -> None:
         assert isinstance(input_dim, (list, tuple)), f'input_dim must be a list or tuple when ab_split_input, got {type(input_dim)}'
@@ -211,12 +223,12 @@ class Astgnn(_AstgnnLoss):
         return h_alpha, h_beta_seq[:, -1], h_beta_seq[:, 0]
 
     def _heads(self, h_alpha: Tensor, h_beta: Tensor, h_beta_0: Tensor):
-        alphas = self.alpha_net(h_alpha)
-        betas = self.beta_net(h_beta)
-        betas_peer = self.beta_net(h_beta_0)
+        alphas = self.alpha_net(h_alpha)[:, -1]
+        betas = self.beta_net(h_beta)[:, -1]
+        betas_peer = self.beta_net(h_beta_0)[:, -1]
         pred_alpha = self.alpha_map_out(alphas)
         pred_beta = self.beta_map_out(betas) if self.beta_into_pred and self.beta_map_out is not None else 0
-        pred = pred_alpha + pred_beta
+        pred = self.pred_batchnorm(pred_alpha + pred_beta)
         return pred, {
             'alphas': alphas,
             'betas': betas,

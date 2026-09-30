@@ -49,3 +49,4 @@ algo:
     rnn_layers:     [2]
     which_output:   [0]
     resnet_blocks:  [1]
+    hidden_as_factors: [true]

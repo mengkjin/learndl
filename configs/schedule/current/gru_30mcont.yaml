@@ -37,6 +37,7 @@ algo:
     which_output:   [null]
     kernel_size:    [3] # for tcn
     hidden_as_factors:    [true]
+    hidden_mean_pool: [false]
 
   
 

@@ -27,5 +27,5 @@ algo:
     ab_split_input: true
     ab_split_pos: 1
     resnet_projector: true
-    beta_into_pred: [true, false]
+    beta_into_pred: [false]
   
