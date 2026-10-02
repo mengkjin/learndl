@@ -82,7 +82,7 @@ class DirectCallHub(DirectCall):
 
         return [
             ('Launch Streamlit App', LaunchApp, 'Open the Streamlit interactive app in a new pane.'),
-            ('Launch Learndl Monitor', LaunchTaskMonitor, 'Open the independent, read-only task monitor.'),
+            ('Launch Learndl Monitor', LaunchTaskMonitor, 'Monitor running scripts, host resources, and finished tasks; confirm before killing a task.'),
             ('Watchdog / Schedule Management', ManageTaskSchedules,
              'Choose preview, status, install/update, or rollback; defaults to preview.'),
             (

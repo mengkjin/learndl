@@ -1,4 +1,4 @@
-"""Read-only live status monitor for Learndl background tasks."""
+"""Live task monitoring with explicit, confirmed operator actions."""
 
 from .core import TaskMonitorRepository, TaskPage, TaskSnapshot
 from .output import OutputCache
