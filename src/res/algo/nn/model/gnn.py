@@ -106,6 +106,11 @@ class Astgnn(_AstgnnLoss):
     ``ab_split_input=True`` sends ``input[:ab_split_pos]`` through the alpha
     encoder and ``input[ab_split_pos:]`` through the beta encoder.
 
+    ``hidden_as_factors`` normalizes each alpha/beta factor across the batch.
+    ``hidden_mean_pool`` averages alpha factors instead of learning their
+    scalar mapping. ``beta_into_pred`` adds the learned beta prediction
+    before the final prediction normalization.
+
     The fit term is ``fit_loss`` (``mse``, ``pearson``, or ``ccc``) against
     ``label[..., 0]``. R², correlation, and turnover stay on the factor outputs.
     """
@@ -223,9 +228,10 @@ class Astgnn(_AstgnnLoss):
         return h_alpha, h_beta_seq[:, -1], h_beta_seq[:, 0]
 
     def _heads(self, h_alpha: Tensor, h_beta: Tensor, h_beta_0: Tensor):
-        alphas = self.alpha_net(h_alpha)[:, -1]
-        betas = self.beta_net(h_beta)[:, -1]
-        betas_peer = self.beta_net(h_beta_0)[:, -1]
+        # Encoders already selected the time steps; retain every factor column.
+        alphas = self.alpha_net(h_alpha)
+        betas = self.beta_net(h_beta)
+        betas_peer = self.beta_net(h_beta_0)
         pred_alpha = self.alpha_map_out(alphas)
         pred_beta = self.beta_map_out(betas) if self.beta_into_pred and self.beta_map_out is not None else 0
         pred = self.pred_batchnorm(pred_alpha + pred_beta)

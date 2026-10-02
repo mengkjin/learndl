@@ -1,14 +1,4 @@
 fit:
-  - gru_day_new
-  - gru_day_new_rtn
-  - gru_15m_new
-  - gru_15m_new_rtn
-  - gru_week_new
-  
-  - gru_mincr
-  
-  - gru_day_lgbm
-  - gru_day_xgboost
   - astgnn_day
   - astgnn_15m
   - astgnn_mincr
