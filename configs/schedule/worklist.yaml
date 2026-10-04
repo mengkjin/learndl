@@ -1,5 +1,6 @@
 fit:
-  - gru_day_new_std
+  - gru_day_new_rtn_mean
+  - gru_day_new_rtn_mean_lgbm
 
 
 resume: False
