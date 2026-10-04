@@ -102,7 +102,7 @@ class rnn_univariate(nn.Module):
        ResNet encoding, followed by the RNN, optionally with time-wise
        attention pooling.
     2. **Decoder** (``uni_rnn_decoder``) — per-head MLP with optional
-       BatchNorm for factor normalization.
+       BatchNorm or explicit daily cross-sectional normalization.
     3. **Mapping** (``uni_rnn_mapping``) — per-head scalar projection with
        optional BatchNorm.
 
@@ -129,8 +129,9 @@ class rnn_univariate(nn.Module):
         num_output:       Number of output heads (default ``1``).
         output_as_factors: If True, apply ``BatchNorm1d(1)`` to normalize
                           each head's scalar output.
-        hidden_as_factors: If True, project hidden state to factors instead
-                          of direct scalar regression.
+        hidden_as_factors: If True, normalize the decoder's hidden output.
+        hidden_norm:      Hidden normalization: 'batch' (legacy BatchNorm) or
+                          'std' (parameter-free daily cross-sectional z-score).
         hidden_mean_pool: If True, apply ``MeanPool`` to the hidden state instead of ``Linear``.
 
     Shapes:
@@ -154,6 +155,7 @@ class rnn_univariate(nn.Module):
         output_as_factors  = True,
         hidden_as_factors  = False,
         hidden_mean_pool  = False,
+        hidden_norm       = 'batch',
         **kwargs
     ):
         super().__init__()
@@ -175,6 +177,7 @@ class rnn_univariate(nn.Module):
             'hidden_as_factors':hidden_as_factors,
             'output_as_factors':output_as_factors,
             'hidden_mean_pool':hidden_mean_pool,
+            'hidden_norm':     hidden_norm,
             **kwargs,
         }
 
@@ -235,6 +238,7 @@ class rnn_multivariate(nn.Module):
         output_as_factors   = True,
         hidden_as_factors   = False,
         hidden_mean_pool    = False,
+        hidden_norm         = 'batch',
         **kwargs,
     ):
         super().__init__()
@@ -259,6 +263,7 @@ class rnn_multivariate(nn.Module):
             'hidden_as_factors':hidden_as_factors,
             'output_as_factors':output_as_factors,
             'hidden_mean_pool':hidden_mean_pool,
+            'hidden_norm':     hidden_norm,
             'num_rnn':          self.num_rnn,
             **kwargs,
         }
@@ -336,15 +341,17 @@ class uni_rnn_decoder(nn.Module):
 
     Applies ``dec_mlp_layers`` fully-connected + activation + dropout layers,
     then projects to a ``hidden_dim``-sized output (or scalar when
-    ``map_to_one=True``).  Optional ``BatchNorm1d`` when
-    ``hidden_as_factors=False``.
+    ``map_to_one=True``). When ``hidden_as_factors=True``, ``hidden_norm``
+    selects legacy BatchNorm ('batch') or daily cross-sectional z-score ('std').
 
     Shapes:
         Input:  ``[bs, hidden_dim]``
         Output: ``[bs, hidden_dim]`` or ``[bs, 1]`` when ``map_to_one=True``
     """
-    def __init__(self,hidden_dim,act_type,dec_mlp_layers,dec_mlp_dim,dropout,hidden_as_factors,map_to_one=False,**kwargs):
+    def __init__(self,hidden_dim,act_type,dec_mlp_layers,dec_mlp_dim,dropout,hidden_as_factors,map_to_one=False,hidden_norm='batch',**kwargs):
         super().__init__()
+        if hidden_norm not in ('batch', 'std'):
+            raise ValueError(f'Invalid hidden_norm: {hidden_norm!r}')
         self.fc_dec_mlp = nn.Sequential()
         mlp_dim = dec_mlp_dim if dec_mlp_dim else hidden_dim
         for i in range(dec_mlp_layers): 
@@ -353,7 +360,9 @@ class uni_rnn_decoder(nn.Module):
                 Layer.Act.get_activation_fn(act_type), 
                 nn.Dropout(dropout)))
         if hidden_as_factors:
-            self.fc_hid_out = nn.Sequential(nn.Linear(mlp_dim , 1 if map_to_one else hidden_dim) , nn.BatchNorm1d(1 if map_to_one else hidden_dim)) 
+            out_dim = 1 if map_to_one else hidden_dim
+            norm = nn.BatchNorm1d(out_dim) if hidden_norm == 'batch' else Layer.CrossSectionalStandardize()
+            self.fc_hid_out = nn.Sequential(nn.Linear(mlp_dim , out_dim) , norm)
         else:
             self.fc_hid_out = nn.Linear(mlp_dim , 1 if map_to_one else hidden_dim)
 
@@ -425,17 +434,20 @@ class multi_rnn_decoder(nn.Module):
         Input:  List of ``[bs, hidden_dim]``, one per stream
         Output: ``[bs, hidden_dim]``
     """
-    def __init__(self,hidden_dim,dropout,num_rnn,rnn_att,num_heads,hidden_as_factors,**kwargs):
+    def __init__(self,hidden_dim,dropout,num_rnn,rnn_att,num_heads,hidden_as_factors,hidden_norm='batch',**kwargs):
         super().__init__()
+        if hidden_norm not in ('batch', 'std'):
+            raise ValueError(f'Invalid hidden_norm: {hidden_norm!r}')
         num_rnn = num_rnn
-        self.dec_list = nn.ModuleList([uni_rnn_decoder(hidden_dim , hidden_as_factors = False , **kwargs) for _ in range(num_rnn)])
+        self.dec_list = nn.ModuleList([uni_rnn_decoder(hidden_dim , dropout=dropout , hidden_as_factors = False , **kwargs) for _ in range(num_rnn)])
         self.fc_mod_att = nn.Sequential()
         if rnn_att: 
             self.fc_mod_att = ModuleWiseAttention(hidden_dim,num_rnn , num_heads=num_heads , dropout=dropout)
         else:
             self.fc_mod_att = Layer.Pass()
         if hidden_as_factors:
-            self.fc_hid_out = nn.Sequential(nn.Linear(num_rnn*hidden_dim , hidden_dim) , nn.BatchNorm1d(hidden_dim))
+            norm = nn.BatchNorm1d(hidden_dim) if hidden_norm == 'batch' else Layer.CrossSectionalStandardize()
+            self.fc_hid_out = nn.Sequential(nn.Linear(num_rnn*hidden_dim , hidden_dim) , norm)
         else:
             self.fc_hid_out = nn.Linear(num_rnn*hidden_dim , hidden_dim)
 

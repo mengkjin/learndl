@@ -27,7 +27,7 @@ __all__ = ['ModelConfig']
 
 ConfigSourceOption : TypeAlias = Literal['current' , 'default']
 InputType : TypeAlias = Literal['data' , 'hidden' , 'factor' , 'combo']
-SampleMethod : TypeAlias = Literal['total_shuffle' , 'sequential' , 'both_shuffle' , 'train_shuffle']
+SampleMethod : TypeAlias = Literal['sequential' , 'both_shuffle' , 'train_shuffle']
 ShuffleOption : TypeAlias = Literal['static' , 'init' , 'epoch']
 
 def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -> Base.FlattenDict:
@@ -246,8 +246,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
         # check sample_method is set correctly
         nn_category = AlgoModule.nn_category(self.model_module)
-        if nn_category == "tra":
-            assert self.sample_method != "total_shuffle", self.sample_method
+        
         if nn_category == "vae":
             assert self.sample_method == "sequential", self.sample_method
 

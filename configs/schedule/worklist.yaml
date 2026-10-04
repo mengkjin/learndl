@@ -1,7 +1,5 @@
 fit:
-  - astgnn_day
-  - astgnn_15m
-  - astgnn_mincr
+  - gru_day_new_std
 
 
 resume: False

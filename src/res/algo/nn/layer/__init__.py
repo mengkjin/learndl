@@ -1,7 +1,7 @@
 """Primitive building-block layers used across all NN model files.
 
 Public API (re-exported from basic.py):
-    Pass, Transpose, MeanPool, Parallel
+    Pass, Transpose, MeanPool, Parallel, CrossSectionalStandardize
 
 Sub-modules:
     Act       — activation function registry and factory

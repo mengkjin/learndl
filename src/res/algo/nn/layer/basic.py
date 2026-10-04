@@ -5,6 +5,7 @@ Classes:
     Transpose  — dimension transposition with optional contiguous copy
     MeanPool   — temporal mean pooling along a specified dimension
     Parallel   — runs N independent copies of a sub-module in parallel
+    CrossSectionalStandardize — parameter-free normalization across stocks
 """
 from __future__ import annotations
 import torch
@@ -12,7 +13,25 @@ import torch
 from torch import nn , Tensor
 from copy import deepcopy
 
-__all__ = ['Pass' , 'Transpose' , 'MeanPool' , 'Parallel']
+__all__ = ['Pass' , 'Transpose' , 'MeanPool' , 'Parallel' , 'CrossSectionalStandardize']
+
+class CrossSectionalStandardize(nn.Module):
+    """Standardize each column of a complete daily ``[stocks, features]`` batch.
+
+    Uses population variance and the same differentiable statistics in train
+    and eval modes, without parameters or running buffers. Do not normalize
+    separate chunks of the same daily cross-section independently.
+    """
+    def __init__(self, eps: float = 1e-5):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.ndim != 2:
+            raise ValueError(f'Expected [stocks, features], got shape {tuple(x.shape)}')
+        values = x.float() if x.dtype in (torch.float16, torch.bfloat16) else x
+        var, mean = torch.var_mean(values, dim=0, unbiased=False, keepdim=True)
+        return ((values - mean) * torch.rsqrt(var + self.eps)).to(x.dtype)
 
 class Pass(nn.Module):
     """Identity layer; passes input through unchanged.

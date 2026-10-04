@@ -430,7 +430,7 @@ class DataOperator:
         update index of train/valid sub-samples of flattened all-samples(with in 0:len(index[0]) * step_len - 1)
         sample_tensor should be boolean tensor , True indicates non
 
-        train/valid sample method: total_shuffle , sequential , both_shuffle , train_shuffle
+        train/valid sample method: sequential , both_shuffle , train_shuffle
         test sample method: sequential
         """
         sample_method = self.config.sample_method
@@ -448,21 +448,17 @@ class DataOperator:
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
             assert sep > 0 and sep < l1 , (sep , l1 , train_ratio)
-            if sample_method == 'total_shuffle':
-                pool = torch.Tensor(permutation(np.arange(effective.sum().item())))
-                sep = int(len(pool) * train_ratio)
-                assert sep > 0 and sep < len(pool) , (sep , len(pool) , train_ratio)
-                sample_index['train'] = _shuffle(pos[effective][pool[:sep]])
-                sample_index['valid'] = _shuffle(pos[effective][pool[sep:]])
-            elif sample_method == 'both_shuffle':
+            if sample_method == 'both_shuffle':
                 sample_index['train'] = _shuffle(pos[:,:sep][effective[:,:sep]])
                 sample_index['valid'] = _shuffle(pos[:,sep:][effective[:,sep:]])
             elif sample_method == 'train_shuffle':
                 sample_index['train'] = _shuffle(pos[:,:sep][effective[:,:sep]])
                 sample_index['valid'] = _sequential(sep , l1)
-            else:
+            elif sample_method == 'sequential':
                 sample_index['train'] = _sequential(0 , sep)
                 sample_index['valid'] = _sequential(sep , l1)
+            else:
+                raise ValueError(f'Invalid sample method: {sample_method}')
         else:
             sample_index[self.stage] = _sequential(0 , l1)
 
