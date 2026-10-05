@@ -276,8 +276,9 @@ Proj.instances.status()  # dict of non-None slots
 Thread-safe deduplicated path list:
 ```python
 Proj.email_attachments.append(path)
+Proj.email_attachments.append(path, filename='model_data.xlsx')  # mail name only; disk name unchanged
 Proj.email_attachments.extend(p1, p2)
-Proj.email_attachments.pop_all()   # returns list and clears
+Proj.email_attachments.pop_all()   # list[EmailAttachment]; clears paths and mail names
 Proj.email_attachments.ban('tmp')  # reject paths containing 'tmp'
 Proj.exit_files.insert(0, path)    # insert at front, deduplicating
 ```

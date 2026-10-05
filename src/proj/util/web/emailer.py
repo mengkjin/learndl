@@ -17,10 +17,13 @@ from typing import Any , Literal , TypeAlias
 import portalocker
 
 from src.proj.env import MACHINE , PATH , Proj
+from src.proj.env.variable.files import EmailAttachment
 from src.proj.core import strPath
 from src.proj.bases import BoundLogger , NoInstance
 
-__all__ = ['Email']
+__all__ = ['Email' , 'EmailAttachment']
+
+AttachmentSpec : TypeAlias = strPath | EmailAttachment
 
 ServerType : TypeAlias = Literal['netease']
 _EmailSettings : dict = {}
@@ -64,6 +67,13 @@ def _atomic_write(path : Path , data : bytes) -> None:
     finally:
         temp.unlink(missing_ok = True)
 
+def _resolve_attachment(item : AttachmentSpec) -> tuple[Path , str]:
+    """Return the local path and the name written on the MIME part."""
+    if isinstance(item , EmailAttachment):
+        return item.path , item.attachment_name
+    path = Path(item)
+    return path , path.name
+
 def _fsync_dir(path : Path) -> None:
     """Persist a directory rename on POSIX. Windows commits ``os.replace`` itself."""
     if os.name != 'posix':
@@ -78,9 +88,11 @@ class Email(BoundLogger, metaclass=NoInstance):
     """
     Email class for sending email with attachment
     example:
-        from src.proj import Email , Proj
+        from src.proj.util.web.emailer import Email , EmailAttachment
         Email.send('Test Email' , 'This is a test email' , 'test@example.com' ,
                    project_attachments = True , attachments = ['path/to/additional.txt'])
+        Email.send('Report' , 'body' , attachments = EmailAttachment(
+            'results/detailed_alpha_data.xlsx' , filename = 'detailed_alpha_data_gru.xlsx'))
     """
     smtp_server : str = _get_email_setting('smtp_server')
     smtp_port : int | Literal['auto'] = _get_email_setting('smtp_port')
@@ -97,34 +109,35 @@ class Email(BoundLogger, metaclass=NoInstance):
     
     @classmethod
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
-                attachments : strPath | list[strPath] | None = None ,
+                attachments : AttachmentSpec | list[AttachmentSpec] | None = None ,
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:') -> Message:
         message = MIMEMultipart()
         message['From'] = cls.sender
         message['To'] = cls.recipient(recipient)
         message['Subject'] = f'{title_prefix} {title}' if title_prefix else title
-        
+
         if attachments is None:
-            attachment_paths : list[Path] = []
+            attachment_items : list[AttachmentSpec] = []
         elif isinstance(attachments , list):
-            attachment_paths = [Path(f) for f in attachments]
+            attachment_items = list(attachments)
         else:
-            attachment_paths = [Path(attachments)]
-            
+            attachment_items = [attachments]
+
         if project_attachments:
-            attachment_paths.extend(Proj.email_attachments.pop_all())
+            attachment_items.extend(Proj.email_attachments.pop_all())
 
         body_text = body if body is not None else ''
-        for attachment in attachment_paths:
-            if not attachment.exists():
-                body_text += f'\nAttachment not found: {attachment}'
+        for item in attachment_items:
+            path , filename = _resolve_attachment(item)
+            if not path.exists():
+                body_text += f'\nAttachment not found: {path}'
             else:
-                with open(attachment, 'rb') as attach_file:
+                with open(path, 'rb') as attach_file:
                     part = MIMEBase('application', 'octet-stream')
                     part.set_payload(attach_file.read())
                     encoders.encode_base64(part)
-                    part.add_header('Content-Disposition' , 'attachment' , filename = attachment.name)
+                    part.add_header('Content-Disposition' , 'attachment' , filename = filename)
                     message.attach(part)
         message.attach(MIMEText(body_text , 'plain' , 'utf-8'))
         return message
@@ -322,7 +335,7 @@ class Email(BoundLogger, metaclass=NoInstance):
     def send(cls , title : str  , 
              body : str = 'This is test! Hello, World!' ,
              recipient : str | None = None , * , 
-             attachments : strPath | list[strPath] | None = None ,
+             attachments : AttachmentSpec | list[AttachmentSpec] | None = None ,
              project_attachments : bool = False ,
              title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
              confirmation_message : str = '' ,

@@ -67,7 +67,7 @@ class DirectCallHub(DirectCall):
                 'Submenu: Streamlit, monitor, watchdog, tests, lint, preview, project auto-fix, '
                 'and kill running scripts.'
             ),
-            'Research Operations': 'Submenu: data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
+            'Research Operations': 'Submenu: model comparison, data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
 
@@ -120,8 +120,10 @@ class DirectCallHub(DirectCall):
         )
         from src.api.calls.files import ModelArchiveOperations
         from src.api.calls.research import CarryOutScheduleWorkList
+        from src.api.calls.model_compare import CompareModels
 
         return [
+            ('Compare Models', CompareModels, CompareModels.get_description()),
             (
                 'Update Project Data',
                 UpdateProjectData,

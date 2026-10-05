@@ -9,6 +9,7 @@ from typing import Any
 from collections.abc import Callable
 
 from src.proj.env import MACHINE , Proj
+from src.proj.env.variable.files import EmailAttachment
 from src.proj.core import strPath , lit
 from src.proj.cal import CALENDAR
 from src.proj.bases import BoundLogger
@@ -141,7 +142,7 @@ class AutoRunTask(BoundLogger):
 
         self.kwargs = kwargs
         
-        self.exit_files : list[strPath] = []
+        self.exit_files : list[strPath | EmailAttachment] = []
         self.error_messages : list[str] = []
         
         self.status = 'Starting'

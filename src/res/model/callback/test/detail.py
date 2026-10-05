@@ -7,7 +7,10 @@ import numpy as np
 from typing import Any , Literal , TypeAlias
 from matplotlib.figure import Figure
 
+from pathlib import Path
+
 from src.proj import Proj , Const , Save
+from src.proj.util.catcher.html import HtmlCatcher
 
 from src.proj.bases import TestType
 from src.res.factor.util import StockFactor 
@@ -158,6 +161,32 @@ class DetailedAlphaAnalysis(BaseCallBack):
                     self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                     self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
 
+    @staticmethod
+    def training_report_attachment_name(path : Path , model_name : str , html_filename : str | None) -> str:
+        """Mail name for a training report, sharing the html attachment's model suffix.
+
+        Disk files stay generic (``detailed_alpha_data.xlsx``). The suffix is the html
+        stem from ``model_name`` through ``_at_<timestamp>`` when that token is present,
+        so a recipient can match data and plot to the same html.
+        """
+        if not model_name:
+            raise ValueError('model_name is required')
+        return f'{path.stem}_{DetailedAlphaAnalysis._html_model_suffix(html_filename , model_name)}{path.suffix}'
+
+    @staticmethod
+    def _html_model_suffix(html_filename : str | None , model_name : str) -> str:
+        """Html stem from ``model_name`` to the end, or ``model_name`` when it is absent."""
+        if not html_filename:
+            return model_name
+        stem = Path(html_filename).stem
+        folded = f'_{stem.lower()}_'
+        if len(folded) != len(stem) + 2:
+            return model_name
+        pos = folded.find(f'_{model_name.lower()}_')
+        if pos < 0:
+            return model_name
+        return stem[pos:]
+
     def display_export(self):
         self.logger.note('Display Analytic Results')
         for name , vb_level in self.table_vb_levels.items():
@@ -185,7 +214,13 @@ class DetailedAlphaAnalysis(BaseCallBack):
         Save.figs(
             self.test_figures , self.path_result_plot , async_save = True ,
             prefix='Detailed Alpha Analysis Plots' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
-        Proj.exit_files.extend(self.path_result_data , self.path_result_plot)
+        primary = HtmlCatcher.PrimaryInstance
+        html_filename = primary.filename if primary is not None else None
+        for report in (self.path_result_data , self.path_result_plot):
+            Proj.exit_files.append(
+                report ,
+                filename = self.training_report_attachment_name(report , self.config.model_name , html_filename) ,
+            )
 
     def on_test_end(self):
         if not self.tasks:
