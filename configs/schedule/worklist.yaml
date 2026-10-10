@@ -4,4 +4,4 @@ fit:
 
 resume: False
 force: True
-rerun_mark: 0
+rerun_mark: 1
