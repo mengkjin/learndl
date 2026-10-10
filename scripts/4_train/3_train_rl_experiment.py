@@ -3,7 +3,7 @@
 # date: 2026-10-09
 # description: Train RL Experiment
 # content: 强化学习组合实验：准备数据、训练、分析、打包并发送邮件；默认使用 CUDA，参数在 JSON 配置文件中修改。
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   config_path:

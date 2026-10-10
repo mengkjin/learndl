@@ -1,6 +1,6 @@
 {
   "alpha": "pred@gru_day_V1",
-  "start": 20170101,
+  "start": 20170104,
   "end": 20251230,
   "alpha_sample_status": "unknown",
   "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230",

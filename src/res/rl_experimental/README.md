@@ -125,7 +125,7 @@ reward = RewardConfig(
 
 ## 服务器一键运行、邮件与本机分析
 
-项目交互 CLI 中也可选择 `4_train / 3_train_rl_experiment`（Train RL Experiment）。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`，完成整个实验并发送附件邮件。可在 CLI 中设置 `config_path`、覆盖 `recipient`，或设置 `no_email=True` 只生成结果包。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。脚本关闭普通任务邮件，由实验流程发送分卷附件；部分邮件发送失败时会明确报错，使用下文的 `resend-bundle` 重发即可，无需重新训练。
+项目交互 CLI 中也可选择 `4_train / 3_train_rl_experiment`（Train RL Experiment）。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`，完成整个实验并发送附件邮件。可在 CLI 中设置 `config_path`、覆盖实验附件邮件的 `recipient`，或设置 `no_email=True` 跳过实验附件邮件。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。脚本同时沿用项目普通任务邮件，自动附带 HtmlCatcher 日志，收件人和开关遵循项目任务邮件配置。部分实验附件邮件发送失败时会明确报错，使用下文的 `resend-bundle` 重发即可，无需重新训练。
 
 服务器配置模板是 `example_server_experiment.json`，默认 CUDA、`pred@gru_day_V1`、4,096 步和 seed 7。先检查日期、alpha 的样本外状态、收件人和输出目录，再执行：
 
