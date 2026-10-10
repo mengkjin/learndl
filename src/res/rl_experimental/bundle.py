@@ -154,6 +154,13 @@ def analyze_bundle(source: str | Path, output_dir: str | Path) -> Path:
     return extract_root
 
 
+def bundle_attachments(metadata_path: str | Path) -> list[Path]:
+    """Verified archive parts and their manifest for a host task's email."""
+    metadata = Path(metadata_path).resolve()
+    _, parts = _parts(metadata)
+    return [*parts, metadata]
+
+
 def send_bundle(
     metadata_path: str | Path,
     recipient: str | None = None,

@@ -369,7 +369,8 @@ class AutoRunTask(BoundLogger):
                 self.exit_message ,
             ]
             from src.proj.util.web.emailer import Email
-            sent = Email.send(title , '\n'.join(bodies) , confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
+            sent = Email.send(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
+                              confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
             if sent:
                 from src.api.task_monitor.scheduling.runtime import record_script_email
                 record_script_email(success=self.execution_status == 'Success')

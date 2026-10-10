@@ -13,6 +13,7 @@ from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TextIO
+from collections.abc import Callable
 
 import numpy as np
 import torch
@@ -137,7 +138,10 @@ def _experiment_config(config: dict[str, Any]) -> ExperimentConfig:
     return experiment
 
 
-def run_experiment(config_path: str | Path, *, no_email: bool = False, recipient: str | None = None) -> dict[str, Any]:
+def run_experiment(
+    config_path: str | Path, *, no_email: bool = False, recipient: str | None = None,
+    bundle_ready: Callable[[Path], None] | None = None,
+) -> dict[str, Any]:
     config = load_run_config(config_path)
     run_id = f"{config['alpha'].replace('@', '_')}_{config['start']}_{config['end']}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}"
     root = Path(config["output_root"]).resolve()
@@ -187,6 +191,8 @@ def run_experiment(config_path: str | Path, *, no_email: bool = False, recipient
     if not no_email:
         status["delivery"] = send_bundle(metadata, recipient or config.get("recipient"))
     _write_json(root / "bundles" / f"{run_id}.run_status.json", status)
+    if bundle_ready is not None:
+        bundle_ready(metadata)
     if error is not None:
         raise RuntimeError(f"experiment {run_id} failed; diagnostic bundle: {metadata}") from error
     return status

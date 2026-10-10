@@ -1,5 +1,10 @@
 # Development log
 
+## 2026-10-10 — 合并实验附件与任务邮件
+
+- RL 项目脚本停用实验内部 SMTP 发送，在打包完成后将 ZIP/分卷和 JSON 清单登记到项目任务附件列表，由 AutoRunTask 与 HtmlCatcher 日志统一发送一封邮件。
+- 失败诊断包在异常重新抛出前登记；支持统一收件人及跳过整封邮件，模块命令保持原有行为。
+
 ## 2026-10-09 — 项目 CLI 实验入口
 
 - 新增 `scripts/4_train/3_train_rl_experiment.py`，由现有脚本发现机制注册，复用 `run_experiment` 完成数据准备、训练、报告、打包和邮件发送。

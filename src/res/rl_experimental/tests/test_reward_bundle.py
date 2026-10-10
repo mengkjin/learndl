@@ -150,11 +150,13 @@ class BundleTest(unittest.TestCase):
                 "snapshot_dir": str(root / "snapshot"), "output_root": str(root / "output"),
                 "training": {"device": "cpu"},
             }), encoding="utf-8")
+            ready = []
             with patch(
                 "src.res.rl_experimental.experiment._snapshot", side_effect=FileNotFoundError("missing alpha"),
             ), self.assertRaisesRegex(RuntimeError, "diagnostic bundle"):
-                run_experiment(config, no_email=True)
+                run_experiment(config, no_email=True, bundle_ready=ready.append)
             metadata = next((root / "output/bundles").glob("*.parts.json"))
+            self.assertEqual(ready, [metadata.resolve()])
             definition = json.loads(metadata.read_text())
             part = metadata.parent / definition["parts"][0]["name"]
             with zipfile.ZipFile(part) as archive:

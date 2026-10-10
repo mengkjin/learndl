@@ -125,9 +125,13 @@ reward = RewardConfig(
 
 ## 服务器一键运行、邮件与本机分析
 
-项目交互 CLI 中也可选择 `4_train / 3_train_rl_experiment`（Train RL Experiment）。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`，完成整个实验并发送附件邮件。可在 CLI 中设置 `config_path`、覆盖实验附件邮件的 `recipient`，或设置 `no_email=True` 跳过实验附件邮件。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。脚本同时沿用项目普通任务邮件，自动附带 HtmlCatcher 日志，收件人和开关遵循项目任务邮件配置。部分实验附件邮件发送失败时会明确报错，使用下文的 `resend-bundle` 重发即可，无需重新训练。
+若准备阶段报 `trade_ts/day_limit contains duplicate date/secid rows`，在项目 CLI 的 `2_data` 中选择 `Repair Day Limit Duplicates`。先以 `dry_run=True` 检查，再以 `dry_run=False` 修复；`end` 需包含最后决策日的下一交易日。脚本只合并整行完全相同的记录，冲突文件保留原样并报错。逐日审计报告和被修改文件的原始备份位于 `results/data_repairs/day_limit/<运行时间>/`，可按报告中的原路径恢复备份。修复时不要同时运行该表的数据更新任务。此脚本只检查已存在的日文件，不补全缺失日期或重新下载冲突数据。
 
-服务器配置模板是 `example_server_experiment.json`，默认 CUDA、`pred@gru_day_V1`、4,096 步和 seed 7。先检查日期、alpha 的样本外状态、收件人和输出目录，再执行：
+项目脚本只发送一封任务邮件，统一附带 HtmlCatcher 日志、实验 ZIP（或全部分卷）和 JSON 清单；失败运行同样附带已生成的诊断包。邮件遵循项目的 `MACHINE.emailable` 设置及标准发送失败队列。分卷不会降低这封邮件的总附件大小。
+
+项目交互 CLI 中可选择 `4_train / 3_train_rl_experiment`（Train RL Experiment）。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`。可设置 `config_path`、覆盖任务邮件的 `recipient`，或设置 `no_email=True` 跳过整封邮件。收件人依次取脚本参数、实验配置、项目默认邮箱。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。
+
+服务器配置模板是 `example_server_experiment.json`，默认 CUDA、`pred@gru_day_V1`、100,000 步和 seed 7。以下模块命令不经过项目任务邮件，保留独立分卷发送方式；需要 HTML 日志与结果包合并发送时，使用上述项目脚本：
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental run-experiment \
