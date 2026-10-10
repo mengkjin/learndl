@@ -1,0 +1,27 @@
+{
+  "alpha": "pred@gru_day_V1",
+  "start": 20170101,
+  "end": 20251230,
+  "alpha_sample_status": "unknown",
+  "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230",
+  "output_root": "results/rl_experimental/server_runs",
+  "rebuild_snapshot": false,
+  "bundle_max_mb": 10,
+  "recipient": null,
+  "training": {
+    "train_end_date": 20230101,
+    "valid_end_date": 20250101,
+    "total_timesteps": 100000,
+    "seed": 7,
+    "device": "cuda",
+    "eval_freq": 0,
+    "selection_metric": "nav",
+    "reward": {
+      "turnover_penalty": 0.0,
+      "downside_penalty": 0.1,
+      "concentration_penalty": 0.0,
+      "custom_function": null,
+      "custom_params": {}
+    }
+  }
+}
