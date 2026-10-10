@@ -13,6 +13,8 @@ from src.data import DATAVENDOR
 from src.proj import CALENDAR, DB
 
 from .data import PANEL_SCHEMA_VERSION, PanelData, date_split
+from .data_quality import deduplicate_table
+from .progress import progress
 
 
 STYLE_FEATURES = ("size", "beta", "momentum", "residual_volatility", "liquidity")
@@ -87,20 +89,34 @@ def _alpha_date_map(config: RealDataConfig, decision_dates: np.ndarray) -> tuple
     return mapping, missing
 
 
-def _load_alpha(config: RealDataConfig, decision_dates: np.ndarray) -> tuple[pd.DataFrame, dict[int, int]]:
+def _load_table(source: str, key: str, dates: np.ndarray, date_key: str,
+                audit: list[dict]) -> pd.DataFrame:
+    frames = []
+    for start in range(0, len(dates), 128):
+        batch = dates[start:start + 128]
+        progress('data', f'Reading {source}/{key}: dates {start + 1}-{start + len(batch)}/{len(dates)}')
+        frames.append(DB.loads(source, key, batch, key_column=date_key,
+                               override_existing_key=True, vb_level="never"))
+    frame = pd.concat(frames, ignore_index=True)
+    if not frame.empty:
+        frame = deduplicate_table(frame, [date_key, 'secid'], f'{source}/{key}', audit)
+    progress('data', f'Loaded {source}/{key}: {len(frame):,} rows')
+    return frame
+
+
+def _load_alpha(config: RealDataConfig, decision_dates: np.ndarray,
+                duplicate_audit: list[dict] | None = None) -> tuple[pd.DataFrame, dict[int, int]]:
     source, key, column = _alpha_source(config.alpha)
     mapping, missing = _alpha_date_map(config, decision_dates)
     if missing:
         preview = ", ".join(map(str, missing[:10]))
         raise ValueError(f"alpha is unavailable under the configured lag/staleness for {len(missing)} dates: {preview}")
     source_dates = np.unique(list(mapping.values()))
-    raw = DB.loads(source, key, source_dates, key_column="source_date", override_existing_key=True, vb_level="never")
+    raw = _load_table(source, key, source_dates, "source_date", duplicate_audit if duplicate_audit is not None else [])
     required = {"source_date", "secid", column}
     if not required.issubset(raw.columns):
         raise ValueError(f"alpha {source}/{key} must contain {sorted(required)}; got {raw.columns.tolist()}")
     raw = raw.loc[:, ["source_date", "secid", column]].rename(columns={column: "raw_alpha"})
-    if raw.duplicated(["source_date", "secid"]).any():
-        raise ValueError("alpha contains duplicate source_date/secid rows")
     reverse: dict[int, list[int]] = {}
     for decision, source_date in mapping.items():
         reverse.setdefault(source_date, []).append(decision)
@@ -159,10 +175,14 @@ def _file_sha256(path: Path) -> str:
 def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[str, Any]:
     """Audit project data and optionally export a versioned real-data panel."""
     config.validate()
+    progress('data', f'Preparing {config.alpha}, {config.start}-{config.end}, dry_run={dry_run}')
+    duplicate_audit: list[dict] = []
     decision_dates = _calendar_dates(config.start, config.end)
     execution_dates = np.asarray(CALENDAR.offset(decision_dates, 1, "td"), dtype=np.int64)
-    alpha_long, alpha_mapping = _load_alpha(config, decision_dates)
+    alpha_long, alpha_mapping = _load_alpha(config, decision_dates, duplicate_audit)
     description = DATAVENDOR.INFO.get_desc(set_index=False, listed=True, exchange=["SZSE", "SSE"])
+    description = deduplicate_table(description, ['secid', 'list_dt', 'delist_dt'],
+                                    'information_ts/description', duplicate_audit)
     relevant_description = description[(description.list_dt <= config.end) & (description.delist_dt > config.start)]
     allowed_ids = set(relevant_description.secid.astype(int))
     alpha_long = alpha_long[alpha_long.secid.isin(allowed_ids)]
@@ -177,6 +197,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         "decision_count": int(len(decision_dates)),
         "stock_count": int(len(stock_ids)),
         "estimated_bytes": _estimate_bytes(len(decision_dates), len(stock_ids)),
+        "duplicate_cleanup": duplicate_audit,
         "alpha": {
             "expression": config.alpha,
             "database_source": source,
@@ -194,10 +215,11 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
 
     history_start = int(CALENDAR.td(int(decision_dates[0]), -25).as_int())
     history_dates = _calendar_dates(history_start, int(execution_dates[-1]))
-    day = DB.loads("trade_ts", "day", history_dates, key_column="date", override_existing_key=True, vb_level="never")
-    adjusted = DB.loads("trade_ts", "adjprice", history_dates, key_column="date", override_existing_key=True, vb_level="never")
-    limits = DB.loads("trade_ts", "day_limit", execution_dates, key_column="date", override_existing_key=True, vb_level="never")
-    exposure = DB.loads("models", "tushare_cne5_exp", decision_dates, key_column="date", override_existing_key=True, vb_level="never")
+    day = _load_table("trade_ts", "day", history_dates, "date", duplicate_audit)
+    adjusted = _load_table("trade_ts", "adjprice", history_dates, "date", duplicate_audit)
+    limits = _load_table("trade_ts", "day_limit", execution_dates, "date", duplicate_audit)
+    exposure = _load_table("models", "tushare_cne5_exp", decision_dates, "date", duplicate_audit)
+    progress('data', 'Checking daily coverage and prices')
     _assert_daily_table(day, history_dates, "trade_ts/day")
     _assert_daily_table(adjusted, history_dates, "trade_ts/adjprice")
     _assert_daily_table(limits, execution_dates, "trade_ts/day_limit")
@@ -208,6 +230,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     _assert_positive_prices(adjusted[adjusted.secid.isin(stock_ids)], ("open", "close"), "trade_ts/adjprice")
     _assert_positive_prices(limits[limits.secid.isin(stock_ids)], ("up_limit", "down_limit"), "trade_ts/day_limit")
 
+    progress('data', f'Building features: {len(decision_dates)} decision dates, {len(stock_ids)} stocks')
     close = _pivot(adjusted, "close", history_dates, stock_ids)
     daily_return = close.pct_change(fill_method=None)
     day_indexed = day.set_index(["date", "secid"]).sort_index()
@@ -233,6 +256,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     missing = np.empty_like(continuous)
     missing_counts: dict[str, int] = {}
     for feature_index, name in enumerate(CONTINUOUS_FEATURES):
+        progress('data', f'Feature {feature_index + 1}/{len(CONTINUOUS_FEATURES)}: {name}')
         values = feature_frames[name].reindex(index=decision_dates, columns=stock_ids).to_numpy(dtype=np.float64)
         missing_mask = ~np.isfinite(values)
         missing_counts[name] = int(missing_mask.sum())
@@ -263,6 +287,8 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         listed[:, position] |= (decision_dates >= mature_date) & (decision_dates < int(delist_dt))
     st_mask = np.zeros_like(listed)
     for row, date in enumerate(decision_dates):
+        if row % 128 == 0:
+            progress('data', f'Listing/ST eligibility: {row + 1}/{len(decision_dates)} dates')
         st_ids = DATAVENDOR.INFO.get_st(int(date)).secid.to_numpy(dtype=np.int64)
         st_mask[row] = np.isin(stock_ids, st_ids)
     day_close = _pivot(day, "close", history_dates, stock_ids).reindex(index=decision_dates)
@@ -279,14 +305,20 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     industry_codes = np.full((len(decision_dates), len(stock_ids)), -1, dtype=np.int16)
     raw_industries: list[np.ndarray] = []
     all_industry_values: set[Any] = set()
-    for date in decision_dates:
-        values = DATAVENDOR.INFO.get_indus(int(date)).reindex(stock_ids).indus.to_numpy()
+    for row, date in enumerate(decision_dates):
+        if row % 128 == 0:
+            progress('data', f'Industry classifications: {row + 1}/{len(decision_dates)} dates')
+        industry = DATAVENDOR.INFO.get_indus(int(date))
+        industry = deduplicate_table(industry.reset_index(), ['secid'],
+                                      f'information_ts/industry/{date}', duplicate_audit).set_index('secid')
+        values = industry.reindex(stock_ids).indus.to_numpy()
         raw_industries.append(values)
         all_industry_values.update(value for value in values if pd.notna(value))
     industry_map = {value: index for index, value in enumerate(sorted(all_industry_values, key=str))}
     for row, values in enumerate(raw_industries):
         industry_codes[row] = np.asarray([industry_map.get(value, -1) if pd.notna(value) else -1 for value in values], dtype=np.int16)
 
+    progress('data', 'Building next-open execution masks and overnight/intraday returns')
     close_t = close.reindex(index=decision_dates).to_numpy(dtype=np.float64)
     close_next = close.reindex(index=execution_dates).to_numpy(dtype=np.float64)
     execution_day = day[day.date.isin(execution_dates)].copy()
@@ -333,8 +365,10 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     output = Path(config.output)
     output.mkdir(parents=True, exist_ok=True)
     panel_path = output / "panel.npz"
+    progress('data', f'Writing snapshot: {panel_path}')
     panel.save_npz(panel_path)
     quality = {
+        "duplicate_cleanup": duplicate_audit,
         "investable_per_day": {
             "min": int(investable.sum(axis=1).min()),
             "median": float(np.median(investable.sum(axis=1))),
@@ -375,4 +409,6 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     }
     (output / "quality_report.json").write_text(json.dumps(quality, indent=2, ensure_ascii=False), encoding="utf-8")
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+    progress('data', f'Snapshot complete: {panel_path}; duplicate rows removed='
+             f'{sum(event["removed_rows"] for event in duplicate_audit)}')
     return {"dry_run": False, "panel": str(panel_path), "manifest": manifest, "quality": quality}

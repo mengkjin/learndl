@@ -22,6 +22,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv
 
 from .baselines import replay_baseline
 from .data import PanelData, Standardizer, date_split
+from .progress import progress
 from .diagnostics import compare_metrics, comparison_figure
 from .env import EpisodeRange, PortfolioEnv
 from .policy import MaskedStockActorCriticPolicy
@@ -174,6 +175,7 @@ class ValidationCallback(BaseCallback):
         self._counts: dict[str, int] = {}
 
     def _validate(self, *, eligible_for_selection: bool) -> dict[str, float]:
+        progress('validation', f'Evaluating update {self.update_index}, steps={self.num_timesteps}')
         started = time.perf_counter()
         metrics, history = evaluate_model(self.model, self.eval_env)
         metrics["discounted_reward"] = history_metrics(history, self.gamma)["discounted_reward"]
@@ -199,6 +201,8 @@ class ValidationCallback(BaseCallback):
             "update": self.update_index, "environment_steps": self.num_timesteps, **values,
         })
         write_history(self.output_dir / "validation_updates.csv", self.validations)
+        progress('validation', f'Update {self.update_index}: NAV={metrics["final_nav"]:.6f}, '
+                 f'score={score:.6f}, best_update={self.best_update}, elapsed={seconds:.1f}s')
         return values
 
     def _on_training_start(self) -> None:
@@ -246,9 +250,13 @@ class ValidationCallback(BaseCallback):
         })
         write_history(self.output_dir / "update_history.csv", self.updates)
         self.logger.dump(step=self.num_timesteps)
+        progress('train', f'Update {self.update_index} complete; steps={self.num_timesteps}/{self.model._total_timesteps}; '
+                 f'reward={values.get("rollout/reward_mean", float("nan")):.6f}; '
+                 f'rollout={self._last_rollout_seconds:.1f}s, optimization={seconds:.1f}s')
 
     def _on_rollout_start(self) -> None:
         self._finish_update()
+        progress('train', f'Collecting rollout {self.update_index + 1}, steps={self.num_timesteps}')
         self._sums, self._counts = {}, {}
         self._rollout_started = time.perf_counter()
 
@@ -292,6 +300,10 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     splits = date_split(panel, config.train_end_date, config.valid_end_date)
+    for name, (start, end) in splits.items():
+        progress('split', f'{name}: {int(panel.decision_dates[start])}-{int(panel.return_end_dates[end - 1])}, '
+                 f'{end - start} transitions')
+    progress('train', 'Fitting normalization on training data and initializing PPO')
     standardizer = Standardizer.fit(panel, *splits["train"])
     normalized = standardizer.transform(panel)
     standardizer.save_npz(output / "normalizer.npz")
@@ -324,6 +336,7 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
         seed=config.seed,
         verbose=0,
     )
+    progress('baseline', 'Evaluating validation equal-weight benchmark')
     valid_equal_history = replay_baseline(panel, splits["valid"], config.constraints(), "alpha_equal_weight")
     valid_equal_metrics = history_metrics(valid_equal_history)
     write_history(output / "validation_equal_weight_history.csv", valid_equal_history)
@@ -333,6 +346,8 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     initial_parameters = [parameter.detach().cpu().clone() for parameter in model.policy.parameters()]
     started = time.perf_counter()
     # None turns off SB3's dump; the stub still annotates log_interval as int.
+    progress('train', f'Start PPO: device={model.device}, seed={config.seed}, budget={config.total_timesteps}, '
+             f'{config.n_envs} environments × {config.rollout_steps} steps per rollout')
     model.learn(
         total_timesteps=config.total_timesteps,
         callback=callback,
@@ -348,13 +363,16 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
             )
         )
     )
+    progress('checkpoint', f'Training complete; saving final model; best update={callback.best_update}')
     model.save(output / "final_model")
     write_history(output / "validation_history.csv", callback.best_history)
 
     test_env = _env(normalized, splits["test"], config, random_start=False)
     best = PPO.load(output / "best_model", env=test_env, device=config.device)
+    progress('test', 'Evaluating best checkpoint on test interval')
     test_metrics, test_history = evaluate_model(best, test_env)
     test_metrics["discounted_reward"] = history_metrics(test_history, config.gamma)["discounted_reward"]
+    progress('test', 'Evaluating equal-weight benchmark')
     baseline_history = replay_baseline(panel, splits["test"], config.constraints(), "alpha_equal_weight")
     baseline_metrics = history_metrics(baseline_history)
     write_history(output / "test_history.csv", test_history)
@@ -362,6 +380,7 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     robust_metrics = None
     test_histories = {"ppo": test_history, "equal_weight": baseline_history}
     if panel.is_execution_panel:
+        progress('test', 'Evaluating robust top50 benchmark')
         robust_history = replay_baseline(panel, splits["test"], config.constraints(), "robust_top50")
         robust_metrics = history_metrics(robust_history)
         test_histories["robust_top50"] = robust_history
@@ -412,6 +431,8 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
         "stock_ids": panel.stock_ids,
     }
     (output / "metrics.json").write_text(json.dumps(metadata, indent=2, default=_json_default), encoding="utf-8")
+    progress('test', f'Finished: PPO NAV={test_metrics["final_nav"]:.6f}, '
+             f'equal-weight NAV={baseline_metrics["final_nav"]:.6f}; metrics={output / "metrics.json"}')
     train_env.close()
     valid_env.close()
     test_env.close()

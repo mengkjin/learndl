@@ -24,6 +24,7 @@ from .real_data import RealDataConfig, prepare_real_data
 from .report import generate_report
 from .reward import RewardConfig
 from .training import ExperimentConfig, train_experiment
+from .progress import progress
 
 
 DEFAULT_RUN_CONFIG: dict[str, Any] = {
@@ -113,9 +114,11 @@ def _snapshot(config: dict[str, Any]) -> tuple[PanelData, Path]:
     )
     required = [directory / name for name in ("panel.npz", "manifest.json", "quality_report.json")]
     if config.get("rebuild_snapshot") or not any(path.exists() for path in required):
+        progress('snapshot', f'Creating snapshot: {directory}')
         prepare_real_data(data)
     elif not all(path.is_file() for path in required):
         raise ValueError("snapshot is incomplete; enable rebuild_snapshot after checking the directory")
+    progress('snapshot', f'Checking snapshot manifest and loading panel: {directory}')
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
     actual = manifest["config"]
     expected = asdict(data)
@@ -157,20 +160,24 @@ def run_experiment(
     with (run / "stdout.log").open("w", encoding="utf-8") as stdout_file, (run / "stderr.log").open("w", encoding="utf-8") as stderr_file:
         with redirect_stdout(_Tee(sys.stdout, stdout_file)), redirect_stderr(_Tee(sys.stderr, stderr_file)):
             try:
+                progress('run', f'Start {run_id}; output={run}')
                 current_phase = "snapshot"
                 panel, snapshot = _snapshot(config)
                 phases.append({"phase": "snapshot", "status": "success", "path": str(snapshot)})
                 shutil.copy2(snapshot / "manifest.json", run / "data_manifest.json")
                 shutil.copy2(snapshot / "quality_report.json", run / "data_quality_report.json")
                 current_phase = "training"
+                progress('run', 'Snapshot ready; configuring training device and reward')
                 experiment = _experiment_config(config)
                 metrics = train_experiment(panel, run, experiment)
                 phases.append({"phase": "training", "status": "success", "updates": metrics["completed_updates"]})
                 current_phase = "report"
+                progress('report', 'Generating offline analysis report')
                 report = generate_report(run)
                 phases.append({"phase": "report", "status": "success", "path": report.name})
                 status.update({"status": "success", "completed_at": datetime.now(timezone.utc).isoformat()})
             except Exception as exc:
+                progress(current_phase, f'Failed: {type(exc).__name__}: {exc}', warning=True)
                 error = exc
                 trace = traceback.format_exc()
                 stderr_file.write(trace)
@@ -186,13 +193,17 @@ def run_experiment(
                 )
             finally:
                 _write_json(run / "status.json", status)
+    progress('bundle', f'Packaging {status["status"]} run: {run}')
     metadata = create_bundle(run, root / "bundles", int(float(config["bundle_max_mb"]) * 1024 * 1024))
     status["bundle_metadata"] = str(metadata)
     if not no_email:
+        progress('email', 'Sending experiment bundle')
         status["delivery"] = send_bundle(metadata, recipient or config.get("recipient"))
     _write_json(root / "bundles" / f"{run_id}.run_status.json", status)
     if bundle_ready is not None:
         bundle_ready(metadata)
+        progress('email', f'Bundle registered with task email: {metadata}')
     if error is not None:
         raise RuntimeError(f"experiment {run_id} failed; diagnostic bundle: {metadata}") from error
+    progress('run', f'Complete: {run_id}; bundle={metadata}')
     return status

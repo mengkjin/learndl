@@ -125,7 +125,11 @@ reward = RewardConfig(
 
 ## 服务器一键运行、邮件与本机分析
 
-若准备阶段报 `trade_ts/day_limit contains duplicate date/secid rows`，在项目 CLI 的 `2_data` 中选择 `Repair Day Limit Duplicates`。先以 `dry_run=True` 检查，再以 `dry_run=False` 修复；`end` 需包含最后决策日的下一交易日。脚本只合并整行完全相同的记录，冲突文件保留原样并报错。逐日审计报告和被修改文件的原始备份位于 `results/data_repairs/day_limit/<运行时间>/`，可按报告中的原路径恢复备份。修复时不要同时运行该表的数据更新任务。此脚本只检查已存在的日文件，不补全缺失日期或重新下载冲突数据。
+RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风格暴露和 alpha 的日期/证券重复键，以及上市记录与行业资料的对应键。发现重复时输出 `WARNING`，按源读取顺序保留最后一行；内容冲突时额外报告冲突键数量，这不代表识别出了最新修订值。处理仅发生在内存，不改写数据库；清理记录写入 manifest 的 `audit.duplicate_cleanup` 和 `quality_report.json`。缺失整日数据和非法价格仍按原规则报错。复用已有快照时不会重读源表，如需重新检查源数据请重建快照。
+
+终端、notebook 和 HtmlCatcher 会实时显示带时间戳的 `[RL/阶段]` 输出，包括每批 128 个日期的数据读取、特征和资格构建、快照保存、实际时间切分、每轮 PPO 采样/更新、验证净值与最佳轮次、测试基线、报告及打包。数据和训练期间的输出同时进入运行目录的 stdout/stderr 日志。
+
+如需修复数据库本身，可在项目 CLI 的 `2_data` 中选择 `Repair Day Limit Duplicates`。先以 `dry_run=True` 检查，再以 `dry_run=False` 修复；`end` 需包含最后决策日的下一交易日。该独立脚本只合并整行完全相同的记录，冲突文件保留原样并报错。逐日审计报告和原始备份位于 `results/data_repairs/day_limit/<运行时间>/`。修复时不要同时运行该表的数据更新任务。
 
 项目脚本只发送一封任务邮件，统一附带 HtmlCatcher 日志、实验 ZIP（或全部分卷）和 JSON 清单；失败运行同样附带已生成的诊断包。邮件遵循项目的 `MACHINE.emailable` 设置及标准发送失败队列。分卷不会降低这封邮件的总附件大小。
 
