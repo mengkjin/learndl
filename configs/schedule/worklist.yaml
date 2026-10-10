@@ -1,6 +1,5 @@
 fit:
-  - gru_30mcont
-  - gru_day_lgbm
+  - lgbm_of_hidden
 
 
 resume: False
