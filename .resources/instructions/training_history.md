@@ -40,6 +40,42 @@ Watchdog 每次闲时 worklist 检查都会先核对所有 schedule 名称，即
 watchdog 轮询重试，重启不会丢失。其他有效 schedule 仍可按闲时条件执行；修正名称或补上配置后
 自动重新检查。此错误不创建训练记录，也不计作训练失败，不会阻止修复后的首次训练。
 
+## Watchdog 异常退出恢复
+
+自动 worklist 的同版本成功任务、脚本错误、watchdog 超时仍不重试。
+没有正常结束记录的进程丢失、SIGKILL、服务器重启和原生库崩溃可以自动恢复，不要求证明 OOM。
+主动 Ctrl+C / SIGINT、SIGTERM 保持停止；负信号退出码、130/143 包装退出码及同次服务的
+退出记录均用于识别中止。明确中止优先于旧 OOM 证据和后续重启；手工 kill -9 无法可靠区分，可能触发恢复。
+本次服务 invocation 的 `SERVICE_RESULT=oom-kill` 仍用于诊断 OOM，但不是重试资格的前提。
+脚本执行结果在 SMTP 调用前独立记录，邮件发送失败不改变恢复资格。
+
+`runs/scheduling/maintenance.yaml` 的 `idle_worklist` 支持：
+
+- `recovery_enabled: true`：开启异常退出恢复。
+- `recovery_max_retries: 3`：每个 schedule、同一配置版本最多额外恢复三次，0 表示不恢复。
+- `recovery_delay_seconds: 900`：每次异常退出后至少等 15 分钟，再等下一次闲时检查。
+- `recovery_min_available_memory_percent: 20`：恢复前系统可用内存至少为总内存的 20%。
+
+恢复还必须满足原有 FitLock 和显存闲时条件；等待中的任务不阻塞其他 schedule。
+每次恢复都是新进程，记录父 run ID 和恢复序号，强制 `resume=true` 并使用父运行记录的
+准确训练目录，不修改 worklist 的 resume/force，也不选择最新目录。
+目录、checkpoint 或保存配置缺失/损坏时停止并报错，不自动新建目录重训。
+新的 worklist/schedule 版本取消旧恢复请求，按普通新版本规则运行。
+人工 `idle_worklist reset` 仍是显式解除阻止操作，不属于自动恢复额度。
+
+取证和恢复状态持久化在 scheduling 的 `runs.sqlite`（`run_evidence` 表），与邮件回执分开。
+异常及恢复启动邮件包含原因、证据、序号、冷却或内存等待状态。
+使用 `python -m src.api.task_monitor.scheduling.idle_worklist status` 查看运行与证据。
+旧运行可以在满足异常退出分类、原目录记录和恢复校验时恢复；没有准确目录记录时不猜测目录。
+cron 后端也可按退出结果恢复；systemd 额外提供启动器一起丢失时的退出信号和 OOM 诊断。
+
+服务器 CLI 的 `Non-Research Operations` → `Watchdog / Schedule Management` →
+`Install / Update Schedules` 会调用同一安装器，同时更新配置快照、训练服务退出取证入口和计时器。
+默认的 `Preview Changes` 只预览，不安装。也可在服务器项目目录执行
+`.venv/bin/python -m src.api.task_monitor.scheduling.installer apply --host mengkjin-server`，
+更新配置快照及 `learndl-idle-worklist.service` 的固定 `ExecStopPost` 取证入口。
+仅 Git Pull 不能安装该入口。此机制用于有限恢复，不保证修复导致 OOM 的内存峰值或泄漏。
+
 ## 两套独立的本机记录
 
 均使用 `PATH.lc_machine`，即 `.local_resources/<机器名>/`，不会进入 Git。

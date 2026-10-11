@@ -352,6 +352,8 @@ class AutoRunTask(BoundLogger):
         from src.api.task_monitor.scheduling.runtime import termination_requested
         if termination_requested():
             return
+        from src.api.task_monitor.scheduling.recovery import script_result
+        script_result(self.execution_status)
         if self.email: 
             title = f'{self.execution_status} - {self.task_name.replace("_", " ").title()} - {self.time_str}'
             bodies = [

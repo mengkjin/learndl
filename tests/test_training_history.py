@@ -175,6 +175,31 @@ class WorklistTest(unittest.TestCase):
         self.assertFalse(self.main.call_args.kwargs['resume'])
         self.assertNotIn('base_path', self.main.call_args.kwargs)
 
+    def test_recovery_overrides_resume_false_with_exact_parent_directory(self):
+        import os
+        from src.api.task_monitor.scheduling import runtime, recovery
+        from src.api.task_monitor.scheduling.idle_worklist import version
+        self.worklist.write_text('fit: [example]\nresume: false\nforce: true\n')
+        expected = version(self.state.revisions('example'))
+        with patch.object(runtime, 'runtime_dir', return_value=self.root / 'runtime'):
+            store = runtime.RunStore()
+            parent = dict(id='oom-parent', owner='idle_worklist', task='example', version=expected,
+                          phase='error', returncode=-9)
+            store.put(parent)
+            recovery.record(store, parent['id'], service_result='oom-kill', model_path=str(self.folder))
+            request = dict(id='oom-retry', owner='idle_worklist', task='example', version=expected,
+                           phase='running', pid=os.getpid(), parent_run_id=parent['id'],
+                           retry_index=1, resume_model_path=str(self.folder))
+            store.put(request)
+            with patch.dict(os.environ, LEARNDL_MANAGED_RUN=request['id']):
+                CarryOutScheduleWorkList(automatic=True, only_schedule='example', expected_version=expected,
+                                        recovery_run_id=request['id']).run()
+            self.assertTrue(self.main.call_args.kwargs['resume'])
+            self.assertEqual(self.main.call_args.kwargs['base_path'], str(self.folder))
+            self.assertEqual(self.state.read()['reason'], 'abnormal exit recovery')
+            self.assertEqual(recovery.evidence(store, request['id'])['training_status'], 'success')
+            self.assertIn('resume: false', self.worklist.read_text())
+
     def test_failed_or_swallowed_failure_is_retried(self):
         self.main.side_effect = lambda **kw: SimpleNamespace(success=False, execution_success=False)
         with self.assertRaises(RuntimeError):

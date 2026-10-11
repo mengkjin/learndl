@@ -229,7 +229,7 @@ class IdleTest(unittest.TestCase):
                            phase='complete' if code == 0 else 'error', pid=os.getpid(), script_email_enabled=True,
                            returncode=code, started_at=10, timeout_seconds=None)
                 self.store.put(run)
-                task = SimpleNamespace(email=True, execution_status=status, task_name='schedule',
+                task = SimpleNamespace(email=True, kwargs={}, execution_status=status, task_name='schedule',
                                        time_str='now', source='py', task_full_name='schedule',
                                        init_time=datetime.now(), end_time=datetime.now(), status=status,
                                        error_message='', exit_message='', exit_files=[])
@@ -252,7 +252,7 @@ class IdleTest(unittest.TestCase):
         run = dict(id='mail-failed', owner=idle.OWNER, task='first', phase='error', pid=os.getpid(),
                    returncode=1, started_at=10, timeout_seconds=None)
         self.store.put(run)
-        task = SimpleNamespace(email=True, execution_status='Error', task_name='schedule',
+        task = SimpleNamespace(email=True, kwargs={}, execution_status='Error', task_name='schedule',
                                time_str='now', source='py', task_full_name='schedule',
                                init_time=datetime.now(), end_time=datetime.now(), status='Error',
                                error_message='', exit_message='', exit_files=[])

@@ -105,23 +105,36 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
     return worklist, schedules, missing
 
 
-def candidate(store: RunStore, *, only: str | None = None) -> dict | None:
+def candidate(store: RunStore, *, only: str | None = None, options: dict | None = None) -> dict | None:
     worklist, schedules, _ = worklist_schedules(store)
-    return _candidate(store, worklist, schedules, only=only)
+    return _candidate(store, worklist, schedules, only=only, options=options)
 
 
-def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None) -> dict | None:
+def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None,
+               options: dict | None = None) -> dict | None:
     from src.api.calls.worklist_state import WorklistState
+    from .recovery import recovery_plan, record, evidence
+    options = settings() if options is None else options
     resume, force = worklist.get('resume', False), worklist.get('force', False)
     attempts = store.owned(OWNER)
     for name, revisions in schedules.items():
         if only is not None and name != only:
             continue
         key = version(revisions)
-        if any(run['task'] == name and run['version'] == key and
-               run['phase'] not in {'deferred', 'complete'} and not run.get('retry_allowed')
-               for run in attempts):
-            continue
+        latest = next((run for run in reversed(attempts) if run['task'] == name and run['version'] == key
+                       and run['phase'] != 'deferred'), None)
+        recovery = {}
+        if latest and latest['phase'] != 'complete' and not latest.get('retry_allowed'):
+            if latest['phase'] in ACTIVE:
+                continue
+            recovery = recovery_plan(store, latest, options)
+            previous_plan = evidence(store, latest['id']).get('recovery', {})
+            if (previous_plan.get('recovery_status') in {'ready', 'cooldown', 'system memory busy', 'system memory unavailable'}
+                    and recovery['recovery_status'] == 'cannot resume: recorded training directory missing'):
+                store.event(latest, 'recovery_blocked', recovery['recovery_status'])
+            record(store, latest['id'], recovery=recovery)
+            if not recovery['retry']:
+                continue
         state = WorklistState(name)
         try:
             with state.lock():
@@ -131,7 +144,9 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
         except portalocker.LockException:
             continue
         if reason != 'completed':
-            return {'task': name, 'version': key, 'revisions': revisions,
+            resume_request = {field: recovery[field] for field in
+                              ('parent_run_id', 'retry_index', 'resume_model_path', 'retry_not_before') if field in recovery}
+            return {'task': name, 'version': key, 'revisions': revisions, **resume_request,
                     'rerun_mark': WorklistState.rerun_mark(worklist)}
     return None
 
@@ -145,7 +160,7 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
             return {'idle_worklist': 'queued or active', **diagnostics}
         if reason := idle_reason(options):
             return {'idle_worklist': reason, **diagnostics}
-        request = _candidate(store, worklist, schedules)
+        request = _candidate(store, worklist, schedules, options=options)
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -160,6 +175,7 @@ def _launch(request: dict, store: RunStore) -> int:
     log.parent.mkdir(parents=True, exist_ok=True)
     request.update(phase='starting', started_at=time.time(), uid=os.getuid(), log_path=str(log),
                    script_email_enabled=True,
+                   invocation_id=os.environ.get('INVOCATION_ID'),
                    runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), boot_id=boot_id())
     store.put(request)
     read_fd, write_fd = os.pipe()
@@ -216,8 +232,10 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                next_candidate = candidate(store, only=request['task']) if options.get('enabled') else None
-                if others or idle_reason(options) or not next_candidate or next_candidate['version'] != request['version']:
+                next_candidate = candidate(store, only=request['task'], options=options) if options.get('enabled') else None
+                if (others or idle_reason(options) or not next_candidate or next_candidate['version'] != request['version']
+                        or next_candidate.get('parent_run_id') != request.get('parent_run_id')
+                        or next_candidate.get('retry_index') != request.get('retry_index')):
                     return 0
                 # Claim durably before releasing the short queue lock.
                 request.update(phase='starting', started_at=time.time())
@@ -233,15 +251,22 @@ def child(run_id: str) -> int:
     os.close(gate)
     if ready != b'1':
         return 1
-    request = RunStore().get(run_id)
+    store = RunStore()
+    request = store.get(run_id)
     from src.api.calls.research import CarryOutScheduleWorkList
     from src.api.calls.worklist_state import AutomaticDeferred
+    from .recovery import record
     sys.argv = [str(CarryOutScheduleWorkList.SCHEDULE_SCRIPT)]
     try:
         CarryOutScheduleWorkList(only_schedule=request['task'], automatic=True,
-                                 expected_version=request['version']).run()
+                                 expected_version=request['version'],
+                                 recovery_run_id=run_id if request.get('parent_run_id') else None).run()
     except AutomaticDeferred:
         return DEFERRED
+    except BaseException as exc:
+        record(store, run_id, script_outcome='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'error')
+        raise
+    record(store, run_id, script_outcome='success')
     return 0
 
 
@@ -264,7 +289,10 @@ def main() -> int:
     if args.command == 'worker':
         return worker()
     if args.command == 'status':
-        print(json.dumps(RunStore().owned(OWNER), indent=2, ensure_ascii=False))
+        from .recovery import evidence
+        store = RunStore()
+        print(json.dumps([dict(run, evidence=evidence(store, run['id'])) for run in store.owned(OWNER)],
+                         indent=2, ensure_ascii=False))
         return 0
     if not args.schedule_or_run:
         parser.error('schedule/run ID required')

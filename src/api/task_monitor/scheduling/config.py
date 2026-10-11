@@ -168,10 +168,21 @@ def load_config(directory: Path, host: str) -> dict:
         if key not in JOB_NAMES:
             raise ValueError(f'Unknown maintenance job: {key}')
         _keys(job, {'enabled', 'interval_seconds', 'max_sources', 'max_seconds'} |
-              ({'max_gpu_memory_percent', 'progress_timeout_seconds'} if key == 'idle_worklist' else set()))
+              ({'max_gpu_memory_percent', 'progress_timeout_seconds', 'recovery_enabled',
+                'recovery_max_retries', 'recovery_delay_seconds', 'recovery_min_available_memory_percent'}
+               if key == 'idle_worklist' else set()))
         if key == 'git_auto_update' and (type(job.get('max_seconds', 45)) is not int or not 10 <= job.get('max_seconds', 45) <= 60):
             raise ValueError('git_auto_update max_seconds must be between 10 and 60')
         if key == 'idle_worklist':
+            if type(job.get('recovery_enabled', True)) is not bool:
+                raise ValueError('recovery_enabled must be a boolean')
+            for option, default, minimum in [('recovery_max_retries', 3, 0), ('recovery_delay_seconds', 900, 60)]:
+                value = job.get(option, default)
+                if type(value) is not int or value < minimum:
+                    raise ValueError(f'{option} must be an integer >= {minimum}')
+            available = job.get('recovery_min_available_memory_percent', 20)
+            if type(available) not in (int, float) or not 0 < available <= 100:
+                raise ValueError('recovery_min_available_memory_percent must be in (0,100]')
             percent = job.get('max_gpu_memory_percent', 20)
             limit = job.get('progress_timeout_seconds', 43200)
             if type(percent) not in (int, float) or not 0 < percent <= 100:

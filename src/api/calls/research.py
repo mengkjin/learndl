@@ -130,12 +130,23 @@ class CarryOutScheduleWorkList(DirectCall):
                             raise AutomaticDeferred('Already completed')
                         Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
                         continue
-                    Logger.note(f'Run [{schedule_name}]: {reason}; resume={effective_resume}')
                     model_path = previous.get('model_path') if previous else None
+                    if automatic and (recovery_run_id := self.kwargs.get('recovery_run_id')):
+                        from src.api.task_monitor.scheduling.recovery import resume_path
+                        from src.api.task_monitor.scheduling.runtime import RunStore
+                        store = RunStore()
+                        model_path = resume_path(store, store.get(recovery_run_id), schedule_name,
+                                                 self.kwargs['expected_version'])
+                        effective_resume, reason = True, 'abnormal exit recovery'
+                    Logger.note(f'Run [{schedule_name}]: {reason}; resume={effective_resume}')
                     details: dict[str, Any] = {'revisions': revisions, 'reason': reason, 'resume': effective_resume,
                                'force': force, 'model_path': model_path, 'training_run_ids': []}
                     state.save(status='running', **details)
                     def record_progress(run):
+                        import os
+                        if automatic and (managed_id := os.environ.get('LEARNDL_MANAGED_RUN')):
+                            from src.api.task_monitor.scheduling.recovery import child_progress
+                            child_progress(managed_id, run)
                         # Persist the chosen directory before training, including hard-kill recovery.
                         if run['run_id'] not in details['training_run_ids']:
                             details['training_run_ids'].append(run['run_id'])

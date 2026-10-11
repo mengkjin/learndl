@@ -242,6 +242,9 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         module = 'src.api.task_monitor.scheduling.idle_worklist'
         if config['default_backend'] == 'systemd':
             units['learndl-idle-worklist.service'] = service(root, python, module, ['worker'])
+            units['learndl-idle-worklist.service'] += (
+                'ExecStopPost=' + ' '.join(unit_quote(str(value)) for value in
+                                          [python, '-m', 'src.api.task_monitor.scheduling.recovery']) + '\n')
             units['learndl-idle-worklist.timer'] = ('[Unit]\nDescription=Learndl queued idle training\n[Timer]\n'
                 'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
         else:
@@ -270,7 +273,7 @@ def validate_unit(name: str, contents: str) -> None:
     from src.proj import PATH
     allowed = {
         'Unit': {'Description', 'Documentation', 'After', 'Wants'},
-        'Service': {'Type', 'User', 'Group', 'WorkingDirectory', 'Environment', 'ExecStart',
+        'Service': {'Type', 'User', 'Group', 'WorkingDirectory', 'Environment', 'ExecStart', 'ExecStopPost',
                     'TimeoutStartSec', 'TimeoutStopSec', 'KillMode', 'NoNewPrivileges', 'UMask',
                     'Nice', 'OOMScoreAdjust', 'MemoryMax', 'PrivateTmp'},
         'Timer': {'OnCalendar', 'OnBootSec', 'OnUnitInactiveSec', 'AccuracySec', 'Persistent', 'Unit'},
@@ -316,6 +319,13 @@ def validate_unit(name: str, contents: str) -> None:
             expected = ['-m', 'src.api.task_monitor.scheduling.idle_worklist', 'worker']
         if argv[1:] != expected:
             raise ValueError('Unexpected service command')
+        if 'ExecStopPost' in fields:
+            if name != 'learndl-idle-worklist.service' or len(fields['ExecStopPost']) != 1:
+                raise ValueError('Unexpected stop observer')
+            observer = shlex.split(fields['ExecStopPost'][0])
+            if (len(observer) != 3 or Path(observer[0]).resolve() != Path(sys.executable).resolve()
+                    or observer[1:] != ['-m', 'src.api.task_monitor.scheduling.recovery']):
+                raise ValueError('Unexpected stop observer command')
         for values in fields.get('Environment', []):
             for assignment in shlex.split(values):
                 key, _, value = assignment.partition('=')

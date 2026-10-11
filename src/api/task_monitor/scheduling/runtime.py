@@ -27,6 +27,7 @@ class RunStore:
                     run_id TEXT NOT NULL, outcome TEXT NOT NULL, sent_at REAL NOT NULL,
                     PRIMARY KEY(run_id, outcome)
                 );
+                CREATE TABLE IF NOT EXISTS run_evidence (run_id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS runs_phase ON runs(json_extract(data, '$.phase'));
             ''')
 
@@ -366,6 +367,14 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                    f'Log: {run.get("log_path", "")}\nVersion: {run.get("version", "")}\n'
                    f'Progress timeout: {run.get("progress_timeout_seconds", "")} seconds')
         if run.get('owner') == 'idle_worklist':
+            from .recovery import evidence, recovery_plan
+            from .idle_worklist import settings
+            current = store.get(run['id']) or run
+            if current.get('phase') not in {'queued', 'starting', 'running', 'deferred'}:
+                message += '\nRecovery: ' + json.dumps(recovery_plan(store, current, settings()), ensure_ascii=False) + '\n'
+                message += 'Exit evidence: ' + json.dumps(evidence(store, run['id']), ensure_ascii=False) + '\n'
+            if run.get('parent_run_id'):
+                message += f'\nAbnormal-exit resume attempt: {run["retry_index"]}; parent: {run["parent_run_id"]}; directory: {run["resume_model_path"]}\n'
             completion = run.get('completion') or {}
             message += (f'\nModel directory: {completion.get("model_path", "pending")}\n'
                         f'Training runs: {completion.get("training_run_ids", [])}\n'
