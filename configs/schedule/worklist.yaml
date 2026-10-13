@@ -1,5 +1,5 @@
 fit:
-  - lgbm_of_hidden
+  - lgbm_of_hidden_fast
 
 
 resume: False

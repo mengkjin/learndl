@@ -15,6 +15,7 @@ from src.proj import CALENDAR, DB
 from .data import PANEL_SCHEMA_VERSION, PanelData, date_split
 from .data_quality import deduplicate_table
 from .progress import progress
+from .valuation import build_valuations
 
 
 STYLE_FEATURES = ("size", "beta", "momentum", "residual_volatility", "liquidity")
@@ -153,6 +154,23 @@ def _assert_positive_prices(frame: pd.DataFrame, fields: tuple[str, ...], name: 
             raise ValueError(f"{name}.{field} contains non-positive/non-finite prices: {sample}")
 
 
+def _execution_returns(close_t: np.ndarray, close_next: np.ndarray,
+                       adjusted_open: np.ndarray, valid_open: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    overnight = np.full_like(close_t, np.nan, dtype=np.float64)
+    intraday = np.full_like(close_t, np.nan, dtype=np.float64)
+    # An executable open can be valued independently of that day's close.
+    # A missing close still fails settlement if exposure remains after trading.
+    overnight_valid = valid_open & np.isfinite(close_t) & (close_t > 0)
+    intraday_valid = valid_open & np.isfinite(close_next) & (close_next > 0)
+    overnight[overnight_valid] = adjusted_open[overnight_valid] / close_t[overnight_valid] - 1.0
+    intraday[intraday_valid] = close_next[intraday_valid] / adjusted_open[intraday_valid] - 1.0
+    frozen = ~valid_open & np.isfinite(close_t) & (close_t > 0)
+    overnight[frozen] = 0.0
+    valued = frozen & np.isfinite(close_next) & (close_next > 0)
+    intraday[valued] = close_next[valued] / close_t[valued] - 1.0
+    return overnight, intraday
+
+
 def _pivot(frame: pd.DataFrame, field: str, dates: np.ndarray, stocks: np.ndarray) -> pd.DataFrame:
     result = frame.pivot(index="date", columns="secid", values=field)
     return result.reindex(index=dates, columns=stocks)
@@ -161,7 +179,8 @@ def _pivot(frame: pd.DataFrame, field: str, dates: np.ndarray, stocks: np.ndarra
 def _estimate_bytes(n_dates: int, n_stocks: int) -> int:
     float_arrays = 1 + 1 + 1 + len(CONTINUOUS_FEATURES) * 2
     bool_arrays = 5
-    return n_dates * n_stocks * (float_arrays * 4 + bool_arrays) + n_dates * n_stocks * 2
+    # Industry int16 plus valuation reason uint8, age/last-date int32 arrays.
+    return n_dates * n_stocks * (float_arrays * 4 + bool_arrays + 2 + 1 + 4 + 4)
 
 
 def _file_sha256(path: Path) -> str:
@@ -226,12 +245,24 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     _assert_daily_table(exposure, decision_dates, "models/tushare_cne5_exp")
     # Source files also contain securities outside this historical SSE/SZSE snapshot.
     # Their prices must not block export; all snapshot securities remain validated.
-    _assert_positive_prices(day[day.secid.isin(stock_ids)], ("open", "close"), "trade_ts/day")
+    _assert_positive_prices(day[day.secid.isin(stock_ids)], ("open", "close", "adjfactor"), "trade_ts/day")
     _assert_positive_prices(adjusted[adjusted.secid.isin(stock_ids)], ("open", "close"), "trade_ts/adjprice")
     _assert_positive_prices(limits[limits.secid.isin(stock_ids)], ("up_limit", "down_limit"), "trade_ts/day_limit")
 
     progress('data', f'Building features: {len(decision_dates)} decision dates, {len(stock_ids)} stocks')
-    close = _pivot(adjusted, "close", history_dates, stock_ids)
+    # Listing for valuation is independent of alpha, ST and IPO maturity filters.
+    alive = np.zeros((len(history_dates), len(stock_ids)), dtype=bool)
+    positions = {int(secid): col for col, secid in enumerate(stock_ids)}
+    for row in relevant_description.itertuples():
+        col = positions.get(int(row.secid))
+        if col is not None:
+            alive[:, col] |= (history_dates >= int(row.list_dt)) & (history_dates < int(row.delist_dt))
+    raw_closes = _pivot(day, 'close', history_dates, stock_ids).to_numpy(dtype=float)
+    factors = _pivot(day, 'adjfactor', history_dates, stock_ids).to_numpy(dtype=float)
+    statuses = _pivot(day, 'status', history_dates, stock_ids).to_numpy(dtype=float)
+    valuations = build_valuations(history_dates, stock_ids, raw_closes, factors, statuses,
+                                 _pivot(adjusted, 'close', history_dates, stock_ids).to_numpy(dtype=float), alive)
+    close = pd.DataFrame(valuations.close, index=history_dates, columns=stock_ids)
     daily_return = close.pct_change(fill_method=None)
     day_indexed = day.set_index(["date", "secid"]).sort_index()
     turnover = day_indexed["turn_tt"].unstack("secid").reindex(index=history_dates, columns=stock_ids)
@@ -292,7 +323,10 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         st_ids = DATAVENDOR.INFO.get_st(int(date)).secid.to_numpy(dtype=np.int64)
         st_mask[row] = np.isin(stock_ids, st_ids)
     day_close = _pivot(day, "close", history_dates, stock_ids).reindex(index=decision_dates)
-    traded_at_decision = np.isfinite(day_close.to_numpy()) & (day_close.to_numpy() > 0)
+    decision_rows = np.searchsorted(history_dates, decision_dates)
+    traded_at_decision = (np.isfinite(day_close.to_numpy()) & (day_close.to_numpy() > 0)
+                          & (statuses[decision_rows] > 0) & np.isfinite(factors[decision_rows])
+                          & (factors[decision_rows] > 0))
     investable = listed & ~st_mask & alpha_available & traded_at_decision
     # Re-rank after all point-in-time eligibility filters. The earlier rank is
     # monotonic and only supplies a stable tie order across reused source rows.
@@ -328,20 +362,17 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     adjusted_open = raw_open * adj_factor
     limit_up = _pivot(limits, "up_limit", execution_dates, stock_ids).to_numpy(dtype=np.float64)
     limit_down = _pivot(limits, "down_limit", execution_dates, stock_ids).to_numpy(dtype=np.float64)
-    valid_open = np.isfinite(adjusted_open) & (adjusted_open > 0) & (status > 0)
+    execution_rows = np.searchsorted(history_dates, execution_dates)
+    valid_open = np.isfinite(adjusted_open) & (adjusted_open > 0) & (status > 0) & alive[execution_rows]
     valid_limits = np.isfinite(limit_up) & np.isfinite(limit_down)
     can_buy = valid_open & valid_limits & (raw_open < limit_up - 1e-8)
     can_sell = valid_open & valid_limits & (raw_open > limit_down + 1e-8)
-    stale = ~valid_open
+    stale = valuations.stale[execution_rows]
 
-    overnight = np.full_like(close_t, np.nan, dtype=np.float64)
-    intraday = np.full_like(close_t, np.nan, dtype=np.float64)
-    active = valid_open & np.isfinite(close_t) & (close_t > 0) & np.isfinite(close_next) & (close_next > 0)
-    overnight[active] = adjusted_open[active] / close_t[active] - 1.0
-    intraday[active] = close_next[active] / adjusted_open[active] - 1.0
-    carried = stale & np.isfinite(close_t) & np.isfinite(close_next) & np.isclose(close_t, close_next, rtol=1e-6, atol=1e-8)
-    overnight[carried] = 0.0
-    intraday[carried] = 0.0
+    overnight, intraday = _execution_returns(close_t, close_next, adjusted_open, valid_open)
+    # A terminal date has no synthetic open valuation; do not carry past delisting.
+    overnight[~alive[execution_rows]] = np.nan
+    intraday[~alive[execution_rows]] = np.nan
     forward = close_next / close_t - 1.0
 
     panel = PanelData(
@@ -358,6 +389,9 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         can_buy=can_buy,
         can_sell=can_sell,
         valuation_stale=stale,
+        valuation_reason=valuations.reason[execution_rows],
+        valuation_stale_days=valuations.stale_days[execution_rows],
+        valuation_last_valid_date=valuations.last_valid_date[execution_rows],
         industry_codes=industry_codes,
         feature_names=feature_names,
     )
@@ -369,6 +403,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     panel.save_npz(panel_path)
     quality = {
         "duplicate_cleanup": duplicate_audit,
+        "valuation": valuations.report,
         "investable_per_day": {
             "min": int(investable.sum(axis=1).min()),
             "median": float(np.median(investable.sum(axis=1))),
@@ -391,6 +426,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         for name, (start, end) in default_splits.items()
     }
     manifest = {
+        "valuation_policy": "day_close_then_adjprice_then_causal_carry_while_listed_v3",
         "config": {**asdict(config), "output": str(output)},
         "audit": audit,
         "panel_contract": panel.contract(),
@@ -399,6 +435,8 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         "calendar": {"decision": "SSE/SZSE trading day", "execution": "next trading-day open", "valuation": "execution-day close"},
         "default_time_splits": split_dates,
         "execution_assumptions": [
+            "valuation may carry last known close while listed; missing data is not confirmed suspension",
+            "adjprice open is never an executable open; delisting stops valuation carry",
             "daily open execution; sells precede buys",
             "suspension/no open freezes the position",
             "open at upper limit cannot buy; open at lower limit cannot sell",

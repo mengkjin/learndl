@@ -7,10 +7,35 @@ import numpy as np
 import pandas as pd
 
 from src.res.rl_experimental.data_quality import deduplicate_table
-from src.res.rl_experimental.real_data import _load_table
+from src.res.rl_experimental.real_data import _execution_returns, _load_table
+from src.res.rl_experimental.portfolio import execute_open_close
 
 
 class DataQualityTest(unittest.TestCase):
+    def test_missing_close_does_not_invalidate_known_open(self):
+        overnight, intraday = _execution_returns(
+            np.array([10., 10., 10.]), np.array([np.nan, 10., np.nan]),
+            np.array([11., np.nan, np.nan]), np.array([True, False, False]),
+        )
+        self.assertAlmostEqual(overnight[0], .1)
+        self.assertTrue(np.isnan(intraday[0]))
+        self.assertEqual(overnight[1], 0.)
+        self.assertEqual(overnight[2], 0.)
+        self.assertTrue(np.isnan(intraday[2]))
+        # Selling all at a known open needs no subsequent close valuation.
+        args = dict(old_weights=np.array([.5]), old_cash=.5,
+                    target_weights=np.array([0.]), overnight_returns=overnight[:1],
+                    intraday_returns=intraday[:1], can_buy=np.array([True]), can_sell=np.array([True]),
+                    fee_rate=0., max_holdings=1, max_weight=1., stock_ids=np.array([600001]),
+                    decision_date=20230103, execution_date=20230104)
+        self.assertAlmostEqual(execute_open_close(**args).nav_multiplier, 1.05)
+        args['can_sell'] = np.array([False])
+        with self.assertRaisesRegex(ValueError, 'a close valuation.*execution_date=20230104.*600001'):
+            execute_open_close(**args)
+        args['overnight_returns'] = np.array([np.nan])
+        with self.assertRaisesRegex(ValueError, 'an overnight valuation.*decision_date=20230103.*600001'):
+            execute_open_close(**args)
+
     def test_duplicates_warn_keep_last_and_leave_source_untouched(self):
         frame = pd.DataFrame({'date': [1, 1, 2, 2], 'secid': [3, 3, 3, 3], 'value': [4., 4., 5., 6.]})
         original = frame.copy(deep=True)

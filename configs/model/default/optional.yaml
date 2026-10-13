@@ -51,6 +51,7 @@ input.verify.x.autofill:
   vol_other: forward
 
 train.dataloader.sample_method: sequential
+train.label_normalization: standardize
 train.dataloader.shuffle_option: epoch
 train.dataloader.train_ratio: 0.8
 train.trainer.transfer: false
@@ -114,3 +115,13 @@ conditional.transformer:
     trigger: 60
     recover_level: 1.0
     speedup2x: true
+
+# Scalar final outputs; weights are a vector, not an algorithm sweep.
+input.final.types: []
+input.final.precursor: normal
+input.final.weights: equal
+input.final.refresh: false
+
+model.module.linear: linear
+model.interval.linear: 20
+model.window.linear: 0

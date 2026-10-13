@@ -22,6 +22,9 @@ def get_predictor_module(module : str | ModelConfig , *args , **kwargs) -> Predi
     elif module_type == 'boost':
         from src.res.model.model_module.module.boost import BoostPredictor
         predictor = BoostPredictor(*args , **kwargs)
+    elif module_type == 'linear':
+        from .linear import LinearPredictor
+        predictor = LinearPredictor(*args, **kwargs)
     elif is_null_module_type(module_type):
         from src.res.model.model_module.module.null import NullPredictor
         predictor = NullPredictor(*args , **kwargs)

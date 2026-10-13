@@ -9,6 +9,7 @@ import numpy as np
 
 from .data import PanelData
 from .portfolio import PortfolioConstraints, execute_open_close, settle_period
+from .valuation import holding_valuation_metrics, valuation_context
 
 
 BaselineKind = Literal["alpha_equal_weight", "robust_top50"]
@@ -190,6 +191,10 @@ def replay_baseline(
                 fee_rate=constraints.fee_rate,
                 max_holdings=constraints.max_holdings,
                 max_weight=constraints.max_weight,
+                stock_ids=panel.stock_ids,
+                decision_date=int(panel.decision_dates[time_index]),
+                execution_date=int(execution_dates[time_index]),
+                valuation_context=valuation_context(panel, time_index),
             )
             weights, cash = filled.end_weights, filled.end_cash
             multiplier, turnover, cost = filled.nav_multiplier, filled.turnover, filled.cost_fraction
@@ -202,6 +207,7 @@ def replay_baseline(
                 "rejected_buys": filled.rejected_buy_count,
                 "rejected_sells": filled.rejected_sell_count,
                 "stale_valuations": int(np.count_nonzero(valuation_stale[time_index] & (weights > 1e-8))),
+                **holding_valuation_metrics(panel, time_index, weights),
             }
         else:
             target_cash = max(0.0, 1.0 - float(target.sum()))

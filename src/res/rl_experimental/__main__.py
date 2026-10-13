@@ -46,6 +46,7 @@ def parser() -> argparse.ArgumentParser:
     baseline.add_argument("--output", type=Path, required=True)
     baseline.add_argument("--train-end-date", type=int)
     baseline.add_argument("--valid-end-date", type=int)
+    baseline.add_argument("--split", choices=("train", "valid", "test"), default="test")
 
     evaluate = sub.add_parser("evaluate")
     evaluate.add_argument("data", type=Path)
@@ -126,7 +127,7 @@ def main() -> None:
         from .portfolio import PortfolioConstraints
 
         panel = PanelData.load_npz(args.data)
-        split = date_split(panel, args.train_end_date, args.valid_end_date)["test"]
+        split = date_split(panel, args.train_end_date, args.valid_end_date)[args.split]
         args.output.mkdir(parents=True, exist_ok=True)
         metrics = {}
         for kind in ("alpha_equal_weight", "robust_top50"):

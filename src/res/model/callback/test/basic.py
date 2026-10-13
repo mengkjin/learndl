@@ -66,6 +66,8 @@ class BasicTestResult(BaseCallBack):
 
         target_dates = np.setdiff1d(self.test_full_dates , df['date'].unique())
         preds = self.record.get_preds(target_dates).dropna(subset=['pred'])
+        if preds.empty:
+            return df
         preds = self._attach_eval_labels(preds).dropna(subset=['pred' , *self.EVAL_LABELS])
 
         if preds.empty:
@@ -123,7 +125,7 @@ class BasicTestResult(BaseCallBack):
             return
 
         with self.logger.paragraph('Test Summary' , 3): 
-            if df_date['model_date'].nunique() == 1 or self.config.base_path.is_null_model:
+            if df_date['model_date'].nunique() == 1 or not self.config.requires_fit:
                 # only one model_date, calculate by year
                 df_date['model_date'] = (df_date['date'].astype(int) // 10000).apply(lambda x:f'Y{x}')
             else:

@@ -55,7 +55,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
         indent : int = 0 , vb_level : Base.lit.VerbosityLevel = 1 , **kwargs
     ) -> None:
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self._strict_hidden_source = False
+        self._strict_model_source = False
         if isinstance(model_input , PredictorPath):
             self.path = model_input
         else:
@@ -82,9 +82,13 @@ class ArchivedPredictorModel(Base.BoundLogger):
         Preferred: gru@gru_day_new_rtn@1@0@best (directory 1, model number 0).
         Legacy gru@gru_day_new_rtn@0@best means the unnumbered directory only.
         """
-        from src.res.model.util.hidden_source import hidden_source_path
-        instance = cls(hidden_source_path(model_str))
-        instance._strict_hidden_source = True
+        return cls.from_model_reference(model_str)
+
+    @classmethod
+    def from_model_reference(cls, model_str: str):
+        from src.res.model.util.model_source import model_source_path
+        instance = cls(model_source_path(model_str))
+        instance._strict_model_source = True
         return instance
 
     @property
@@ -110,7 +114,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     @cached_property
     def config(self) -> ModelConfig:
         with Proj.silence:
-            if not self._strict_hidden_source:
+            if not self._strict_model_source:
                 return ModelConfig(self.model_name, stage=2, resume=1).start_model()
             if not self.path.base.is_dir():
                 raise FileNotFoundError(f'Prediction model directory does not exist: {self.path.base}')
@@ -123,7 +127,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
 
     @cached_property
     def model_dates(self) -> np.ndarray:
-        if self._strict_hidden_source:
+        if self._strict_model_source:
             # Other model numbers can have different archive dates.
             return self.path.sub_dirs(self.path.archive(int(self.path.use_model_nums[0])), as_int=True)
         return self.path.model_dates

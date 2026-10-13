@@ -125,6 +125,12 @@ reward = RewardConfig(
 
 ## 服务器一键运行、邮件与本机分析
 
+真实快照使用 schema v3 的停牌估值规则：成交始终依赖 `day` 的真实开盘和可交易状态；收盘估值依次使用有效的 `day.close × adjfactor`、`adjprice.close`、仍上市期间的最近有效估值。无可成交开盘时冻结买卖，有可信收盘时仍计入价格变化；双表缺失可承接估值并汇总 warning，不认定为已确认停牌。复牌跳涨/跳跌完整进入隔夜收益，退市或没有任何历史估值时不继续补值。
+
+质量报告的 `valuation` 记录来源、冲突和连续缺失区间；轨迹增加 `carried_holdings`、`missing_data_carried_holdings`、`max_held_stale_days`。承接天数从载入的历史窗口开始累计，更早的停牌时长未知。价格来源冲突时优先 day 的真实复权收盘并告警。所有估值处理只在 RL 内存中进行。
+
+升级后需将实验 JSON 的 `rebuild_snapshot` 临时设为 `true`（或使用新的快照目录）生成 v3 快照，后续可改回 `false`。旧快照/checkpoint 仍可按原契约回放，但新实验入口不会静默沿用旧估值逻辑。建议先运行 `replay-baselines <快照目录>/panel.npz --split valid --train-end-date 20230101 --valid-end-date 20250101 --output results/rl_experimental/valuation_check`，确认验证基线通过，再运行服务器训练脚本。
+
 RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风格暴露和 alpha 的日期/证券重复键，以及上市记录与行业资料的对应键。发现重复时输出 `WARNING`，按源读取顺序保留最后一行；内容冲突时额外报告冲突键数量，这不代表识别出了最新修订值。处理仅发生在内存，不改写数据库；清理记录写入 manifest 的 `audit.duplicate_cleanup` 和 `quality_report.json`。缺失整日数据和非法价格仍按原规则报错。复用已有快照时不会重读源表，如需重新检查源数据请重建快照。
 
 终端、notebook 和 HtmlCatcher 会实时显示带时间戳的 `[RL/阶段]` 输出，包括每批 128 个日期的数据读取、特征和资格构建、快照保存、实际时间切分、每轮 PPO 采样/更新、验证净值与最佳轮次、测试基线、报告及打包。数据和训练期间的输出同时进入运行目录的 stdout/stderr 日志。

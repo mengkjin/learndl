@@ -42,6 +42,7 @@ AVAILABLE_NNS = {
     'moe_gru'           : Model.MoE.moe_gru,
     'tft'               : Model.TFT.TemporalFusionTransformer,
     'astgnn'            : Model.gnn.Astgnn,
+    'astgnn_legacy'     : Model.gnn.AstgnnLegacy,
     'resnet_gru'        : Model.resnet_gru.resnet_gru,
     'transformer_gru'   : Model.transformer_gru.transformer_gru,
     'resnet_transformer': Model.resnet_transformer.resnet_transformer,

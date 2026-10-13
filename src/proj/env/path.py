@@ -54,6 +54,7 @@ class PATH:
     email_outbox = lc_machine.joinpath('email_outbox')
 
     sched          = conf.joinpath('schedule' , 'current')
+    sched_linear   = conf.joinpath('schedule', 'linear')
     sched_archive  = conf.joinpath('schedule' , 'archive')
     sched_worklist = conf.joinpath('schedule' , 'worklist.yaml')
     sched_shared   = lc_share.joinpath('schedule_model')
@@ -86,6 +87,7 @@ class PATH:
 
     model_nn      = model.joinpath('nn')
     model_boost   = model.joinpath('boost')
+    model_linear  = model.joinpath('linear')
     model_factor  = model.joinpath('factor')
     model_st      = model.joinpath('st')
     model_archive = model.joinpath('archive')

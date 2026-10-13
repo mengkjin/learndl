@@ -19,12 +19,12 @@ input:
   # input specification ----------------------------------------------------------------
   type: hidden # [data , hidden , factor] , specify below
 
-  hidden.types: # list of hidden states , use if input_type is hidden
-    - gru@gru_day_new@0@best # directory @2, model number 0
-    - gru@gru_30mcont@0@best # directory @2, model number 0
-    - gru@gru_mincr@0@best # directory @2, model number 0
-    - resnet_gru@gru_week_new@0@best # directory @2, model number 0
-    - resnet_gru@gru_15m_new_rtn@0@best # directory @2, model number 0
+  hidden.types: # defaults: directory 1, model_num 0, model_submodel best
+    - gru@gru_day_new
+    - gru@gru_30mcont
+    - gru@gru_mincr
+    - resnet_gru@gru_week_new
+    - resnet_gru@gru_15m_new_rtn
 
 train:
   boost:

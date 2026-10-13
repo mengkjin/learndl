@@ -189,7 +189,7 @@ class ModelTrainer(BaseTrainer):
         if registered:
             return [ModelPath(pred_model.full_name) for pred_model in PredictorPath.SelectModels() if pred_model.is_resumable]
         else:
-            return [ModelPath(model) for model in cls.available_models()]
+            return [ModelPath(model) for model in cls.available_models() if ModelPath(model).module_type != "linear"]
 
     @classmethod
     def all_resumable_models(cls , **kwargs) -> list[ModelPath]:
@@ -198,10 +198,11 @@ class ModelTrainer(BaseTrainer):
 
     @staticmethod
     def available_models(include_short_test : bool = False , include_factors : bool = False):
-        root_paths = [PATH.model_nn , PATH.model_boost]
+        root_paths = [PATH.model_nn , PATH.model_boost, PATH.model_linear]
         if include_short_test:
             root_paths.append(PATH.model_st)
         if include_factors:
             root_paths.append(PATH.model_factor)
-        bases = [f'{root.name}@{model.name}' for root in root_paths for model in sorted(root.iterdir()) if model.is_dir() and not model.name.startswith('.')]
-        return bases
+        bases = [f'{root.name}@{model.name}' for root in root_paths for model in sorted(root.glob("*")) if model.is_dir() and not model.name.startswith('.')]
+        return [name for name in bases if ModelPath(name).module_type != 'linear'
+                or (PATH.sched_linear / f'{ModelPath(name).model_clean_name}.yaml').is_file()]

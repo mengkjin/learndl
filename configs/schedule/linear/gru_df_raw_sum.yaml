@@ -1,0 +1,12 @@
+# ModelTrainer.schedule('gru_df_raw_sum', short_test=False, resume=0, start=..., end=...)
+model:
+  module: linear
+  labels: [std_lag1_10]
+input:
+  type: final
+  final.types:
+    - pred@gru_day_V1
+    - factor@df_scores_v0
+  final.precursor: none
+  final.weights: [1, 1]
+  final.refresh: false

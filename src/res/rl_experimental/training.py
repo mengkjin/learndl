@@ -142,6 +142,7 @@ class ValidationCallback(BaseCallback):
     ROLLOUT_FIELDS = (
         "reward", "turnover", "fee_estimate", "cash_weight", "holdings",
         "frozen_holdings", "rejected_buys", "rejected_sells",
+        "carried_holdings", "missing_data_carried_holdings", "max_held_stale_days",
     )
 
     def __init__(

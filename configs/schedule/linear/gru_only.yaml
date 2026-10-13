@@ -1,0 +1,11 @@
+# ModelTrainer.schedule('gru_only', short_test=False, resume=0, start=..., end=...)
+model:
+  module: linear
+  labels: [std_lag1_10]
+input:
+  type: final
+  final.types:
+    - pred@gru_day_V1
+  final.precursor: normal
+  final.weights: equal
+  final.refresh: false

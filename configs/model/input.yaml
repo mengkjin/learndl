@@ -1,5 +1,5 @@
 # main input configs ----------------------------------------------------------------
-type: data # [data , hidden , factor , combo] , specify below
+type: data # [data , hidden , factor , final , combo] , specify below
 
 filter.secid: null # random.200 , random.1000 , ...
 filter.date: null # 20241101-20250331 (yyyyMMdd-yyyyMMdd)
@@ -20,7 +20,8 @@ verify.x.autofill:
   vol_price: forward
   vol_other: forward
 
-# Exact source: module@name@directory_index@model_num@submodel.
+# Exact source: module@name[@directory_index][@model_num@submodel].
+# Omitted directory_index defaults to 1; omitted @model_num@submodel defaults to @0@best.
 # Directory 1 is the unnumbered folder; 2 means name@2. No fallback or prompts.
 hidden.types: # missing directory/model number/checkpoint raises an error
   - gru@gru_day_V0@1@0@best
@@ -38,3 +39,9 @@ factor.types: # list of category1 , use if input_type is factor
 combo.types: # list of input type in combo mode , use if input_type is combo
   - data
   - factor
+
+# Scalar final outputs; weights are a vector, not an algorithm sweep.
+final.types: []
+final.precursor: normal
+final.weights: equal
+final.refresh: false

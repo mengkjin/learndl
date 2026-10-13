@@ -10,6 +10,7 @@ from gymnasium import spaces
 
 from .data import PanelData
 from .portfolio import PortfolioConstraints, execute_open_close, project_action, select_slots, settle_period
+from .valuation import holding_valuation_metrics, valuation_context
 from .reward import RewardConfig, RewardContext, RewardEvaluator
 
 
@@ -184,6 +185,10 @@ class PortfolioEnv(gym.Env):
                 fee_rate=self.constraints.fee_rate,
                 max_holdings=self.constraints.max_holdings,
                 max_weight=self.constraints.max_weight,
+                stock_ids=self.panel.stock_ids,
+                decision_date=int(self.panel.decision_dates[self._time]),
+                execution_date=int(execution_dates[self._time]),
+                valuation_context=valuation_context(self.panel, self._time),
             )
             new_weights = execution.end_weights
             new_cash = execution.end_cash
@@ -199,6 +204,7 @@ class PortfolioEnv(gym.Env):
                 "rejected_buys": execution.rejected_buy_count,
                 "rejected_sells": execution.rejected_sell_count,
                 "stale_valuations": int(np.count_nonzero(valuation_stale[self._time] & (new_weights > 1e-8))),
+                **holding_valuation_metrics(self.panel, self._time, new_weights),
             }
         else:
             new_weights, new_cash, nav_multiplier, turnover, cost_fraction = settle_period(

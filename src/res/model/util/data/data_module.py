@@ -155,7 +155,7 @@ class DataModule(Base.BoundLogger):
                 raise ValueError(f'dates is not align with calendar dates!')
         self.data_dates = dates
         
-        if self.config.is_null_model:
+        if not self.config.requires_fit:
             # previos month end (use calendar date)
             self.test_full_dates = dates
             self.model_date_list = CALENDAR.tds(CALENDAR.offset(dates // 100 * 100 + 1 , offset = -1 , type = 'cd'))
@@ -235,6 +235,8 @@ class DataModule(Base.BoundLogger):
         slens = {key:int(val) for key,val in slens.items() if key in self.input_keys}
         slens.update({key:int(val) for key,val in param.items() if key.endswith('_seq_len')})
         
+        if any(slens.get(key) != 1 for key in self.config.input_final_types):
+            raise ValueError('Final inputs require sequence length 1, including algorithm overrides')
         assert slens , (self.config.seq_lens | param.get('seqlens',{}) , self.input_keys)
         loader_param = DataloaderParam(stage , model_date , slens , retro_start_date , retro_end_date)
         if self.loader_param == loader_param: 
@@ -300,6 +302,33 @@ class DataModule(Base.BoundLogger):
     def setup_loader_inputs(self):
         """additional input prepare for hidden input"""
         self.setup_loader_inputs_hidden()
+        self.setup_loader_inputs_final()
+
+    def setup_loader_inputs_final(self):
+        if not self.config.input_final_types:
+            return
+        from src.res.model.util.final_source import FinalInputLoader
+        if not hasattr(self, '_final_loader'):
+            self._final_loader = FinalInputLoader(self.config)
+        dates = self.y_date[self.step_idx]
+        if len(dates) == 0:
+            return
+        self.datas.x.update(self._final_loader.blocks(dates, self.datas.secid, self.datas.date))
+        self.logger.note(f'Final coverage {dates[0]}..{dates[-1]}: '
+                         f'{min(self._final_loader.coverage)}..{max(self._final_loader.coverage)} '
+                         f'of {len(self.datas.secid)} stocks per date', vb=1)
+        self.config.update_data_param(self.datas.x)
+
+    def validate_final_coverage(self):
+        """Fail empty linear evaluations before success callbacks and summaries."""
+        if self.config.module_type != 'linear':
+            return
+        if self.config.is_resuming and self.config.resumed_max_pred_date >= max(self.test_full_dates):
+            self.logger.note('Final inputs: no new dates to evaluate', vb=0)
+            return
+        if not hasattr(self, '_final_loader') or not self._final_loader.coverage_by_date:
+            raise ValueError(f'Final inputs: no dates evaluated during {self.beg_date}..{self.end_date}')
+        self.logger.note(self._final_loader.validate_coverage(self.test_full_dates), vb=0)
 
     def setup_loader_inputs_hidden(self):
         """additional input prepare for hidden input , calculate hiddens and temporary store them"""
@@ -668,7 +697,7 @@ class DataModule(Base.BoundLogger):
 
     @property
     def empty_x(self):
-        return self.datas.empty_x and not self.input_keys_hidden
+        return self.datas.empty_x and not self.input_keys_hidden and not self.config.input_final_types
 
     @property
     def beg_date(self):

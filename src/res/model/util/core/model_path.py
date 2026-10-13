@@ -67,6 +67,10 @@ class ModelPath:
     def is_null_model(self) -> bool:
         return bool(self) and is_null_module_type(self.module_type)
     @property
+    def requires_fit(self) -> bool:
+        """Execution capability, independent of null-model naming/config semantics."""
+        return self.module_type in ('nn', 'boost')
+    @property
     def module_type(self) -> ModuleType:
         return ModuleType(self.full_name_kwargs['module_type'])
     @property
@@ -102,6 +106,8 @@ class ModelPath:
                     return PATH.model_nn / f'{self.model_module}@{self.model_name}'
                 case 'boost':
                     return PATH.model_boost / f'{self.model_module}@{self.model_name}'
+                case 'linear':
+                    return PATH.model_linear / self.model_clean_name
                 case 'factor':
                     return PATH.model_factor / self.model_module
                 case _:
@@ -122,6 +128,8 @@ class ModelPath:
 
     @property
     def is_resumable(self) -> bool:
+        if self.module_type == 'linear':
+            return False  # only explicit resume=1 resumes a linear test
         return self.archive().exists() and any(p.is_file() for p in self.archive().rglob('*'))
 
     @property

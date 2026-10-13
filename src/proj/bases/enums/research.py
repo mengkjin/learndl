@@ -12,6 +12,7 @@ class ModuleType(StrEnum):
     NN = 'nn'
     BOOST = 'boost'
     FACTOR = 'factor'
+    LINEAR = 'linear'
     INVALID = ''
 
 class BoostModuleType(StrEnum):

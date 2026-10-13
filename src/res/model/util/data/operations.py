@@ -86,11 +86,15 @@ class DataOperator:
 
     def standardize_y(
         self , y : torch.Tensor , effective : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:
-        """standardize y and weight"""
+        """Prepare labels at both loading stages, preserving raw returns when requested."""
         y = y[:,index1].clone() if index1 is not None else y.clone()
         if effective is not None: 
             y.nan_to_num_(0)[~effective] = torch.nan
-        y = standardize(y , dim=0)
+        normalization = getattr(self.config, 'label_normalization', 'standardize')
+        if normalization == 'standardize':
+            y = standardize(y , dim=0)
+        elif normalization != 'raw':
+            raise ValueError(f'Invalid label normalization: {normalization}')
         weight_scheme = self.config.weight_scheme(self.stage , no_weight)
         w = self.label_weighting(weight_scheme , y)
         return y, w
@@ -269,6 +273,12 @@ class DataOperator:
                 if keys:
                     eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
                     effs.append(eff)
+        final_keys = getattr(self.config, 'input_final_types', [])
+        if final_keys:
+            effs.append(torch.stack([
+                torch.isfinite(x[key][:, index1]).flatten(2).all(dim=-1)
+                for key in final_keys
+            ], dim=-1).all(dim=-1))
         if y is not None:
             y_check = y.unsqueeze(-1) if y.ndim == 2 else y
             eff = self.finite_position(None , y_check , index1)
@@ -462,4 +472,4 @@ class DataOperator:
         else:
             sample_index[self.stage] = _sequential(0 , l1)
 
-        return sample_index   
+        return sample_index

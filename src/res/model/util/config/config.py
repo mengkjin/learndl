@@ -26,7 +26,7 @@ from src.res.model.util.core import ModelPath , model_module_type, is_null_modul
 __all__ = ['ModelConfig']
 
 ConfigSourceOption : TypeAlias = Literal['current' , 'default']
-InputType : TypeAlias = Literal['data' , 'hidden' , 'factor' , 'combo']
+InputType : TypeAlias = Literal['data' , 'hidden' , 'factor' , 'final', 'combo']
 SampleMethod : TypeAlias = Literal['sequential' , 'both_shuffle' , 'train_shuffle']
 ShuffleOption : TypeAlias = Literal['static' , 'init' , 'epoch']
 
@@ -83,21 +83,21 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     @classmethod
     def find_path(cls , base_path: ModelPath | None = None, name: str | None = None) -> Path | None:
         if base_path:
+            if base_path.module_type == 'linear':
+                path = PATH.sched_linear / f'{base_path.model_clean_name}.yaml'
+                if not path.is_file():
+                    raise FileNotFoundError(f'Linear schedule is required: {path}')
+                return path
             config_path = base_path.conf_file("schedule")
             return config_path if config_path.exists() else None
         elif not name:
             return None
         else:
-            schedule_path_0 = PATH.sched.joinpath(f"{name}.yaml")
-            schedule_path_1 = PATH.sched_shared.joinpath(f"{name}.yaml")
-            assert not (schedule_path_0.exists() and schedule_path_1.exists()), \
-                f"{name} exists in both config/schedule/current and .local_resources/shared/schedule_model/schedule"
-            if schedule_path_0.exists():
-                return schedule_path_0
-            elif schedule_path_1.exists():
-                return schedule_path_1
-            else:
-                return None
+            candidates = [root / f"{name}.yaml" for root in (PATH.sched, PATH.sched_shared, PATH.sched_linear)]
+            existing = [path for path in candidates if path.is_file()]
+            if len(existing) > 1:
+                raise ValueError(f'Duplicate schedule {name}: {existing}')
+            return existing[0] if existing else None
 
     @classmethod
     def check_name_exist(cls , model_name: str | None = None) -> bool:
@@ -144,7 +144,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         self.Param[key] = value
 
     def resumed_config_param(self) -> Base.FlattenDict | None:
-        if (self.base_path and not self.base_path.is_null_model
+        if (self.base_path and self.base_path.module_type != "linear" and not self.base_path.is_null_model
                 and (not self.short_test or self.resume_saved_config)):
             conf_file = self.base_path.conf_file("model")
             return get_config_dict(conf_file) if conf_file.exists() else None
@@ -158,6 +158,9 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return get_config_dict([PATH.conf.joinpath("model", f"{cfg}.yaml") for cfg in self.CONFIG_LIST])
 
     def optional_load_params(self , option : ConfigSourceOption):
+        if self.base_path and self.base_path.module_type == 'linear':
+            # Both schedule and model-path entry points start from the same defaults.
+            return self.default_config_param()
         Param = None if self.start_with_none else self.resumed_config_param()
         if Param is None:
             Param = self.current_config_param() if option == "current" else self.default_config_param()
@@ -244,7 +247,36 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         if self.should_be_short_test and not self.short_test:
             self.logger.alert1("Should be at server or short_test, but short_test is False now!" , vb = 1)
 
+        if self.module_type == 'linear':
+            if self.model_module != 'linear' or (self.start_with_none and not self.schedule_name):
+                raise ValueError('Use a linear schedule, not an ad-hoc module configuration')
+            name = self.schedule_name or self.base_path.model_clean_name
+            self['model.name'] = name
+            source = ScheduleConfig.find_path(None, name)
+            if source != PATH.sched_linear / f'{name}.yaml':
+                raise ValueError('Linear models require a defining configs/schedule/linear schedule')
+            if self.input_type != 'final':
+                raise ValueError('Linear models require input.type=final')
+        if self.input_final_types:
+            if len(set(self.input_final_types)) != len(self.input_final_types):
+                raise ValueError('Duplicate final inputs; combine their weights instead')
+            from src.res.model.util.final_source import FinalSource, final_weights
+            for reference in self.input_final_types:
+                FinalSource.parse(reference)
+            final_weights(self.input_final_weights, len(self.input_final_types))
+            if self.input_final_precursor not in ('none', 'normal', 'percentile'):
+                raise ValueError('input.final.precursor must be none, normal or percentile')
+            for key in self.input_final_types:
+                if self.seq_lens[key] != 1 or self.seq_steps[key] != 1:
+                    raise ValueError('Final inputs require sequence length and step 1')
+        elif self.input_type == 'final':
+            raise ValueError('input.final.types must not be empty')
+
         # check sample_method is set correctly
+        if self.label_normalization not in ('raw', 'standardize'):
+            raise ValueError('train.label_normalization must be raw or standardize')
+        if self.model_module == 'astgnn':
+            self.check_astgnn_config()
         nn_category = AlgoModule.nn_category(self.model_module)
         
         if nn_category == "vae":
@@ -281,8 +313,29 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
         return self
 
+    def check_astgnn_config(self):
+        """A stock graph requires one complete date and two forward return targets."""
+        import re
+        if self.sample_method != 'sequential':
+            raise ValueError('astgnn requires sequential sampling of complete daily cross sections')
+        if len(self.labels) != 2:
+            raise ValueError('astgnn requires two labels: alpha fit return and joint R² return')
+        horizons = []
+        for label in self.labels:
+            match = re.fullmatch(r'(?:rtn|std|res)_lag(\d+)_(\d+)(?:_.*)?', label)
+            if match is None:
+                raise ValueError(f'Cannot validate astgnn label horizon: {label}')
+            horizons.append(sum(map(int, match.groups())))
+        if self.skip_horizon <= max(horizons):
+            raise ValueError('astgnn train.skip_horizon must be strictly greater than max(label lag + days)')
+
     def generate_model_full_name(self):
-        if is_null_module_type(self.module_type):
+        if self.module_type == 'linear':
+            name = self.schedule_name or self["model.name"]
+            if not name:
+                raise ValueError('Linear models require a schedule name')
+            full_name = f'linear@{name}'
+        elif is_null_module_type(self.module_type):
             full_name = self.full_module_name
         else:
             model_name = str(self["model.name"]) if self["model.name"] else self.generate_valid_model_name()
@@ -473,6 +526,24 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             return []
 
     @property
+    def input_final_types(self) -> list[str]:
+        if self.input_type == 'final' or (self.input_type == 'combo' and 'final' in self['input.combo.types']):
+            return self.unwrap_inputs(self['input.final.types'] or [])
+        return []
+
+    @property
+    def input_final_precursor(self) -> str:
+        return str(self['input.final.precursor'] or 'none').lower()
+
+    @property
+    def input_final_weights(self):
+        return self['input.final.weights']
+
+    @property
+    def input_final_refresh(self) -> bool:
+        return bool(self['input.final.refresh'])
+
+    @property
     def input_factor_types(self) -> list[str]:
         if self.input_type == "factor" or (self.input_type == "combo" and "factor" in self["input.combo.types"]):
             return self.unwrap_inputs(self["input.factor.types"])
@@ -510,6 +581,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             "data": self.input_data_types,
             "factor": self.input_factor_types,
             "hidden": self.input_hidden_types,
+            "final": self.input_final_types,
         }
 
     @property
@@ -518,6 +590,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             "data": {tp: "." for tp in self.input_data_types},
             "factor": {tp: "." for tp in self.input_factor_types},
             "hidden": {tp: "." for tp in self.input_hidden_types},
+            "final": {tp: "." for tp in self.input_final_types},
         }
 
     @property
@@ -591,6 +664,10 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     @property
     def sample_method(self) -> SampleMethod:
         return self["train.dataloader.sample_method"]
+
+    @property
+    def label_normalization(self) -> str:
+        return str(self.Param.get('train.label_normalization', 'standardize'))
 
     @property
     def shuffle_option(self) -> ShuffleOption:
@@ -727,7 +804,7 @@ class AlgoConfig(Base.BoundLogger , Base.CacheProps):
         return f"{self.__class__.__name__}(model_name={self.model_name})"
 
     def load_params(self):
-        if self.base_path.is_null_model:
+        if self.base_path.is_null_model or self.module_type == 'linear':
             self.Param = get_config_dict(None)
         elif self.base_path and not self.start_with_none and (conf_file := self.base_path.conf_file(f"algo.{self.model_module}")).exists():
             self.Param = get_config_dict(conf_file)
@@ -750,7 +827,7 @@ class AlgoConfig(Base.BoundLogger , Base.CacheProps):
         return self
 
     def check_validity(self):
-        if is_null_module_type(self.module_type):
+        if is_null_module_type(self.module_type) or self.module_type == 'linear':
             self.n_model = 1
         else:
             lens = [len(v) for v in self.Param.values() if isinstance(v, (list, tuple))]
@@ -957,8 +1034,11 @@ class ModelConfig(BaseModelConfig):
                 self.base_path.clear_model_path()
                 self.logger.alert1(f"{self.base_path} is cleared" , vb = 1)
 
+        if self.module_type == 'linear':
+            from src.res.model.util.linear_lifecycle import prepare_linear_run
+            prepare_linear_run(self)
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
-        dump_kwargs = {'overwrite': self.short_test, 'vb_level': 'never'}
+        dump_kwargs = {'overwrite': self.short_test or self.module_type == 'linear', 'vb_level': 'never'}
         self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , **dump_kwargs)
         self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , **dump_kwargs)
         self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , **dump_kwargs)
@@ -980,6 +1060,10 @@ class ModelConfig(BaseModelConfig):
     @property
     def is_null_model(self) -> bool:
         return self.base_path.is_null_model
+
+    @property
+    def requires_fit(self) -> bool:
+        return self.base_path.requires_fit
 
     @property
     def full_module_name(self):
@@ -1119,12 +1203,12 @@ class ModelConfig(BaseModelConfig):
         queue_of_stages: list[Base.lit.StageAll] = ["data", "fit", "test"]
 
         if value == -1:
-            if not self.base_path.is_null_model:
+            if self.base_path.requires_fit:
                 msg = "--What stage would you want to run? 0: fit + test, 1: fit only , 2: test only"
                 self.logger.note(msg , vb = self.parse_vb)
                 value = int(input(f"[0, fit & test] , [1, fit only] , [2, test only]"))
 
-        if self.base_path.is_null_model:
+        if not self.base_path.requires_fit:
             value = 2
 
         match value:
@@ -1151,7 +1235,7 @@ class ModelConfig(BaseModelConfig):
         """
         assert value in [-1, 0, 1], f"resume must be -1, 0, or 1, got {value}"
         if value == -1:
-            if self.short_test:
+            if self.short_test or self.module_type == "linear":
                 value = 0
             else:
                 candidates = self.base_path.find_resumable_candidates()
@@ -1192,6 +1276,10 @@ class ModelConfig(BaseModelConfig):
                 1,2,3,...: choose one by model_index
         0: don't change the base_path
         """
+        if self.module_type == 'linear':
+            if value not in (-1, 0):
+                raise ValueError('Linear schedules do not have numbered experiment directories')
+            return
         assert value in [-1, 0], f"initial selection must be -1 or 0, got {value}"
         candidates = self.base_path.find_resumable_candidates_indices(
             folder_not_exist="fit" in self.queue_of_stages and not self.is_resuming)
@@ -1289,6 +1377,10 @@ class ModelConfig(BaseModelConfig):
                 info_strs.append((1, "Data Types", f"{self.input_data_types}"))
             elif self.input_type == "hidden":
                 info_strs.append((1, "Hidden Models", f"{self.input_hidden_types}"))
+            elif self.input_type == "final":
+                info_strs.append((1, "Final Sources", ", ".join(self.input_final_types)))
+                info_strs.append((1, "Final Precursor", self.input_final_precursor))
+                info_strs.append((1, "Final Weights", self.input_final_weights))
             elif self.input_type == "factor":
                 info_strs.append((1, "Factor Types", f"{self.input_factor_types}"))
                 if self.input_factor_names:

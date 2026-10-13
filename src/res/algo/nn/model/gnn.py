@@ -1,4 +1,9 @@
-"""Astgnn: Alpha-Beta Co-Mining GRU.
+"""ASTGNN: Alpha-Beta Co-Mining GRU with a directed stock graph.
+
+``AstgnnLegacy`` retains the original graph-free checkpoint layout and loss.
+``Astgnn`` requires new weights and complete, single-date stock batches.
+Its fit/R² label horizons are selected by schedule, not hard-coded here.
+The graph excludes self edges and has quadratic memory cost in stock count.
 
 One encoder when ``ab_split_input`` is false. When it is true, inputs before
 ``ab_split_pos`` feed the alpha GRU and the rest feed the beta GRU.
@@ -14,7 +19,7 @@ from src.res.algo.nn.loss.loss import Loss
 
 from .RNN import mod_gru
 
-__all__ = ['Astgnn']
+__all__ = ['Astgnn', 'AstgnnLegacy']
 
 _FIT_LOSSES = ('mse', 'pearson', 'ccc')
 
@@ -99,8 +104,8 @@ def _fit_weight(weight: Tensor | None) -> Tensor | None:
     return weight
 
 
-class Astgnn(_AstgnnLoss):
-    """Alpha-Beta Co-Mining GRU. Registry key: ``'astgnn'``.
+class AstgnnLegacy(_AstgnnLoss):
+    """Original graph-free GRU. Registry key: ``'astgnn_legacy'``.
 
     ``ab_split_input=False`` concatenates every input stream and runs one GRU.
     ``ab_split_input=True`` sends ``input[:ab_split_pos]`` through the alpha
@@ -242,3 +247,116 @@ class Astgnn(_AstgnnLoss):
             'pred_alpha': pred_alpha,
             'pred_beta': pred_beta,
         }
+
+
+class _SingletonBatchNorm1d(nn.BatchNorm1d):
+    """Use running statistics for a one-stock training cross section."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.training and x.shape[0] == 1:
+            return nn.functional.batch_norm(
+                x, self.running_mean, self.running_var, self.weight, self.bias,
+                training=False, momentum=0., eps=self.eps,
+            )
+        return super().forward(x)
+
+
+class _AsymmetricStockGraph(nn.Module):
+    """Dense directed stock graph, with self information only in the residual."""
+
+    def __init__(self, factor_dim: int):
+        super().__init__()
+        self.query = nn.Linear(factor_dim, factor_dim)
+        self.key = nn.Linear(factor_dim, factor_dim)
+        self.value = nn.Linear(factor_dim, factor_dim)
+        self.output = nn.Linear(factor_dim, factor_dim)
+
+    def adjacency(self, x: Tensor) -> Tensor:
+        scores = torch.relu(self.query(x) @ self.key(x).T)
+        if len(x) <= 1:
+            return scores * 0
+        diagonal = torch.eye(len(x), device=x.device, dtype=torch.bool)
+        return scores.masked_fill(diagonal, -torch.inf).softmax(dim=-1)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.output(x + self.adjacency(x) @ self.value(x))
+
+
+class Astgnn(AstgnnLegacy):
+    """Full ASTGNN with directed cross-stock beta propagation.
+
+    Each batch must contain one date's complete effective stock universe.
+    Labels are two schedule-selected returns (fit, joint explanation). Alpha
+    alone receives the fit loss; the optional beta output mapping affects only
+    the returned prediction and is not trained by this four-term objective.
+    Window-start and window-end beta factors share the same graph head.
+    """
+
+    def __init__(
+        self, input_dim, hidden_dim: int = 64, alpha_num: int = 60,
+        beta_num: int = 10, hidden_as_factors: bool = True,
+        pred_batchnorm: bool = False, loss_fit_weight: float = 1.,
+        loss_rsquare_weight: float = 1., loss_turnover_lamb: float = 1.,
+        **kwargs,
+    ):
+        if alpha_num < 1 or beta_num < 1:
+            raise ValueError('alpha_num and beta_num must be positive')
+        super().__init__(
+            input_dim=input_dim, hidden_dim=hidden_dim, alpha_num=alpha_num,
+            beta_num=beta_num, hidden_as_factors=False, **kwargs,
+        )
+        self.beta_net = nn.Sequential(
+            nn.Linear(hidden_dim, beta_num), _AsymmetricStockGraph(beta_num),
+        )
+        if hidden_as_factors:
+            self.alpha_net.append(_SingletonBatchNorm1d(alpha_num))
+            self.beta_net.append(_SingletonBatchNorm1d(beta_num))
+        self.pred_batchnorm = _SingletonBatchNorm1d(1) if pred_batchnorm else nn.Identity()
+        self.loss_fit_weight = loss_fit_weight
+        self.loss_rsquare_weight = loss_rsquare_weight
+        self.loss_turnover_lamb = loss_turnover_lamb
+        for name in ('loss_fit_weight', 'loss_rsquare_weight', 'loss_corr_lamb', 'loss_turnover_lamb'):
+            value = getattr(self, name)
+            if not 0 <= value < float('inf'):
+                raise ValueError(f'{name} must be finite and nonnegative')
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        if prefix + 'beta_net.0.weight' in state_dict and prefix + 'beta_net.1.query.weight' not in state_dict:
+            error_msgs.append(
+                'Graph-free ASTGNN weights cannot load into the full astgnn. '
+                'Use AstgnnLegacy / astgnn_legacy with the original configuration, '
+                'or retrain astgnn; no automatic weight migration is performed.'
+            )
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
+                                      missing_keys, unexpected_keys, error_msgs)
+
+    def loss(self, pred: Tensor, label: Tensor, alphas: Tensor, betas: Tensor,
+             betas_peer: Tensor, pred_alpha: Tensor,
+             weight: Tensor | None = None, **kwargs) -> dict[str, Tensor]:
+        if label.ndim != 2 or label.shape != (len(alphas), 2):
+            raise ValueError(f'ASTGNN requires two return label columns, got {label.shape}')
+        fit = self.fit_criterion(pred_alpha, label[:, :1], weight=_fit_weight(weight))
+        factors = torch.cat((alphas, betas), dim=-1)
+        return {
+            self.fit_loss: self.loss_fit_weight * fit if isinstance(fit, Tensor) else self.loss_fit_weight * fit[self.fit_loss],
+            'rsquare': self.loss_rsquare_weight * self.rsquare_loss(factors, label[:, 1]),
+            'corr': self.loss_corr_lamb * self.corr_loss(factors),
+            'turnover': self.loss_turnover_lamb * self.turnover_loss(betas, betas_peer),
+        }
+
+    def rsquare_loss(self, hiddens: Tensor, label: Tensor, **kwargs) -> Tensor:
+        """Uncentered squared residual fraction (1 - R²), without an intercept."""
+        # Pseudoinverse supports rank-deficient and wide factor matrices.
+        h = hiddens.float() if hiddens.dtype in (torch.float16, torch.bfloat16) else hiddens
+        y = label.to(h.dtype)
+        residual = y - h @ (torch.linalg.pinv(h) @ y)
+        energy = y.square().sum()
+        fraction = residual.square().sum() / energy.clamp_min(torch.finfo(y.dtype).tiny)
+        return torch.where(energy > 0, fraction, residual.sum() * 0)
+
+    def corr_loss(self, hiddens: Tensor, **kwargs) -> Tensor:
+        """Full correlation-matrix Frobenius norm; constant columns map to zero."""
+        h = hiddens - hiddens.mean(dim=0, keepdim=True)
+        h = h / h.norm(dim=0, keepdim=True).clamp_min(1e-6)
+        return (h.T @ h).norm()

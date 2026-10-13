@@ -170,6 +170,10 @@ def execute_open_close(
     fee_rate: float,
     max_holdings: int,
     max_weight: float,
+    stock_ids: np.ndarray | None = None,
+    decision_date: int | None = None,
+    execution_date: int | None = None,
+    valuation_context: dict[str, np.ndarray] | None = None,
 ) -> ExecutionResult:
     """Mark close-to-open, execute legal orders, then mark open-to-close.
 
@@ -184,13 +188,36 @@ def execute_open_close(
     buy_mask = np.asarray(can_buy, dtype=bool)
     sell_mask = np.asarray(can_sell, dtype=bool)
     n = old.size
+    if stock_ids is not None and np.asarray(stock_ids).shape != (n,):
+        raise ValueError('stock_ids must have the same shape as execution arrays')
+
+    def valuation_error(period: str, bad: np.ndarray) -> ValueError:
+        details = [
+            {'index': int(i), 'secid': int(stock_ids[i]) if stock_ids is not None else None,
+             'old_weight': float(old[i]), 'target_weight': float(target[i]),
+             'overnight_return': float(overnight[i]), 'intraday_return': float(intraday[i]),
+             'can_buy': bool(buy_mask[i]), 'can_sell': bool(sell_mask[i])}
+            for i in bad[:10]
+        ]
+        if valuation_context:
+            from .valuation import REASONS
+            for item, i in zip(details, bad[:10], strict=True):
+                item.update({key: int(value[i]) for key, value in valuation_context.items()})
+                item['reason_name'] = REASONS.get(item['reason'], 'unknown')
+        return ValueError(
+            f'held assets lack {period} valuation; decision_date={decision_date}, '
+            f'execution_date={execution_date}; assets={details}. '
+            'Check adjusted close on decision day, raw open/adjustment factor/trading status '
+            'and adjusted close on execution day, including suspension/delisting records. '
+            'Missing held-asset valuations are not replaced with zero returns.'
+        )
     if any(value.shape != (n,) for value in (target, overnight, intraday, buy_mask, sell_mask)):
         raise ValueError("execution arrays must have identical [stock] shape")
     if np.any(old < -1e-10) or old_cash < -1e-10 or np.any(target < -1e-10):
         raise ValueError("execution supports long-only portfolios")
     if np.any(~np.isfinite(overnight[old > 1e-12])):
         bad = np.flatnonzero((old > 1e-12) & ~np.isfinite(overnight))
-        raise ValueError(f"held assets lack an overnight valuation: {bad[:10].tolist()}")
+        raise valuation_error('an overnight', bad)
 
     open_assets = old * (1.0 + np.nan_to_num(overnight, nan=0.0))
     cash = float(old_cash)
@@ -232,7 +259,7 @@ def execute_open_close(
 
     if np.any(~np.isfinite(intraday[open_assets > 1e-12])):
         bad = np.flatnonzero((open_assets > 1e-12) & ~np.isfinite(intraday))
-        raise ValueError(f"held assets lack a close valuation: {bad[:10].tolist()}")
+        raise valuation_error('a close', bad)
     close_assets = open_assets * (1.0 + np.nan_to_num(intraday, nan=0.0))
     final_nav = float(close_assets.sum() + cash)
     if not np.isfinite(final_nav) or final_nav <= 0:

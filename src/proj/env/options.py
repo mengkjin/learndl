@@ -11,9 +11,13 @@ class OptionsDefinition:
     def available_models(cls) -> list[str]:
         """Get the available nn/boost models in the models directory"""
         models : list[str] = []
-        for root in [PATH.model_nn , PATH.model_boost , PATH.model_st]:
-            for model in root.iterdir():
+        for root in [PATH.model_nn , PATH.model_boost , PATH.model_st, PATH.model_linear]:
+            for model in root.glob("*"):
                 if model.is_dir() and not model.name.startswith('.'):
+                    linear_name = (model.name if root == PATH.model_linear else
+                                   model.name.removeprefix('linear@') if root == PATH.model_st and model.name.startswith('linear@') else None)
+                    if linear_name is not None and not (PATH.sched_linear / f'{linear_name}.yaml').is_file():
+                        continue
                     models.append(f'{root.name}/{model.name}')
         return models
 
@@ -28,7 +32,11 @@ class OptionsDefinition:
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/model/schedule directory"""
-        return sorted([p.stem for p in PATH.sched.glob('*.yaml')] + [p.stem for p in PATH.sched_shared.glob('*.yaml')])
+        from src.res.model.util.config.config import ScheduleConfig
+        names = sorted({p.stem for root in (PATH.sched, PATH.sched_shared, PATH.sched_linear) for p in root.glob('*.yaml')})
+        for name in names:
+            ScheduleConfig.find_path(None, name)  # fail clearly on ambiguous names
+        return names
 
     @classmethod
     def available_trackingports(cls) -> list[str]:

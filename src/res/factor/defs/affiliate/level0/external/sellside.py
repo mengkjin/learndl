@@ -4,7 +4,7 @@ Sellside factors for affiliate level0
 from __future__ import annotations
 from src.res.factor.calculator.factor_calc import SellsideFactor
 
-__all__ = ['df_scores_v0' , 'df_scores_v2' , 'df_scores_v3' , 'ht_master_combined']
+__all__ = ['df_scores_v0' , 'df_scores_v2' , 'df_scores_v3' , 'ht_master_combined' , 'hy_scores_v5' , 'hy_cmm']
 
 class df_scores_v0(SellsideFactor):
     init_date = 20180101

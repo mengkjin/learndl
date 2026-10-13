@@ -9,7 +9,7 @@ from typing import Any, Callable, cast
 import numpy as np
 
 
-PANEL_SCHEMA_VERSION = 2
+PANEL_SCHEMA_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,9 @@ class PanelData:
     can_buy: np.ndarray | None = None
     can_sell: np.ndarray | None = None
     valuation_stale: np.ndarray | None = None
+    valuation_reason: np.ndarray | None = None
+    valuation_stale_days: np.ndarray | None = None
+    valuation_last_valid_date: np.ndarray | None = None
     industry_codes: np.ndarray | None = None
     feature_names: tuple[str, ...] = ()
     schema_version: int = PANEL_SCHEMA_VERSION
@@ -102,6 +105,20 @@ class PanelData:
             object.__setattr__(self, "valuation_stale", stale)
         elif np.any(~np.isfinite(returns[investable])):
             raise ValueError("forward returns must be finite for investable stocks")
+
+        metadata_fields = ('valuation_reason', 'valuation_stale_days', 'valuation_last_valid_date')
+        if any(getattr(self, name) is not None for name in metadata_fields):
+            if not self.is_execution_panel or not all(getattr(self, name) is not None for name in metadata_fields):
+                raise ValueError('valuation metadata requires all three arrays and an execution panel')
+            for name in metadata_fields:
+                value = np.asarray(getattr(self, name))
+                if value.shape != (t, n) or not np.issubdtype(value.dtype, np.integer) or np.any(value < 0):
+                    raise ValueError(f'invalid {name}')
+                object.__setattr__(self, name, value)
+            if np.any(self.valuation_reason > 5):
+                raise ValueError('unknown valuation reason')
+            if np.any(self.valuation_last_valid_date > self.execution_dates[:, None]):
+                raise ValueError('valuation date cannot reference a future observation')
 
         if self.industry_codes is not None:
             industry = np.asarray(self.industry_codes, dtype=np.int16)
@@ -194,6 +211,9 @@ class PanelData:
                 self.can_sell,
                 self.valuation_stale,
                 self.industry_codes,
+                self.valuation_reason,
+                self.valuation_stale_days,
+                self.valuation_last_valid_date,
             )
             if value is not None
         )
@@ -229,6 +249,9 @@ class PanelData:
             "can_sell",
             "valuation_stale",
             "industry_codes",
+            "valuation_reason",
+            "valuation_stale_days",
+            "valuation_last_valid_date",
         ):
             value = getattr(self, name)
             if value is not None:
@@ -245,6 +268,8 @@ class PanelData:
             kwargs["feature_names"] = tuple(kwargs["feature_names"].tolist())
         if "schema_version" in kwargs:
             kwargs["schema_version"] = int(kwargs["schema_version"])
+        else:
+            kwargs['schema_version'] = 1
         return cls(**kwargs)
 
 

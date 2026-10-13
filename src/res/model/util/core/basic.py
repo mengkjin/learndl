@@ -69,7 +69,11 @@ def combine_full_name(
     """
     combine a full model name into (st , module_type , module_name , model_clean_name , model_name_index)
     """
-    if is_null_module_type(module_type):
+    if module_type == 'linear':
+        if module_name != 'linear' or model_name_index not in ('', 1):
+            raise ValueError('Linear models use linear@schedule_name without a directory index')
+        name = f'linear@{model_clean_name}'
+    elif is_null_module_type(module_type):
         assert module_name == model_clean_name , f'module_name {module_name} and model_clean_name {model_clean_name} are not the same a {module_type} model'
         assert model_name_index == '' or (isinstance(model_name_index , int) and model_name_index == 1), f'model_name_index {model_name_index} is not empty as a {module_type} model'
         name = f'{module_type}@{module_name}'
@@ -106,11 +110,11 @@ def split_module_type_prefix(text : str) -> tuple[ModuleType,str]:
     If the string starts with 'aa.' or 'bb.', returns (prefix, rest).
     Otherwise, returns ('', text).
     """
-    match = re.match(r'^(nn|boost|db|factor)\@(.*)$', text)
+    match = re.match(r'^(nn|boost|db|factor|linear)\@(.*)$', text)
     if match:
         module_type : Any = match.group(1)
         remain : str = match.group(2)
-        assert module_type in ['nn' , 'boost' , 'factor'] , f'Invalid module type [{module_type}]'
+        assert module_type in ['nn' , 'boost' , 'factor', 'linear'] , f'Invalid module type [{module_type}]'
     else:
         module_name = text.split('@')[0]
         module_type = model_module_type(module_name)
@@ -129,6 +133,10 @@ def split_full_name(text : str) -> tuple[str,ModuleType,str,str,str]:
     try:
         st , remain = split_st_prefix(text)
         module_type , remain = split_module_type_prefix(remain)
+        if module_type == 'linear':
+            if not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]*', remain):
+                raise ValueError('Expected linear@schedule_name')
+            return st, ModuleType.LINEAR, 'linear', remain, ''
         remain , model_name_index = split_digits_suffix(remain)
         if '@' in remain:
             module_name , model_clean_name = remain.split('@' , 1)
@@ -155,7 +163,7 @@ def model_module_type(module_name : str) -> ModuleType:
     if module_name in ModuleType:
         return ModuleType(module_name)
     elif '@' in module_name:
-        match = re.match(r'^(nn|boost|db|factor)\@(.*)$', module_name)
+        match = re.match(r'^(nn|boost|db|factor|linear)\@(.*)$', module_name)
         assert match , f'Invalid module type for [{module_name}]'
         module_type , module_name = match.group(1) , match.group(2)
         return ModuleType(module_type)
@@ -184,4 +192,6 @@ def search_existing_models(model_name : str) -> tuple[ModuleType,str]:
     for model in PATH.model_boost.glob(f'*{model_name}'):
         if model.is_dir() and not model.name.startswith('.'):
             return ModuleType.BOOST , model.name
+    if (PATH.model_linear / model_name).is_dir():
+        return ModuleType.LINEAR, model_name
     raise ValueError(f'Cannot find existing model for [{model_name}]')

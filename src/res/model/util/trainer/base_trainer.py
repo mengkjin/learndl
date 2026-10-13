@@ -11,7 +11,7 @@ import numpy as np
 from functools import wraps
 from typing import Any , Literal , TypeAlias , cast , Sized , Callable
 
-from src.proj import Const , Base
+from src.proj import Const , Base, PATH
 from src.proj.util.script.fit_lock import FitLock, FitLockNN
 
 from src.proj.bases import FittingEventType
@@ -104,7 +104,9 @@ class BaseTrainer(BasePipeline):
         config_kwargs = dict(self._config_kwargs)
         model_kwargs = dict(self._kwargs)
         schedule_resume = config_kwargs.get('schedule_name') and self._kwargs.get('resume') == 1
-        if schedule_resume:
+        linear_schedule = bool(config_kwargs.get('schedule_name') and
+                               (PATH.sched_linear / f"{config_kwargs['schedule_name']}.yaml").is_file())
+        if schedule_resume and not linear_schedule:
             from src.res.model.util.core import ModelPath
             from ..schedule_resume import select_schedule_run, validate_saved_configs
 
@@ -125,7 +127,7 @@ class BaseTrainer(BasePipeline):
         model_kwargs.pop('resume_selection', None)
         self._config = ModelConfig(**config_kwargs , **model_kwargs)
         try:
-            if schedule_resume and self._config.boost_head_config:
+            if schedule_resume and not linear_schedule and self._config.boost_head_config:
                 validate_saved_configs(self._config.base_path, boost_head=self._config.boost_head_config.model_module)
             self._config.start_model()
         finally:
@@ -307,8 +309,12 @@ class BaseTrainer(BasePipeline):
 
         return self
 
-    def go(self):
-        """alias of main_process"""
+    def go(self, *, resume: int | None = None):
+        """Run; an explicit resume overrides the initialization option."""
+        if resume is not None:
+            if resume not in (0, 1):
+                raise ValueError("resume must be 0 or 1")
+            self._kwargs["resume"] = resume
         return self.main_process()
 
     def stage_setup(self):
@@ -416,6 +422,7 @@ class BaseTrainer(BasePipeline):
                 self.on_test_model_end()
                 if self.status.model_num == self.config.model_num_list[-1]:
                     self.on_test_model_date_end()
+            self.data.validate_final_coverage()
             self.on_test_end_before()
             self.on_test_end()
             self.on_test_end_after()

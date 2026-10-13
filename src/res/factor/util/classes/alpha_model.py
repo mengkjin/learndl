@@ -14,6 +14,7 @@ from collections.abc import Callable, Sequence, Mapping
 from src.proj import Const , DB , Base , Dates 
 from src.data import DATAVENDOR
 from src.func.transform import fill_na_as_const , winsorize_by_dist , standard_normal
+from src.func.linear import weighted_components
 
 from .general_model import GeneralModel
 
@@ -189,7 +190,7 @@ class Amodel:
 
         secid = np.unique(np.concatenate([alpha.secid for alpha in alphas]))
         all_alphas = np.stack([alpha.alpha_of(secid , nan = 0) for alpha in alphas] , axis = 0)
-        alpha = np.sum(all_alphas * weights[:,None] , axis = 0) / weights.sum()
+        alpha = weighted_components(all_alphas, weights, axis=0, normalize_weights=True).sum(axis=0)
         amodel = cls(date , alpha , secid , name)
         if normalize: 
             amodel = amodel.zscore(inplace=True)

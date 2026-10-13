@@ -1,0 +1,18 @@
+# Stored GRU prediction and Dongfang sellside factor, equally weighted.
+# ModelTrainer.schedule('pred_mix', short_test=False, resume=0)
+model:
+  module: linear
+  labels: [std_lag1_10]
+input:
+  type: final
+  final.types:
+    - pred@gru_day_V1
+    - factor@df_scores_v0
+  # none: raw values; normal: daily z-score clipped at +/-3.5;
+  # percentile: average tied rank / finite count.
+  final.precursor: normal
+  # equal means mean; [1, 1] means sum; [1, -1] means difference.
+  final.weights: equal
+  final.refresh: false
+# Exact archive source example (select pred.0 explicitly for multi-head output):
+# model_pred@gru@experiment_b@1@0@best@pred.0

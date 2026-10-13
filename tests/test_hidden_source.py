@@ -174,6 +174,10 @@ class HiddenSourceTest(unittest.TestCase):
         # A same-named Boost folder must not affect the explicitly specified GRU.
         shutil.copytree(self.base, PATH.model_boost / 'lgbm@gru_day_new_rtn')
         for ref, expected in [('gru@gru_day_new_rtn@1@0@best', self.base),
+                              ('gru@gru_day_new_rtn', self.base),
+                              ('gru@gru_day_new_rtn@1', self.base),
+                              ('gru@gru_day_new_rtn@2', other),
+                              ('nn@gru@gru_day_new_rtn', self.base),
                               ('gru@gru_day_new_rtn@2@0@best', other),
                               ('gru@gru_day_new_rtn@0@best', self.base),
                               ('nn@gru@gru_day_new_rtn@2@0@best', other)]:
@@ -183,11 +187,13 @@ class HiddenSourceTest(unittest.TestCase):
                 self.assertEqual(model.config.base_path.base, expected)
                 self.assertEqual(model.config.base_path.model_module, 'gru')
                 self.assertEqual(model.path.use_model_nums.tolist(), [0])
+                self.assertEqual(model.path.use_submodel, 'best')
         self.prompt.assert_not_called()
 
     def test_missing_directory_never_falls_back_to_another_index(self):
         self.base.rename(self.base.with_name(self.base.name + '@2'))
-        for ref in ('gru@gru_day_new_rtn@1@0@best', 'gru@gru_day_new_rtn@0@best'):
+        for ref in ('gru@gru_day_new_rtn@1@0@best', 'gru@gru_day_new_rtn@0@best',
+                    'gru@gru_day_new_rtn'):
             with self.assertRaisesRegex(FileNotFoundError, 'directory does not exist'):
                 self.load(ref)
         self.assertFalse(self.base.exists())
@@ -227,8 +233,8 @@ class HiddenSourceTest(unittest.TestCase):
         self.assertEqual(self.load().model_dates.tolist(), [20240101])
         self.assertEqual(self.load('gru@gru_day_new_rtn@1@1@best').model_dates.tolist(), [20250101])
 
-    def test_reference_requires_module_number_and_submodel(self):
-        for reference in ('gru_day_new_rtn', 'gru@gru_day_new_rtn', 'gru@gru_day_new_rtn@best',
+    def test_reference_requires_module_and_valid_optional_suffix(self):
+        for reference in ('gru_day_new_rtn', 'gru@gru_day_new_rtn@best',
                           'gru@gru_day_new_rtn@0', 'gru@gru_day_new_rtn@1@all@best',
                           'gru@gru_day_new_rtn@0@0@best', 'gru@gru_day_new_rtn@1@-1@best',
                           'boost@gru@gru_day_new_rtn@1@0@best', 'unknown_module@name@1@0@best'):
