@@ -264,7 +264,7 @@ class PredRecorder(TrainerPipeline):
         - only resume predictions with all submodels
         """ 
         self.resume_info = ''
-        if not self.config.is_resuming or not Const.Model.resume_test:
+        if self.config.module_type == 'linear' or not self.config.is_resuming or not Const.Model.resume_test:
             return
         
         pred_records = self.pred_records().query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
@@ -300,6 +300,29 @@ class PredRecorder(TrainerPipeline):
             self.config.resumed_max_pred_date = max_pred_date
             self.resume_info = f', recognize past saved preds before prediction date {self.config.resumed_max_pred_date}'
     
+    def prepare_linear_test(self) -> None:
+        """Resolve exact completed dates before final inputs are read in data stage."""
+        self.purge_outdated_model_preds()
+        completed = np.array([], dtype=int)
+        empty_dates = np.array([], dtype=int)
+        if self.config.is_resuming and Const.Model.resume_test:
+            dates = self.data.test_full_dates
+            coverage_path = self.folder_records / 'linear_empty_dates.json'
+            if coverage_path.is_file():
+                empty_dates = np.asarray(PATH.read_json(coverage_path)['empty_dates'], dtype=int)
+            records = self.pred_records().query('min_pred_date <= @dates.max() & max_pred_date >= @dates.min()')
+            if not records.empty:
+                saved = Load.df(records['path'].tolist(), key_column=None)
+                saved = saved.query('model_num == 0 & submodel == "best"')
+                completed = np.intersect1d(dates, saved.loc[np.isfinite(saved['pred']), 'date'].unique())
+        self.data.linear_completed_dates = completed
+        self.data.linear_known_empty_dates = empty_dates
+        self.data.linear_pending_dates = np.setdiff1d(self.data.test_full_dates, np.union1d(completed, empty_dates))
+        self.config.resumed_max_pred_date = int(completed.max()) if len(completed) else 19000101
+        self.resumed_models = pd.DataFrame(columns=['model_date', 'model_num'])
+        self.resume_info = f', linear: {len(completed)} completed dates, {len(self.data.linear_pending_dates)} pending dates'
+        self.logger.note(self.resume_info.lstrip(', '), vb=1)
+
     def append_batch_preds(self) -> None:
         if self.pred_idx in self.pred_dict.keys() or self.batch_output.empty: 
             return
@@ -405,6 +428,8 @@ class PredRecorder(TrainerPipeline):
         self.purge_retrained_model_preds()
 
     def on_test_start(self):
+        if self.config.module_type == 'linear':
+            return  # Prepared in data stage, before reading final inputs.
         self.purge_outdated_model_preds()
         if self.has_purged_preds:
             self.setup_resuming_status()
@@ -423,6 +448,11 @@ class PredRecorder(TrainerPipeline):
 
     def on_test_end(self):
         self.purge_duplicated_model_preds()
+        if self.config.module_type == 'linear':
+            empty_dates = [date for date, count in self.data._final_loader.coverage_by_date.items() if not count]
+            empty_dates = np.union1d(self.data.linear_known_empty_dates, empty_dates).astype(int)
+            PATH.dump_json({'empty_dates': empty_dates.tolist()},
+                           self.folder_records / 'linear_empty_dates.json', overwrite=True)
         avg_pred_records = self.avg_pred_records()
         if not avg_pred_records.empty:
             self.logger.stdout(f'Avg model preds updated to {avg_pred_records["max_pred_date"].max()}')

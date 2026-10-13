@@ -39,6 +39,12 @@ class OptionsDefinition:
         return names
 
     @classmethod
+    def available_linear_schedules(cls) -> list[str]:
+        """Linear schedules can be tested before a model output directory exists."""
+        return [name for name in cls.available_schedules()
+                if (PATH.sched_linear / f'{name}.yaml').is_file()]
+
+    @classmethod
     def available_trackingports(cls) -> list[str]:
         """Get the available tracking ports in the trade_port directory"""
         return [p.name for p in PATH.trade_port.iterdir() if not p.name.startswith('.')]
@@ -118,6 +124,11 @@ class Options:
     def available_schedules(cls , refresh : bool = False) -> list[str]:
         """Get the available schedules from the cache"""
         return cls.cache.get('available_schedules' , refresh)
+
+    @classmethod
+    def available_linear_schedules(cls , refresh : bool = False) -> list[str]:
+        """Get only schedules defined in configs/schedule/linear."""
+        return cls.cache.get('available_linear_schedules' , refresh)
 
     @classmethod
     def available_trackingports(cls , refresh : bool = False) -> list[str]:

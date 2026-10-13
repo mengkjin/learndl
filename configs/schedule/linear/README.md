@@ -32,7 +32,11 @@ input:
   final.refresh: false
 ```
 
-Run through the existing trainer:
+The script menu entry `5_test/3_test_linear.py` lists only linear schedules,
+supports `start`/`end`, and defaults to `resume=False`. It writes normal results
+under `models/linear/<schedule_name>/` and includes a schedule config editor.
+
+Or run through the existing trainer:
 
 ```python
 from src.res.model.model_module.application import ModelTrainer
@@ -66,6 +70,11 @@ There is no algorithm weight sweep or fitting stage in this version.
 
 - `pred@name`: one stored prediction column from `DB_pred`; never reruns a model.
   Published predictions may already average multiple model numbers.
+  If DataBlock reshaping fails, duplicate rows are checked and their dates are
+  warned about. Identical rows are collapsed in memory and conversion retries;
+  conflicting values for the same stock/date raise `ValueError` with the source,
+  requested period and example keys. Source files are not modified, and normal
+  conversions do not incur this duplicate check.
 - `factor@name`: one registered factor, loaded without extra normalization.
 - `model_pred@module@name@directory_index@model_num@submodel[@pred.N]`:
   one archived model output. Directory 1 is the unnumbered experiment directory.
@@ -82,8 +91,11 @@ Only nn/boost upstream models are supported; recursive linear sources are not.
 ## Preprocessing and weights
 
 Every source contributes one scalar column. Stocks and dates are aligned before
-processing. The common finite universe of nonzero-weight columns defines each
-day's cross-section. The final layer does not zero-fill or forward-fill missing values.
+processing. Each day, wholly empty components are ignored. The remaining
+nonzero-weight components define the common finite stock universe; individual
+missing stock values are not filled. A day without any available component is
+skipped. The effective test period is bounded by usable dates (including saved
+dates when resuming). The final layer does not forward-fill values.
 Factor loaders keep their own existing semantics: `df_scores_v0`, for example,
 uses its primary/alternative sellside databases and carries the last usable
 cross-section onto later dates. Coverage is reported. Zero-weight sources do not restrict that universe.
@@ -96,7 +108,9 @@ cross-section, before weighting and batching:
 - `percentile`: average tied rank / finite count, in (0, 1].
 - `none`: raw values.
 
-`final.weights: equal` means the mean (1/N per column). A numeric vector such as
+`final.weights: equal` means the mean of that day's available components (1/N
+per available column). If only one component is available, its value is used.
+A numeric vector such as
 `[1, 1]` or `[1, -1]` is used literally, without automatic normalization.
 It is an input option, so a plain vector is not expanded into multiple models.
 For raw prediction addition, choose `none` and `[1, 1]`.
@@ -117,6 +131,15 @@ changes are rejected to avoid mixing experiments; extend the end date or use
 `resume=0` to recompute. A fresh run replaces this schedule's generated test
 records/results, retaining upstream models and raw prediction caches.
 
+Final inputs are read and preprocessed once in the data stage. For linear
+resume, saved prediction records determine the exact unfinished dates first,
+including historical gaps; completed dates are not read again. No new dates
+means no final-source reads. Dates confirmed to have no usable combination are
+recorded too, so leading/trailing empty periods do not reload on every resume.
+Use `resume=0` to reconsider those dates after upstream data is backfilled.
+The test stage only consumes prepared tensors,
+even though results are still organized into monthly model dates.
+
 Schedule names must be unique across current, shared and linear directories.
 
 ## Missing sources and shared computation
@@ -124,9 +147,11 @@ Schedule names must be unique across current, shared and linear directories.
 Nonzero-weight source storage and model checkpoints are checked before a fresh
 run clears previous results. Missing storage raises `FileNotFoundError`; unknown
 factors or invalid configuration raise `ValueError`, with the source and context.
-Partial missing dates are skipped and summarized. A required source with no
-finite values in the whole attempted test period, or no common finite stocks
-throughout that period, raises an error before successful completion callbacks.
+Empty daily components are ignored and dates with no usable combination are
+skipped and summarized. An entirely empty component is allowed when another
+component has data. If the whole evaluation has no usable combination (and no
+saved predictions on resume), the data stage raises an error. Storage missing
+from the computer is still an error, rather than being treated as an empty day.
 Empty individual months are allowed. Resume with no new dates is a no-op.
 
 Final inputs and `Amodel.combine_linear` share `src.func.linear` weight parsing

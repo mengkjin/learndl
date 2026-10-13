@@ -16,6 +16,19 @@ from src.res.model.util.final_source import FinalSource, FinalInputLoader, prepa
 
 
 class SharedLinearTest(unittest.TestCase):
+    def test_daily_empty_components_equal_and_literal_weights(self):
+        raw = torch.tensor([[[float('nan'), float('nan')], [2., float('nan')], [2., 6.]],
+                            [[float('nan'), float('nan')], [4., float('nan')], [4., 8.]]])
+        equal = prepare_final_values(raw, 'none', 'equal').sum(-1)
+        self.assertTrue(equal[:, 0].isnan().all())
+        torch.testing.assert_close(equal[:, 1:], torch.tensor([[2., 4.], [4., 6.]]))
+        literal = prepare_final_values(raw, 'none', [.7, .3]).sum(-1)
+        torch.testing.assert_close(literal[:, 1:], torch.tensor([[1.4, 3.2], [2.8, 5.2]]))
+        normal = prepare_final_values(raw, 'normal', 'equal').sum(-1)
+        torch.testing.assert_close(normal[:, 1:], torch.tensor([[-1., -1.], [1., 1.]]))
+        percentile = prepare_final_values(raw, 'percentile', 'equal').sum(-1)
+        torch.testing.assert_close(percentile[:, 1:], torch.tensor([[.5, .5], [1., 1.]]))
+
     def test_composite_union_weights_normalization_and_single_component(self):
         a = Amodel(20240102, np.array([2., 6.]), np.array([1, 2]), 'a')
         b = Amodel(20240102, np.array([4., 8.]), np.array([2, 3]), 'b')
@@ -87,6 +100,17 @@ class FinalSourceAvailabilityTest(unittest.TestCase):
         self.assertIn('1/2 usable dates', summary)
         self.assertIn('skipped dates: [20240102]', summary)
         self.assertIn('no new dates', loader.validate_coverage([]))
+
+    def test_entirely_empty_component_is_ignored_when_another_has_data(self):
+        loader = self.loader()
+        def frame(source, dates, **kwargs):
+            rows = [(1, 20240102, 4.)] if source.reference == 'a' else []
+            return pd.DataFrame(rows, columns=['secid', 'date', 'value'])
+        with patch.object(FinalSource, 'frame', autospec=True, side_effect=frame):
+            blocks = loader.blocks([20240102], [1], [20240102])
+        self.assertEqual(blocks['pred@a'].values.item(), 4.)
+        self.assertEqual(blocks['pred@b'].values.item(), 0.)
+        self.assertIn("ignored empty components: ['pred@b']", loader.validate_coverage([20240102]))
 
     def test_empty_nan_disjoint_and_future_only_fail_at_period_end(self):
         for kind in ('empty', 'nan', 'disjoint', 'future'):

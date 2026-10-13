@@ -676,7 +676,30 @@ class DataBlock:
         _trace('from-polars joined', dense=values)
         values = values.to_numpy()
         _trace('from-polars numpy', array=values)
-        values = torch.from_numpy(values).reshape(secid.len(), date.len(), inday.len(), len(feature))
+        values = torch.from_numpy(values)
+        try:
+            values = values.reshape(secid.len(), date.len(), inday.len(), len(feature))
+        except RuntimeError as exc:
+            # Only pay for duplicate checks when the dense grid cannot be reshaped.
+            keys = ['secid', 'date', 'inday']
+            duplicates = df.filter(df.select(keys).is_duplicated())
+            if duplicates.is_empty():
+                raise
+            duplicate_dates = duplicates['date'].unique().sort().to_list()
+            Logger.warning(f'DataBlock.from_polars: duplicate stock/date/inday rows; '
+                           f'dates: {duplicate_dates}. Removing identical rows before retrying.')
+            unique = df.unique(maintain_order=True)
+            conflicts = unique.filter(unique.select(keys).is_duplicated())
+            if not conflicts.is_empty():
+                conflict_dates = conflicts['date'].unique().sort().to_list()
+                examples = conflicts.select(keys).unique().sort(keys).head(5).to_dicts()
+                raise ValueError(f'DataBlock.from_polars: conflicting values for the same stock/date/inday; '
+                                 f'dates: {conflict_dates}; examples: {examples}') from exc
+            del values
+            values = torch.from_numpy(
+                grid_lazy.join(unique.lazy(), on=keys, how='left').sort(keys)
+                .select(feature).collect().to_numpy()
+            ).reshape(secid.len(), date.len(), inday.len(), len(feature))
         _trace('from-polars tensor', tensor=values)
         block = cls(values , secid.to_numpy() , date.to_numpy() , feature)
         return block

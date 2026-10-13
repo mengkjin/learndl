@@ -226,15 +226,17 @@ class BaseTrainer(BasePipeline):
         return BatchData(self.batch_input , self.batch_output)
     @property
     def batch_dates(self) -> np.ndarray: 
-        return self.cached_properties.query('model_start' , 'batch_dates' , lambda: np.concatenate([self.data.early_test_dates , self.data.model_test_dates]))
+        return np.asarray(self.data.loader_dates[self.data.stage], dtype=int)
     @property
     def batch_warm_up(self) -> int: 
-        return self.cached_properties.query('model_start' , 'batch_warm_up' , lambda: len(self.data.early_test_dates) if self.status.stage == 'test' else 0)
+        return self.cached_properties.query('model_start' , 'batch_warm_up' , lambda: int(np.isin(self.batch_dates, self.data.early_test_dates).sum()) if self.status.stage == 'test' else 0)
     @property
     def batch_aftermath(self) -> int: 
-        return self.cached_properties.query('model_start' , 'batch_aftermath' , lambda: len(self.data.early_test_dates) + len(self.data.model_test_dates) if self.status.stage == 'test' else 100_000_000)
+        return self.cached_properties.query('model_start' , 'batch_aftermath' , lambda: len(self.batch_dates) if self.status.stage == 'test' else 100_000_000)
     @property
     def batch_resumed(self) -> int: 
+        if self.config.module_type == 'linear':
+            return 0  # Completed dates are excluded before loading the inputs.
         if not self.cached_properties.has('model_start' , 'batch_resumed'):
             if (
                 self.status.stage == 'test' and 
@@ -242,7 +244,7 @@ class BaseTrainer(BasePipeline):
                 self.config.is_resuming and  
                 Const.Model.resume_test and
                 Const.Model.resume_test_start == 'last_pred_date'):
-                value = sum(self.data.model_test_dates <= self.config.resumed_max_pred_date)
+                value = sum(self.batch_dates <= self.config.resumed_max_pred_date)
             else:
                 value = 0
             self.cached_properties.set('model_start' , 'batch_resumed' , value)
@@ -335,6 +337,9 @@ class BaseTrainer(BasePipeline):
             self.on_data_start_before()
             self.on_data_start()
             self.data.load_data()
+            if self.config.module_type == 'linear':
+                self.record.prepare_linear_test()
+                self.data.preload_final_inputs()
             self.on_data_end()
             self.on_data_end_after()
         self.memory_tracker.mark('stage_data_end')
@@ -422,7 +427,6 @@ class BaseTrainer(BasePipeline):
                 self.on_test_model_end()
                 if self.status.model_num == self.config.model_num_list[-1]:
                     self.on_test_model_date_end()
-            self.data.validate_final_coverage()
             self.on_test_end_before()
             self.on_test_end()
             self.on_test_end_after()

@@ -130,6 +130,9 @@ class DataModule(Base.BoundLogger):
         self.labels = self.data_operator.standardize_y(self.datas.y.values.squeeze(2).clone() , no_weight = True)[0]
         self._memory_mark('label_standardize_end', standardized_shape=list(self.labels.shape))
 
+        if self.config.module_type != 'linear':
+            self.preload_final_inputs()
+
         if self.empty_x:
             self.logger.alert2(f'DataModule got empty x , fit and test stage will be skipped')
             self.logger.note(f'{self.input_type} input keys: {self.input_keys}' , vb = 1)
@@ -208,6 +211,39 @@ class DataModule(Base.BoundLogger):
                     gc.collect()
                     torch.cuda.empty_cache()
 
+    def preload_final_inputs(self):
+        """Read and prepare final sources once, before any fit/test batches."""
+        if not self.config.input_final_types:
+            return
+        from src.res.model.util.final_source import FinalInputLoader
+        self._final_loader = FinalInputLoader(self.config)
+        linear = self.config.module_type == 'linear'
+        dates = self.linear_pending_dates if linear else self.datas.date
+        if linear and not len(dates) and not len(self.linear_completed_dates):
+            raise ValueError(f'Final inputs: no usable dates during {self.beg_date}..{self.end_date}')
+        if len(dates):
+            self.logger.note(f'Loading final inputs for {len(dates)} dates: {dates[0]}..{dates[-1]}', vb=1)
+            self.datas.x.update(self._final_loader.blocks(dates, self.datas.secid, self.datas.date))
+            self.config.update_data_param(self.datas.x)
+            # Prepared tensors are retained; test batches never need the raw frames again.
+            self._final_loader.frames.clear()
+        self._final_preloaded = True
+        if linear:
+            usable = np.array([date for date in dates if self._final_loader.coverage_by_date[int(date)] > 0], dtype=int)
+            if len(usable) or (len(dates) and not len(self.linear_completed_dates)):
+                self.logger.note(self._final_loader.validate_coverage(dates), vb=1)
+            elif len(dates):
+                self.logger.note(f'Final inputs: no usable new dates in {dates[0]}..{dates[-1]}; keeping saved predictions', vb=1)
+            else:
+                self.logger.note('Final inputs: no new dates to evaluate', vb=1)
+            self.linear_pending_dates = usable
+            self.test_full_dates = np.union1d(self.linear_completed_dates, usable)
+            self.model_date_list = np.unique(CALENDAR.tds(CALENDAR.offset(
+                usable // 100 * 100 + 1, offset=-1, type='cd'))) if len(usable) else np.array([], dtype=int)
+            if len(self.test_full_dates):
+                self.logger.note(f'Linear effective test period: {self.test_full_dates[0]}..{self.test_full_dates[-1]} '
+                                 f'({len(self.test_full_dates)} dates)', vb=1)
+
 
     def setup(
         self, stage : Base.lit.StageAll , 
@@ -268,6 +304,9 @@ class DataModule(Base.BoundLogger):
                     start_date = max(CALENDAR.cd(self.model_date , 1) , CALENDAR.td(self.config.resumed_max_pred_date , -1).as_int())
                     end_date = self.next_model_date(self.model_date)
                     possible_dates = self.test_full_dates
+                    if self.config.module_type == 'linear':
+                        start_date = CALENDAR.cd(self.model_date, 1)
+                        possible_dates = self.linear_pending_dates
                     
                 before_dates = self.datas.date[self.datas.date < min(possible_dates)][-y_extend:]
                 possible_dates = np.concatenate([before_dates , possible_dates])
@@ -307,28 +346,8 @@ class DataModule(Base.BoundLogger):
     def setup_loader_inputs_final(self):
         if not self.config.input_final_types:
             return
-        from src.res.model.util.final_source import FinalInputLoader
-        if not hasattr(self, '_final_loader'):
-            self._final_loader = FinalInputLoader(self.config)
-        dates = self.y_date[self.step_idx]
-        if len(dates) == 0:
-            return
-        self.datas.x.update(self._final_loader.blocks(dates, self.datas.secid, self.datas.date))
-        self.logger.note(f'Final coverage {dates[0]}..{dates[-1]}: '
-                         f'{min(self._final_loader.coverage)}..{max(self._final_loader.coverage)} '
-                         f'of {len(self.datas.secid)} stocks per date', vb=1)
-        self.config.update_data_param(self.datas.x)
-
-    def validate_final_coverage(self):
-        """Fail empty linear evaluations before success callbacks and summaries."""
-        if self.config.module_type != 'linear':
-            return
-        if self.config.is_resuming and self.config.resumed_max_pred_date >= max(self.test_full_dates):
-            self.logger.note('Final inputs: no new dates to evaluate', vb=0)
-            return
-        if not hasattr(self, '_final_loader') or not self._final_loader.coverage_by_date:
-            raise ValueError(f'Final inputs: no dates evaluated during {self.beg_date}..{self.end_date}')
-        self.logger.note(self._final_loader.validate_coverage(self.test_full_dates), vb=0)
+        if not getattr(self, '_final_preloaded', False):
+            raise RuntimeError('Final inputs must be preloaded in data stage')
 
     def setup_loader_inputs_hidden(self):
         """additional input prepare for hidden input , calculate hiddens and temporary store them"""

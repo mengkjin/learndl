@@ -17,18 +17,20 @@ def final_weights(value, size: int) -> np.ndarray:
 
 
 def prepare_final_values(values: torch.Tensor, precursor: str, weights) -> torch.Tensor:
-    """Process [stock, date, source] on each common finite daily universe."""
+    """Ignore wholly absent daily components, then use their common finite stocks."""
     if values.ndim != 3:
         raise ValueError('Expected final values with stock, date, source axes')
     if precursor not in ('none', 'normal', 'percentile'):
         raise ValueError(f'Unknown final precursor: {precursor}')
     w = final_weights(weights, values.shape[-1])
     raw = values.detach().cpu().numpy().astype(float, copy=True)
-    active = w != 0
-    common = np.asarray(np.isfinite(raw[..., active]).all(axis=-1))
     result = np.full_like(raw, np.nan)
     for date in range(raw.shape[1]):
-        mask = common[:, date]
+        active = (w != 0) & np.isfinite(raw[:, date, :]).any(axis=0)
+        if not active.any():
+            continue
+        # Indexing active columns separately keeps the [stock, component] axes.
+        mask = np.isfinite(raw[:, date, :][:, active]).all(axis=1)
         if not mask.any():
             continue
         x = raw[mask, date, :].copy()
@@ -40,7 +42,11 @@ def prepare_final_values(values: torch.Tensor, precursor: str, weights) -> torch
             x = x.clip(-3.5, 3.5)
         elif precursor == 'percentile':
             x = pd.DataFrame(x).rank(method='average', pct=True).to_numpy()
-        result[mask, date, :] = weighted_components(x, w)
+        daily_weights = w.copy()
+        daily_weights[~active] = 0
+        if isinstance(weights, str) and weights == 'equal':
+            daily_weights[active] = 1.0 / active.sum()
+        result[mask, date, :] = weighted_components(x, daily_weights)
     return torch.as_tensor(result, dtype=values.dtype, device=values.device)
 
 
@@ -131,9 +137,12 @@ class FinalSource:
             df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
         else:
             if self.kind == 'pred':
-                from src.data.loader import BlockLoader
+                from src.data.util import DataBlock
                 self.validate(f'{min(dates)}..{max(dates)}')
-                block = BlockLoader('pred', self.reference).load(int(min(dates)), int(max(dates)))
+                try:
+                    block = DataBlock.load_raw('pred', self.reference, dates=dates, vb_level='never')
+                except ValueError as exc:
+                    raise ValueError(f'{self.expression} {min(dates)}..{max(dates)}: {exc}') from exc
                 df = block.to_dataframe().reset_index() if not block.empty else pd.DataFrame()
             else:
                 self.validate(f'{min(dates)}..{max(dates)}')
@@ -149,8 +158,12 @@ class FinalSource:
         if column not in columns:
             raise ValueError(f'{self.reference}: output column {column} does not exist')
         df = df.loc[df.date.isin(dates), ['secid', 'date', column]].rename(columns={column: 'value'})
-        if df.duplicated(['secid', 'date']).any():
-            raise ValueError(f'Duplicate stock/date rows in {self.reference}')
+        # Stored predictions have already passed DataBlock's grid conversion.
+        if self.kind != 'pred' and df.duplicated(['secid', 'date']).any():
+            duplicates = df.loc[df.duplicated(['secid', 'date'], keep=False)]
+            examples = duplicates[['secid', 'date']].drop_duplicates().head(5).to_dict('records')
+            raise ValueError(f'{self.expression} {min(dates)}..{max(dates)}: '
+                             f'Duplicate stock/date rows with conflicting values; examples: {examples}')
         return df
 
 
@@ -172,14 +185,15 @@ class FinalInputLoader:
             return 'Final inputs: no new dates to evaluate'
         period = f'{attempted[0]}..{attempted[-1]}'
         weights = final_weights(self.config.input_final_weights, len(self.sources))
-        for (key, source), weight in zip(self.sources.items(), weights):
-            if weight and not self.source_dates[key].intersection(attempted):
-                raise ValueError(f'{key}: no finite values during {period}; storage: {source.storage_paths()}')
+        absent = [key for key, weight in zip(self.sources, weights)
+                  if weight and not self.source_dates[key].intersection(attempted)]
         skipped = [date for date in attempted if not self.coverage_by_date[date]]
         if len(skipped) == len(attempted):
-            raise ValueError(f'Final sources {list(self.sources)}: no common finite stocks during {period}')
+            reason = 'no finite values' if len(absent) == np.count_nonzero(weights) else 'no common finite stocks'
+            raise ValueError(f'Final sources {list(self.sources)}: {reason} during {period}')
+        skipped_note = str(skipped) if len(skipped) <= 10 else f'{len(skipped)} dates ({skipped[:3]} ... {skipped[-3:]})'
         return (f'Final coverage {period}: {len(attempted) - len(skipped)}/{len(attempted)} usable dates; '
-                f'skipped dates: {skipped}')
+                f'skipped dates: {skipped_note}; ignored empty components: {absent}')
 
     def blocks(self, dates, secid, align_date):
         from src.data.util import DataBlock
@@ -203,7 +217,8 @@ class FinalInputLoader:
                 else:
                     frame = source.frame(pending)
                 old = self.frames.get(key)
-                self.frames[key] = pd.concat([old, frame], ignore_index=True) if old is not None else frame
+                self.frames[key] = (frame if old is None or old.empty else old if frame.empty
+                                    else pd.concat([old, frame], ignore_index=True))
             self.loaded_dates[key].update(pending)
             frame = self.frames.get(key, pd.DataFrame(columns=['secid', 'date', 'value']))
             frame = frame.loc[frame.date.isin(dates)]

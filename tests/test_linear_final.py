@@ -11,7 +11,7 @@ import polars as pl
 import torch
 import yaml
 
-from src.proj import PATH
+from src.proj import DB, PATH
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.config.config import ScheduleConfig
 from src.res.model.util.core import ModelPath
@@ -22,6 +22,27 @@ from src.res.model.util.trainer.base_trainer import BaseTrainer
 
 
 class FinalValuesTest(unittest.TestCase):
+    def test_pred_duplicate_rows_and_sparse_dates(self):
+        raw = pl.DataFrame({'secid': [10, 10, 20], 'date': [20240102, 20240102, 20240104],
+                            'score': [2., 2., 6.]})
+        config = SimpleNamespace(input_final_types=['pred@published'], input_final_weights='equal',
+                                 input_final_precursor='none', input_final_refresh=False)
+        dates = [20240102, 20240103, 20240104]
+        with patch.object(DB, 'loads_pl', return_value=raw) as load, patch.object(FinalSource, 'validate'):
+            loader = FinalInputLoader(config)
+            block = loader.blocks(dates, [10, 20], dates)['pred@published']
+            expected = torch.tensor([[2., float('nan'), float('nan')],
+                                     [float('nan'), float('nan'), 6.]], dtype=block.values.dtype)
+            torch.testing.assert_close(block.values[:, :, 0, 0], expected, equal_nan=True)
+            self.assertEqual(loader.coverage_by_date, {20240102: 1, 20240103: 0, 20240104: 1})
+            self.assertEqual(load.call_count, 1)
+            np.testing.assert_array_equal(load.call_args.kwargs['dates'], dates)
+            load.return_value = raw.with_columns(pl.Series('score', [2., 3., 6.]))
+            with self.assertRaisesRegex(ValueError, r'pred@published 20240102..20240104:.*conflicting.*20240102'):
+                FinalSource.parse('pred@published').frame(dates)
+            load.return_value = pl.DataFrame()
+            self.assertTrue(FinalSource.parse('pred@published').frame(dates).empty)
+
     def test_raw_sum_mean_difference_and_zero_weight(self):
         raw = torch.tensor([[[2., 4.]], [[6., 8.]]])
         for weights, expected in [([1, 1], [6., 14.]), ('equal', [3., 7.]), ([1, -1], [-2., -2.])]:
@@ -81,15 +102,14 @@ class FinalValuesTest(unittest.TestCase):
 
     def test_pred_factor_loaders_and_zero_weight_missing_source(self):
         from src.data.util import DataBlock
-        from src.data.loader import BlockLoader
         from src.res.factor.calculator import FactorCalculator
         block = DataBlock.from_pandas(pd.DataFrame({'secid': [20, 10], 'date': [20240102] * 2, 'score': [2., 1.]}))
-        with patch.object(BlockLoader, 'load', return_value=block), \
+        with patch.object(DB, 'loads_pl', return_value=pl.from_pandas(block.to_dataframe().reset_index())) as load, \
              patch.object(FinalSource, 'validate'), \
-             patch.object(BlockLoader, '__init__', return_value=None), \
              patch.object(ArchivedPredictorModel, 'from_model_reference', side_effect=AssertionError('No inference')):
             result = FinalSource.parse('pred@published@2').frame([20240102])
             self.assertEqual(result.value.tolist(), [1., 2.])
+            np.testing.assert_array_equal(load.call_args.kwargs['dates'], [20240102])
         with patch.object(FactorCalculator, 'all_factors', return_value=['known']), \
              patch.object(FinalSource, 'validate'), \
              patch('src.res.factor.calculator.StockFactorHierarchy.get_factor') as lookup:
@@ -238,6 +258,7 @@ class LinearScheduleTest(unittest.TestCase):
         def load_blocks(module):
             module.blocks['y'] = labels
         def frame(source, requested, **kwargs):
+            self.assertEqual(trainer.status.stage, 'data')
             multiplier = 1 if source.reference == 'a' else 2
             return pd.DataFrame([(secid, date, float(secid * multiplier))
                                  for date in requested for secid in secids],
@@ -253,6 +274,7 @@ class LinearScheduleTest(unittest.TestCase):
              patch.object(BaseTrainer, 'stage_fit', side_effect=AssertionError('No fit allowed')):
             trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
             trainer.go()
+            self.assertEqual(read.call_count, 2)
             Save.async_wait_all()
             paths = list(trainer.record.folder_preds.glob('*.feather'))
             self.assertTrue(paths)
@@ -272,13 +294,33 @@ class LinearScheduleTest(unittest.TestCase):
             self.assertEqual(len(second), len(dates) * len(secids))
             np.testing.assert_allclose(second.pred, second.secid * 3)
             self.assertTrue(trainer.config.is_resuming)
+            self.assertEqual(read.call_count, 2)
+            for call in read.call_args_list:
+                self.assertEqual(list(call.args[1]), [20240105])
 
             # No new period is a successful no-op, including unchanged records.
+            read.reset_mock()
             trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
             trainer.go(resume=1)
             Save.async_wait_all()
             unchanged = Load.df(list(trainer.record.folder_preds.glob('*.feather')), key_column=None)
             self.assertEqual(len(unchanged), len(second))
+            read.assert_not_called()
+
+            # A hole before the last saved date is the only date read on resume.
+            for path in trainer.record.folder_preds.glob('*.feather'):
+                frame_on_disk = Load.df(path).query('date != 20240103')
+                Save.df(frame_on_disk, path, overwrite=True, vb_level='never')
+            read.reset_mock()
+            trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
+            trainer.go(resume=1)
+            Save.async_wait_all()
+            self.assertEqual(read.call_count, 2)
+            for call in read.call_args_list:
+                self.assertEqual(list(call.args[1]), [20240103])
+            repaired = Load.df(list(trainer.record.folder_preds.glob('*.feather')), key_column=None)
+            self.assertEqual(len(repaired), len(second))
+            np.testing.assert_allclose(repaired.pred, repaired.secid * 3)
 
             # Entirely absent inputs fail before summary/success callbacks.
             from contextlib import nullcontext
@@ -309,6 +351,7 @@ class LinearScheduleTest(unittest.TestCase):
         def load_blocks(module):
             module.blocks['y'] = labels
         def frame(source, requested, **kwargs):
+            self.assertEqual(trainer.status.stage, 'data')
             return pd.DataFrame([(secid, date, float(secid)) for date in requested if date >= 20240201
                                  for secid in secids], columns=['secid', 'date', 'value'])
         self.definition['model'].update(beg_date=20240130, end_date=20240202)
@@ -317,7 +360,7 @@ class LinearScheduleTest(unittest.TestCase):
         self.save_schedule()
         with patch.object(ModuleData, 'target_start_end', return_value=(20240130, 20240202)), \
              patch.object(ModuleData, '_load_blocks', load_blocks), \
-             patch.object(FinalSource, 'frame', autospec=True, side_effect=frame), \
+             patch.object(FinalSource, 'frame', autospec=True, side_effect=frame) as read, \
              patch.object(BaseTrainer, 'main_process', BaseTrainer.main_process.__wrapped__):
             trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
             trainer.go()
@@ -325,6 +368,52 @@ class LinearScheduleTest(unittest.TestCase):
             result = Load.df(list(trainer.record.folder_preds.glob('*.feather')), key_column=None)
             self.assertEqual(set(result.date), {20240201, 20240202})
             self.assertEqual(trainer.data._final_loader.coverage_by_date[20240130], 0)
+            self.assertEqual(read.call_count, 2)
+            self.assertEqual(trainer.data.test_full_dates.tolist(), [20240201, 20240202])
+
+    def test_partial_month_and_late_component_keep_batch_dates_aligned(self):
+        from src.data.util import DataBlock
+        from src.res.model.util.data.module_data import ModuleData
+        from src.res.model.model_module.application.trainer import ModelTrainer
+        from src.proj import Save, Load
+        dates = np.array([20240102, 20240103, 20240104, 20240105, 20240108, 20240109])
+        secids = np.arange(100, 164)
+        values = torch.arange(64, dtype=torch.float32)[:, None, None, None].expand(64, len(dates), 1, 2).clone()
+        labels = DataBlock(values, secids, dates, ['std_lag1_10', 'rtn_lag1_10'])
+        def load_blocks(module):
+            module.blocks['y'] = labels
+        def frame(source, requested, **kwargs):
+            self.assertEqual(trainer.status.stage, 'data')
+            valid = [20240103, 20240105, 20240108] if source.reference == 'a' else [20240108]
+            multiplier = 1 if source.reference == 'a' else 3
+            return pd.DataFrame([(secid, date, float(secid * multiplier)) for date in requested if date in valid
+                                 for secid in secids], columns=['secid', 'date', 'value'])
+        self.definition['model'].update(beg_date=20240102, end_date=20240109)
+        self.definition['input']['final.weights'] = 'equal'
+        self.definition['train'] = {'callbacks': ['BasicTestResult']}
+        self.definition['env'] = {'mem_storage': True}
+        self.save_schedule()
+        with patch.object(ModuleData, 'target_start_end', return_value=(20240102, 20240109)), \
+             patch.object(ModuleData, '_load_blocks', load_blocks), \
+             patch.object(FinalSource, 'frame', autospec=True, side_effect=frame) as read, \
+             patch.object(BaseTrainer, 'main_process', BaseTrainer.main_process.__wrapped__):
+            trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
+            trainer.go()
+            Save.async_wait_all()
+            result = Load.df(list(trainer.record.folder_preds.glob('*.feather')), key_column=None)
+            self.assertEqual(set(result.date), {20240103, 20240105, 20240108})
+            np.testing.assert_allclose(result.pred, result.secid * np.where(result.date == 20240108, 2, 1))
+            self.assertEqual(trainer.data.test_full_dates.tolist(), [20240103, 20240105, 20240108])
+            self.assertEqual(trainer.batch_dates.tolist(), [20240103, 20240105, 20240108])
+            self.assertEqual(len(trainer.data.model_date_list), 1)
+            self.assertEqual(read.call_count, 2)
+            # Known empty dates also count as checked; a no-op resume reads no sources.
+            read.reset_mock()
+            trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
+            trainer.go(resume=1)
+            read.assert_not_called()
+            Save.async_wait_all()
+            self.assertEqual(trainer.data.test_full_dates.tolist(), [20240103, 20240105, 20240108])
 
     def test_sample_schedules_parse(self):
         real_schedules = Path(__file__).resolve().parents[1] / 'configs/schedule/linear'
