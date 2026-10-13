@@ -11,6 +11,10 @@ Ready-to-run schedules (choose a date range covered by your local sources):
 - `gru_df_equal`: GRU + `df_scores_v0`, normal/equal.
 - `gru_df_weighted`: the same sources, normal/[0.7, 0.3].
 - `gru_df_raw_sum`: the same sources, none/[1, 1] for raw addition.
+- `linear_of_hidden`: the five source models from `current/lgbm_of_hidden.yaml`
+  (also used by `lgbm_of_hidden_fast`), using their final `pred.0` outputs with
+  directory 1, model number 0 and submodel `best`. Uses normal/equal and the same
+  evaluation label `rtn_lag1_10`; no second-stage model is trained.
 - `pred_mix`: the same combination as `gru_df_equal`, retained as a starter template.
 
 These schedules are not added to the worklist automatically. Copy one to a new

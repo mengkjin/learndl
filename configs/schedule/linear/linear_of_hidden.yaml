@@ -1,0 +1,18 @@
+# Equal-weight final predictions from the same sources as current/lgbm_of_hidden.yaml.
+# ModelTrainer.schedule('linear_of_hidden', short_test=False, resume=0, start=..., end=...)
+model:
+  module: linear
+  labels: [rtn_lag1_10]
+input:
+  type: final
+  # Same hidden defaults: directory 1, model_num 0, submodel best.
+  # Select the first prediction head explicitly for multi-output source models.
+  final.types:
+    - model_pred@gru@gru_day_new@0@best@pred.0
+    - model_pred@gru@gru_30mcont@0@best@pred.0
+    - model_pred@gru@gru_mincr@0@best@pred.0
+    - model_pred@resnet_gru@gru_week_new@0@best@pred.0
+    - model_pred@resnet_gru@gru_15m_new_rtn@0@best@pred.0
+  final.precursor: normal
+  final.weights: equal
+  final.refresh: false
