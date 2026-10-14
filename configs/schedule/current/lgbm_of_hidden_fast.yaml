@@ -29,10 +29,10 @@ input:
 train:
   boost:
     param:
-      objective: mse # null , mse , mae , rank
+      objective: mae # null , mse , mae , rank
     weight:
-      cs_type: top
-      ts_type: lin
+      cs_type: null
+      ts_type: null
       bm_type: null
     # valid_metric:
     #   name: global2top
