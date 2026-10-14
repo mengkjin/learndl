@@ -3,7 +3,7 @@
 # date: 2026-10-12
 # description: Test Linear Model
 # content: 测试 configs/schedule/linear 中定义的线性组合，默认重新测试，显式 resume 才续测
-# email: False
+# email: True
 # mode: shell
 # parameters:
 #   schedule_name:
