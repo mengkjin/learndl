@@ -5,7 +5,7 @@
   "alpha_sample_status": "unknown",
   "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230",
   "output_root": "results/rl_experimental/server_runs",
-  "rebuild_snapshot": false,
+  "rebuild_snapshot": true,
   "bundle_max_mb": 10,
   "recipient": null,
   "training": {
