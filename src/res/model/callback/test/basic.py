@@ -47,10 +47,16 @@ class BasicTestResult(BaseCallBack):
         return ['model_num' , 'model_date' , 'submodel' , 'date' , *self.stat_cols]
 
     def _attach_eval_labels(self , preds : pd.DataFrame) -> pd.DataFrame:
-        """Merge unified eval labels from the full y DataBlock onto preds."""
+        """Load fixed evaluation targets independently of training label sources."""
         if preds.empty:
             return preds
         y_blk = self.data.datas.blocks['y']
+        if any(c not in y_blk.feature for c in self.EVAL_LABELS):
+            # Training y contains only selected targets, and may use no default y.
+            # Load full cross sections so on-demand neutralisation is unchanged.
+            y_blk = self.data.datas.load_one('y', dates=np.sort(preds['date'].unique()))
+        if not y_blk.initiated:
+            raise ValueError('Default y evaluation labels are unavailable for prediction dates')
         missing = [c for c in self.EVAL_LABELS if c not in y_blk.feature]
         assert not missing , f'missing eval labels in y block: {missing}, available={list(y_blk.feature)}'
         y_df = y_blk.align_feature(list(self.EVAL_LABELS)).to_dataframe().reset_index()

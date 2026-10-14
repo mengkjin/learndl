@@ -23,6 +23,7 @@ from src.proj import Base , CALENDAR
 from src.func.tensor import nanmedian , standardize , rank_pct
 from src.data.preprocess import PrePros , PreProHistNorm
 from src.res.model.util.config import ModelConfig
+from src.res.model.util.label_spec import LabelSpec
 
 from .batch_input_loader import DataloaderParam
 
@@ -79,7 +80,7 @@ class DataOperator:
     @staticmethod
     def parse_label_horizon(label : str) -> tuple[int , int] | None:
         """Parse ``(lag, days)`` from classic label names like ``std_lag1_10``."""
-        m = _LABEL_HORIZON_RE.fullmatch(label)
+        m = _LABEL_HORIZON_RE.fullmatch(LabelSpec.parse(label).feature)
         if m is None:
             return None
         return int(m.group(1)) , int(m.group(2))
@@ -175,6 +176,7 @@ class DataOperator:
         dates : np.ndarray ,
         secids : np.ndarray ,
         label_names : list[str] ,
+        coverage : torch.Tensor | None = None ,
     ) -> torch.Tensor:
         """
         Fill y NaN with 0 when the name is in the risk residual universe at label end date.
@@ -182,6 +184,7 @@ class DataOperator:
         Distinguishes ``no forward trade ≈ 0 return`` (keep) from ``not in risk
         residual universe`` (leave NaN / discard).  Does not require labels dump
         recalculation.
+        ``coverage`` excludes holes introduced when aligning label sources.
         """
         if y.ndim != 3:
             raise ValueError(f'Expected y shape (secid, date, label), got {tuple(y.shape)}')
@@ -190,6 +193,10 @@ class DataOperator:
         )
         y = y.clone()
         nan_any = ~torch.isfinite(y)
+        if coverage is not None:
+            if coverage.shape != y.shape:
+                raise ValueError(f'Label coverage shape {coverage.shape} != {y.shape}')
+            nan_any &= coverage.to(device=y.device, dtype=torch.bool)
         if not bool(nan_any.any().item()):
             return y
 

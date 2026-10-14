@@ -255,8 +255,9 @@ class LinearScheduleTest(unittest.TestCase):
         secids = np.arange(100, 164)
         values = torch.arange(64, dtype=torch.float32)[:, None, None, None].expand(64, 4, 1, 2).clone()
         labels = DataBlock(values, secids, dates, ['std_lag1_10', 'rtn_lag1_10'])
-        def load_blocks(module):
-            module.blocks['y'] = labels
+        def load_one(module, key, **kwargs):
+            self.assertEqual(key, 'y')
+            return labels.copy()
         def frame(source, requested, **kwargs):
             self.assertEqual(trainer.status.stage, 'data')
             multiplier = 1 if source.reference == 'a' else 2
@@ -268,7 +269,7 @@ class LinearScheduleTest(unittest.TestCase):
         self.definition['env'] = {'mem_storage': True}
         self.save_schedule()
         with patch.object(ModuleData, 'target_start_end', return_value=(20240102, 20240105)), \
-             patch.object(ModuleData, '_load_blocks', load_blocks), \
+             patch.object(ModuleData, 'load_one', load_one), \
              patch.object(FinalSource, 'frame', autospec=True, side_effect=frame) as read, \
              patch.object(BaseTrainer, 'main_process', BaseTrainer.main_process.__wrapped__), \
              patch.object(BaseTrainer, 'stage_fit', side_effect=AssertionError('No fit allowed')):
@@ -348,8 +349,9 @@ class LinearScheduleTest(unittest.TestCase):
         secids = np.arange(100, 164)
         values = torch.arange(64, dtype=torch.float32)[:, None, None, None].expand(64, 4, 1, 2).clone()
         labels = DataBlock(values, secids, dates, ['std_lag1_10', 'rtn_lag1_10'])
-        def load_blocks(module):
-            module.blocks['y'] = labels
+        def load_one(module, key, **kwargs):
+            self.assertEqual(key, 'y')
+            return labels.copy()
         def frame(source, requested, **kwargs):
             self.assertEqual(trainer.status.stage, 'data')
             return pd.DataFrame([(secid, date, float(secid)) for date in requested if date >= 20240201
@@ -359,7 +361,7 @@ class LinearScheduleTest(unittest.TestCase):
         self.definition['env'] = {'mem_storage': True}
         self.save_schedule()
         with patch.object(ModuleData, 'target_start_end', return_value=(20240130, 20240202)), \
-             patch.object(ModuleData, '_load_blocks', load_blocks), \
+             patch.object(ModuleData, 'load_one', load_one), \
              patch.object(FinalSource, 'frame', autospec=True, side_effect=frame) as read, \
              patch.object(BaseTrainer, 'main_process', BaseTrainer.main_process.__wrapped__):
             trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')
@@ -380,8 +382,9 @@ class LinearScheduleTest(unittest.TestCase):
         secids = np.arange(100, 164)
         values = torch.arange(64, dtype=torch.float32)[:, None, None, None].expand(64, len(dates), 1, 2).clone()
         labels = DataBlock(values, secids, dates, ['std_lag1_10', 'rtn_lag1_10'])
-        def load_blocks(module):
-            module.blocks['y'] = labels
+        def load_one(module, key, **kwargs):
+            self.assertEqual(key, 'y')
+            return labels.copy()
         def frame(source, requested, **kwargs):
             self.assertEqual(trainer.status.stage, 'data')
             valid = [20240103, 20240105, 20240108] if source.reference == 'a' else [20240108]
@@ -394,7 +397,7 @@ class LinearScheduleTest(unittest.TestCase):
         self.definition['env'] = {'mem_storage': True}
         self.save_schedule()
         with patch.object(ModuleData, 'target_start_end', return_value=(20240102, 20240109)), \
-             patch.object(ModuleData, '_load_blocks', load_blocks), \
+             patch.object(ModuleData, 'load_one', load_one), \
              patch.object(FinalSource, 'frame', autospec=True, side_effect=frame) as read, \
              patch.object(BaseTrainer, 'main_process', BaseTrainer.main_process.__wrapped__):
             trainer = ModelTrainer.initialize(schedule_name='linear_unit', short_test=False, vb_level='never')

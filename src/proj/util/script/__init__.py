@@ -1,4 +1,4 @@
-"""Script execution helpers: OS/shell launch, locks, Streamlit task wrapper, recording, and scheduling."""
+"""Script execution helpers: OS/shell launch, locks, Streamlit task wrapper, and recording."""
 
 from .script_cmd import ScriptCmd
 from .script_lock import ScriptLockMultiple
@@ -6,7 +6,6 @@ from .fit_lock import FitLock, FitLockNN
 from .script_tool import ScriptTool
 from .autorun import AutoRunTask 
 from .task_record import TaskRecorder 
-from .task_schedule import TaskScheduler
 from .param_codec import (
     coerce_value,
     default_value,

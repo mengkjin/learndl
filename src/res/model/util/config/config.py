@@ -21,6 +21,7 @@ from src.proj.util.functional.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
+from src.res.model.util.label_spec import LabelSpec, parse_labels
 from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
 
 __all__ = ['ModelConfig']
@@ -232,6 +233,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         return self
 
     def check_validity(self):
+        self['model.labels'] = self.labels
         if not self.base_path:
             full_name = self.generate_model_full_name()
             self.base_path.with_full_name(full_name)
@@ -322,7 +324,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             raise ValueError('astgnn requires two labels: alpha fit return and joint R² return')
         horizons = []
         for label in self.labels:
-            match = re.fullmatch(r'(?:rtn|std|res)_lag(\d+)_(\d+)(?:_.*)?', label)
+            match = re.fullmatch(r'(?:rtn|std|res)_lag(\d+)_(\d+)(?:_.*)?', LabelSpec.parse(label).feature)
             if match is None:
                 raise ValueError(f'Cannot validate astgnn label horizon: {label}')
             horizons.append(sum(map(int, match.groups())))
@@ -461,7 +463,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
     @property
     def labels(self) -> list[str]:
-        return self["model.labels"]
+        return [spec.name for spec in parse_labels(self["model.labels"])]
 
     @property
     def submodels(self) -> list[str]:

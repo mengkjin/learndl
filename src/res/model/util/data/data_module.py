@@ -83,6 +83,8 @@ class DataModule(Base.BoundLogger):
         use_data = use_data or self._use_data
         if not hasattr(self , 'datas'):
             return False
+        if self.datas.y_labels != self.config.labels:
+            return False
         if self.datas.use_data == 'both' or self.datas.use_data == use_data:
             return True
         return False
@@ -411,6 +413,7 @@ class DataModule(Base.BoundLogger):
             self.y_date ,
             self.y_secid ,
             self.config.labels ,
+            coverage = self.datas.label_coverage[:,self.d0:self.d1] ,
         )
 
         x_shapes = [x.shape[:2] for x in x_full.values()]
@@ -750,7 +753,7 @@ class DataModule(Base.BoundLogger):
     def min_test_date(self):
         if hasattr(self , 'test_full_dates'):
             return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
-        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 99991231
+        return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names, y_labels = self.config.labels) or 99991231
 
     @property
     def max_test_date(self):

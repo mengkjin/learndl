@@ -15,6 +15,30 @@ bash runs/install_schedules.sh rollback --host mengkjin-server
 Its old `--remove-legacy-cron` option no longer deletes cron lines. Comment those
 lines yourself and inspect a plan before applying.
 
+## Removed shared-folder command queue
+
+The legacy `ScheduledTask` / `TaskScheduler` API and its notebook example have
+been removed without a compatibility layer. Daily update no longer prints or
+executes commands from `PATH.share_folder/task_schedule`; it still synchronizes
+shared model schedule configurations with `SharedSync.sync()`.
+
+Use the supported entrypoints instead:
+
+- Automatic model training: add schedule names to `configs/schedule/worklist.yaml`;
+  watchdog's `idle_worklist` job queues eligible training for the independent worker.
+- Manual training: use the existing single schedule model or schedule worklist
+  entrypoint (`ScheduleModel` / `CarryOutScheduleWorkList`).
+- Periodic scripts: register entrypoints and configure tasks/plans through this
+  unified scheduler, as described below.
+
+Existing `.await` / `.done` files are left untouched and are no longer consumed
+by the updated daily script. They are not automatically executed, migrated, or
+deleted: arbitrary shell commands cannot be converted directly into a model
+worklist. Review any remaining server files and external callers separately;
+imports of the removed API must be updated. This removal requires no timer,
+cron, or watchdog configuration changes. Already-running Python processes keep
+their loaded code until they exit; subsequent processes use the updated code.
+
 ## Configuration
 
 - `tasks.yaml`: registered entrypoint, arguments, lock group, overlap policy,

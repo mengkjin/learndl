@@ -30,6 +30,7 @@ from functools import partial, cached_property
 
 from src.proj import CALENDAR , Base , Logger
 
+from src.res.model.util.label_spec import LabelSpec, parse_labels
 from src.data import DataBlock
 from src.data.preprocess import PreProHistNorm , SpecialDataSet
 
@@ -45,6 +46,10 @@ class ModuleDataConfig:
     filter_secid: str | None
     filter_date: str | None
     dtype: torch.dtype
+
+    def __post_init__(self):
+        if self.y_labels is not None:
+            self.y_labels = [spec.name for spec in parse_labels(self.y_labels)]
 
     @property
     def fit_for_cache(self):
@@ -83,7 +88,8 @@ class ModuleData(Base.BoundLogger):
     data_type_list : list[str]
         Block keys to load in addition to ``'y'`` (e.g. ``['day', '15m']``).
     y_labels : list[str] | None
-        Sub-set of features to expose via the ``y`` property.
+        Ordered source@feature references; omitted source means ``y``.
+        None exposes all features of the default ``y`` source.
     use_data : 'fit' or 'predict' or 'both'
         Controls the date range and whether the disk cache is used.
     factor_names : list[str] | None
@@ -106,6 +112,9 @@ class ModuleData(Base.BoundLogger):
     ):
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
         self.config = config
+        overlap = set(self.label_sources) & set(self.data_type_list)
+        if overlap or 'y' in self.data_type_list:
+            raise ValueError(f'Label sources cannot be model inputs: {overlap or {"y"}}')
 
     @classmethod
     def initialize(cls, data_type_list: list[str],
@@ -150,8 +159,16 @@ class ModuleData(Base.BoundLogger):
 
     @property
     def load_keys(self) -> list[str]:
-        """All block keys to be loaded: ``['y', *data_type_list]``."""
-        return ["y", *self.data_type_list]
+        """Unique label sources followed by explicit input blocks."""
+        return list(dict.fromkeys([*self.label_sources, *self.data_type_list]))
+
+    @property
+    def label_sources(self) -> list[str]:
+        return self.sources_for_labels(self.y_labels)
+
+    @staticmethod
+    def sources_for_labels(labels: list[str] | None) -> list[str]:
+        return ['y'] if labels is None else list(dict.fromkeys(spec.source for spec in parse_labels(labels)))
 
     @cached_property
     def blocks(self) -> dict[str, DataBlock]:
@@ -174,13 +191,10 @@ class ModuleData(Base.BoundLogger):
         """All blocks except ``'y'`` (the feature/input blocks)."""
         return {key: value for key, value in self.blocks.items() if key != "y"}
 
-    @cached_property
+    @property
     def y(self) -> DataBlock:
-        """The label block, feature-aligned to ``y_labels``."""
-        if self.y_labels is not None:
-            assert all(label in self.blocks["y"].feature for label in self.y_labels) , \
-                f'{self.y_labels} is not in {self.blocks["y"].feature}'
-        return self.blocks["y"].align_feature(self.y_labels)
+        """Aligned, source-qualified labels in configuration order."""
+        return self.blocks["y"]
 
     @property
     def empty_x(self) -> bool:
@@ -233,7 +247,7 @@ class ModuleData(Base.BoundLogger):
         Compute the (start, end) date range to load data for.
 
         - ``'predict'`` mode: loads the last 366 calendar days up to updated.
-        - ``'fit'`` mode: loads from 20070101 up to the last available ``'y'`` dump date.
+        - ``'fit'`` mode: loads from 20070101 up to the latest selected label dump date.
         """
         start = (
             CALENDAR.td(CALENDAR.updated(), -366).td
@@ -241,7 +255,7 @@ class ModuleData(Base.BoundLogger):
             else 20070101
         )
         end = (
-            DataBlock.max_data_date("y", "fit")
+            max((DataBlock.max_data_date(key, "fit") or 0 for key in self.label_sources), default=0)
             if self.use_data == "fit"
             else CALENDAR.updated()
         )
@@ -251,8 +265,8 @@ class ModuleData(Base.BoundLogger):
     def load(self) -> ModuleData:
         """
         load all relevant data of this module data, should be called before any other operations
-        blocks: ['y' , *data_type_list] DataBlocks
-        norms: ['y' , *data_type_list] DataBlockNorms (if exists)
+        blocks: assembled 'y' labels and explicitly configured input DataBlocks
+        norms: input DataBlockNorms (if they exist)
         factor: factor_names DataBlock
         """
         if self.loaded:
@@ -272,23 +286,50 @@ class ModuleData(Base.BoundLogger):
     def _init_data(self) -> ModuleData:
         self.__dict__.pop("x", None)
         self.__dict__.pop("y", None)
+        self.__dict__.pop("label_coverage", None)
         self.blocks.clear()
         self.norms.clear()
         return self
 
     def _load_blocks(self) -> ModuleData:
-        """
-        load all blocks including y and data_type_list blocks.
-
-        Iterates over ``load_keys`` (``'y'`` first, then X blocks).
-        The ``'y'`` block drives the secid and date grids that all X blocks
-        are aligned to in the subsequent ``align_blocks()`` call.
-        """
-        start , end = self.target_start_end()
-        date = self.date_filter(CALENDAR.range(start , end))
-        for i , key in enumerate(self.load_keys):
-            assert i > 0 or key == 'y' , f'{key} must be the first key'
-            self.blocks[key] = self.load_one(key, dates = date)
+        """Load each label source once, then assemble labels on their union grid."""
+        from src.data.preprocess import PrePros
+        unknown = set(self.label_sources) - set(PrePros.keys())
+        if unknown:
+            raise ValueError(f'Unknown label sources: {sorted(unknown)}')
+        date = self.date_filter(CALENDAR.range(*self.target_start_end()))
+        specs = None if self.y_labels is None else parse_labels(self.y_labels)
+        sources = {}
+        for key in self.label_sources:
+            block = self.load_one(key, dates=date)
+            if not block.initiated:
+                raise ValueError(f'Label source {key!r} has no data or feature schema')
+            if block.shape[2] != 1:
+                raise ValueError(f'Label source {key!r} must have inday length 1: {block.shape}')
+            if len(set(block.feature)) != len(block.feature):
+                raise ValueError(f'Label source {key!r} has duplicate features')
+            features = list(block.feature) if specs is None else [sp.feature for sp in specs if sp.source == key]
+            missing = set(features) - set(block.feature)
+            if missing:
+                raise ValueError(f'Label source {key!r} missing fields: {sorted(missing)}')
+            sources[key] = block.align_feature(features)
+        if specs is None:
+            specs = [LabelSpec('y', str(feature)) for feature in sources['y'].feature]
+        secid = self.secid_filter(np.unique(np.concatenate([block.secid for block in sources.values()])))
+        aligned = {}
+        coverage = {}
+        for key, block in sources.items():
+            coverage[key] = torch.as_tensor(np.isin(secid, block.secid)[:, None] & np.isin(date, block.date)[None, :])
+            aligned[key] = block.align_secid_date(secid, date)
+        columns = []
+        for spec in specs:
+            column = aligned[spec.source].align_feature([spec.feature])
+            column.update(feature=[spec.name])
+            columns.append(column)
+        self.blocks['y'] = DataBlock.concat_feature(columns)
+        self.label_coverage = torch.stack([coverage[spec.source] for spec in specs], dim=-1)
+        for key in self.data_type_list:
+            self.blocks[key] = self.load_one(key, dates=date)
         return self
 
     def _align_blocks(self) -> ModuleData:
@@ -296,7 +337,7 @@ class ModuleData(Base.BoundLogger):
         if not self.blocks:
             return self
         date = self.date_filter(CALENDAR.range(*self.target_start_end()))
-        secid = self.secid_filter(self.secid)
+        secid = self.secid
         for key , block in self.blocks.items():
             if (
                 key == 'market' and block.initiated and len(block.secid) == 1
@@ -387,13 +428,20 @@ class ModuleData(Base.BoundLogger):
 
     @classmethod
     def min_data_date(
-        cls, data_type_list: list[str], factor_names: list[str] | None = None
+        cls, data_type_list: list[str], factor_names: list[str] | None = None,
+        *, y_labels: list[str] | None = None
     ) -> int | None:
         """Return the minimum data date from the loaded blocks and factor names."""
         from src.res.factor.calculator import StockFactorHierarchy
 
         dates: list[int] = []
-        for data_type in ["y", *data_type_list]:
+        label_dates = []
+        for key in cls.sources_for_labels(y_labels):
+            candidates = [DataBlock.min_data_date(key, frame) for frame in ('fit', 'predict')]
+            label_dates.extend(dt for dt in candidates if dt is not None)
+        if label_dates:
+            dates.append(min(label_dates))
+        for data_type in data_type_list:
             fit_min_date = DataBlock.min_data_date(data_type, "fit")
             predict_min_date = DataBlock.min_data_date(data_type, "predict")
             if fit_min_date is None and predict_min_date is None:
