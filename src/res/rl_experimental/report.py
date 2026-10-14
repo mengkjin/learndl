@@ -21,7 +21,7 @@ def _number(value: Any, digits: int = 4) -> str:
 
 
 def _percent(value: Any, digits: int = 2) -> str:
-    return f"{100 * float(value):.{digits}f}%"
+    return "未定义（基准净值为零）" if value is None else f"{100 * float(value):.{digits}f}%"
 
 
 def _image_data(path: Path) -> str:
@@ -107,6 +107,11 @@ code,pre{{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f1
 <div class="flow"><span class="step">真实 panel</span><span class="arrow">→</span><span class="step">仅训练段拟合归一化</span><span class="arrow">→</span><span class="step">alpha 候选 + 旧持仓</span><span class="arrow">→</span><span class="step">固定槽位与掩码</span><span class="arrow">→</span><span class="step">actor 两维动作</span><span class="arrow">→</span><span class="step">硬约束映射</span><span class="arrow">→</span><span class="step">次日开盘执行</span><span class="arrow">→</span><span class="step">收盘估值与 reward</span></div>
 <p>每个槽位中的第一维动作修正 alpha 的选股排序，第二维经 softplus 转为配权偏好。<code>project_action()</code> 再强制只做多、最多 50 只、单股不超过 3% 和现金约束。未来的停牌与涨跌停状态不会进入 t 日 observation；环境只在 t+1 开盘结算时读取它们。</p>
 <p>真实环境先把旧持仓从 t 日收盘计价至 t+1 日开盘，再先卖后买、扣除实际费用，最后从开盘计价到收盘。单日记录同时保存净值倍数、费用、换手、持仓、冻结/拒单以及 reward 分项。</p>
+<p>v4 真实快照采用退市剩余持仓全额核销假设：结算日开盘前按上一收盘持仓金额计入损失，
+不产生现金、费用或换手。全部资产耗尽时净值为零，episode 结束；内置 log reward 使用 1e-12 下限，自定义 reward 仍收到真实零倍率。
+ST/异常状态和 90 日公告预警统一硬剔除；不能卖出的持仓继续冻结。历史公告覆盖缺口见质量报告，不能视为确认无风险。</p>
+<p>PPO 测试累计退市损失（初始净值单位）：{_number(test.get('total_delisting_loss', 0), 6)}；
+核销持仓事件数：{int(test.get('delisting_events', 0))}；资产耗尽：{'是' if test.get('assets_exhausted') else '否'}。</p>
 <h3>本次测试期第一步记账示例</h3>
 <table><tr><th>决策日</th><th>结算日</th><th>单期净收益</th><th>隔夜收益</th><th>换手</th><th>费用/初始净值</th><th>期末 NAV</th></tr>
 <tr><td>{html.escape(first_day.get('decision_date', '—'))}</td><td>{html.escape(first_day.get('return_end_date', '—'))}</td><td>{_percent(first_day.get('period_return', 0))}</td><td>{_percent(first_day.get('overnight_return', 0))}</td><td>{_number(first_day.get('turnover', 0))}</td><td>{_number(first_day.get('fee_estimate', 0), 6)}</td><td>{_number(first_day.get('nav', 0), 6)}</td></tr></table>

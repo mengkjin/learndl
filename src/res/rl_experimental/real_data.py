@@ -16,6 +16,7 @@ from .data import PANEL_SCHEMA_VERSION, PanelData, date_split
 from .data_quality import deduplicate_table
 from .progress import progress
 from .valuation import build_valuations
+from .risk import prepare_risk, delisting_events
 
 
 STYLE_FEATURES = ("size", "beta", "momentum", "residual_volatility", "liquidity")
@@ -316,18 +317,13 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
             continue
         mature_date = int(CALENDAR.td(int(list_dt), config.min_listing_days).as_int())
         listed[:, position] |= (decision_dates >= mature_date) & (decision_dates < int(delist_dt))
-    st_mask = np.zeros_like(listed)
-    for row, date in enumerate(decision_dates):
-        if row % 128 == 0:
-            progress('data', f'Listing/ST eligibility: {row + 1}/{len(decision_dates)} dates')
-        st_ids = DATAVENDOR.INFO.get_st(int(date)).secid.to_numpy(dtype=np.int64)
-        st_mask[row] = np.isin(stock_ids, st_ids)
+    risk_mask, risk_reason, risk_report = prepare_risk(decision_dates, stock_ids, DB, DATAVENDOR.INFO)
     day_close = _pivot(day, "close", history_dates, stock_ids).reindex(index=decision_dates)
     decision_rows = np.searchsorted(history_dates, decision_dates)
     traded_at_decision = (np.isfinite(day_close.to_numpy()) & (day_close.to_numpy() > 0)
                           & (statuses[decision_rows] > 0) & np.isfinite(factors[decision_rows])
                           & (factors[decision_rows] > 0))
-    investable = listed & ~st_mask & alpha_available & traded_at_decision
+    investable = listed & ~risk_mask & alpha_available & traded_at_decision
     # Re-rank after all point-in-time eligibility filters. The earlier rank is
     # monotonic and only supplies a stable tie order across reused source rows.
     for row in range(len(decision_dates)):
@@ -389,6 +385,8 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         can_buy=can_buy,
         can_sell=can_sell,
         valuation_stale=stale,
+        risk_excluded=risk_mask, risk_reason=risk_reason,
+        delisting_event=delisting_events(decision_dates, execution_dates, stock_ids, relevant_description),
         valuation_reason=valuations.reason[execution_rows],
         valuation_stale_days=valuations.stale_days[execution_rows],
         valuation_last_valid_date=valuations.last_valid_date[execution_rows],
@@ -404,6 +402,7 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     quality = {
         "duplicate_cleanup": duplicate_audit,
         "valuation": valuations.report,
+        "risk": risk_report,
         "investable_per_day": {
             "min": int(investable.sum(axis=1).min()),
             "median": float(np.median(investable.sum(axis=1))),
@@ -426,6 +425,8 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
         for name, (start, end) in default_splits.items()
     }
     manifest = {
+        "risk": risk_report,
+        "delisting_policy": "100% loss of remaining prior-close holdings before open; no cash/fee/turnover",
         "valuation_policy": "day_close_then_adjprice_then_causal_carry_while_listed_v3",
         "config": {**asdict(config), "output": str(output)},
         "audit": audit,

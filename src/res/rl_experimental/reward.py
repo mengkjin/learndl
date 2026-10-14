@@ -78,7 +78,7 @@ def builtin_reward(context: RewardContext, params: Mapping[str, JsonValue]) -> R
     config = RewardConfig.from_value(params)
     config.validate()
     components = {
-        "log_growth": float(np.log(context.nav_multiplier)),
+        "log_growth": float(np.log(max(context.nav_multiplier, 1e-12))),
         "turnover_penalty": -config.turnover_penalty * context.turnover,
         "downside_penalty": -config.downside_penalty * min(context.net_return, 0.0) ** 2,
         "concentration_penalty": -config.concentration_penalty * float(np.square(context.end_weights).sum()),
@@ -91,7 +91,7 @@ def example_drawdown_aware_reward(context: RewardContext, params: Mapping[str, J
     downside = float(params.get("downside_penalty", 2.0))
     turnover = float(params.get("turnover_penalty", 0.001))
     components = {
-        "log_growth": float(np.log(context.nav_multiplier)),
+        "log_growth": float(np.log(max(context.nav_multiplier, 1e-12))),
         "custom_downside": -downside * min(context.net_return, 0.0) ** 2,
         "custom_turnover": -turnover * context.turnover,
     }

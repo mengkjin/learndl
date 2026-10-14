@@ -39,6 +39,9 @@ class ExecutionResult:
     frozen_count: int
     rejected_buy_count: int
     rejected_sell_count: int
+    delisting_loss_fraction: float = 0.0
+    written_off_indices: tuple[int, ...] = ()
+    assets_exhausted: bool = False
 
 
 def select_slots(
@@ -174,6 +177,8 @@ def execute_open_close(
     decision_date: int | None = None,
     execution_date: int | None = None,
     valuation_context: dict[str, np.ndarray] | None = None,
+    delisting_event: np.ndarray | None = None,
+    risk_excluded: np.ndarray | None = None,
 ) -> ExecutionResult:
     """Mark close-to-open, execute legal orders, then mark open-to-close.
 
@@ -215,6 +220,24 @@ def execute_open_close(
         raise ValueError("execution arrays must have identical [stock] shape")
     if np.any(old < -1e-10) or old_cash < -1e-10 or np.any(target < -1e-10):
         raise ValueError("execution supports long-only portfolios")
+    events = np.zeros(n, dtype=bool) if delisting_event is None else np.asarray(delisting_event, dtype=bool)
+    risk = np.zeros(n, dtype=bool) if risk_excluded is None else np.asarray(risk_excluded, dtype=bool)
+    if events.shape != (n,) or risk.shape != (n,):
+        raise ValueError('risk/event arrays must have [stock] shape')
+    written_off = tuple(int(i) for i in np.flatnonzero(events & (old > 0)))
+    loss = float(old[events].sum())
+    old = old.copy()
+    old[events] = 0.0
+    target = target.copy()
+    target[events | risk] = 0.0
+    buy_mask = buy_mask & ~events & ~risk
+    if written_off:
+        from .progress import progress
+        ids = [int(stock_ids[i]) if stock_ids is not None else i for i in written_off]
+        progress('execution', f'Delisting full write-off: date={execution_date}, stocks={ids}, loss_fraction={loss:.10g}', warning=True)
+    if loss > 0 and old.sum() == 0 and old_cash == 0:
+        return ExecutionResult(np.zeros(n, dtype=np.float32), 0., 0., 0., 0., 0., 0., 0., 0, 0, 0,
+                               loss, written_off, True)
     if np.any(~np.isfinite(overnight[old > 1e-12])):
         bad = np.flatnonzero((old > 1e-12) & ~np.isfinite(overnight))
         raise valuation_error('an overnight', bad)
@@ -278,4 +301,6 @@ def execute_open_close(
         frozen_count=int(frozen.sum()),
         rejected_buy_count=int(rejected_buy.sum()),
         rejected_sell_count=int(rejected_sell.sum()),
+        delisting_loss_fraction=loss,
+        written_off_indices=written_off,
     )

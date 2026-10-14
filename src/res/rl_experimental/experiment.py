@@ -120,8 +120,8 @@ def _snapshot(config: dict[str, Any]) -> tuple[PanelData, Path]:
         raise ValueError("snapshot is incomplete; enable rebuild_snapshot after checking the directory")
     progress('snapshot', f'Checking snapshot manifest and loading panel: {directory}')
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-    if manifest['panel_contract']['schema_version'] < 3:
-        raise ValueError('snapshot predates suspension valuation schema v3; set rebuild_snapshot=true')
+    if manifest['panel_contract']['schema_version'] < 4:
+        raise ValueError('snapshot predates risk/delisting schema v4; set rebuild_snapshot=true')
     actual = manifest["config"]
     expected = asdict(data)
     for key, value in expected.items():
@@ -129,8 +129,8 @@ def _snapshot(config: dict[str, Any]) -> tuple[PanelData, Path]:
         if actual.get(key) != expected_value:
             raise ValueError(f"snapshot config mismatch for {key}: {actual.get(key)!r} != {expected_value!r}")
     panel = PanelData.load_npz(directory / "panel.npz")
-    if panel.valuation_reason is None:
-        raise ValueError('snapshot lacks valuation provenance; set rebuild_snapshot=true')
+    if panel.valuation_reason is None or panel.risk_excluded is None or panel.delisting_event is None:
+        raise ValueError('snapshot lacks valuation/risk/delisting provenance; set rebuild_snapshot=true')
     if panel.contract() != manifest["panel_contract"]:
         raise ValueError("snapshot panel contract does not match manifest")
     return panel, directory

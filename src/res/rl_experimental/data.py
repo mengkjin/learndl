@@ -9,7 +9,7 @@ from typing import Any, Callable, cast
 import numpy as np
 
 
-PANEL_SCHEMA_VERSION = 3
+PANEL_SCHEMA_VERSION = 4
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,9 @@ class PanelData:
     valuation_reason: np.ndarray | None = None
     valuation_stale_days: np.ndarray | None = None
     valuation_last_valid_date: np.ndarray | None = None
+    risk_excluded: np.ndarray | None = None
+    risk_reason: np.ndarray | None = None
+    delisting_event: np.ndarray | None = None
     industry_codes: np.ndarray | None = None
     feature_names: tuple[str, ...] = ()
     schema_version: int = PANEL_SCHEMA_VERSION
@@ -119,6 +122,20 @@ class PanelData:
                 raise ValueError('unknown valuation reason')
             if np.any(self.valuation_last_valid_date > self.execution_dates[:, None]):
                 raise ValueError('valuation date cannot reference a future observation')
+
+        risk_fields = ('risk_excluded', 'risk_reason', 'delisting_event')
+        if any(getattr(self, name) is not None for name in risk_fields):
+            if not self.is_execution_panel or not all(getattr(self, name) is not None for name in risk_fields):
+                raise ValueError('risk metadata requires all three arrays and execution data')
+            for name in risk_fields:
+                value = np.asarray(getattr(self, name))
+                if value.shape != (t, n):
+                    raise ValueError(f'invalid {name} shape')
+                if name == 'risk_reason' and (not np.issubdtype(value.dtype, np.integer) or np.any((value < 0) | (value > 3))):
+                    raise ValueError('invalid risk reason')
+                object.__setattr__(self, name, value.astype(np.uint8 if name == 'risk_reason' else bool))
+            if np.any(self.risk_excluded != (self.risk_reason != 0)) or np.any(investable & self.risk_excluded):
+                raise ValueError('risk mask must agree with reasons and exclude investable stocks')
 
         if self.industry_codes is not None:
             industry = np.asarray(self.industry_codes, dtype=np.int16)
@@ -214,6 +231,7 @@ class PanelData:
                 self.valuation_reason,
                 self.valuation_stale_days,
                 self.valuation_last_valid_date,
+                self.risk_excluded, self.risk_reason, self.delisting_event,
             )
             if value is not None
         )
@@ -252,6 +270,7 @@ class PanelData:
             "valuation_reason",
             "valuation_stale_days",
             "valuation_last_valid_date",
+            "risk_excluded", "risk_reason", "delisting_event",
         ):
             value = getattr(self, name)
             if value is not None:

@@ -35,7 +35,7 @@
 - `investable [T,N]`：当时的投资资格。
 - `forward_returns [T,N]`：决策后的收益，只供环境结算。
 
-真实数据快照使用 schema v2，并另外保存 `execution_dates`、隔夜/日内收益、`can_buy`、`can_sell`、估值陈旧标志和逐日行业编码。行业编码只在构造 observation 时展开为 one-hot，不参与连续特征标准化。未来交易状态只由环境在结算时读取，不会进入 t 日 observation。
+真实数据快照使用 schema v4，并另外保存 `execution_dates`、隔夜/日内收益、`can_buy`、`can_sell`、估值陈旧标志和逐日行业编码。行业编码只在构造 observation 时展开为 one-hot，不参与连续特征标准化。未来交易状态只由环境在结算时读取，不会进入 t 日 observation。
 
 NPZ 可以用 `PanelData.save_npz()` 和 `PanelData.load_npz()` 读写。checkpoint 会记录 schema、特征顺序、证券和日期指纹；重新评估时数据不匹配会直接报错。
 
@@ -125,11 +125,11 @@ reward = RewardConfig(
 
 ## 服务器一键运行、邮件与本机分析
 
-真实快照使用 schema v3 的停牌估值规则：成交始终依赖 `day` 的真实开盘和可交易状态；收盘估值依次使用有效的 `day.close × adjfactor`、`adjprice.close`、仍上市期间的最近有效估值。无可成交开盘时冻结买卖，有可信收盘时仍计入价格变化；双表缺失可承接估值并汇总 warning，不认定为已确认停牌。复牌跳涨/跳跌完整进入隔夜收益，退市或没有任何历史估值时不继续补值。
+真实快照使用 schema v4（保留 v3 的停牌估值规则）：成交始终依赖 `day` 的真实开盘和可交易状态；收盘估值依次使用有效的 `day.close × adjfactor`、`adjprice.close`、仍上市期间的最近有效估值。无可成交开盘时冻结买卖，有可信收盘时仍计入价格变化；双表缺失可承接估值并汇总 warning，不认定为已确认停牌。复牌跳涨/跳跌完整进入隔夜收益，退市或没有任何历史估值时不继续补值。
 
 质量报告的 `valuation` 记录来源、冲突和连续缺失区间；轨迹增加 `carried_holdings`、`missing_data_carried_holdings`、`max_held_stale_days`。承接天数从载入的历史窗口开始累计，更早的停牌时长未知。价格来源冲突时优先 day 的真实复权收盘并告警。所有估值处理只在 RL 内存中进行。
 
-升级后需将实验 JSON 的 `rebuild_snapshot` 临时设为 `true`（或使用新的快照目录）生成 v3 快照，后续可改回 `false`。旧快照/checkpoint 仍可按原契约回放，但新实验入口不会静默沿用旧估值逻辑。建议先运行 `replay-baselines <快照目录>/panel.npz --split valid --train-end-date 20230101 --valid-end-date 20250101 --output results/rl_experimental/valuation_check`，确认验证基线通过，再运行服务器训练脚本。
+升级后需将实验 JSON 的 `rebuild_snapshot` 临时设为 `true`（或使用新的快照目录）生成 v4 快照，后续可改回 `false`。旧快照/checkpoint 仍可按原契约回放，但新实验入口不会静默沿用旧估值逻辑。建议先运行 `replay-baselines <快照目录>/panel.npz --split valid --train-end-date 20230101 --valid-end-date 20250101 --output results/rl_experimental/valuation_check`，确认验证基线通过，再运行服务器训练脚本。
 
 RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风格暴露和 alpha 的日期/证券重复键，以及上市记录与行业资料的对应键。发现重复时输出 `WARNING`，按源读取顺序保留最后一行；内容冲突时额外报告冲突键数量，这不代表识别出了最新修订值。处理仅发生在内存，不改写数据库；清理记录写入 manifest 的 `audit.duplicate_cleanup` 和 `quality_report.json`。缺失整日数据和非法价格仍按原规则报错。复用已有快照时不会重读源表，如需重新检查源数据请重建快照。
 
@@ -225,3 +225,16 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s src/res/r
 04、05 默认使用 2025-01-02 至 2025-02-28 的决策日期，输出位于 `results/rl_experimental/`。依次运行即可完成数据准备；日期、alpha 方向/滞后及样本外状态均可在配置单元修改。默认每个 alpha 日期必须存在，行情需要覆盖特征回看期和最后决策日的下一交易日。dry-run 只审计 alpha 与预计数组内存，正式导出才完整检查行情及其他数据。
 
 两本 notebook 共享默认快照位置；复用前检查配置、文件指纹和数据契约。源数据库变化不会自动重建快照，设置 `REBUILD_SNAPSHOT=True` 才会覆盖导出。05 每次训练创建独立运行目录，默认为 CPU；4090 可改为 `DEVICE="cuda"`。此短实验的 alpha 样本外状态默认未知，结果标记为工程实验。
+
+
+### 退市核销与危险股票（schema v4）
+
+真实快照在决策日用 `DATAVENDOR.INFO.get_st(t)` 的全部异常类别及项目 `warnst` 的 90 个自然日公告规则硬剔除股票，不增加低价/弱势筛选。优先读取当日 `exposure/warns_st_and_delist_90`，缺缓存时只读同期公告，不写回数据库。公告标题匹配“可能.*风险警示”或“可能.*退市”。缺文件与空文件分别记录；缓存来源覆盖未经验证也单独标记。历史覆盖不足会告警并继续应用已有规则，不代表完整复现实盘筛选。
+
+风险股的候选资格和目标权重归零，robust 旧持仓缓冲不能绕过；卖不出的实际持仓仍保留。风险解除后可以再次入选。结算在历史 `delist_dt` 当日或其后第一个交易日开盘前，将剩余上一收盘持仓金额全额核销：无现金回收，无费用和换手。**这是实验估值假设，并非所有真实退市股票的最终回收价值。** 普通停牌、上市前或缺价不会被当成退市。未来退市事件不进入此前观测。
+
+新增 `risk_excluded`、原因位（1=ST/异常，2=公告预警，可叠加）和 `delisting_event` 数组均参与指纹。旧 panel/checkpoint 可按旧契约读取；`run-experiment` 必须重建 v4 快照。全部资产核销后 NAV=0、收益=-100%，RL 和基准停止交易；内置对数奖励对倍率使用 `1e-12` 下限，自定义函数收到真实零倍率。零净值基准的相对净值指标为未定义。
+
+轨迹新增 `written_off_stock_ids`、`delisting_loss`（初始净值单位）、`delisting_events`（核销持仓数量）、`risk_unsold_holdings` 和 `assets_exhausted`。汇总记录累计损失/事件数；训练 CSV/TensorBoard 记录对应数值分项。质量报告及 manifest 保存逐日风险来源/覆盖缺口；终端与 HtmlCatcher 捕获覆盖摘要及核销事件。
+
+服务器更新代码后先将 JSON 中 `rebuild_snapshot` 设为 `true`，或单独执行 `prepare-real` 创建新目录；先用上方 `replay-baselines --split valid` 验证两条基线，再开始 PPO。`train_experiment` 现在也在 PPO 开始前回放验证期两条基线，并保存 `validation_baseline_metrics.json` 与对应逐日 CSV。重建成功后可将该开关改回 `false`。

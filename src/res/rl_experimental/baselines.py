@@ -9,6 +9,7 @@ import numpy as np
 
 from .data import PanelData
 from .portfolio import PortfolioConstraints, execute_open_close, settle_period
+from .risk import execution_risk_args, execution_risk_metrics
 from .valuation import holding_valuation_metrics, valuation_context
 
 
@@ -61,6 +62,11 @@ def history_metrics(history: list[dict[str, object]]) -> dict[str, float]:
         "final_nav": float(nav[-1]),
         "total_fees": float(np.sum([_as_float(row.get("fee_estimate", 0.0)) for row in history])),
     }
+    metrics.update({
+        'total_delisting_loss': float(sum(float(row.get('delisting_loss', 0)) for row in history)),
+        'delisting_events': float(sum(int(row.get('delisting_events', 0)) for row in history)),
+        'assets_exhausted': float(nav[-1] == 0),
+    })
     if "frozen_holdings" in history[0]:
         metrics["mean_frozen_holdings"] = float(np.mean([_as_float(row["frozen_holdings"]) for row in history]))
         metrics["rejected_orders"] = float(
@@ -195,10 +201,12 @@ def replay_baseline(
                 decision_date=int(panel.decision_dates[time_index]),
                 execution_date=int(execution_dates[time_index]),
                 valuation_context=valuation_context(panel, time_index),
+                **execution_risk_args(panel, time_index),
             )
             weights, cash = filled.end_weights, filled.end_cash
             multiplier, turnover, cost = filled.nav_multiplier, filled.turnover, filled.cost_fraction
             extra = {
+                **execution_risk_metrics(panel, time_index, filled, previous_nav),
                 "execution_date": int(execution_dates[time_index]),
                 "overnight_return": filled.overnight_multiplier - 1.0,
                 "buy_notional": filled.buy_notional,
@@ -233,4 +241,6 @@ def replay_baseline(
             }
             | extra
         )
+        if nav == 0:
+            break
     return history

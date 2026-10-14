@@ -10,6 +10,7 @@ from gymnasium import spaces
 
 from .data import PanelData
 from .portfolio import PortfolioConstraints, execute_open_close, project_action, select_slots, settle_period
+from .risk import execution_risk_args, execution_risk_metrics
 from .valuation import holding_valuation_metrics, valuation_context
 from .reward import RewardConfig, RewardContext, RewardEvaluator
 
@@ -152,6 +153,8 @@ class PortfolioEnv(gym.Env):
     def step(self, action: np.ndarray):
         if self._time >= self._episode_end:
             raise RuntimeError("step called after termination; reset the environment")
+        if self._nav == 0:
+            raise RuntimeError('episode assets exhausted; reset before stepping')
         decision_observation = {key: value.copy() for key, value in self._observation().items()}
         for value in decision_observation.values():
             value.flags.writeable = False
@@ -189,6 +192,7 @@ class PortfolioEnv(gym.Env):
                 decision_date=int(self.panel.decision_dates[self._time]),
                 execution_date=int(execution_dates[self._time]),
                 valuation_context=valuation_context(self.panel, self._time),
+                **execution_risk_args(self.panel, self._time),
             )
             new_weights = execution.end_weights
             new_cash = execution.end_cash
@@ -196,6 +200,7 @@ class PortfolioEnv(gym.Env):
             turnover = execution.turnover
             cost_fraction = execution.cost_fraction
             execution_info = {
+                **execution_risk_metrics(self.panel, self._time, execution, previous_nav),
                 "execution_date": execution_dates[self._time].item(),
                 "overnight_return": execution.overnight_multiplier - 1.0,
                 "buy_notional": execution.buy_notional,
@@ -260,7 +265,7 @@ class PortfolioEnv(gym.Env):
         } | execution_info | {f"reward_component/{key}": value for key, value in reward_result.components.items()}
         self.history.append(record)
         self._time += 1
-        terminated = self._time >= self._episode_end
+        terminated = self._time >= self._episode_end or self._nav == 0
         obs = self._observation()
         info = self._base_info() | record
         return obs, reward, terminated, False, info

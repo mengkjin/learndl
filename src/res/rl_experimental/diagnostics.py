@@ -7,11 +7,11 @@ import numpy as np
 from matplotlib.figure import Figure
 
 
-def compare_metrics(ppo: dict[str, float], equal: dict[str, float]) -> dict[str, float]:
+def compare_metrics(ppo: dict[str, float], equal: dict[str, float]) -> dict[str, float | None]:
     """Return differences with explicit units (percentage points versus NAV ratios)."""
     return {
         "return_difference_pp": 100.0 * (ppo["total_return"] - equal["total_return"]),
-        "relative_nav_return": ppo["final_nav"] / equal["final_nav"] - 1.0,
+        "relative_nav_return": ppo["final_nav"] / equal["final_nav"] - 1.0 if equal["final_nav"] > 0 else None,
         "max_drawdown_difference_pp": 100.0 * (ppo["max_drawdown"] - equal["max_drawdown"]),
         "volatility_difference_pp": 100.0 * (ppo["annualized_volatility"] - equal["annualized_volatility"]),
         "mean_turnover_difference": ppo["mean_turnover"] - equal["mean_turnover"],
@@ -21,11 +21,18 @@ def compare_metrics(ppo: dict[str, float], equal: dict[str, float]) -> dict[str,
 
 def comparison_figure(histories: dict[str, list[dict[str, Any]]]) -> Figure:
     """All curves start from cash; both decision and settlement dates must match."""
-    reference = [(row["decision_date"], row["return_end_date"]) for row in histories["ppo"]]
+    longest = max(histories.values(), key=len)
+    reference = [(row["decision_date"], row["return_end_date"]) for row in longest]
+    histories = {name: list(rows) for name, rows in histories.items()}
     if not reference:
         raise ValueError("comparison requires nonempty histories")
     for name, history in histories.items():
         dates = [(row["decision_date"], row["return_end_date"]) for row in history]
+        if dates == reference[:len(dates)] and len(dates) < len(reference) and history and history[-1]['nav'] == 0:
+            # Display the terminal zero balance, without creating further trades.
+            history.extend({'decision_date': d, 'return_end_date': e, 'nav': 0., 'fee_estimate': 0.,
+                            'turnover': 0., 'cash_weight': 0.} for d, e in reference[len(dates):])
+            dates = reference
         if dates != reference:
             raise ValueError(f"{name} comparison dates do not match PPO")
     figure = Figure(figsize=(13, 12), layout="constrained")
@@ -39,7 +46,7 @@ def comparison_figure(histories: dict[str, list[dict[str, Any]]]) -> Figure:
             np.r_[0.0, np.cumsum([row["fee_estimate"] for row in history])],
             np.r_[0.0, [row["turnover"] for row in history]],
             np.r_[1.0, [row["cash_weight"] for row in history]],
-            nav / equal_nav - 1.0,
+            np.divide(nav, equal_nav, out=np.full_like(nav, np.nan), where=equal_nav > 0) - 1.0,
         ]
         for ax, values in zip(axes, series, strict=True):
             ax.plot(values, label=name)

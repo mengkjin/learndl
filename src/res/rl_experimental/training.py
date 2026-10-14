@@ -100,6 +100,11 @@ def history_metrics(history: list[dict[str, Any]], gamma: float | None = None) -
         "final_nav": float(nav[-1]),
         "total_fees": float(np.sum([row.get("fee_estimate", 0.0) for row in history])),
     }
+    metrics.update({
+        'total_delisting_loss': float(sum(float(row.get('delisting_loss', 0)) for row in history)),
+        'delisting_events': float(sum(int(row.get('delisting_events', 0)) for row in history)),
+        'assets_exhausted': float(nav[-1] == 0),
+    })
     if "frozen_holdings" in history[0]:
         metrics["mean_frozen_holdings"] = float(np.mean([row["frozen_holdings"] for row in history]))
         metrics["rejected_orders"] = float(
@@ -142,6 +147,7 @@ class ValidationCallback(BaseCallback):
     ROLLOUT_FIELDS = (
         "reward", "turnover", "fee_estimate", "cash_weight", "holdings",
         "frozen_holdings", "rejected_buys", "rejected_sells",
+        "delisting_loss", "delisting_events", "risk_unsold_holdings", "assets_exhausted",
         "carried_holdings", "missing_data_carried_holdings", "max_held_stale_days",
     )
 
@@ -341,6 +347,14 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     valid_equal_history = replay_baseline(panel, splits["valid"], config.constraints(), "alpha_equal_weight")
     valid_equal_metrics = history_metrics(valid_equal_history)
     write_history(output / "validation_equal_weight_history.csv", valid_equal_history)
+    if panel.is_execution_panel:
+        progress('baseline', 'Evaluating validation robust top50 benchmark before PPO')
+        valid_robust_history = replay_baseline(panel, splits['valid'], config.constraints(), 'robust_top50')
+        write_history(output / 'validation_robust_top50_history.csv', valid_robust_history)
+        (output / 'validation_baseline_metrics.json').write_text(json.dumps({
+            'alpha_equal_weight': valid_equal_metrics,
+            'robust_top50': history_metrics(valid_robust_history),
+        }, indent=2), encoding='utf-8')
     callback = ValidationCallback(
         valid_env, output, config.eval_freq, valid_equal_metrics, config.gamma, config.selection_metric,
     )
