@@ -1,7 +1,8 @@
 fit:
-  - lgbm_of_hidden_fast
+  - gru_day_lag0
+  - gru_day_lag0_att
 
 
 resume: False
 force: True
-rerun_mark: 2
+rerun_mark: 0
