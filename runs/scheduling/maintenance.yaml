@@ -13,12 +13,12 @@ watchdog:
       max_seconds: 20
     idle_worklist:
       enabled: true
-      interval_seconds: 900
+      interval_seconds: 60
       max_gpu_memory_percent: 20
       progress_timeout_seconds: 43200
       recovery_enabled: true
       recovery_max_retries: 3
-      recovery_delay_seconds: 900
+      recovery_delay_seconds: 60
       recovery_min_available_memory_percent: 20
     git_auto_update:
       enabled: true

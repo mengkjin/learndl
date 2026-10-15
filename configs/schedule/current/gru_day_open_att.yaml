@@ -8,7 +8,7 @@ model:
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - y_open@rtn_lag1_10 # independent lag0 label source
+    - y_open@rtn_10_open # independent lag0 label source
 
   special:
     global2top: true # false
