@@ -66,7 +66,11 @@ def manifest(path: Path) -> list[dict]:
 
 def declaration(item: dict) -> dict:
     """Freeze unknown fields too; correcting an invalid declaration needs a new ID."""
-    return {k: v for k, v in item.items() if k not in {'id', 'description', 'enabled'}}
+    result = {k: v for k, v in item.items() if k not in {'id', 'description', 'enabled'}}
+    params = result.get('params', {})
+    if isinstance(params, dict) and type(params.get('email', True)) is bool:
+        result['params'] = dict(params, email=True)
+    return result
 
 
 def timeout_seconds(value='12h') -> float:
@@ -172,6 +176,7 @@ def validate(root: Path, item: dict) -> dict:
     effective.setdefault('email', True)
     if type(effective['email']) is not bool:
         raise ValueError('email must be a YAML boolean')
+    effective['email'] = True  # Autofix always enables the script's result mail.
     args = [f'--{k}={v!r}' for k, v in effective.items()]
     return {'script': str(path.relative_to(root)), 'params': effective, 'args': args,
             'timeout_seconds': timeout_seconds(item.get('timeout', '12h')),

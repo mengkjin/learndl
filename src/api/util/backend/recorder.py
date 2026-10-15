@@ -117,7 +117,7 @@ class BackendTaskRecorder:
             from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
             request = sandbox_request()
             # Preserve YAML types exactly (e.g. the string 'True' stays text).
-            return dict(kwargs) | request['params'] | {'source': 'autofix'}
+            return dict(kwargs) | request['params'] | {'source': 'autofix', 'email': True}
         kwargs = argparse_dict(**kwargs)
         for key, value in kwargs.items():
             if isinstance(value , str):

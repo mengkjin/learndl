@@ -4,15 +4,18 @@ Autofix 用来在代码更新后执行明确声明的数据重算、回补或修
 
 当前清单注册了 `20261014_create_open_vwap_datablocks_01`：先生成六组 open/VWAP 原始标签，再构建 `y_open` / `y_vwap` 的 fit 与 predict DataBlock。其他脚本没有因本功能而自动获得 autofix 准入。
 
-该任务固定从标签日下一交易日起持有 5、10、20 天，从 20050101 回补至执行时已成熟的日期，不重算原有 close 标签。已有同名原始标签和 DataBlock 会先备份到 `data/Interim/autofix_backups/`，其 `report.json` 记录备份映射、完成步骤和失败原因。六组原始标签全部成功后才构建 DataBlock；失败会保留备份和已完成的数据，不自动重试或回滚。注册时关闭了结果邮件，超时为 48 小时。`dry_run: true` 只预览数据范围，不生成数据或备份。
+该任务固定从标签日下一交易日起持有 5、10、20 天，从 20050101 回补至执行时已成熟的日期，不重算原有 close 标签。已有同名原始标签和 DataBlock 会先备份到 `data/Interim/autofix_backups/`，其 `report.json` 记录备份映射、完成步骤和失败原因。六组原始标签全部成功后才构建 DataBlock；失败会保留备份和已完成的数据，不自动重试或回滚。当前统一强制开启脚本结果邮件，超时为 48 小时。`dry_run: true` 只预览数据范围，不生成数据或备份。
 
 ## 最重要的规则
+
+`20261015_rename_label_datablocks_01` 仅将 fit/predict 下的旧 `X_y_*` 改名为 `Y_*`，支持 `.mmap` 目录、`.pt` 和 `.feather` 文件，不读取或重新计算数据。执行前检查全部命名冲突，新旧名称并存时停止且不覆盖；已改名的文件再次检查会跳过。迁移记录位于 `data/Interim/autofix_reports/`，部分失败时可据此核对路径；若需要由 autofix 再次执行，仍需新 ID。读取暂时兼容旧名称，新写入统一使用新名称。
 
 - **每个服务器、项目实例内，每个 ID 最多尝试一次。** 成功、失败、脚本不存在、参数错误、启动失败、超时或结果不明，均不自动重试。
 - **重新执行必须追加不同 ID。** 没有 revision、reset、force 或清空历史后重跑的入口。
 - 等待其他任务结束只是排队，不算尝试。首次登记后执行声明被冻结；修改同一 ID 的脚本、参数或超时会产生冲突，不能让旧 ID 重跑。
 - 一条失败不阻塞其他 ID。存在先后依赖的多个步骤请放进同一个脚本，脚本自行在失败处停止。
-- 正常进入脚本后，完成邮件由脚本负责，默认 `email: true`。Autofix 不再补发普通成功或业务失败邮件。
+- 正常进入脚本后，完成邮件由脚本负责，autofix 强制传入 `email: true`。Autofix 不再补发普通成功或业务失败邮件。
+- 每个 ID 正式领取时，watchdog 另发一次启动流程通知，不受 `params.email` 影响；纯排队不发。
 
 ## 文件怎么写
 
@@ -44,7 +47,7 @@ fixes:
 - `id`：必填，唯一且稳定。以英文字母或数字开头，之后可含字母、数字、下划线、点和短横线，最多 128 字符。建议使用日期、用途和编号。
 - `script`：必填，项目根目录下 `scripts/` 内的 Python 相对路径。拒绝绝对路径、`..`、符号链接和未准入脚本。
 - `params`：参数映射，可省略表示使用脚本的静态默认值。未知参数、框架保留参数、错误类型会导致启动失败。
-- `params.email`：可选，默认 `true`；需要关闭脚本结果邮件时写 YAML 布尔值 `false`，不要写字符串 `"false"`。
+- `params.email`：可省略或写 `true`；autofix 总是强制传入 `true`，旧条目的布尔值 `false` 也会被覆盖。字符串等非布尔值仍视为参数错误。
 - `description`：可选说明，修改不会重新执行。
 - `enabled`：默认 `true`。`false` 撤回尚未尝试的请求，不中断已经开始的任务。
 - `timeout`：默认 `12h`，支持正数加 `s`、`m`、`h`、`d`，例如 `30m`、`12h`。包括进程初始化、计算及结束阶段；超时后先 TERM，30 秒后 KILL。
@@ -116,12 +119,15 @@ python -m src.api.task_monitor.scheduling.autofix status
 
 ## 邮件与日志
 
-- **脚本接管后正常结束或业务报错**：由脚本自己的邮件机制处理，默认开启，保留内容和附件；关闭 `email` 后不由 autofix 代发结果邮件。
+- **开始启动流程**：领取 ID 的同一事务保存 `starting` 邮件事件，watchdog 在下一次通知轮询中发送，正常约一分钟内；内容包括 ID、服务器、领取时间、Git commit、脚本、脱敏参数及日志位置。这表示已经开始启动准备，不代表业务已开始或成功。即使后续参数校验失败或领取后崩溃，通知事件仍保留。失败只重试邮件，不重跑任务；上线前已经尝试的旧记录不补发启动通知。
+- **脚本接管后正常结束或业务报错**：由脚本自己的邮件机制处理，autofix 强制启用其 email 参数，保留内容和附件；autofix 不代发第二封结果邮件。
 - **脚本未接管**：autofix 发送启动失败邮件，注明 ID、服务器、提交、脚本、脱敏参数、阶段、异常、有限错误输出和日志路径，并注明必须新建 ID 才能重试。创建了 Python 进程不等于业务已开始。
 - **超时、异常信号、进程丢失或重启**：由监督机制发异常中断告警；不作为普通业务失败再发第二封结果邮件。
 - **整份 YAML 格式错误、重复 ID**：按文件内容去重告警，暂停新请求发现；不虚构任务执行结果。
 
 通知失败只重试通知，绝不重跑脚本。脚本结果邮件沿用现有邮件队列；autofix 告警使用独立持久队列。SMTP 在“已经发出、发送回执尚未持久化”时崩溃可能产生重复邮件，不能保证邮件绝对一次。
+
+`email` 现在是 autofix 的强制通知策略，优先于脚本头部默认值和旧清单的 `email: false`。比较冻结声明时，仅将缺省/布尔 false/true 统一为 true，兼容旧账本；其他执行参数仍保持冻结规则。仅修改这个布尔设置不会产生冲突，也不会清除已尝试状态。已执行或正在运行的任务不会因此重跑、补发结果邮件或改变当前进程。
 
 执行账本、完整监督日志和通知事件位于 `~/.local/state/learndl/<项目路径摘要>/autofix/`。`status` 会显示实际位置和每次日志路径。脚本还保留原有任务记录、报告和邮件附件。
 
@@ -133,7 +139,7 @@ Watchdog 只做短检查，长任务由独立 `learndl-autofix.service` 执行�
 
 ## 服务器首次安装与更新
 
-只在 Linux 服务器配置执行，本机 macOS 可编辑、校验和预览。服务器需要 systemd、Bubblewrap，以及可用的非特权 user namespace；Bubblewrap 必须支持 `--disable-userns`。安装发行版提供的 `bubblewrap` 包后，使用现有调度安装器：
+只在 Linux 服务器配置执行，本机 macOS 可编辑、校验和预览。服务器需要 systemd、Bubblewrap，以及可用的非特权 user namespace；Bubblewrap 必须支持 `--disable-userns`，该选项由上游 [0.8.0](https://github.com/containers/bubblewrap/releases/tag/v0.8.0) 引入。应使用发行版仍维护且提供该能力的软件包；仅安装某些旧发行版默认提供的版本可能不够。安装后，使用现有调度安装器：
 
 ```bash
 bash runs/install_schedules.sh plan --host mengkjin-server --diff
@@ -144,6 +150,17 @@ bash runs/install_schedules.sh status --host mengkjin-server
 以现有普通服务器账号运行安装器，不要整体使用 sudo。安装器仅为受管 systemd 单元使用已有 sudo 安装步骤。`maintenance.yaml` 已包含 autofix job，但**拉取 Git 不等于安装服务**。首次 apply 初始化账本并安装 worker；后续任务清单增量变化不需要再次 apply。隔离策略或 systemd 配置变化后需要重新 plan/apply。
 
 已经安装旧 watchdog 的服务器也必须执行一次上述 `plan/apply`，无需先卸载。单独重启 watchdog 不会创建 worker、账本或隔离策略。安装器会和 worker、维护许可互斥；有任务占用时应等待结束后再 apply，而不是强行切换配置。启用状态保存在项目外的账本中，项目内配置被误删不能关闭互斥保护。
+
+如果安装报错 `Bubblewrap must support --disable-userns` 或 `lacks --disable-userns`，先在执行安装器的同一账号、同一环境下检查：
+
+```bash
+cat /etc/os-release
+command -v bwrap
+bwrap --version
+bwrap --help
+```
+
+这表示当前找到的程序缺少所需能力，不是 tasks.yaml 错误。优先通过当前发行版的官方更新仓库或受支持的 backports 获取新版；若已升级却仍报错，检查 PATH 是否仍优先选择旧副本。升级后确认帮助中出现 `--disable-userns`，再执行 `plan/apply`。不要删除这个检查或执行参数、清空账本，或关闭系统安全策略来绕过此错误。安装器按实际能力检测，支持发行版回移该选项的版本；不只比较版本号。
 
 清单为空时 worker 不执行脚本。缺少隔离组件或隔离失败会拒绝执行，不退回普通 Python 执行。不可直接在终端运行内部 `worker` 代替已安装服务。
 
@@ -159,6 +176,8 @@ bash runs/install_schedules.sh rollback --host mengkjin-server
 ```
 
 `status` 的 `history` 包含已从清单移除的 ID，`scheduled` 显示定时补跑记录。补跑启动后监督进程崩溃的记录可能停留在 `starting`，应结合普通任务账本及日志人工核查，不自动重复启动。
+
+如果看起来“空闲但未运行”，先查询 `status` 和 worker 的 journal。`activation_enabled` 表示项目外账本中的启用开关；`last_worker_check` 给出最近一次 worker 检查时间及等待原因，例如补跑队列优先、维护许可被占用、旧脚本记录待核查，或没有可尝试的新 ID。时间长期不更新时优先检查 timer/service；旧版尚无此字段时显示 null，不代表从未运行。`dispatching` 也可能正在进行隔离预检，不能据此判断业务已经启动。不要通过删除账本、清锁或修改旧 ID 绕过等待。
 
 ## 文件隔离范围
 

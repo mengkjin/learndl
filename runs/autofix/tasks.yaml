@@ -1,3 +1,5 @@
+# Autofix 通知规则：统一强制传入 email=true，覆盖脚本默认值和旧条目的 email=false。
+# watchdog 另发启动流程邮件；同一 ID 最多尝试一次，修改邮件设置不会重跑。
 schema_version: 1
 fixes:
   - id: 20261014_create_open_vwap_datablocks_01
@@ -5,6 +7,14 @@ fixes:
     script: scripts/.autofix/create_open_vwap_datablocks.py
     params:
       dry_run: false
-      email: false
+      email: true
     timeout: 48h
+    enabled: true
+  - id: 20261015_rename_label_datablocks_01
+    description: 将 fit/predict 中旧 X_y_* DataBlock 改名为 Y_*，仅重命名，不重新计算标签或数据。
+    script: scripts/.autofix/rename_label_datablocks.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 30m
     enabled: true

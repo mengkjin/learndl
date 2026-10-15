@@ -105,7 +105,9 @@ class Store:
                 previous = db.execute('SELECT fingerprint,data FROM fixes WHERE id=?', (key,)).fetchone()
                 if previous:
                     record = json.loads(previous[1])
-                    record['conflict'] = previous[0] != fingerprint
+                    # Recompute from the frozen item so legacy email=False hashes
+                    # adopt the mandatory-mail policy without resetting attempts.
+                    record['conflict'] = digest(declaration(record['item'])) != fingerprint
                     if record['conflict']:
                         conflicts.append(key)
                     if not record.get('attempted'):
@@ -149,6 +151,10 @@ class Store:
                 return None
             record.update(fields, attempted=True, phase='starting', started_at=time.time(), supervisor_pid=os.getpid())
             db.execute('UPDATE fixes SET data=? WHERE id=?', (canonical(record), key))
+            # Commit the notification with the claim: a crash must not lose the
+            # start event, and duplicate claimers must not enqueue another one.
+            db.execute('INSERT OR IGNORE INTO events(id,data) VALUES (?,?)',
+                       (key + ':starting', canonical(redact(dict(record, kind='starting')))))
         return record
 
     def event(self, key, data):

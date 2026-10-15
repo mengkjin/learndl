@@ -30,9 +30,20 @@ def preflight() -> str:
     executable = shutil.which('bwrap')
     if not executable:
         raise RuntimeError('Bubblewrap (bwrap) is not installed; refusing unsandboxed execution')
-    help_text = subprocess.run([executable, '--help'], capture_output=True, text=True, timeout=10, check=True).stdout
+    result = subprocess.run([executable, '--help'], capture_output=True, text=True, timeout=10, check=True)
+    help_text = result.stdout + result.stderr
     if '--disable-userns' not in help_text:
-        raise RuntimeError('Bubblewrap must support --disable-userns')
+        version = 'version unavailable'
+        try:
+            result = subprocess.run([executable, '--version'], capture_output=True, text=True, timeout=10)
+            version = (result.stdout or result.stderr).strip()[:200] or version
+        except (OSError, subprocess.SubprocessError):
+            pass
+        raise RuntimeError(
+            f'Bubblewrap at {executable} ({version}) lacks --disable-userns. '
+            'This capability was added in upstream 0.8.0; install a supported distribution package '
+            'providing it, verify the bwrap selected by PATH, then rerun scheduling plan/apply. '
+            'Autofix isolation has not been downgraded. See runs/autofix/README.md.')
     return executable
 
 

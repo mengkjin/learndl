@@ -53,7 +53,7 @@ class SpecTests(Fixture):
         self.assertEqual(result['timeout_seconds'], 43200)
         self.assertIn('--start=20200101', result['args'])
         self.item['params']['email'] = False
-        self.assertFalse(validate(self.root, self.item)['params']['email'])
+        self.assertTrue(validate(self.root, self.item)['params']['email'])
 
     def test_reject_unknown_reserved_types_and_revision(self):
         for change in ({'revision': 2}, {'params': {'start': '1'}}, {'params': {'source': 'bash'}},
@@ -91,11 +91,35 @@ class SpecTests(Fixture):
 
 
 class LedgerTests(Fixture):
+    def test_legacy_email_policy_change_never_resets_attempt(self):
+        from src.api.task_monitor.scheduling.autofix_spec import digest
+        legacy = self.item | {'params': {'start': 20200101, 'email': False}}
+        self.register([legacy])
+        # Reproduce the raw declaration hash saved by the previous implementation.
+        with self.store.connect() as db:
+            db.execute('UPDATE fixes SET fingerprint=? WHERE id=?',
+                       (digest({k: v for k, v in legacy.items() if k != 'id'}), legacy['id']))
+        updated = self.item | {'params': {'start': 20200101, 'email': True}}
+        self.register([updated])
+        record = self.store.get('fix-001')
+        self.assertFalse(record['conflict'])
+        self.assertEqual(record['phase'], 'queued')
+        self.assertTrue(validate(self.root, record['item'])['params']['email'])
+        self.assertIsNotNone(self.store.claim('fix-001'))
+        self.store.update('fix-001', phase='failed')
+        self.register([self.item])  # Omitted email is also mandatory true.
+        self.assertFalse(self.store.get('fix-001')['conflict'])
+        self.assertIsNone(self.store.claim('fix-001'))
+        self.register([updated | {'params': {'start': 20210101, 'email': True}}])
+        self.assertTrue(self.store.get('fix-001')['conflict'])
+
     def test_at_most_once_concurrent_claims(self):
         self.register()
         with concurrent.futures.ThreadPoolExecutor(8) as pool:
             results = list(pool.map(lambda _: self.store.claim(self.item['id']), range(16)))
         self.assertEqual(sum(r is not None for r in results), 1)
+        with self.store.connect(readonly=True) as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM events WHERE id='fix-001:starting'").fetchone()[0], 1)
         self.store.update(self.item['id'], phase='failed')
         self.register()
         self.assertIsNone(self.store.claim(self.item['id']))
@@ -139,7 +163,23 @@ class LedgerTests(Fixture):
         self.assertIsNone(self.store.claim('fix-001'))
         self.assertIsNotNone(self.store.claim('next'))
         with self.store.connect() as db:
-            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0], 1)
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0], 3)
+
+    def test_start_notice_retries_without_restarting_even_with_email_disabled(self):
+        self.register([self.item | {'params': {'email': False}}])
+        with self.store.connect(readonly=True) as db:
+            self.assertEqual(db.execute('SELECT count(*) FROM events').fetchone()[0], 0)
+        self.store.claim('fix-001', supervisor_created=0)
+        with patch.object(autofix, 'state_dir', return_value=self.control):
+            calls = []
+            self.assertFalse(autofix.deliver(lambda *a, **k: calls.append(a) or False))
+            self.assertTrue(autofix.deliver(lambda *a, **k: calls.append(a) or True))
+            self.assertTrue(autofix.deliver(lambda *a, **k: self.fail('duplicate start notice')))
+        self.assertEqual(len(calls), 2)
+        self.assertIn('starting', calls[0][0])
+        self.assertIn('不代表业务脚本已开始', calls[0][1])
+        self.assertIn('"email":false', calls[0][1])
+        self.assertIsNone(self.store.claim('fix-001'))
 
     def test_unknown_supervisor_is_terminal(self):
         self.register()
@@ -170,6 +210,24 @@ class LedgerTests(Fixture):
 
 
 class IsolationTests(Fixture):
+    def test_old_bubblewrap_reports_path_version_and_upgrade(self):
+        from types import SimpleNamespace
+        with patch.object(autofix_sandbox.sys, 'platform', 'linux'), \
+             patch.object(autofix_sandbox.shutil, 'which', return_value='/usr/bin/bwrap'), \
+             patch.object(autofix_sandbox.subprocess, 'run', side_effect=[
+                 SimpleNamespace(stdout='--unshare-user', stderr=''),
+                 SimpleNamespace(stdout='bubblewrap 0.6.1', stderr='')]):
+            with self.assertRaisesRegex(RuntimeError, r'/usr/bin/bwrap.*0.6.1.*0.8.0'):
+                autofix_sandbox.preflight()
+
+    def test_backported_capability_is_accepted_without_version_gate(self):
+        from types import SimpleNamespace
+        with patch.object(autofix_sandbox.sys, 'platform', 'linux'), \
+             patch.object(autofix_sandbox.shutil, 'which', return_value='/usr/bin/bwrap'), \
+             patch.object(autofix_sandbox.subprocess, 'run', return_value=SimpleNamespace(stdout='', stderr='--disable-userns')) as run:
+            self.assertEqual(autofix_sandbox.preflight(), '/usr/bin/bwrap')
+            run.assert_called_once()
+
     def test_same_filesystem_bind_mount_is_rejected(self):
         target = str(self.root / 'external data').replace(' ', r'\040')
         with self.assertRaisesRegex(ValueError, 'Nested mount'):
@@ -278,32 +336,31 @@ sys.exit({exit_code})
         row, events = self.simulate()
         self.assertEqual(row['phase'], 'success')
         self.assertTrue(row['handoff'])
-        self.assertEqual(events, [])
+        self.assertEqual([e['kind'] for e in events], ['starting'])
         self.assertIsNone(self.store.claim(row['id']))
 
     def test_script_failure_even_exit_zero_is_not_success_or_duplicate_mail(self):
         row, events = self.simulate(success=False, exit_code=0)
         self.assertEqual(row['phase'], 'failed')
-        self.assertEqual(events, [])
+        self.assertEqual([e['kind'] for e in events], ['starting'])
 
-    def test_email_false_is_honoured(self):
+    def test_legacy_email_false_is_forced_true(self):
         row, events = self.simulate(email=False)
         self.assertEqual(row['phase'], 'success')
-        self.assertFalse(row['script_mail']['enabled'])
-        self.assertEqual(events, [])
+        self.assertTrue(row['script_mail']['enabled'])
+        self.assertEqual([e['kind'] for e in events], ['starting'])
 
     def test_import_failure_has_startup_mail_and_error_output(self):
         row, events = self.simulate(started=False, exit_code=1)
         self.assertEqual(row['phase'], 'failed')
         self.assertFalse(row['handoff'])
-        self.assertEqual(events[0]['kind'], 'startup_failed')
-        self.assertIn('ImportError', events[0]['error_tail'])
+        self.assertEqual([e['kind'] for e in events], ['starting', 'startup_failed'])
+        self.assertIn('ImportError', events[1]['error_tail'])
 
     def test_timeout_is_one_interruption_event(self):
         row, events = self.simulate(wait=True)
         self.assertEqual(row['phase'], 'unknown')
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0]['kind'], 'interrupted')
+        self.assertEqual([e['kind'] for e in events], ['starting', 'interrupted'])
         self.assertIsNone(self.store.claim(row['id']))
 
 
@@ -461,13 +518,50 @@ class ScriptContractTests(unittest.TestCase):
 
 
 class TypedParameterTests(unittest.TestCase):
+    def test_manifest_email_overrides_script_default(self):
+        from types import SimpleNamespace
+        from src.api.util.backend.recorder import BackendTaskRecorder
+        from src.proj.util.script.autorun import AutoRunTask
+        for enabled in (True, False):
+            with self.subTest(email=enabled), patch.dict(os.environ, LEARNDL_AUTOFIX_ID='fixture'), \
+                 patch.object(maintenance_gate, 'sandbox_request', return_value={'params': {'email': enabled}}):
+                recorder = BackendTaskRecorder(email=not enabled)
+                self.assertIs(recorder.params['email'], True)
+                task = SimpleNamespace(kwargs={'email': not enabled} | recorder.params)
+                self.assertIs(AutoRunTask.email.fget(task), True)
+
     def test_autofix_preserves_literal_looking_strings(self):
         from src.api.util.backend.recorder import BackendTaskRecorder
         params = {'label': 'True', 'number': '001', 'empty': '', 'email': False}
         with patch.dict(os.environ, LEARNDL_AUTOFIX_ID='fixture'), \
              patch.object(maintenance_gate, 'sandbox_request', return_value={'params': params}):
             actual = BackendTaskRecorder.parse_kwargs({})
-        self.assertEqual(actual, params | {'source': 'autofix'})
+        self.assertEqual(actual, params | {'source': 'autofix', 'email': True})
+
+
+class WorkerDiagnosticsTests(Fixture):
+    def test_waiting_reason_is_durable_without_consuming_id(self):
+        from contextlib import nullcontext
+        from src.api.task_monitor.scheduling import runtime, git_update
+        from src.proj.util.script import code_update_lock
+        self.register()
+        with patch.object(maintenance_gate, 'configured', return_value=True), \
+             patch.object(maintenance_gate, 'permit', return_value=nullcontext()), \
+             patch.object(autofix.sys, 'platform', 'linux'), \
+             patch.object(autofix, 'state_dir', return_value=self.control), \
+             patch.object(autofix, 'discover', return_value=True), \
+             patch.object(runtime, 'process_cgroup', return_value='/system.slice/learndl-autofix.service'), \
+             patch.object(git_update, 'training_blocker', return_value='managed task is active'), \
+             patch.object(code_update_lock, 'training_code_guard', return_value=nullcontext()), \
+             patch.object(autofix, 'execute') as execute:
+            self.assertEqual(autofix.worker(), 0)
+            execute.assert_not_called()
+        with self.store.connect(readonly=True) as db:
+            report = json.loads(db.execute("SELECT value FROM metadata WHERE key='worker_observation'").fetchone()[0])
+        self.assertEqual(report['status'], 'waiting')
+        self.assertEqual(report['reason'], 'managed task is active')
+        self.assertIn('checked_at', report)
+        self.assertFalse(self.store.get('fix-001')['attempted'])
 
 
 class MailboxSafetyTests(Fixture):

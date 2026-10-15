@@ -1163,12 +1163,25 @@ class DataBlock:
         """
         Return the filesystem path for the preprocessed dump of ``key`` / ``type``.
 
+        ``y`` uses Y; ``y_*`` uses Y_* with read fallback to legacy X_y_*.
+        ``find_if_not_exists=False`` returns the canonical label path directly.
         Falls back to the first existing suffix in ``DumpSuffix``
         when ``find_if_not_exists=True`` and the canonical path does not exist.
         """
         assert key , 'key is required'
         if key.lower() in ['y' , 'labels']: 
             path = PATH.datablock.joinpath(frame , f'Y{dump_suffix}')
+        elif key.lower().startswith('y_'):
+            key = key.lower()
+            path = PATH.datablock.joinpath(frame, f'Y_{key[2:]}{dump_suffix}')
+            if not find_if_not_exists:
+                return path
+            # Prefer every supported canonical format over legacy X_y_* dumps.
+            canonical = cls.find_existing_dump_path(path)
+            if canonical.exists():
+                return canonical
+            legacy = cls.find_existing_dump_path(path.with_name(f'X_{key}{dump_suffix}'))
+            return legacy if legacy.exists() else path
         else:
             alias_list = data_type_alias(key)
             path = None
@@ -1391,6 +1404,10 @@ class DataBlock:
             path = self.path_raw(flags['db_src'] , flags['db_key'])
         elif flags.get('category') == 'preprocess':
             path = self.path_preprocess(flags['preprocess_key'] , flags.get('frame' , flags.get('type' , 'fit')))
+            key = flags['preprocess_key'].lower()
+            if key.startswith('y_'):
+                # Legacy fallback is read-only: new writes always use Y_*.
+                path = path.with_name(f'Y_{key[2:]}{path.suffix}')
         else:
             raise ValueError(f'Unsupported category: {flags.get("category")} , please set correct category before saving!')
         path.parent.mkdir(exist_ok=True)

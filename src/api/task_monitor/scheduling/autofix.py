@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import portalocker
@@ -134,6 +135,17 @@ def tick():
 def _mail_body(event):
     # Parameter values are excluded from exception/log text to avoid accidental leaks.
     item = event.get('item', {})
+    if event.get('kind') == 'starting':
+        claimed_at = datetime.fromtimestamp(event['started_at'], timezone.utc).isoformat()
+        return '\n'.join([
+            'Autofix 启动通知：已领取本 ID，开始启动流程。',
+            '这是领取时的记录，不代表业务脚本已开始或已经成功；邮件可能因队列重试而延迟送达。',
+            f'Autofix ID: {event["id"]}', f'Host: {event.get("host", socket.gethostname())}',
+            f'Claimed at (UTC): {claimed_at}', f'Git commit: {event.get("commit", "unknown")}',
+            f'Script: {item.get("script", "")}', f'Parameters: {canonical(redact(item.get("params", {})))}',
+            f'Log: {event.get("log_path", "")}',
+            '本通知由 watchdog 发送。Autofix 强制传入 email=true，脚本负责结果邮件。上方参数为原始登记声明。',
+            '本 ID 最多尝试一次；失败后如需重新执行，必须新增不同 ID。'])
     lines = [f'Host: {event.get("host", socket.gethostname())}', f'Autofix ID: {event.get("id", "manifest")}',
              f'Git commit: {event.get("commit", "unknown")}', f'Script: {item.get("script", "")}',
              f'Parameters: {canonical(redact(item.get("params", {})))}',
@@ -152,7 +164,7 @@ def deliver(sender):
     complete = True
     with portalocker.Lock(str(store.directory / 'mail.lock'), timeout=0):
         with store.connect(readonly=True) as db:
-            events = db.execute('SELECT id,data FROM events WHERE sent=0').fetchall()
+            events = db.execute('SELECT id,data FROM events WHERE sent=0 ORDER BY rowid').fetchall()
         for key, raw in events:
             event = json.loads(raw)
             try:
@@ -197,10 +209,10 @@ def execute(store, root, row):
              'uid': os.getuid(), 'boot_id': boot_id(), 'cgroup': process_cgroup(os.getpid())}
     if not (scope['cgroup'] or '').endswith('/learndl-autofix.service'):
         scope = None
-    record = store.claim(key, supervisor_created=created, commit=commit(root), scope=scope)
+    log = store.directory / 'logs' / (hashlib.sha256(key.encode()).hexdigest() + '.log')
+    record = store.claim(key, supervisor_created=created, commit=commit(root), scope=scope, log_path=str(log))
     if record is None:
         return
-    log = store.directory / 'logs' / (hashlib.sha256(key.encode()).hexdigest() + '.log')
     process = None
     handoff = False
     timed_out = False
@@ -293,7 +305,8 @@ def recorded_task_blocker():
     database = TaskDatabase()
     with database.conn_handler as (_, cursor):
         cursor.execute("SELECT task_id FROM task_records WHERE status IN ('starting','running') LIMIT 1")
-        return 'A recorded script is still active or awaiting reconciliation' if cursor.fetchone() else None
+        row = cursor.fetchone()
+        return f'Recorded script {row[0]} is still active or awaiting reconciliation' if row else None
 
 
 def control_failure(error, sender):
@@ -314,12 +327,21 @@ def control_failure(error, sender):
             db.execute('UPDATE notices SET sent=1 WHERE id=?', (key,))
 
 
+def worker_observation(store, status, reason, *, code=0, **fields):
+    observation = {'checked_at': time.time(), 'status': status, 'reason': reason, **fields}
+    if store is not None:
+        with store.connect() as db:
+            db.execute("INSERT OR REPLACE INTO metadata VALUES ('worker_observation', ?)", (canonical(observation),))
+    print('Autofix worker: ' + canonical(observation), flush=True)
+    return code
+
+
 def worker():
     from .maintenance_gate import MaintenanceBusy, configured, permit
     from .git_update import training_blocker
     from src.proj.util.script.code_update_lock import training_code_guard
     if not configured():
-        return 0
+        return worker_observation(None, 'disabled', 'Autofix activation is disabled; verify scheduling installation')
     from .runtime import process_cgroup
     if sys.platform != 'linux' or not (process_cgroup(os.getpid()) or '').endswith('/learndl-autofix.service'):
         raise RuntimeError('The autofix worker must run in its installed systemd service')
@@ -327,30 +349,34 @@ def worker():
     try:
         with portalocker.Lock(str(store.directory / 'worker.lock'), mode='r+', timeout=0):
             if reconcile(store):
-                return 0
+                return worker_observation(store, 'waiting', 'An earlier autofix still has an active or uncertain process scope')
             # Deferred calendar tasks are dispatched before maintenance work.
             if store.scheduled():
-                return 0
+                return worker_observation(store, 'waiting', 'Deferred calendar tasks take priority; inspect learndl-deferred.service', queued=len(store.scheduled()))
             if not discover(store, ROOT):
-                return 1
+                return worker_observation(store, 'configuration_error', 'Cannot discover tasks; inspect manifest error events', code=1)
             candidates = sorted((r for r in store.rows() if r['phase'] == 'queued'), key=lambda r: r['order'])
             if not candidates:
                 (store.directory / 'pending').unlink(missing_ok=True)
-                return 0
+                return worker_observation(store, 'idle', 'No eligible unattempted IDs; inspect task history for conflicts or terminal outcomes')
             (store.directory / 'pending').touch()
             with permit(exclusive=True, blocking=False), training_code_guard():
-                if training_blocker() or recorded_task_blocker():
-                    return 0
+                blocker = training_blocker() or recorded_task_blocker()
+                if blocker:
+                    return worker_observation(store, 'waiting', blocker)
                 # Current manifest is read again under the code-update guard.
                 if not discover(store, ROOT):
-                    return 1
+                    return worker_observation(store, 'configuration_error', 'Manifest changed and is invalid', code=1)
                 candidates = sorted((r for r in store.rows() if r['phase'] == 'queued'), key=lambda r: r['order'])
                 if candidates:
+                    worker_observation(store, 'dispatching', 'Exclusive maintenance permit acquired', task_id=candidates[0]['id'])
                     execute(store, ROOT, candidates[0])
+                    outcome = store.get(candidates[0]['id'])
+                    worker_observation(store, 'completed_attempt', outcome.get('error') or outcome['phase'], task_id=outcome['id'], phase=outcome['phase'])
             if not any(r['phase'] == 'queued' for r in store.rows()):
                 (store.directory / 'pending').unlink(missing_ok=True)
-    except (portalocker.LockException, MaintenanceBusy):
-        pass
+    except (portalocker.LockException, MaintenanceBusy) as exc:
+        return worker_observation(store, 'waiting', f'Worker/maintenance permit occupied: {type(exc).__name__}: {exc}')
     return 0
 
 
@@ -409,6 +435,10 @@ def main():
     result = {'schema_version': 1, 'state_directory': str(directory),
               'execution_state': 'known' if store else 'unknown (server ledger unavailable)', 'fixes': output}
     if args.action == 'status' and store:
+        result['activation_enabled'] = store.enabled()
+        with store.connect(readonly=True) as db:
+            observation = db.execute("SELECT value FROM metadata WHERE key='worker_observation'").fetchone()
+        result['last_worker_check'] = json.loads(observation[0]) if observation else None
         result['history'] = redact(store.rows())
         with store.connect(readonly=True) as db:
             result['scheduled'] = [dict(zip(('id', 'task', 'state'), row)) for row in db.execute('SELECT id,task,state FROM scheduled ORDER BY created')]
