@@ -273,3 +273,7 @@ it can even prevent the next watchdog from starting, removing timeout and mail
 coverage until repaired. Use a tested master and retain an external way to inspect
 systemd failures. Updating worklist/schedule contents also invalidates completion
 versions and can cause future idle training to run again, per worklist policy.
+
+## Autofix maintenance
+
+`autofix` is an explicitly installed watchdog job and independent systemd worker. The shipped request list is empty. Installation requires Bubblewrap on Linux and initializes a protected, project-external ledger; ordinary code pulls do not initialize it. Calendar triggers deferred by maintenance are persisted and drained before subsequent fixes or idle training. See [Autofix configuration and operations](../autofix/README.md) for one-attempt IDs, script opt-in, notification ownership, sandbox prerequisites, and installation/rollback instructions.

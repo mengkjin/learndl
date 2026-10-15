@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import ExitStack
 
 import portalocker
 import psutil
@@ -52,6 +53,10 @@ def gpu_memory_percent() -> float:
 
 
 def idle_reason(options: dict) -> str | None:
+    from .maintenance_gate import configured, pending
+    from .autofix_store import state_dir
+    if configured() and pending(state_dir()):
+        return 'autofix maintenance pending'
     from src.proj import MACHINE
     from src.proj.util.script import FitLock
     if not MACHINE.cuda_server or sys.platform != 'linux':
@@ -170,6 +175,17 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
 
 
 def _launch(request: dict, store: RunStore) -> int:
+    from .maintenance_gate import MaintenanceBusy, permit
+    try:
+        with permit(blocking=False):
+            return _launch_admitted(request, store)
+    except MaintenanceBusy:
+        request['phase'] = 'deferred'
+        store.put(request)
+        return DEFERRED
+
+
+def _launch_admitted(request: dict, store: RunStore) -> int:
     from src.proj import PATH
     log = runtime_dir() / 'idle_worklist' / f'{request["id"]}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -182,9 +198,11 @@ def _launch(request: dict, store: RunStore) -> int:
     child = None
     try:
         env = dict(os.environ, LEARNDL_MANAGED_RUN=request['id'], LEARNDL_GATE_FD=str(read_fd), PYTHONUNBUFFERED='1')
+        from .maintenance_gate import pass_fds, child_env
+        env.update(child_env())
         with log.open('ab', buffering=0) as output:
             child = subprocess.Popen([sys.executable, '-u', '-m', 'src.api.task_monitor.scheduling.idle_worklist', '_child', request['id']],
-                                     cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd,),
+                                     cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, *pass_fds()),
                                      stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT)
         request.update(pid=child.pid, process_created=psutil.Process(child.pid).create_time(), phase='running')
         cgroup = process_cgroup(child.pid)
@@ -270,6 +288,33 @@ def child(run_id: str) -> int:
     return 0
 
 
+def reset_worklist(store: RunStore | None = None) -> str:
+    """Treat the current worklist as new locally, preserving YAML and history.
+
+    Training starts on subsequent idle polls and retains the worklist resume policy.
+    Refuse queued/active automatic work or a locked worklist schedule.
+    """
+    from src.proj import PATH
+    from src.api.calls.worklist_state import WorklistState
+    from src.res.model.util.training_history import now, write_json
+    store = store or RunStore()
+    with queue_lock(), ExitStack() as locks:
+        if any(run['phase'] in ACTIVE for run in store.owned(OWNER)):
+            raise RuntimeError('Cannot reset a queued or active worklist')
+        _, schedules, missing = worklist_schedules(store)
+        if missing:
+            raise ValueError(f'Cannot reset worklist with missing schedules: {", ".join(missing)}')
+        try:
+            for name in sorted(schedules):
+                locks.enter_context(WorklistState(name).lock())
+        except portalocker.LockException as exc:
+            raise RuntimeError('Cannot reset an active worklist schedule') from exc
+        generation = uuid.uuid4().hex
+        write_json(PATH.lc_machine / 'schedule_worklist' / 'reset.json',
+                   {'generation': generation, 'reset_at': now()})
+        return generation
+
+
 def reset(schedule: str, store: RunStore | None = None) -> None:
     store = store or RunStore()
     with queue_lock():
@@ -283,11 +328,14 @@ def reset(schedule: str, store: RunStore | None = None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['worker', '_child', 'status', 'reset'])
+    parser.add_argument('command', choices=['worker', '_child', 'status', 'reset', 'reset-worklist'])
     parser.add_argument('schedule_or_run', nargs='?')
     args = parser.parse_args()
     if args.command == 'worker':
         return worker()
+    if args.command == 'reset-worklist':
+        print(f'Worklist reset: {reset_worklist()}')
+        return 0
     if args.command == 'status':
         from .recovery import evidence
         store = RunStore()

@@ -227,6 +227,12 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
             invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.scheduling.runner', 'run', key])
             for day, minute in sorted(missing):
                 cron_lines.append(f'{minute % 60} {minute // 60} * * {day} cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
+    if config['watchdog']['jobs'].get('autofix', {}).get('enabled'):
+        units['learndl-autofix.service'] = service(root, python, 'src.api.task_monitor.scheduling.autofix', ['worker']) + 'RestrictAddressFamilies=AF_INET AF_INET6\n'
+        units['learndl-autofix.timer'] = ('[Unit]\nDescription=Learndl autofix and deferred task worker\n[Timer]\n'
+            'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
+        units['learndl-deferred.service'] = service(root, python, 'src.api.task_monitor.scheduling.runner', ['deferred'])
+        units['learndl-deferred.timer'] = units['learndl-autofix.timer'].replace('autofix and deferred task', 'deferred calendar task')
     # Watchdog always has one trigger, even when individual jobs are disabled.
     tick = config['watchdog']['tick_seconds']
     if config['default_backend'] == 'systemd':
@@ -275,7 +281,7 @@ def validate_unit(name: str, contents: str) -> None:
         'Unit': {'Description', 'Documentation', 'After', 'Wants'},
         'Service': {'Type', 'User', 'Group', 'WorkingDirectory', 'Environment', 'ExecStart', 'ExecStopPost',
                     'TimeoutStartSec', 'TimeoutStopSec', 'KillMode', 'NoNewPrivileges', 'UMask',
-                    'Nice', 'OOMScoreAdjust', 'MemoryMax', 'PrivateTmp'},
+                    'Nice', 'OOMScoreAdjust', 'MemoryMax', 'PrivateTmp', 'RestrictAddressFamilies'},
         'Timer': {'OnCalendar', 'OnBootSec', 'OnUnitInactiveSec', 'AccuracySec', 'Persistent', 'Unit'},
         'Install': {'WantedBy'},
     }
@@ -315,6 +321,12 @@ def validate_unit(name: str, contents: str) -> None:
         if not argv or Path(argv[0]).resolve() != Path(sys.executable).resolve():
             raise ValueError('Unexpected service interpreter')
         expected = ['-m', 'src.api.task_monitor.watchdog'] if name == 'learndl-watchdog.service' else ['-m', 'src.api.task_monitor.scheduling.runner', 'run', name.removeprefix(PREFIX).removesuffix('.service')]
+        if name == 'learndl-autofix.service':
+            if fields.get('RestrictAddressFamilies') != ['AF_INET AF_INET6']:
+                raise ValueError('Autofix must not access host Unix control sockets')
+            expected = ['-m', 'src.api.task_monitor.scheduling.autofix', 'worker']
+        if name == 'learndl-deferred.service':
+            expected = ['-m', 'src.api.task_monitor.scheduling.runner', 'deferred']
         if name == 'learndl-idle-worklist.service':
             expected = ['-m', 'src.api.task_monitor.scheduling.idle_worklist', 'worker']
         if argv[1:] != expected:
@@ -341,6 +353,20 @@ def validate_unit(name: str, contents: str) -> None:
 
 
 def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
+    # Serialize installation/rollback against dispatch and the full task lifetime,
+    # not merely a point-in-time "no active rows" check.
+    from .autofix_store import Store, state_dir
+    control = state_dir()
+    if control.exists():
+        from .maintenance_gate import permit
+        Store(control)
+        with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0), \
+             permit(directory=control, exclusive=True, blocking=False):
+            return _apply_plan(plan, original_cron, directory)
+    return _apply_plan(plan, original_cron, directory)
+
+
+def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if plan['global_conflicts']:
         raise ValueError('\n'.join(plan['global_conflicts']))
     manifest_path = directory / 'manifest.json'
@@ -355,7 +381,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if actual_desktop is not None and actual_desktop not in (previous.get('desktop_autostart'), desired_desktop, interrupted_desktop):
         raise RuntimeError(f'Desktop autostart was externally changed: {desktop}')
     for name in previous['units']:
-        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name):
+        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
@@ -378,7 +404,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
-            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name):
+            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name):
                 raise ValueError('Invalid transaction unit name')
             path = UNIT_DIR / name
             if path.exists():
@@ -386,6 +412,16 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     # Preserve previously installed configuration for tasks blocked by ambiguity.
     old_config_path = directory / 'installed.json'
     old_config = json.loads(old_config_path.read_text()) if old_config_path.exists() else None
+    if old_config and old_config.get('autofix_initialized') and plan['config']:
+        plan['config']['autofix_initialized'] = True
+    if old_config and old_config.get('autofix_initialized'):
+        from .autofix_store import Store, state_dir
+        controls = Store(state_dir())
+        if any(r['phase'] in {'starting', 'running'} for r in controls.rows()):
+            raise RuntimeError('Wait for the running autofix before changing installation')
+        enabled = bool(plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'))
+        if not enabled and controls.scheduled():
+            raise RuntimeError('Drain deferred calendar tasks before disabling autofix')
     for key in plan['conflicts']:
         if BEGIN in plan['cron']:
             before, managed = plan['cron'].split(BEGIN, 1)
@@ -415,12 +451,19 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     previous['timer_states'] = {name: timer_state(name) for name in previous['units'] if name.endswith('.timer')}
     files_match = all((UNIT_DIR / name).exists() and (UNIT_DIR / name).read_text() == contents for name, contents in plan['units'].items())
     timers_match = all(timer_state(name).get('ActiveState') == 'active' and timer_state(name).get('UnitFileState') == 'enabled' for name in plan['units'] if name.endswith('.timer'))
-    if not recovering and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
+    policy_matches = True
+    if plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'):
+        from .autofix_store import state_dir, ROOT, Store
+        control = state_dir(ROOT)
+        if old_config and old_config.get('autofix_initialized'):
+            Store(control)
+        policy_matches = (control / 'policy.py').exists() and (control / 'policy.py').read_bytes() == Path(__file__).with_name('autofix_sandbox.py').read_bytes()
+    if not recovering and policy_matches and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
         print('Already up to date')
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
-    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist)\.(timer|service)', name) for name in names):
+    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name) for name in names):
         raise ValueError('Invalid managed unit name')
     with tempfile.TemporaryDirectory(prefix='learndl-install-') as temp:
         stage = Path(temp)
@@ -431,6 +474,21 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             command(['systemd-analyze', 'verify', *[str(stage / name) for name in plan['units']]])
         if read_cron() != original_cron:
             raise RuntimeError('Crontab changed during planning; rerun installer')
+        if plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'):
+            from .autofix_sandbox import preflight
+            from .autofix_store import initialize, state_dir, ROOT
+            preflight()
+            control = state_dir(ROOT)
+            if old_config and old_config.get('autofix_initialized') and not control.exists():
+                raise RuntimeError('Autofix ledger disappeared; restore it instead of reinitializing')
+            initialize(control, ROOT)
+            # Policy is installed explicitly, never replaced by the sandboxed script.
+            source = Path(__file__).with_name('autofix_sandbox.py')
+            policy = control / 'policy.py'
+            temporary = control / 'policy.tmp'
+            temporary.write_bytes(source.read_bytes())
+            temporary.replace(policy)
+            plan['config']['autofix_initialized'] = True
         if not recovering:
             atomic_json(directory / 'rollback.json', snapshot)
         atomic_json(directory / 'transaction.json', {'phase': 'prepared', 'plan': plan})
@@ -459,6 +517,10 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             old_config_path.unlink(missing_ok=True)
         else:
             atomic_json(old_config_path, plan['config'])
+        from .autofix_store import Store, state_dir
+        if state_dir().exists():
+            Store(state_dir()).set_enabled(bool(plan['config'] and plan['config'].get('autofix_initialized')
+                and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled')))
         if read_cron() != original_cron:
             raise RuntimeError('Crontab changed during installation; transaction preserved for rollback')
         if plan['cron'] != original_cron:

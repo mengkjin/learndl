@@ -118,3 +118,14 @@ input:
 `gru_day_lgbm` 和 `gru_day_xgboost` 现均固定使用
 `gru@gru_day_new_rtn@0@best`（未带编号后缀的目录，参数编号 0）。更新配置不会改变已经启动的训练；若恢复旧
 训练，仍以其保存的配置为准。要采用新的来源，请使用新的训练配置启动。
+
+### 本机重置整个 worklist
+
+执行 `.venv/bin/python -m src.api.task_monitor.scheduling.idle_worklist reset-worklist`，
+或调用 `from src.api.task_monitor.scheduling.idle_worklist import reset_worklist; reset_worklist()`。
+接口在 `local_machine/schedule_worklist/reset.json` 写入新的执行版本，使用与文件变更相同的版本比较逻辑，
+使当前 worklist 中已成功或失败的 schedule 都重新获得执行资格；不修改 YAML、Git 状态或删除训练历史。
+Watchdog 在后续闲时检查中按列表顺序逐项执行，继续遵循原来的 `resume`、资源限制与异常恢复策略，
+新版本完成后仍会跳过。也可手动执行 CarryOutScheduleWorkList 消费此版本。
+正在排队或执行自动训练、当前 schedule 被锁定、或存在无法匹配的 schedule 时，重置报错且不更新版本。
+此操作仅作用于当前机器，不会立即启动训练。原有 `reset <schedule>` 仍只解除单个 schedule 的失败重试限制。

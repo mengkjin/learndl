@@ -143,7 +143,7 @@ def _run_task_lifecycle(context: _WatchdogContext) -> JobResult:
     # CLI reconstructions have their own durable outbox for both exceptions and
     # external kills. Do not send a second generic killed-task email.
     pending = {task_id for task_id in pending
-               if (task := context.task_db.get_task(task_id)) is None or task.source != 'cli-reconstruct'}
+               if (task := context.task_db.get_task(task_id)) is None or task.source not in {'cli-reconstruct', 'autofix'}}
     from src.api.task_monitor.scheduling.runtime import timeout_task_ids
     pending.difference_update(timeout_task_ids())
     return JobResult(
@@ -197,6 +197,22 @@ def _run_task_timeouts(context: _WatchdogContext) -> JobResult:
     return JobResult(stats=inspect_timeouts())
 
 
+def _run_autofix(context: _WatchdogContext) -> JobResult:
+    from src.api.task_monitor.scheduling.autofix import tick, deliver
+    from src.api.task_monitor.scheduling.maintenance_gate import configured
+    from src.proj.util.web.emailer import Email
+    try:
+        if not configured():
+            return JobResult(stats={'status': 'not installed; run scheduling plan/apply'})
+        stats = tick()
+        stats['notifications_delivered'] = deliver(Email.send)
+    except Exception as exc:
+        from src.api.task_monitor.scheduling.autofix import control_failure
+        control_failure(exc, Email.send)
+        raise
+    return JobResult(stats=stats)
+
+
 def _run_idle_worklist(context: _WatchdogContext) -> JobResult:
     from src.api.task_monitor.scheduling.idle_worklist import dispatch
     return JobResult(stats=dispatch(context.maintenance['jobs']['idle_worklist']))
@@ -224,6 +240,7 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     if maintenance is None:
         return defaults
     registry = {job.name: job.runner for job in defaults}
+    registry['autofix'] = _run_autofix
     registry['idle_worklist'] = _run_idle_worklist
     registry['git_auto_update'] = _run_git_auto_update
     options = dict(maintenance['jobs'])

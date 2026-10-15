@@ -1,5 +1,6 @@
 """Source-qualified model labels, independent of config and data loading."""
 from dataclasses import dataclass
+import re
 
 
 @dataclass(frozen=True)
@@ -10,6 +11,15 @@ class LabelSpec:
     @property
     def name(self) -> str:
         return self.feature if self.source == 'y' else f'{self.source}@{self.feature}'
+
+    @property
+    def horizon(self) -> tuple[int, int] | None:
+        """Return (start offset, holding days); open/VWAP imply T+1."""
+        classic = re.fullmatch(r'(?:rtn|std|res)_lag(\d+)_(\d+)(?:_.*)?', self.feature)
+        if classic:
+            return int(classic[1]), int(classic[2])
+        price = re.fullmatch(r'(?:rtn|std)_(\d+)_(?:open|vwap)', self.feature)
+        return (1, int(price[1])) if price else None
 
     @classmethod
     def parse(cls, label: str) -> 'LabelSpec':

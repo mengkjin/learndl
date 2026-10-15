@@ -38,7 +38,11 @@ class WorklistState:
         path = ScheduleConfig.find_path(name=schedule_name)
         if path is None:
             raise FileNotFoundError(f'Schedule config missing: {schedule_name}')
-        return {'worklist': file_revision(PATH.sched_worklist), 'schedule': file_revision(path)}
+        revisions = {'worklist': file_revision(PATH.sched_worklist), 'schedule': file_revision(path)}
+        reset_path = PATH.lc_machine / 'schedule_worklist' / 'reset.json'
+        if reset_path.exists():
+            revisions['reset_generation'] = {'generation': json.loads(reset_path.read_text())['generation']}
+        return revisions
 
     @staticmethod
     def rerun_mark(worklist: dict | None) -> str:

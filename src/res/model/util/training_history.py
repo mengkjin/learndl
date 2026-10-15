@@ -181,12 +181,15 @@ def record_training(func):
     @wraps(func)
     def wrapped(self, *args, **kwargs):
         from src.proj.util.script.code_update_lock import training_code_guard
-        with training_code_guard():
+        from src.api.task_monitor.scheduling.maintenance_gate import permit
+        with permit(), training_code_guard():
             run = TrainingRun(self)
             self.training_run = run
             try:
-                result = func(self, *args, **kwargs)
-                Save.async_wait_all(caller_name='training_history')
+                try:
+                    result = func(self, *args, **kwargs)
+                finally:
+                    Save.async_wait_all(caller_name='training_history')
             except BaseException as exc:
                 run.finish('interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', exc)
                 raise

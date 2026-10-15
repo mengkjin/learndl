@@ -70,9 +70,11 @@ class HistoryTest(unittest.TestCase):
     def test_errors_interruptions_and_async_save_failure(self):
         for error, status in [(ValueError('failed'), 'failed'), (KeyboardInterrupt(), 'interrupted')]:
             with self.subTest(status=status), history.collect_training_runs() as runs:
+                self.wait.reset_mock()
                 with self.assertRaises(type(error)):
                     FakeTrainer(self.root).execute(error)
                 self.assertEqual(runs[0]['status'], status)
+                self.wait.assert_called_once()  # Failed training still drains writes before releasing its lease.
         self.wait.side_effect = OSError('disk failed')
         with history.collect_training_runs() as runs:
             with self.assertRaises(OSError):
@@ -312,7 +314,7 @@ class ResumeValidationTest(unittest.TestCase):
         base.find_resumable_candidates_indices.return_value = [1]
         base.find_new_index.return_value = 2
         config = object.__new__(ModelConfig)
-        config.model_config = SimpleNamespace(base_path=base)
+        config.model_config = SimpleNamespace(base_path=base, full_module_name='gru')
         config.queue_of_stages = ['fit']
         config.is_resuming = False
         config.logger = Mock()

@@ -59,7 +59,7 @@ class Plotter:
             
             ax = fig.add_subplot(111)
             ax.plot(df['trade_date'], df['pf'], label='actual trade')  
-            for price_type in ['close' , 'open' , 'vwap']:
+            for price_type in ['open' , 'vwap']: # close is not used in top portfolio
                 if f'pf_{price_type}' in df.columns:
                     ax.plot(df['trade_date'] , df[f'pf_{price_type}'] , label=f'as if {price_type}')
             ax.legend(loc='upper left')  

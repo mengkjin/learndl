@@ -210,7 +210,7 @@ class InstallerTransactionTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        self.root = Path(self.temp.name).resolve()
         self.units = self.root / 'units'
         self.units.mkdir()
         self.state = self.root / 'state'
@@ -229,6 +229,11 @@ class InstallerTransactionTest(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
         self.config = load_config(ROOT / 'runs/scheduling', 'mengkjin-server')
+        for target, value in [('src.api.task_monitor.scheduling.autofix_sandbox.preflight', lambda: '/usr/bin/bwrap'),
+                              ('src.api.task_monitor.scheduling.autofix_store.state_dir', lambda root=None: self.root / 'control')]:
+            patcher = patch(target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def execute(self, argv, *, input_text=None):
         self.calls.append(argv)
@@ -243,6 +248,16 @@ class InstallerTransactionTest(unittest.TestCase):
 
     def plan(self):
         return build_plan(copy.deepcopy(self.config), self.cron, ROOT, Path(sys.executable), 'Asia/Shanghai')
+
+    def test_installation_does_not_race_active_maintenance_worker(self):
+        import portalocker
+        from src.api.task_monitor.scheduling.autofix_store import initialize
+        control = self.root / 'control'
+        initialize(control, ROOT)
+        with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0):
+            with self.assertRaises(portalocker.LockException):
+                apply_plan(self.plan(), self.cron, self.state)
+        self.assertEqual(self.calls, [])
 
     def test_apply_idempotence_and_first_install_rollback(self):
         original = self.cron

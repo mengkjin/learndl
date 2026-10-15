@@ -173,6 +173,7 @@ class ScriptHeader:
     file_editor: dict[str, Any] = field(default_factory=dict)
     file_previewer: dict[str, Any] = field(default_factory=dict)
     disabled: bool = False
+    autofix: bool = False
 
     header_pattern : ClassVar[str] = r'^#(.*)'
     exit_patterns : ClassVar[tuple[str, ...]] = (r'^# exit.*', r'^$')

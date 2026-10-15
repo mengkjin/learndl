@@ -10,6 +10,8 @@ module        : gru
 labels: 
   # Optional source@label; omitted source means y. Order defines output order.
   # Mixed example: [std_lag1_10, y_lag0@std_lag0_10]
+  # Open/VWAP: y_open@std_10_open, y_vwap@std_10_vwap (also rtn_*).
+  # Fixed T+1 to T+1+n trading days; no lag1 in these names. n = 5, 10, 20.
   # rtn : raw return | std : standardized return | res : risk model residual
   # if module is nn , use multiloss combination of the labels , otherwise only use the first label
   - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]

@@ -138,10 +138,11 @@ def check_and_update(options: dict, *, root: Path | None = None) -> dict:
         return {'status': 'skipped', 'reason': 'server only'}
     directory = runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with portalocker.Lock(str(directory / 'git_update.lock'), mode='a', timeout=0):
+        with permit(exclusive=True, blocking=False), portalocker.Lock(str(directory / 'git_update.lock'), mode='a', timeout=0):
             return _update(root, options)
-    except portalocker.LockException:
+    except (portalocker.LockException, MaintenanceBusy):
         return {'status': 'deferred', 'reason': 'another automatic update is in progress'}
 
 

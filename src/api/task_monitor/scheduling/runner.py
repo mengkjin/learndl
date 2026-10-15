@@ -15,7 +15,54 @@ from .config import ENTRYPOINTS, installed_config
 from .runtime import RunStore, members
 
 
-def run(task_id: str) -> int:
+def run(task_id: str, *, deferred: bool = False) -> int:
+    from .maintenance_gate import MaintenanceBusy, configured, permit
+    from .autofix_store import Store, state_dir
+    try:
+        with permit(blocking=False, priority=deferred):
+            return _run(task_id, retry_busy=deferred)
+    except MaintenanceBusy:
+        if configured() and not deferred:
+            # Calendar slots in the existing scheduler have minute precision.
+            Store(state_dir()).enqueue(task_id, int(time.time() // 60))
+        return 75 if deferred else 0
+
+
+def run_deferred(store) -> None:
+    for key, task in store.scheduled():
+        # Persist before starting: a dead launcher must not blindly duplicate it.
+        store.schedule_state(key, 'starting')
+        try:
+            code = run(task, deferred=True)
+        except Exception:
+            store.schedule_state(key, 'unknown')
+            raise
+        store.schedule_state(key, 'queued' if code == 75 else 'finished')
+        if code == 75:
+            break
+
+
+def deferred_worker() -> int:
+    import portalocker
+    from .maintenance_gate import configured
+    from .autofix_store import Store, state_dir
+    from .runtime import process_cgroup
+    if not configured():
+        return 0
+    if not (process_cgroup(os.getpid()) or '').endswith('/learndl-deferred.service'):
+        raise RuntimeError('Deferred worker must run in its installed systemd service')
+    store = Store(state_dir())
+    try:
+        with portalocker.Lock(str(store.directory / 'worker.lock'), mode='r+', timeout=0):
+            from .autofix import reconcile
+            if not reconcile(store):
+                run_deferred(store)
+    except portalocker.LockException:
+        pass
+    return 0
+
+
+def _run(task_id: str, *, retry_busy: bool = False) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
     config = installed_config()
@@ -31,7 +78,7 @@ def run(task_id: str) -> int:
         lock.__enter__()
     except (BlockingIOError, TimeoutError):
         print(f'SCHEDULER SKIPPED: {task_id}: execution lock unavailable', flush=True)
-        return 0
+        return 75 if retry_busy else 0
     try:
         store = RunStore()
         # A previous runner can die before its descendants release inherited
@@ -44,7 +91,7 @@ def run(task_id: str) -> int:
             while members(older):
                 if task['overlap'] == 'skip' or time.monotonic() - wait_started >= task['wait_timeout_seconds']:
                     print(f'SCHEDULER SKIPPED: {task_id}: previous supervised session remains active', flush=True)
-                    return 0
+                    return 75 if retry_busy else 0
                 time.sleep(1)
         run_id = uuid.uuid4().hex
         run_record = {'id': run_id, 'task': task_id, 'phase': 'starting', 'started_at': time.time(),
@@ -57,13 +104,15 @@ def run(task_id: str) -> int:
                    LEARNDL_LOCK_GROUP=task['lock_group'], LEARNDL_GATE_FD=str(read_fd))
         script = str(PATH.main / ENTRYPOINTS[task['entrypoint']])
         command = [sys.executable, '-m', 'src.api.task_monitor.scheduling.runner', '_child', script, *task['args']]
-        child = subprocess.Popen(command, cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, lock_fd))
+        from .maintenance_gate import pass_fds, child_env
+        env.update(child_env())
+        child = subprocess.Popen(command, cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, lock_fd, *pass_fds()))
         os.close(read_fd)
         try:
             from .runtime import process_cgroup
             run_record.update(pid=child.pid, runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), process_created=psutil.Process(child.pid).create_time(), phase='running', started_at=time.time())
             cgroup = process_cgroup(child.pid)
-            if cgroup and cgroup.endswith(f'/learndl-schedule-{task_id}.service'):
+            if cgroup and cgroup.endswith((f'/learndl-schedule-{task_id}.service', '/learndl-deferred.service')):
                 run_record['cgroup'] = cgroup
             store.put(run_record)
             os.write(write_fd, b'1')  # Child may only execute after durable registration.
@@ -100,7 +149,29 @@ def inherited_lock(lock_group: str) -> bool:
         return False
 
 
+def legacy(task_id: str, arguments: list[str]) -> int:
+    """Compatibility shell wrappers enter durable admission after installation."""
+    from .maintenance_gate import configured
+    from .installer import normalize_args
+    from src.proj import PATH
+    if not configured():
+        return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
+                                '--source=bash', '--email=1', *arguments])
+    config = installed_config()
+    normalized = normalize_args(arguments)
+    if task_id == 'daily_update' and normalized == ['--forfeit_if_done', 'True']:
+        normalized = []
+    for key, task in config['tasks'].items():
+        if task['entrypoint'] == task_id and normalize_args(task['args']) == normalized:
+            return run(key)
+    raise ValueError('Legacy wrapper arguments do not match an installed task; use a registered entrypoint')
+
+
 def main() -> int:
+    if sys.argv[1:] == ['deferred']:
+        return deferred_worker()
+    if len(sys.argv) > 2 and sys.argv[1] == 'legacy':
+        return legacy(sys.argv[2], sys.argv[3:])
     if len(sys.argv) > 1 and sys.argv[1] == '_child':
         gate = int(os.environ.pop('LEARNDL_GATE_FD'))
         ready = os.read(gate, 1)

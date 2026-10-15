@@ -146,6 +146,41 @@ class IdleTest(unittest.TestCase):
             self.assertTrue(runtime.deliver_timeout_events(sender, self.store))
         self.assertIn('Rerun mark: 1', sender.call_args.args[1])
 
+    def test_reset_worklist_invalidates_success_and_failure_once(self):
+        self.worklist.write_text('fit: [first, second]\nresume: false\nforce: false\n')
+        original = self.worklist.read_bytes()
+        self.save_success('first')
+        self.store.put(dict(id='failed', owner=idle.OWNER, task='second', phase='error',
+                            version=idle.version(WorklistState.revisions('second')), returncode=1))
+        self.assertIsNone(idle.candidate(self.store))
+        generation = idle.reset_worklist(self.store)
+        self.assertEqual(self.worklist.read_bytes(), original)
+        self.assertEqual(WorklistState('first').read()['status'], 'success')
+        self.assertEqual(self.store.get('failed')['phase'], 'error')
+        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(WorklistState.revisions('first')['reset_generation']['generation'], generation)
+        self.save_success('first')
+        self.assertEqual(idle.candidate(self.store)['task'], 'second')
+        self.save_success('second')
+        self.assertIsNone(idle.candidate(self.store))
+        self.assertNotEqual(idle.reset_worklist(self.store), generation)
+        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+
+    def test_reset_worklist_refuses_active_and_missing_schedules(self):
+        idle.dispatch(self.options, self.store)
+        with self.assertRaisesRegex(RuntimeError, 'active'):
+            idle.reset_worklist(self.store)
+        run = self.store.owned(idle.OWNER)[0]
+        run['phase'] = 'complete'
+        self.store.put(run)
+        with WorklistState('first').lock():
+            with self.assertRaisesRegex(RuntimeError, 'active'):
+                idle.reset_worklist(self.store)
+        with patch.object(ScheduleConfig, 'find_path', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'missing'):
+                idle.reset_worklist(self.store)
+        self.assertFalse((self.root / 'schedule_worklist' / 'reset.json').exists())
+
     def test_failure_suppression_reset_and_configuration_change(self):
         idle.dispatch(self.options, self.store)
         request = self.store.owned(idle.OWNER)[0]

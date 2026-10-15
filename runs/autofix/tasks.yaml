@@ -1,0 +1,10 @@
+schema_version: 1
+fixes:
+  - id: 20261014_create_open_vwap_datablocks_01
+    description: 先生成六组次日 open/VWAP 原始收益标签，再重建 y_open/y_vwap 的 fit 和 predict DataBlock；不改旧收盘价标签。
+    script: scripts/.autofix/create_open_vwap_datablocks.py
+    params:
+      dry_run: false
+      email: false
+    timeout: 48h
+    enabled: true

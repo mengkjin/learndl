@@ -18,6 +18,7 @@ class _ReturnLabelPreProcessor(TradePreProcessor):
     """
 
     LABEL_KEYS = ('ret10_lag', 'ret20_lag', 'ret5_lag', 'ret3_lag')
+    NEUTRALIZE_EXCLUDE_SUFFIXES = ('_3', '_open', '_vwap')
 
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
@@ -35,7 +36,7 @@ class _ReturnLabelPreProcessor(TradePreProcessor):
         indus_size = model_exp.values[...,:]
         x = torch.Tensor(indus_size).squeeze(2)
         for i_feat,lb_name in enumerate(data_block.feature):
-            if lb_name.startswith('rtn') and not lb_name.endswith(('_3' , '_open' , '_vwap')):
+            if lb_name.startswith('rtn') and not lb_name.endswith(self.NEUTRALIZE_EXCLUDE_SUFFIXES):
                 y_raw = data_block.values[...,i_feat].squeeze(2)
                 y_std = neutralize_2d(y_raw , x , dim = 0)
                 assert y_std is not None , 'y_std is None'
@@ -59,3 +60,15 @@ class PrePro_y(_ReturnLabelPreProcessor):
 class PrePro_y_lag0(_ReturnLabelPreProcessor):
     """Independent 5/10/20-day lag0 return and neutralised labels."""
     LABEL_KEYS = ("ret10", "ret20", "ret5")
+
+
+class PrePro_y_open(_ReturnLabelPreProcessor):
+    """5/10/20-day open-to-open returns, always from T+1 to T+1+n."""
+    LABEL_KEYS = ('ret10_open', 'ret20_open', 'ret5_open')
+    NEUTRALIZE_EXCLUDE_SUFFIXES = ()
+
+
+class PrePro_y_vwap(_ReturnLabelPreProcessor):
+    """5/10/20-day VWAP-to-VWAP returns, always from T+1 to T+1+n."""
+    LABEL_KEYS = ('ret10_vwap', 'ret20_vwap', 'ret5_vwap')
+    NEUTRALIZE_EXCLUDE_SUFFIXES = ()

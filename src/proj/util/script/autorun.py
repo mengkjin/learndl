@@ -1,6 +1,6 @@
 """Long-running scheduled tasks: email/HTML reports, crash protection, and task metadata descriptors."""
 from __future__ import annotations
-import sys
+import sys , os
 
 from datetime import datetime
 from functools import wraps
@@ -165,6 +165,15 @@ class AutoRunTask(BoundLogger):
         self.set_debug_mode()
         Proj.print_info(once_type = 'script')
         self.logger.divider()
+        self._autofix_primary = False
+        if os.environ.get('LEARNDL_AUTOFIX_ID'):
+            from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
+            from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+            request = sandbox_request()
+            marker = Path(request['channel']) / 'started.json'
+            if not marker.exists():
+                script_event('started', email=self.email)
+                self._autofix_primary = True
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -172,6 +181,9 @@ class AutoRunTask(BoundLogger):
             Save.async_wait_all(caller_name = self.__class__.__name__)
         except Exception as e:
             self.logger.error(f'AutoRunTask async wait failed: {e}')
+            if os.environ.get('LEARNDL_AUTOFIX_ID'):
+                self.status = 'Error'
+                self.error_messages.append(f'Async save failed: {e}')
         self.end_time = datetime.now()
         if isinstance(self.func_return , Path):
             Proj.exit_files.append(self.func_return)
@@ -206,6 +218,9 @@ class AutoRunTask(BoundLogger):
             except Exception as e:
                 # Email sending failures should not break the rest of cleanup.
                 self.logger.error(f'AutoRunTask send_email failed: {e}')
+                if getattr(self, '_autofix_primary', False):
+                    from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+                    script_event('mail', enabled=self.email, delivered=False, error=type(e).__name__)
 
         try:
             if self.execution_success: 
@@ -218,6 +233,10 @@ class AutoRunTask(BoundLogger):
                 )
         except Exception as e:
             self.logger.error(f'AutoRunTask task_record update failed: {e}')
+        if getattr(self, '_autofix_primary', False):
+            from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+            script_event('finished', success=self.status == 'Success' and not self.error_messages,
+                         status=self.execution_status, email=self.email)
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
@@ -242,6 +261,8 @@ class AutoRunTask(BoundLogger):
                         error_msg = self.logger.print_exc(e)
                         self.logger.conclude(error_msg , level = 'error')
                         
+            if os.environ.get('LEARNDL_AUTOFIX_ID') and (self.status != 'Success' or self.error_messages or self.should_forfeit):
+                raise RuntimeError('Autofix script did not complete successfully; see script report')
             return self
         return wrapper
 
@@ -325,6 +346,8 @@ class AutoRunTask(BoundLogger):
         will be 'Success' only if no error messages , otherwise 'Error'
         more strict than status
         """
+        if os.environ.get('LEARNDL_AUTOFIX_ID'):
+            return self.status == 'Success' and not self.error_messages
         return not self.error_messages
    
     @property
@@ -373,6 +396,9 @@ class AutoRunTask(BoundLogger):
             from src.proj.util.web.emailer import Email
             sent = Email.send(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
                               confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
+            if getattr(self, '_autofix_primary', False):
+                from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+                script_event('mail', enabled=True, delivered=bool(sent))
             if sent:
                 from src.api.task_monitor.scheduling.runtime import record_script_email
                 record_script_email(success=self.execution_status == 'Success')

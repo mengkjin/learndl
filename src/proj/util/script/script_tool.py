@@ -138,7 +138,7 @@ class ScriptTool:
             return func(*args , **filter_kwargs_explicit_only(sig , kwargs))
 
         @wraps(func)
-        def wrapper(*args , **kwargs):
+        def admitted(*args , **kwargs):
             from src.proj.util.functional.parallel import is_main_process
             if not is_main_process():
                 return inner(*args , **kwargs)
@@ -164,6 +164,15 @@ class ScriptTool:
                 task_func = self.script_lock(task_func)
             new_func = self.backend_recorder(task_func)
             return new_func(*args , **kwargs)
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            from src.proj.util.functional.parallel import is_main_process
+            if not is_main_process():
+                return inner(*args, **kwargs)
+            from src.api.task_monitor.scheduling.maintenance_gate import permit
+            with permit():
+                return admitted(*args, **kwargs)
         return wrapper
 
     def __repr__(self):

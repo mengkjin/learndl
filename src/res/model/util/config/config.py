@@ -317,17 +317,16 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
     def check_astgnn_config(self):
         """A stock graph requires one complete date and two forward return targets."""
-        import re
         if self.sample_method != 'sequential':
             raise ValueError('astgnn requires sequential sampling of complete daily cross sections')
         if len(self.labels) != 2:
             raise ValueError('astgnn requires two labels: alpha fit return and joint R² return')
         horizons = []
         for label in self.labels:
-            match = re.fullmatch(r'(?:rtn|std|res)_lag(\d+)_(\d+)(?:_.*)?', LabelSpec.parse(label).feature)
-            if match is None:
+            horizon = LabelSpec.parse(label).horizon
+            if horizon is None:
                 raise ValueError(f'Cannot validate astgnn label horizon: {label}')
-            horizons.append(sum(map(int, match.groups())))
+            horizons.append(sum(horizon))
         if self.skip_horizon <= max(horizons):
             raise ValueError('astgnn train.skip_horizon must be strictly greater than max(label lag + days)')
 

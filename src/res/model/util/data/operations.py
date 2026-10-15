@@ -12,7 +12,6 @@ Includes:
 
 from __future__ import annotations
 
-import re
 import torch
 import numpy as np
 from typing import Any
@@ -28,8 +27,6 @@ from src.res.model.util.label_spec import LabelSpec
 from .batch_input_loader import DataloaderParam
 
 __all__ = ['DataOperator']
-
-_LABEL_HORIZON_RE = re.compile(r'^(?:std|rtn|res)_lag(\d+)_(\d+)(?:_.*)?$')
 
 
 class DataOperator:
@@ -79,11 +76,8 @@ class DataOperator:
 
     @staticmethod
     def parse_label_horizon(label : str) -> tuple[int , int] | None:
-        """Parse ``(lag, days)`` from classic label names like ``std_lag1_10``."""
-        m = _LABEL_HORIZON_RE.fullmatch(LabelSpec.parse(label).feature)
-        if m is None:
-            return None
-        return int(m.group(1)) , int(m.group(2))
+        """Parse classic or fixed-next-day open/VWAP label horizons."""
+        return LabelSpec.parse(label).horizon
 
     def standardize_y(
         self , y : torch.Tensor , effective : torch.Tensor | None = None , index1 : torch.Tensor | None = None , no_weight = False) -> tuple[torch.Tensor , torch.Tensor | None]:

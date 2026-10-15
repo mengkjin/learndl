@@ -21,7 +21,7 @@ PageCursor: TypeAlias = tuple[float, str]
 
 ACTIVE_STATUSES = frozenset(('starting', 'running'))
 FINISHED_STATUSES = frozenset(('complete', 'error', 'killed'))
-BACKGROUND_SOURCES = frozenset(('bash', 'cron', 'nohup', 'systemd'))
+BACKGROUND_SOURCES = frozenset(('bash', 'cron', 'nohup', 'systemd', 'autofix'))
 TIME_WINDOW_SECONDS: dict[TimeWindow, float | None] = {
     'history': None,
     'last_day': 86400,

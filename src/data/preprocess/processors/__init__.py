@@ -5,6 +5,7 @@ from .registry import (
     TRADE_ALLOW_INACTIVE as TRADE_ALLOW_INACTIVE,
 )
 from .labels import PrePro_y as PrePro_y, PrePro_y_lag0 as PrePro_y_lag0
+from .labels import PrePro_y_open as PrePro_y_open, PrePro_y_vwap as PrePro_y_vwap
 from .trade import (
     PrePro_day as PrePro_day,
     PrePro_15m as PrePro_15m,

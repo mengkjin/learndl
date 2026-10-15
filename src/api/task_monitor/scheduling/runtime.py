@@ -144,6 +144,13 @@ def process_cgroup(pid: int) -> str | None:
 
 
 def termination_requested() -> bool:
+    if os.environ.get('LEARNDL_AUTOFIX_ID'):
+        from .maintenance_gate import sandbox_request
+        request = sandbox_request()
+        marker = Path(request['channel']) / 'terminate.json'
+        if marker.exists():
+            return json.loads(marker.read_text()).get('nonce') == request['nonce']
+        return False
     run_id = os.getenv('LEARNDL_MANAGED_RUN')
     return bool(run_id and 'term_at' in RunStore().get(run_id))
 

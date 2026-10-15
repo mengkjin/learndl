@@ -15,7 +15,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'git_auto_update', 'cli_recovery'}
+JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'git_auto_update', 'cli_recovery', 'autofix'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
@@ -162,7 +162,7 @@ def load_config(directory: Path, host: str) -> dict:
         raise ValueError('tick_seconds must be a whole-minute divisor of 3600')
     if not isinstance(watchdog['units'], list) or any(not re.fullmatch(r'[A-Za-z0-9_.@:-]+', unit) for unit in watchdog['units']):
         raise ValueError('Invalid systemd unit list')
-    if any(unit.startswith('learndl-schedule-') or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service'} for unit in watchdog['units']):
+    if any(unit.startswith('learndl-schedule-') or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service', 'learndl-autofix.service', 'learndl-deferred.service'} for unit in watchdog['units']):
         raise ValueError('Scheduled oneshot units cannot be probed as persistent services')
     for key, job in watchdog['jobs'].items():
         if key not in JOB_NAMES:
@@ -196,6 +196,8 @@ def load_config(directory: Path, host: str) -> dict:
         for option in ('max_sources', 'max_seconds'):
             if option in job and (type(job[option]) is not int or job[option] <= 0):
                 raise ValueError(f'Invalid {option}')
+    if watchdog['jobs'].get('autofix', {}).get('enabled') and settings['default_backend'] != 'systemd':
+        raise ValueError('Autofix requires the systemd backend')
     return {'version': 1, 'host': host, 'timezone': settings['timezone'], 'default_backend': settings['default_backend'],
             'tasks': tasks, 'schedules': schedules, 'watchdog': watchdog}
 
