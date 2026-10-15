@@ -1,6 +1,6 @@
 fit:
-  - gru_day_lag0
-  - gru_day_lag0_att
+  - gru_day_open
+  - gru_day_open_att
 
 
 resume: False
