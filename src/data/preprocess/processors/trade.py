@@ -39,6 +39,24 @@ class PrePro_15m(TradePreProcessor):
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
+
+class PrePro_15mraw(TradePreProcessor):
+    """
+    15-minute bar preprocessor (key: ``'15m'``).
+
+    Prices are divided by the daily pre-close. Volume is converted to free-float
+    turnover by allocating day ``turn_fl`` according to each bar's share of the
+    day's intraday volume sum (avoids day/minute volume unit mismatch), then
+    clipped at 200%. The ``volume`` feature is renamed to ``turn_fl``.
+    """
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs)}
+
+    def process(self , blocks):
+        data_block = blocks['15m']
+        return data_block
     
 class PrePro_30m(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""

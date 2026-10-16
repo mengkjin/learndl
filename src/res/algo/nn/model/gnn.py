@@ -153,7 +153,7 @@ class AstgnnLegacy(_AstgnnLoss):
 
         rnn_kwargs = {'input_dim': enc_in_dim, 'output_dim': hidden_dim, 'num_layers': rnn_layers, 'dropout': dropout}
         if ab_split_input:
-            self._init_split_encoders(input_dim, enc_in_dim, rnn_kwargs, kwargs)
+            self._init_split_encoders(input_dim, enc_in_dim, rnn_kwargs, {**kwargs, 'act_type': act_type})
         else:
             if not isinstance(input_dim, int):
                 input_dim = sum(input_dim)

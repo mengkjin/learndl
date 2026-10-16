@@ -12,6 +12,7 @@ hidden_as_factors:    [true]
 ab_split_input: false
 ab_split_pos:   1
 resnet_projector: false
+dim_med:        [null] # ResNet projector width; null: max(1, enc_in_dim // 4)
 fit_loss:       mse # mse , ccc , pearson
 # Raw-return prediction: leave output normalization disabled.
 pred_batchnorm: false

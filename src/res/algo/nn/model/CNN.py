@@ -3,6 +3,8 @@
 """
 from __future__ import annotations
 import torch
+from math import isfinite
+from numbers import Integral, Real
 
 from torch import nn , Tensor
 from torch.nn.utils.parametrizations import weight_norm
@@ -97,166 +99,210 @@ class mod_tcn(nn.Module):
     def forward(self, x : Tensor) -> Tensor:
         return self.net(x.permute(0,2,1)).permute(0,2,1)
     
+def _validate_resnet_dims(**dims):
+    for name, value in dims.items():
+        if isinstance(value, bool) or not isinstance(value, Integral) or value < 1:
+            raise ValueError(f'{name} must be a positive integer, got {value!r}')
+
+
+def _resnet_bottleneck_dim(dim_in, dim_out, dim_med, clip_value):
+    _validate_resnet_dims(dim_in=dim_in, dim_out=dim_out)
+    if dim_med is None:
+        dim_med = max(1, dim_out // 4)
+    _validate_resnet_dims(dim_med=dim_med)
+    if clip_value is not None and (
+        isinstance(clip_value, bool) or not isinstance(clip_value, Real)
+        or not isfinite(clip_value) or clip_value <= 0
+    ):
+        raise ValueError(f'clip_value must be None or a finite positive number, got {clip_value!r}')
+    return dim_med
+
+
+def _validate_resnet_input(x, expected_shape):
+    if not isinstance(x, Tensor):
+        raise TypeError('ResNet input must be a torch.Tensor')
+    if x.ndim != len(expected_shape) or any(
+        actual < 1 or (expected is not None and actual != expected)
+        for actual, expected in zip(x.shape, expected_shape)
+    ):
+        raise ValueError(f'Expected nonempty ResNet input shape {expected_shape}, got {tuple(x.shape)}')
+    if not x.is_floating_point():
+        raise TypeError(f'ResNet input must be floating point, got {x.dtype}')
+
+
 class _resnet_block_1d(nn.Module):
-    """Bottleneck 1-D ResNet block with optional clipping.
+    """Post-activation 1-D bottleneck residual block.
 
-    Architecture: ``1×1 Conv → BN → Act → 3×1 Conv → BN → Act → 1×1 Conv → BN → Act``
-    with a residual 1×1 projection when ``dim_in != dim_out``.
+    Branch: ``1×1 Conv → BN → Act → 3×1 Conv → BN → Act → 1×1 Conv → BN``.
+    Output: ``Act(shortcut + branch)``. The shortcut is identity when channel
+    counts match, otherwise a ``1×1 Conv → BN`` projection.
 
-    Args:
-        dim_in:     Number of input channels.
-        dim_out:    Number of output channels (default ``64``).
-        dim_med:    Bottleneck intermediate channels (default ``dim_out // 4``).
-        clip_value: Clamp residual shortcut to ``[-clip_value, clip_value]``
-                    to prevent exploding activations (default ``10``).
-        act_type:   Activation function key (default ``'leaky'``).
-
-    Shapes:
-        Input:  ``[bs, dim_in, seq_len]``  (channels-first)
-        Output: ``[bs, dim_out, seq_len]``
+    ``dim_med=None`` selects ``max(1, dim_out // 4)``. ``clip_value=None``
+    leaves the shortcut unchanged; a positive value enables shortcut clipping.
+    ``act_type`` accepts the keys/callable factories supported by ``Layer.Act``.
+    Input: ``[bs, dim_in, seq_len]``; output: ``[bs, dim_out, seq_len]``.
     """
-    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , act_type = 'leaky' , **kwargs) -> None:
+    def __init__(self, dim_in, dim_out=64, dim_med=None, clip_value=None, act_type='leaky', **kwargs):
         super().__init__()
+        dim_med = _resnet_bottleneck_dim(dim_in, dim_out, dim_med, clip_value)
         self.clip_value = clip_value
-        self.dim_in     = dim_in
-        if dim_in == dim_out:
-            self.downsample = nn.Sequential()
-        else:
-            self.downsample = nn.Conv1d(dim_in , dim_out , 1)
-
-        self.conv = nn.Sequential(
-            nn.Conv1d(dim_in , dim_med , 1) , 
-            nn.BatchNorm1d(dim_med),
-            Layer.Act.get_activation_fn(act_type) ,
-            nn.Conv1d(dim_med, dim_med , kernel_size=3, stride=1, padding=1 , bias = False) , 
-            nn.BatchNorm1d(dim_med),
-            Layer.Act.get_activation_fn(act_type) ,
-            nn.Conv1d(dim_med, dim_out , 1) , 
+        self.dim_in = dim_in
+        self.dim_med = dim_med
+        self.dim_out = dim_out
+        self.downsample = nn.Identity() if dim_in == dim_out else nn.Sequential(
+            nn.Conv1d(dim_in, dim_out, 1, bias=False),
             nn.BatchNorm1d(dim_out),
-            Layer.Act.get_activation_fn(act_type) ,
         )
-
-    def forward(self , x : Tensor) -> Tensor:
-        if x.shape[-2] != self.dim_in and x.shape[-1] == self.dim_in: 
-            Logger.alert1('auto permute!')
-            x = x.permute(0,2,1) 
-        x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
-        x2 = self.conv(x)
-        return x1 + x2
-    
-class mod_resnet_1d(nn.Module):
-    """Stacked 1-D ResNet blocks for intra-day feature extraction.
-
-    Applies ``resnet_blocks`` bottleneck residual blocks to a per-sample
-    feature sequence, then flattens and projects to ``dim_out``.  Used as an
-    intra-day encoder in ``resnet_lstm``/``resnet_gru`` where each date's
-    intra-day bar sequence is processed independently.
-
-    Args:
-        seq_len:       Intra-day sequence length (e.g. number of bars per day).
-        feat_len:      Number of input features per bar.
-        dim_out:       Output dimension (default ``64``).
-        clip_value:    Residual clipping threshold (default ``10``).
-        resnet_blocks: Number of residual blocks (default ``3``).
-
-    Shapes:
-        Input:  ``[bs, n_days, seq_len, feat_len]``
-        Output: ``[bs, n_days, dim_out]``
-    """
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
-        super().__init__()
-        self.seq_len = seq_len
-        self.dim_in  = feat_len
-        self.clip_value = clip_value
-        self.blocks = nn.Sequential()
-        d_in , d_out , d_med = feat_len , dim_out , dim_out//4
-        for _ in range(resnet_blocks):
-            self.blocks.append(_resnet_block_1d(d_in , d_out , d_med , clip_value))
-            d_in = d_out
-        self.fc_out = nn.Linear(d_out * seq_len , dim_out)
-
-    def forward(self , x : Tensor) -> Tensor:
-        x1 = x.reshape(-1,*x.shape[2:]).permute(0,2,1)
-        output = self.blocks(x1)
-        output = self.fc_out(output.flatten(start_dim=1))
-        output = output.reshape(*x.shape[:2] , *output.shape[1:])
-        return output
-    
-# 2-d conv resnet
-class _resnet_block_2d(nn.Module):
-    """Bottleneck 2-D ResNet block with optional clipping.
-
-    Parallel to ``_resnet_block_1d`` but uses ``Conv2d`` layers.  Used for
-    treating the ``(seq_len, feat_len)`` intra-day feature matrix as a 2-D
-    input.
-
-    Shapes:
-        Input:  ``[bs, dim_in, seq_len, feat_len]``  (channels-first)
-        Output: ``[bs, dim_out, seq_len, feat_len]``
-    """
-    def __init__(self, dim_in , dim_out = 64 , dim_med = 64 // 4 , clip_value = 10 , act_type = 'leaky' , **kwargs) -> None:
-        super().__init__()
-        self.clip_value = clip_value
-        self.dim_in     = dim_in
-        if dim_in == dim_out:
-            self.downsample = nn.Sequential()
-        else:
-            self.downsample = nn.Conv2d(dim_in , dim_out , 1)
-
         self.conv = nn.Sequential(
-            nn.Conv2d(dim_in , dim_med , 1) , 
-            nn.BatchNorm2d(dim_med),
-            Layer.Act.get_activation_fn(act_type) ,
-            nn.Conv2d(dim_med, dim_med , kernel_size=3, stride=1, padding=1 , bias = False) , 
-            nn.BatchNorm2d(dim_med),
-            Layer.Act.get_activation_fn(act_type) ,
-            nn.Conv2d(dim_med, dim_out , 1) , 
-            nn.BatchNorm2d(dim_out),
-            Layer.Act.get_activation_fn(act_type) ,
+            nn.Conv1d(dim_in, dim_med, 1, bias=False),
+            nn.BatchNorm1d(dim_med),
+            Layer.Act.get_activation_fn(act_type),
+            nn.Conv1d(dim_med, dim_med, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm1d(dim_med),
+            Layer.Act.get_activation_fn(act_type),
+            nn.Conv1d(dim_med, dim_out, 1, bias=False),
+            nn.BatchNorm1d(dim_out),
         )
+        self.act = Layer.Act.get_activation_fn(act_type)
 
-    def forward(self , x : Tensor) -> Tensor:
-        if x.shape[1] != self.dim_in and self.dim_in == 1: 
-            Logger.alert1('auto add dim 1 in index 1!')
-            x = x.unsqueeze(1)
-        x1 = torch.clip(self.downsample(x) , -self.clip_value , self.clip_value)
-        x2 = self.conv(x)
-        return x1 + x2
-    
-class mod_resnet_2d(nn.Module):
-    """Stacked 2-D ResNet blocks treating the intra-day feature grid as an image.
+    def forward(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, self.dim_in, None))
+        shortcut = self.downsample(x)
+        if self.clip_value is not None:
+            shortcut = torch.clamp(shortcut, -self.clip_value, self.clip_value)
+        return self.act(shortcut + self.conv(x))
 
-    Wraps the ``(seq_len, feat_len)`` feature matrix in a channel dimension
-    (``dim_in=1``), applies ``resnet_blocks`` 2-D bottleneck residual blocks,
-    then flattens and projects to ``dim_out``.
+
+class mod_resnet_1d(nn.Module):
+    """Stack 1-D residual blocks, then flatten and linearly project each day.
+
+    Input: ``[bs, n_days, seq_len, feat_len]``; output: ``[bs, n_days, dim_out]``.
+    Input axes must follow this order; layouts are never guessed. Training BN
+    statistics are shared across samples, days and spatial positions.
 
     Args:
-        seq_len:       Intra-day sequence length.
-        feat_len:      Number of features per bar.
-        dim_out:       Output dimension (default ``64``).
-        clip_value:    Residual clipping threshold (default ``10``).
-        resnet_blocks: Number of residual blocks (default ``3``).
+        seq_len: Positive number of intra-day bars.
+        feat_len: Positive number of input features per bar.
+        dim_out: Positive output width (default 64).
+        clip_value: Optional finite positive shortcut limit; None disables clipping.
+        resnet_blocks: Positive number of residual blocks (default 3).
+        dim_med: Positive bottleneck width; None selects max(1, dim_out // 4).
+        act_type: Activation key or module factory (default 'leaky').
 
-    Shapes:
-        Input:  ``[bs, n_days, seq_len, feat_len]``
-        Output: ``[bs, n_days, dim_out]``
+    Extra kwargs are accepted for shared model configuration compatibility.
     """
-    def __init__(self, seq_len , feat_len , dim_out = 64 , clip_value = 10 , resnet_blocks = 3 , **kwargs) -> None:
+    def __init__(self, seq_len, feat_len, dim_out=64, clip_value=None, resnet_blocks=3,
+                 dim_med=None, act_type='leaky', **kwargs):
         super().__init__()
+        _validate_resnet_dims(seq_len=seq_len, feat_len=feat_len, resnet_blocks=resnet_blocks)
+        dim_med = _resnet_bottleneck_dim(feat_len, dim_out, dim_med, clip_value)
+        self.seq_len = seq_len
+        self.dim_in = feat_len
+        self.dim_out = dim_out
+        self.dim_med = dim_med
         self.clip_value = clip_value
         self.blocks = nn.Sequential()
-        d_in , d_out , d_med = 1 , dim_out , dim_out//4
+        d_in = feat_len
         for _ in range(resnet_blocks):
-            self.blocks.append(_resnet_block_2d(d_in , d_out , d_med , clip_value))
-            d_in = d_out
-        self.fc_out = nn.Linear(feat_len * seq_len * d_out , dim_out)
+            self.blocks.append(_resnet_block_1d(
+                d_in, dim_out, dim_med=dim_med, clip_value=clip_value, act_type=act_type,
+            ))
+            d_in = dim_out
+        self.fc_out = nn.Linear(seq_len * dim_out, dim_out)
 
-    def forward(self , x : Tensor) -> Tensor:
-        x1 = x.reshape(-1,*x.shape[2:]).unsqueeze(-3)
-        output = self.blocks(x1)
+    def forward(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, None, self.seq_len, self.dim_in))
+        output = self.blocks(x.reshape(-1, self.seq_len, self.dim_in).permute(0, 2, 1))
         output = self.fc_out(output.flatten(start_dim=1))
-        output = output.reshape(*x.shape[:2] , *output.shape[1:])
-        return output
+        return output.reshape(x.shape[0], x.shape[1], self.dim_out)
+
+
+class _resnet_block_2d(nn.Module):
+    """Post-activation 2-D bottleneck residual block.
+
+    Branch: ``1×1 Conv → BN → Act → 3×3 Conv → BN → Act → 1×1 Conv → BN``.
+    Output: ``Act(shortcut + branch)``. The shortcut is identity when channel
+    counts match, otherwise a ``1×1 Conv → BN`` projection.
+
+    ``dim_med=None`` selects ``max(1, dim_out // 4)``. ``clip_value=None``
+    leaves the shortcut unchanged; a positive value enables shortcut clipping.
+    ``act_type`` accepts the keys/callable factories supported by ``Layer.Act``.
+    Input: ``[bs, dim_in, seq_len, feat_len]``; output: ``[bs, dim_out, seq_len, feat_len]``.
+    """
+    def __init__(self, dim_in, dim_out=64, dim_med=None, clip_value=None, act_type='leaky', **kwargs):
+        super().__init__()
+        dim_med = _resnet_bottleneck_dim(dim_in, dim_out, dim_med, clip_value)
+        self.clip_value = clip_value
+        self.dim_in = dim_in
+        self.dim_med = dim_med
+        self.dim_out = dim_out
+        self.downsample = nn.Identity() if dim_in == dim_out else nn.Sequential(
+            nn.Conv2d(dim_in, dim_out, 1, bias=False),
+            nn.BatchNorm2d(dim_out),
+        )
+        self.conv = nn.Sequential(
+            nn.Conv2d(dim_in, dim_med, 1, bias=False),
+            nn.BatchNorm2d(dim_med),
+            Layer.Act.get_activation_fn(act_type),
+            nn.Conv2d(dim_med, dim_med, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(dim_med),
+            Layer.Act.get_activation_fn(act_type),
+            nn.Conv2d(dim_med, dim_out, 1, bias=False),
+            nn.BatchNorm2d(dim_out),
+        )
+        self.act = Layer.Act.get_activation_fn(act_type)
+
+    def forward(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, self.dim_in, None, None))
+        shortcut = self.downsample(x)
+        if self.clip_value is not None:
+            shortcut = torch.clamp(shortcut, -self.clip_value, self.clip_value)
+        return self.act(shortcut + self.conv(x))
+
+
+class mod_resnet_2d(nn.Module):
+    """Stack 2-D residual blocks, then flatten and linearly project each day.
+
+    Input: ``[bs, n_days, seq_len, feat_len]``; output: ``[bs, n_days, dim_out]``.
+    Input axes must follow this order; layouts are never guessed. Training BN
+    statistics are shared across samples, days and spatial positions.
+
+    Args:
+        seq_len: Positive number of intra-day bars.
+        feat_len: Positive number of input features per bar.
+        dim_out: Positive output width (default 64).
+        clip_value: Optional finite positive shortcut limit; None disables clipping.
+        resnet_blocks: Positive number of residual blocks (default 3).
+        dim_med: Positive bottleneck width; None selects max(1, dim_out // 4).
+        act_type: Activation key or module factory (default 'leaky').
+
+    Extra kwargs are accepted for shared model configuration compatibility.
+    """
+    def __init__(self, seq_len, feat_len, dim_out=64, clip_value=None, resnet_blocks=3,
+                 dim_med=None, act_type='leaky', **kwargs):
+        super().__init__()
+        _validate_resnet_dims(seq_len=seq_len, feat_len=feat_len, resnet_blocks=resnet_blocks)
+        dim_med = _resnet_bottleneck_dim(1, dim_out, dim_med, clip_value)
+        self.seq_len = seq_len
+        self.dim_in = feat_len
+        self.dim_out = dim_out
+        self.dim_med = dim_med
+        self.clip_value = clip_value
+        self.blocks = nn.Sequential()
+        d_in = 1
+        for _ in range(resnet_blocks):
+            self.blocks.append(_resnet_block_2d(
+                d_in, dim_out, dim_med=dim_med, clip_value=clip_value, act_type=act_type,
+            ))
+            d_in = dim_out
+        self.fc_out = nn.Linear(feat_len * seq_len * dim_out, dim_out)
+
+    def forward(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, None, self.seq_len, self.dim_in))
+        output = self.blocks(x.reshape(-1, 1, self.seq_len, self.dim_in))
+        output = self.fc_out(output.flatten(start_dim=1))
+        return output.reshape(x.shape[0], x.shape[1], self.dim_out)
+
 
 if __name__ == '__main__':
 
@@ -269,7 +315,7 @@ if __name__ == '__main__':
     class resnet1d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
             super().__init__()
-            self.resnet = mod_resnet_1d(seq_len , feat_len , dim_res , 10 , 3) 
+            self.resnet = mod_resnet_1d(seq_len, feat_len, dim_res, resnet_blocks=3)
             self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
         def forward(self , x):
             hidden = self.resnet(x)
@@ -281,7 +327,7 @@ if __name__ == '__main__':
     class resnet2d_gru(nn.Module):
         def __init__(self, seq_len , feat_len , dim_res = 16 , dim_rnn = 64 , **kwargs) -> None:
             super().__init__()
-            self.resnet = mod_resnet_2d(seq_len , feat_len , dim_res , 10 , 3) 
+            self.resnet = mod_resnet_2d(seq_len, feat_len, dim_res, resnet_blocks=3)
             self.gru    = mod_gru(dim_res , dim_rnn , 0.1 , 2)
         def forward(self , x):
             hidden = self.resnet(x)

@@ -40,7 +40,7 @@ class resnet_gru(nn.Module):
             enc_in_dim = hidden_dim
         
         res_kwargs = {k:v for k,v in kwargs.items() if k != 'seq_len'}
-        self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim , **res_kwargs) 
+        self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim, act_type=act_type, **res_kwargs)
 
         self.fc_rnn = mod_gru(
             input_dim = enc_in_dim,

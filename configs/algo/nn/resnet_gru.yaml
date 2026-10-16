@@ -10,6 +10,9 @@ dec_mlp_layers: [1]
 num_output:     [1]
 which_output:   [0]
 resnet_blocks:  [1]
+dim_med:        [null] # null: max(1, enc_in_dim // 4); set a positive integer to override
+act_type:       [leaky]
+clip_value:     [null] # null disables shortcut clipping
 enc_in_dim   :  [16]
 hidden_as_factors:    [true]
 

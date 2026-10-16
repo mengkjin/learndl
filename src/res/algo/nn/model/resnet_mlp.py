@@ -74,7 +74,7 @@ class resnet_mlp(nn.Module):
 
         seq_len = kwargs['seq_len']
         res_kwargs = {k: v for k, v in kwargs.items() if k != 'seq_len'}
-        self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'], input_dim, enc_in_dim, **res_kwargs)
+        self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'], input_dim, enc_in_dim, act_type=act_type, **res_kwargs)
 
         self.fc_day = _temporal_mlp(
             input_dim=enc_in_dim,

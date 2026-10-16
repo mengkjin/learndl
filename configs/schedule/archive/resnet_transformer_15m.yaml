@@ -49,3 +49,4 @@ algo:
     rnn_layers:     [2]    # day-level Transformer depth (reuses key name)
     which_output:   [0]
     resnet_blocks:  [1]
+    dim_med:        [null] # null: max(1, enc_in_dim // 4); or a positive integer

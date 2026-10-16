@@ -91,6 +91,19 @@ class SpecialDataPrenorm:
                 x[:,-1] = 0
         return x
 
+    @classmethod
+    def sp_15mraw(cls , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
+        assert features is not None , 'features is required for 15mraw'
+        assert x.ndim == 4 , f'x must be 4-dimensional for 15mraw, but got {x.shape}'
+
+        # price divlast
+        price_idx = torch.tensor([feat in ('close' , 'high' , 'low' , 'open' , 'vwap') for feat in Base.ensure_name_list(features , [])])
+        x[...,price_idx] = x[...,price_idx] / (x[:,-1:,-1:,price_idx] + 1e-6)
+
+        # volume divsum
+        x[...,~price_idx] = x[...,~price_idx] / (x[...,~price_idx].sum(dim = (1,2), keepdim = True) + 1e-6)
+        return x
+
 class PrenormOperator:
     """prenorm operator for data module datas"""
     def __init__(self, config: ModelConfig , histnorms : dict[str, PreProHistNorm] | None = None):
