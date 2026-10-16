@@ -6,6 +6,7 @@ fit:
   - gru_day_4
   - gru_15m_new_rtn
   - gru_15mraw
+  - gru_week_new
 
 resume: False
 force: True
