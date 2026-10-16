@@ -1,8 +1,11 @@
 fit:
-  - gru_day_open
-  - gru_day_open_att
-
+  - gru_day_raw
+  - gru_day_0
+  - gru_day_1
+  - gru_day_2
+  - gru_day_3
+  - gru_day_4
 
 resume: False
 force: True
-rerun_mark: 2
+rerun_mark: 0
