@@ -28,9 +28,9 @@ algo:
     hidden_dim:     [64] #  2**5
     dropout:        [0.1]
     enc_in:         [true]
-    enc_att:        [true] 
+    enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
-    rnn_att:        [true]
+    rnn_att:        [false]
     rnn_layers:     [2]
     dec_mlp_layers: [1] 
     num_output:     [1]

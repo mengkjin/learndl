@@ -1,12 +1,8 @@
 fit:
-  - gru_day_0
-  - gru_day_1
-  - gru_day_2
-  - gru_day_3
-  - gru_day_4
-  - gru_15m_new_rtn
-  - gru_15mraw
-  - gru_week_new
+  - gru_day_test1
+  - gru_day_test2
+  - gru_day_test3
+  - gru_day_test4
 
 resume: False
 force: True
