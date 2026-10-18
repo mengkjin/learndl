@@ -9,6 +9,7 @@ from unittest import TestCase, main
 from unittest.mock import Mock, patch
 
 import numpy as np
+import pandas as pd
 import torch
 
 from src.data import DataBlock
@@ -170,6 +171,44 @@ class Repair15mrawTest(TestCase):
                 block = make_block()
                 block.values[..., -1] = bad
                 self.assertIsNotNone(task.block_issue(block))
+
+    def test_new_task_traces_then_saves_nan_and_requests_training(self):
+        spec = importlib.util.spec_from_file_location('repair_inf_integration', SCRIPT.with_name('repair_15mraw_inf.py'))
+        new = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(new)
+        block = make_block()
+        block.values[0, 0, 0, 4] = torch.inf
+        self.write(make_block(legacy=True), 'fit')
+        self.write(make_block(), 'predict')
+        self.procs['fit'].frame = 'fit'
+        self.procs['fit'].load_with_extension.side_effect = lambda **kwargs: block
+        raw = pd.DataFrame([{'secid': 1, 'minute': 0, 'vwap': np.inf, 'amount': 1., 'volume': 0.}])
+        with patch.object(new, 'repair', task), patch.object(new, 'load_source_day', return_value=(raw, '/raw/15min.feather')):
+            new.run_task()
+        saved = self.procs['fit'].load_dump()
+        self.assertFalse(torch.isinf(saved.values).any())
+        self.assertTrue(torch.isnan(saved.values[0, 0, 0, 4]))
+        self.training.assert_called_once_with(new.REQUEST_ID)
+        self.assertEqual(self.report()['frames'][0]['inf_audit']['converted_to_nan'], 1)
+        self.assertEqual(self.report()['status'], 'success')
+
+    def test_new_task_unexplained_inf_keeps_original_and_records_failure(self):
+        spec = importlib.util.spec_from_file_location('repair_inf_failure', SCRIPT.with_name('repair_15mraw_inf.py'))
+        new = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(new)
+        block = make_block()
+        block.values[0, 0, 0, 4] = torch.inf
+        self.write(make_block(legacy=True), 'fit')
+        self.procs['fit'].frame = 'fit'
+        self.procs['fit'].load_with_extension.side_effect = lambda **kwargs: block
+        raw = pd.DataFrame([{'secid': 1, 'minute': 0, 'vwap': 2., 'amount': 2., 'volume': 1.}])
+        with patch.object(new, 'repair', task), patch.object(new, 'load_source_day', return_value=(raw, '/raw/15min.feather')):
+            with self.assertRaisesRegex(ValueError, 'Unexplained'):
+                new.run_task()
+        self.procs['fit'].save_dump.assert_not_called()
+        self.training.assert_not_called()
+        self.assertIn('turn_fl', self.procs['fit'].load_dump().feature)
+        self.assertEqual(self.report()['frames'][0]['inf_audit']['status'], 'failed')
 
 
 if __name__ == '__main__':

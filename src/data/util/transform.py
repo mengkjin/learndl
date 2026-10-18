@@ -181,7 +181,8 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     ``trade_min_fillna`` is applied first to ensure clean inputs.  Bars are
     grouped by ``(secid, new_minute_index)`` and aggregated with OHLCV rules:
     open=first, high=max, low=min, close=last, amount/volume=sum.
-    VWAP is recomputed as ``amount / volume`` after aggregation.
+    VWAP is recomputed as ``amount / volume`` after aggregation. Non-positive
+    volume or non-finite operands/results produce NaN, never an infinite VWAP.
 
     ``x_min_new`` must be a multiple of ``x_min_old``.
     """
@@ -197,13 +198,19 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     if x_min_new != 1: 
         df = df[df['minute'] >= 0].copy()
     df['minute'] = df['minute'].clip(lower=0) // by
+    # Sum in float64: finite float32 inputs can overflow during aggregation.
+    df[['amount', 'volume']] = df[['amount', 'volume']].astype(np.float64)
     agg_dict = {'open':'first','high':'max','low':'min','close':'last','amount':'sum','volume':'sum'}
     if 'num_trades' in df.columns: 
         agg_dict['num_trades'] = 'sum'
     data_new = df.groupby(['secid' , 'minute']).agg(agg_dict)
     assert isinstance(data_new , pd.DataFrame) , f'data_new is not a DataFrame: {data_new}'
     if 'vwap' in df.columns: 
-        data_new['vwap'] = data_new['amount'] / data_new['volume']
+        amount, volume = data_new['amount'], data_new['volume']
+        valid = np.isfinite(amount) & np.isfinite(volume) & (volume > 0)
+        with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
+            vwap = amount.where(valid) / volume.where(valid)
+        data_new['vwap'] = vwap.where(np.isfinite(vwap))
     return data_new.reset_index(drop=False)
 
 def chinese_to_pinyin(text : str):

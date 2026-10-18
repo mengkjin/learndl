@@ -49,7 +49,7 @@ def block_issue(block: DataBlock) -> str | None:
     return None
 
 
-def repair_datablocks(dry_run: bool = False):
+def repair_datablocks(dry_run: bool = False, *, prepare_block=None):
     cutoff = int(CALENDAR.updated())
     plan = []
     for frame in FRAMES:
@@ -100,6 +100,8 @@ def repair_datablocks(dry_run: bool = False):
             proc.load_end = cutoff
             proc.DateChunkYears = 1
             block = proc.load_with_extension(reconstruct=True)
+            if prepare_block is not None:
+                prepare_block(block, proc, item, folder)
             if reason := block_issue(block):
                 raise ValueError(f'15mraw/{frame} rebuilt block: {reason}')
             expected_dates = CALENDAR.range(proc.load_start, cutoff)
@@ -128,13 +130,13 @@ def repair_datablocks(dry_run: bool = False):
     return plan
 
 
-def request_training():
+def request_training(default_request_id: str = TRAINING_REQUEST_ID):
     # Autofix has a private /dev and an exclusive maintenance lease. Persist the
     # request; the ordinary idle worker starts training after that lease exits.
     from src.api.calls.worklist_state import WorklistState
     from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
     context = sandbox_request()
-    request_id = context['id'] if context is not None else TRAINING_REQUEST_ID
+    request_id = context['id'] if context is not None else default_request_id
     request = WorklistState('gru_15mraw').request_training(request_id)
     Logger.note(f'gru_15mraw training requested: {request["id"]}; '
                 'waiting for maintenance completion and an idle GPU')

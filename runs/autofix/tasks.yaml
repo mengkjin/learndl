@@ -25,4 +25,12 @@ fixes:
       dry_run: false
       email: true
     timeout: 12h
+    enabled: false
+  - id: 20261018_repair_15mraw_inf_train_03
+    description: 按需重建 15mraw，逐个追查 Inf 的原始记录与溢出/除零证据，再转为 NaN；两份数据校验通过后请求 gru_15mraw 训练。
+    script: scripts/.autofix/repair_15mraw_inf.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 12h
     enabled: true
