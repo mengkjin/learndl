@@ -40,12 +40,14 @@ class Repair15mrawTest(TestCase):
         self.stack.enter_context(patch.object(task, 'PATH', SimpleNamespace(interim=self.root)))
         self.stack.enter_context(patch.object(task.CALENDAR, 'updated', return_value=20240130))
         self.stack.enter_context(patch.object(task.CALENDAR, 'range', side_effect=lambda start, end: np.arange(start, end + 1)))
+        self.stack.enter_context(patch('src.proj.DB.dates', return_value=np.arange(20240101, 20240131)))
         self.stack.enter_context(patch.object(task.Logger, 'note'))
         self.training_original = task.request_training
         self.training = self.stack.enter_context(patch.object(task, 'request_training'))
         self.procs = {}
         for frame in task.FRAMES:
             proc = Mock()
+            proc.frame = frame
             proc.load_start = 20240101
             proc.load_dump.side_effect = lambda f=frame: DataBlock.load_dump(category='preprocess', preprocess_key='15mraw', frame=f)
             proc.load_with_extension.side_effect = lambda **kwargs: make_block()
@@ -209,6 +211,42 @@ class Repair15mrawTest(TestCase):
         self.training.assert_not_called()
         self.assertIn('turn_fl', self.procs['fit'].load_dump().feature)
         self.assertEqual(self.report()['frames'][0]['inf_audit']['status'], 'failed')
+
+    def test_new_task_rebuilds_healthy_dumps_over_available_history(self):
+        spec = importlib.util.spec_from_file_location('repair_available_history', SCRIPT.with_name('repair_15mraw_inf.py'))
+        new = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(new)
+        for frame, proc in self.procs.items():
+            self.write(make_block(), frame)  # Prior sanitized dumps must not be skipped.
+            proc.load_with_extension.side_effect = lambda p=proc, **kw: make_block().slice_date(p.load_start, p.load_end)
+        self.procs['predict'].load_start = 20240120
+        with patch.object(new, 'repair', task), patch.object(new.DB, 'dates', return_value=np.arange(20240102, 20240131)):
+            new.run_task()
+        for proc in self.procs.values():
+            proc.load_with_extension.assert_called_once_with(reconstruct=True)
+        self.assertEqual(self.procs['fit'].load_dump().date[0], 20240102)
+        fit = self.report()['frames'][0]
+        self.assertEqual(fit['source_date_coverage']['omitted_leading_dates'], [20240101])
+        self.assertEqual(fit['rebuilt_date_coverage']['missing_dates'], [])
+        self.assertTrue(Path(fit['backup']).exists())
+        self.training.assert_called_once_with(new.REQUEST_ID)
+
+    def test_prediction_source_failure_stops_before_either_frame_is_rebuilt(self):
+        spec = importlib.util.spec_from_file_location('repair_missing_source', SCRIPT.with_name('repair_15mraw_inf.py'))
+        new = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(new)
+        for frame in self.procs:
+            self.write(make_block(), frame)
+        with patch.object(new, 'repair', task), patch.object(new.DB, 'dates', return_value=np.arange(20240102, 20240131)):
+            with self.assertRaisesRegex(ValueError, 'predict.*raw 15min dates missing'):
+                new.run_task()
+        for proc in self.procs.values():
+            proc.load_with_extension.assert_not_called()
+            proc.save_dump.assert_not_called()
+        self.training.assert_not_called()
+        report = self.report()
+        self.assertEqual(report['status'], 'failed')
+        self.assertEqual(report['frames'][1]['source_date_coverage']['missing_dates'], [20240101])
 
 
 if __name__ == '__main__':

@@ -33,4 +33,12 @@ fixes:
       dry_run: false
       email: true
     timeout: 12h
+    enabled: false
+  - id: 20261018_repair_15mraw_vwap_coverage_train_04
+    description: 按主源与备用源实际日期核对覆盖，备份重建两份 15mraw；无成交或 Inf VWAP 取 close，保留异常证据，校验后启动 gru_15mraw 训练请求。
+    script: scripts/.autofix/repair_15mraw_inf.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 12h
     enabled: true

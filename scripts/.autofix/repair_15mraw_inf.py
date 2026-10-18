@@ -1,5 +1,5 @@
-# description: Trace 15mraw infinities, replace them with NaN, then request training
-# content: Preserve raw evidence; rebuild invalid dumps and audit every infinite cell before saving.
+# description: Rebuild 15mraw with VWAP-to-close fallback, audit Inf, then request training
+# content: Check raw date coverage, back up both dumps, rebuild with current rules and preserve Inf evidence.
 # autofix: true
 # email: true
 # mode: shell
@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from src.proj import DB, Logger
+from src.proj import CALENDAR, DB, Logger
 from src.proj.util.script import ScriptTool
 
 # Keep the original task's CLI/declaration unchanged; share its backup, save
@@ -28,7 +28,7 @@ _spec = importlib.util.spec_from_file_location(
     'repair_15mraw_common', Path(__file__).with_name('repair_15mraw_datablocks.py'))
 repair = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(repair)
-REQUEST_ID = '20261018_repair_15mraw_inf_train_03'
+REQUEST_ID = '20261018_repair_15mraw_vwap_coverage_train_04'
 
 
 def number(value):
@@ -166,7 +166,47 @@ def audit_and_sanitize(block, proc, item, folder, *, vwap_only=False, sanitize=T
                     f'mechanisms={dict(mechanisms)}; evidence={evidence_path}')
 
 
+def configure_date_coverage(proc, item):
+    """Allow only unavailable leading history for fit; never hide internal gaps.
+
+    Calendar-year reconstruction skips wholly empty early years. Requiring the
+    generic 2007 start therefore rejects a valid later-starting minute source.
+    Inspect primary AND alternative files before choosing the effective start.
+    Prediction still requires its entire requested window, including its start.
+    """
+    requested = CALENDAR.range(proc.load_start, proc.load_end)
+    available = np.asarray(list(DB.dates('trade_ts', '15min', use_alt=True)), dtype=np.int64)
+    available = np.intersect1d(available, requested)
+    coverage = item['source_date_coverage'] = {
+        'requested_start': int(proc.load_start), 'requested_end': int(proc.load_end),
+        'available_start': int(available[0]) if len(available) else None,
+        'available_end': int(available[-1]) if len(available) else None,
+        'available_count': len(available), 'use_alt': True,
+        'status': 'checking',
+    }
+    if not len(available):
+        coverage['status'] = 'failed'
+        raise ValueError(f'15mraw/{proc.frame}: no raw 15min data in {proc.load_start}..{proc.load_end}')
+    effective_start = int(available[0]) if proc.frame == 'fit' else int(proc.load_start)
+    expected = CALENDAR.range(effective_start, proc.load_end)
+    missing = np.setdiff1d(expected, available)
+    omitted = requested[requested < effective_start]
+    coverage.update(effective_start=effective_start, expected_count=len(expected),
+                    omitted_leading_dates=omitted.tolist(), missing_dates=missing.tolist())
+    Logger.note(f'15mraw/{proc.frame} source coverage: requested={proc.load_start}..{proc.load_end}; '
+                f'available={available[0]}..{available[-1]} ({len(available)} dates); '
+                f'effective_start={effective_start}; omitted_leading={len(omitted)}; '
+                f'missing={len(missing)} {missing[:20].tolist()}')
+    if len(missing):
+        coverage['status'] = 'failed'
+        raise ValueError(f'15mraw/{proc.frame}: raw 15min dates missing inside the required window: '
+                         f'{missing[:20].tolist()}; full list in source_date_coverage; not rebuilding or training')
+    proc.load_start = effective_start
+    coverage['status'] = 'verified'
+
+
 def configure_processor(proc, item, folder):
+    configure_date_coverage(proc, item)
     def observe(block):
         chunk = {'start': int(block.date[0]), 'end': int(block.date[-1])}
         item.setdefault('vwap_fallback_audits', []).append(chunk)
@@ -177,7 +217,7 @@ def configure_processor(proc, item, folder):
 
 def run_task(dry_run=False):
     plan = repair.repair_datablocks(dry_run=dry_run, prepare_block=audit_and_sanitize,
-                                    configure_processor=configure_processor)
+                                    configure_processor=configure_processor, force_rebuild=True)
     if not dry_run:
         repair.request_training(REQUEST_ID)
     return plan

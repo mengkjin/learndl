@@ -116,9 +116,11 @@ class InfAuditTest(TestCase):
         raw = DataBlock.from_polars(pl.DataFrame(rows))
         proc = object.__new__(PrePro_15mraw)
         proc.frame = 'fit'
+        proc.load_start = proc.load_end = 20240102
         item = {}
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(task, 'load_source_day', return_value=(pd.DataFrame(rows), '/raw/15min.feather')), \
+             patch.object(task.DB, 'dates', return_value=[20240102]), \
              patch.object(task.Logger, 'note'):
             task.configure_processor(proc, item, Path(directory))
             block = proc.process_blocks({'15m': raw})
@@ -148,10 +150,87 @@ class InfAuditTest(TestCase):
             train.assert_not_called()
             task.run_task()
             train.assert_called_once_with(task.REQUEST_ID)
+            self.assertTrue(repair.call_args.kwargs['force_rebuild'])
             repair.side_effect = ValueError('audit failed')
             with self.assertRaisesRegex(ValueError, 'audit failed'):
                 task.run_task()
             train.assert_called_once()
+
+
+class DateCoverageTest(TestCase):
+    def test_real_year_chunks_and_vwap_fallback_with_later_source_start(self):
+        import polars as pl
+        from src.data.preprocess.processors.trade import PrePro_15mraw
+        available = task.CALENDAR.range(20100104, 20100108)
+        rows = [source_row(date=int(date), minute=bar, vwap=2., volume=1.)
+                for date in available for bar in range(16)]
+        rows[0].update(vwap=np.inf, amount=.52, volume=0., close=11.84)
+        proc = PrePro_15mraw('fit', vb_level='never')
+        proc.load_start, proc.load_end, proc.DateChunkYears, proc.mask = 20070101, 20100108, 1, {}
+
+        def load_blocks(start, end, **kwargs):
+            return {'15m': DataBlock.from_polars(pl.DataFrame([r for r in rows if start <= r['date'] <= end]))}
+
+        item = {}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(proc, 'load_dump', side_effect=lambda **kwargs: DataBlock()), \
+             patch.object(proc, 'load_blocks', side_effect=load_blocks), \
+             patch.object(task.DB, 'dates', return_value=available), \
+             patch.object(task, 'load_source_day', side_effect=lambda date: (pd.DataFrame([r for r in rows if r['date'] == date]), '/raw/15min.feather')), \
+             patch.object(task.Logger, 'note'):
+            # Real calendar-year loader skips wholly empty 2007-2009 chunks.
+            before = proc.load_with_extension(reconstruct=True)
+            np.testing.assert_array_equal(before.date, available)
+            self.assertLess(len(before.date), len(task.CALENDAR.range(proc.load_start, proc.load_end)))
+            task.configure_processor(proc, item, Path(directory))
+            rebuilt = proc.load_with_extension(reconstruct=True)
+            np.testing.assert_array_equal(rebuilt.date, task.CALENDAR.range(proc.load_start, proc.load_end))
+            self.assertEqual(proc.load_start, 20100104)
+            self.assertAlmostEqual(float(rebuilt.values[0, 0, 0, 4]), 11.84, places=5)
+            self.assertEqual(item['vwap_fallback_audits'][0]['inf_audit']['inf_count'], 1)
+            self.assertIsNone(task.repair.block_issue(rebuilt))
+
+    def check(self, available, frame='fit', error=None):
+        proc = SimpleNamespace(frame=frame, load_start=20240101, load_end=20240105)
+        item = {}
+        with patch.object(task.DB, 'dates', return_value=available) as dates, \
+             patch.object(task.CALENDAR, 'range', side_effect=lambda start, end: np.arange(start, end + 1)), \
+             patch.object(task.Logger, 'note'):
+            if error:
+                with self.assertRaisesRegex(ValueError, error):
+                    task.configure_date_coverage(proc, item)
+            else:
+                task.configure_date_coverage(proc, item)
+            dates.assert_called_once_with('trade_ts', '15min', use_alt=True)
+        return proc, item['source_date_coverage']
+
+    def test_fit_can_trim_only_unavailable_leading_history(self):
+        proc, report = self.check([20240102, 20240103, 20240104, 20240105])
+        self.assertEqual(proc.load_start, 20240102)
+        self.assertEqual(report['requested_start'], 20240101)
+        self.assertEqual(report['omitted_leading_dates'], [20240101])
+        self.assertEqual(report['missing_dates'], [])
+
+    def test_full_coverage_uses_deduplicated_union_of_sources(self):
+        proc, report = self.check([20240105, 20240101, 20240102, 20240103, 20240104, 20240101])
+        self.assertEqual(proc.load_start, 20240101)
+        self.assertEqual(report['available_count'], 5)
+
+    def test_internal_gap_and_stale_tail_are_not_hidden(self):
+        for available, missing in [([20240102, 20240104, 20240105], [20240103]),
+                                   ([20240102, 20240103, 20240104], [20240105])]:
+            with self.subTest(available=available):
+                _, report = self.check(available, error='raw 15min dates missing')
+                self.assertEqual(report['missing_dates'], missing)
+                self.assertEqual(report['status'], 'failed')
+
+    def test_prediction_cannot_trim_its_required_window(self):
+        _, report = self.check([20240102, 20240103, 20240104, 20240105], frame='predict', error='raw 15min dates missing')
+        self.assertEqual(report['missing_dates'], [20240101])
+
+    def test_no_source_in_requested_range_fails(self):
+        _, report = self.check([20230101], error='no raw 15min data')
+        self.assertIsNone(report['available_start'])
 
 
 class MinuteAggregationTest(TestCase):

@@ -49,7 +49,7 @@ def block_issue(block: DataBlock) -> str | None:
     return None
 
 
-def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_processor=None):
+def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_processor=None, force_rebuild=False):
     cutoff = int(CALENDAR.updated())
     plan = []
     for frame in FRAMES:
@@ -60,6 +60,8 @@ def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_pr
             del block
         except (OSError, ValueError, RuntimeError, EOFError, KeyError, AssertionError) as exc:
             reason = f'unreadable dump: {type(exc).__name__}: {exc}'
+        if force_rebuild and reason is None:
+            reason = 'rebuild requested to apply current preprocessing rules'
         plan.append({'frame': frame, 'reason': reason,
                      'path': str(DataBlock.path_preprocess('15mraw', frame))})
         Logger.note(f'15mraw/{frame}: {reason or "healthy; skip"}')
@@ -81,6 +83,16 @@ def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_pr
     save_report()
     Logger.note(f'15mraw backup/report: {report_path}')
     try:
+        processors = {}
+        for item in targets:
+            proc = PrePros.get_processor('15mraw', item['frame'], vb_level='never')
+            proc.load_end = cutoff
+            proc.DateChunkYears = 1
+            item['status'] = 'checking_sources'
+            if configure_processor is not None:
+                configure_processor(proc, item, folder)
+            processors[item['frame']] = proc
+            save_report()
         for item in targets:
             frame = item['frame']
             source = DataBlock.path_preprocess('15mraw', frame)
@@ -96,20 +108,25 @@ def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_pr
                     shutil.copy2(source, backup)
             item['status'] = 'rebuilding'
             save_report()
-            proc = PrePros.get_processor('15mraw', frame, vb_level='never')
-            proc.load_end = cutoff
-            proc.DateChunkYears = 1
-            if configure_processor is not None:
-                configure_processor(proc, item, folder)
+            proc = processors[frame]
             block = proc.load_with_extension(reconstruct=True)
             if prepare_block is not None:
                 prepare_block(block, proc, item, folder)
             if reason := block_issue(block):
                 raise ValueError(f'15mraw/{frame} rebuilt block: {reason}')
             expected_dates = CALENDAR.range(proc.load_start, cutoff)
+            item['rebuilt_date_coverage'] = {
+                'expected_start': int(expected_dates[0]) if len(expected_dates) else None,
+                'actual_start': int(block.date[0]), 'actual_end': int(block.date[-1]),
+                'expected_count': len(expected_dates), 'actual_count': len(block.date),
+                'missing_dates': np.setdiff1d(expected_dates, block.date).tolist(),
+                'unexpected_dates': np.setdiff1d(block.date, expected_dates).tolist(),
+            }
             if not np.array_equal(block.date, expected_dates):
                 raise ValueError(f'15mraw/{frame}: rebuilt dates do not cover the requested '
-                                 f'{proc.load_start}..{cutoff}; check raw 15min data availability')
+                                 f'{proc.load_start}..{cutoff}; actual={block.date[0]}..{block.date[-1]}; '
+                                 f'missing={item["rebuilt_date_coverage"]["missing_dates"][:20]}; '
+                                 f'see rebuilt_date_coverage in report.json')
             shape, dates, secids = tuple(block.shape), block.date.copy(), block.secid.copy()
             item['status'] = 'saving'
             save_report()
