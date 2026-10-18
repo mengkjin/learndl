@@ -181,8 +181,9 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
     ``trade_min_fillna`` is applied first to ensure clean inputs.  Bars are
     grouped by ``(secid, new_minute_index)`` and aggregated with OHLCV rules:
     open=first, high=max, low=min, close=last, amount/volume=sum.
-    VWAP is recomputed as ``amount / volume`` after aggregation. Non-positive
-    volume or non-finite operands/results produce NaN, never an infinite VWAP.
+    VWAP is recomputed as ``amount / volume`` after aggregation. Zero volume
+    or an infinite quotient falls back to the same bar's finite close.
+    Other invalid operands and an unusable fallback remain NaN.
 
     ``x_min_new`` must be a multiple of ``x_min_old``.
     """
@@ -209,8 +210,11 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
         amount, volume = data_new['amount'], data_new['volume']
         valid = np.isfinite(amount) & np.isfinite(volume) & (volume > 0)
         with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
-            vwap = amount.where(valid) / volume.where(valid)
-        data_new['vwap'] = vwap.where(np.isfinite(vwap))
+            quotient = amount / volume
+        vwap = quotient.where(valid & np.isfinite(quotient))
+        fallback = (volume == 0) | np.isinf(quotient)
+        close = data_new['close'].where(np.isfinite(data_new['close']))
+        data_new['vwap'] = vwap.where(~fallback, close)
     return data_new.reset_index(drop=False)
 
 def chinese_to_pinyin(text : str):

@@ -49,7 +49,7 @@ def block_issue(block: DataBlock) -> str | None:
     return None
 
 
-def repair_datablocks(dry_run: bool = False, *, prepare_block=None):
+def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_processor=None):
     cutoff = int(CALENDAR.updated())
     plan = []
     for frame in FRAMES:
@@ -99,6 +99,8 @@ def repair_datablocks(dry_run: bool = False, *, prepare_block=None):
             proc = PrePros.get_processor('15mraw', frame, vb_level='never')
             proc.load_end = cutoff
             proc.DateChunkYears = 1
+            if configure_processor is not None:
+                configure_processor(proc, item, folder)
             block = proc.load_with_extension(reconstruct=True)
             if prepare_block is not None:
                 prepare_block(block, proc, item, folder)

@@ -10,9 +10,11 @@ Autofix 用来在代码更新后执行明确声明的数据重算、回补或修
 
 `20261018_repair_15mraw_inf_train_03` 替代已停用的 `_train_02`。它复用备份、按需重建、保存前后校验及训练请求流程，在保存前逐日检查重建结果中的每一个 Inf（包括正负无穷），读取与生产加载器相同的 `trade_ts/15min` 或备用来源，记录股票、日期、0..15 的 bar、特征、原始文件、原始值、dtype、amount/volume 和 OHLCV。完整证据写入备份目录下的 `<frame>_inf_evidence.jsonl`；`report.json` 的 `inf_audit` 按特征、来源、可复现机制计数，日志/邮件包含各类样例和汇总。
 
-来源分为原始文件已有 Inf、有限原始值转 float32 溢出、无法解释的预处理异常。对原始 VWAP Inf，用同一条存储记录的 amount/volume 核对非零除零、非有限操作数及数值溢出；“可复现”不冒充历史供应商计算过程的证明，无法追溯的上游原因明确标为 `upstream_origin_unresolved`，原始文件和数值仍保留供进一步调查。缺少原始行、冲突重复行、非标准 bar 标签或无法解释的有限值/NaN 变 Inf 会使任务失败，不覆盖该块、不提交训练。已定位到原始文件的 Inf 和可验证的转换溢出转为 NaN，原有 NaN、有限值和原始行情文件不修改；所有旧校验仍然执行，全 NaN 特征也不能通过。正常无需重建的块已经过无 Inf 检查，不重复审计原始库。
+来源分为原始文件已有 Inf、有限原始值转 float32 溢出、无法解释的预处理异常。对原始 VWAP Inf，用同一条存储记录的 amount/volume 核对非零除零、非有限操作数及数值溢出；“可复现”不冒充历史供应商计算过程的证明，无法追溯的上游原因明确标为 `upstream_origin_unresolved`，原始文件和数值仍保留供进一步调查。缺少原始行、冲突重复行、非标准 bar 标签或无法解释的有限值/NaN 变 Inf 会使任务失败，不覆盖该块、不提交训练。除下述 VWAP 回退外，已定位到原始文件的 Inf 和可验证的转换溢出转为 NaN，原有 NaN、有限值和原始行情文件不修改；所有旧校验仍然执行，全 NaN 特征也不能通过。正常无需重建的块已经过无 Inf 检查，不重复审计原始库。
 
-分钟聚合的 `trade_min_reform` 同时改为 float64 汇总成交额/量，VWAP 仅对有限操作数及正成交量计算，非有限结果设为 NaN，防止非零成交额除零再次生成 Inf。此代码更新不重写历史原始行情。成功只代表 DataBlock 修复完成和训练请求已提交，不代表服务器训练已经完成。
+分钟聚合的 `trade_min_reform` 使用 float64 汇总成交额/量；无成交（volume=0）或 VWAP 商为 Inf 时取同一聚合 bar 的 close。`15mraw` prepro 在 float32 转换后也对零成交量或 Inf VWAP 使用同一 bar 的 close，兼容历史原始 Inf 和转换溢出。close 非有限时保留 NaN，不引入新的 Inf。其他缺失值和字段不因这项回退改变。
+
+Autofix 在 prepro 回退前通过观察回调记录每年分块的 VWAP Inf 证据，报告字段为 `vwap_fallback_audits`，文件为 `<frame>_vwap_<start>_<end>_inf_evidence.jsonl`；所以被 close 替换的 Inf 仍有原始来源和公式核对记录。重建完成后再审计其余 Inf 并转 NaN。此代码更新不重写历史原始行情。成功只代表 DataBlock 修复完成和训练请求已提交，不代表服务器训练已经完成。
 
 `20261017_repair_15mraw_train_02` 检查 `15mraw` 的 fit/predict 两份 DataBlock：缺失、不可读、旧 `turn_fl` 特征、全 NaN 特征或无穷值会触发重算；特征和数值检查通过则跳过，不因数据日期较旧而重算。仅重建 `15mraw`，不改原始行情或其他 DataBlock。受影响的原文件/目录先复制到 `data/Interim/autofix_backups/15mraw_*/`，按年读取原始行情重建至本次固定的数据截止日，保存前检查完整交易日覆盖，保存前后校验特征、数值与保存后的坐标。`report.json` 记录每份数据的原因、备份和执行阶段；失败即停止，保留备份及已经完成的结果，不自动回滚。`dry_run: true` 只检查、不写入。修复代码与该清单须一同发布，已消耗的 ID 需要换新 ID 才能再次运行。
 

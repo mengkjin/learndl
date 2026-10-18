@@ -17,6 +17,19 @@ from src.res.model.util.metric.stage_metrics import EpochMetrics
 
 
 class Raw15mTest(TestCase):
+    def test_vwap_fallback_after_cast_uses_same_bar_close(self):
+        features = ['close', 'high', 'low', 'open', 'volume', 'vwap']
+        values = torch.ones(1, 1, 8, 6, dtype=torch.float64)
+        values[..., 0] = torch.arange(10., 18.)
+        values[0, 0, :, -1] = torch.tensor([torch.inf, -torch.inf, 1e40, torch.nan, 3., torch.nan, torch.inf, 4.], dtype=torch.float64)
+        values[0, 0, 3:5, 4] = 0  # No trades: even NaN or stale finite VWAP uses close.
+        values[0, 0, 6, 0] = torch.inf  # Bad close cannot introduce another Inf.
+        raw = DataBlock(values, [1], [20240102], features)
+        block = object.__new__(PrePro_15mraw).process_blocks({'15m': raw})
+        torch.testing.assert_close(block.values[0, 0, :, 4],
+                                   torch.tensor([10., 11., 12., 13., 14., torch.nan, torch.nan, 4.]), equal_nan=True)
+        torch.testing.assert_close(block.values[..., -1], values[..., 4].float())
+
     def test_volume_survives_and_complete_windows_remain_eligible(self):
         features = ['close', 'high', 'low', 'open', 'volume', 'vwap']
         values = torch.arange(1, 2 * 30 * 16 * 6 + 1, dtype=torch.float32).reshape(2, 30, 16, 6)

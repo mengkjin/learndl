@@ -1,6 +1,7 @@
 """Trade preprocessors."""
 from __future__ import annotations
 import numpy as np
+import torch
 from src.proj import CALENDAR
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
@@ -59,6 +60,23 @@ class PrePro_15mraw(TradePreProcessor):
     def process(self , blocks):
         data_block = blocks['15m']
         return data_block
+
+    def process_blocks(self, blocks):
+        # Run after the base float32 cast so cast-induced Inf is covered too.
+        block = super().process_blocks(blocks)
+        if block.empty:
+            return block
+        observer = getattr(self, 'vwap_inf_observer', None)
+        if observer is not None:
+            observer(block)  # Autofix records the evidence before replacement.
+        i_vwap, i_close, i_volume = [list(block.feature).index(f) for f in ('vwap', 'close', 'volume')]
+        for start in range(0, len(block.date), 64):
+            values = block.values[:, start:start + 64]
+            vwap, close = values[..., i_vwap], values[..., i_close]
+            fallback = torch.isinf(vwap) | (values[..., i_volume] == 0)
+            values[..., i_vwap] = torch.where(
+                fallback, torch.where(torch.isfinite(close), close, torch.nan), vwap)
+        return block
     
 class PrePro_30m(TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""

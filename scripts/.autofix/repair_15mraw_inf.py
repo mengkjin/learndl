@@ -83,7 +83,7 @@ def load_source_day(date):
     return frame.to_pandas(), str(path)
 
 
-def audit_and_sanitize(block, proc, item, folder):
+def audit_and_sanitize(block, proc, item, folder, *, vwap_only=False, sanitize=True, evidence_name=None):
     """Trace every Inf to its raw row, stream evidence, then replace only Inf.
 
     Scan one day at a time (bounded memory). Unknown finite-to-Inf transitions
@@ -92,13 +92,14 @@ def audit_and_sanitize(block, proc, item, folder):
     """
     if block.empty or list(block.feature) != repair.EXPECTED_FEATURES or block.shape[2] != 16:
         raise ValueError('15mraw Inf audit requires the rebuilt six-feature, 16-bar schema')
-    evidence_path = folder / f'{proc.frame}_inf_evidence.jsonl'
+    evidence_path = folder / f'{evidence_name or proc.frame}_inf_evidence.jsonl'
     stats = item['inf_audit'] = {
         'status': 'running', 'evidence': str(evidence_path), 'inf_count': 0,
         'converted_to_nan': 0, 'by_feature': {}, 'by_origin': {}, 'by_mechanism': {},
+        'action': 'Inf to NaN' if sanitize else 'audit before VWAP-to-close fallback',
         'examples': [], 'checked_dates': 0,
-        'interpretation': '15mraw copies raw OHLCV and casts float64 to float32; '
-                          'it performs no price division. Reproduced VWAP mechanisms '
+        'interpretation': '15mraw copies raw OHLCV and casts float64 to float32, then '
+                          'uses close for zero-volume/Inf VWAP. It performs no price division. Reproduced VWAP mechanisms '
                           'are evidence from stored aggregates, not proof of vendor history.',
     }
     origins, mechanisms, features = Counter(), Counter(), Counter()
@@ -107,7 +108,10 @@ def audit_and_sanitize(block, proc, item, folder):
         with evidence_path.open('w') as evidence:
             for d, date in enumerate(block.date):
                 values = block.values[:, d]
-                positions = torch.isinf(values).nonzero().cpu().numpy()
+                mask = torch.isinf(values)
+                if vwap_only:
+                    mask[..., block.feature != 'vwap'] = False
+                positions = mask.nonzero().cpu().numpy()
                 if len(positions):
                     source, source_path = load_source_day(int(date))
                     # Production stores canonical 0..15 minute labels. Do not
@@ -142,8 +146,9 @@ def audit_and_sanitize(block, proc, item, folder):
                             stats['examples'].append(record)
                             Logger.note(f'15mraw/{proc.frame} Inf evidence: {json.dumps(record, ensure_ascii=False)}')
                     evidence.flush()
-                    values.masked_fill_(torch.isinf(values), torch.nan)
-                    stats['converted_to_nan'] += len(positions)
+                    if sanitize:
+                        values.masked_fill_(mask, torch.nan)
+                        stats['converted_to_nan'] += len(positions)
                 stats['checked_dates'] += 1
                 if (d + 1) % 250 == 0:
                     Logger.note(f'15mraw/{proc.frame} Inf audit: {d + 1}/{len(block.date)} dates; '
@@ -161,8 +166,18 @@ def audit_and_sanitize(block, proc, item, folder):
                     f'mechanisms={dict(mechanisms)}; evidence={evidence_path}')
 
 
+def configure_processor(proc, item, folder):
+    def observe(block):
+        chunk = {'start': int(block.date[0]), 'end': int(block.date[-1])}
+        item.setdefault('vwap_fallback_audits', []).append(chunk)
+        audit_and_sanitize(block, proc, chunk, folder, vwap_only=True, sanitize=False,
+                           evidence_name=f'{proc.frame}_vwap_{chunk["start"]}_{chunk["end"]}')
+    proc.vwap_inf_observer = observe
+
+
 def run_task(dry_run=False):
-    plan = repair.repair_datablocks(dry_run=dry_run, prepare_block=audit_and_sanitize)
+    plan = repair.repair_datablocks(dry_run=dry_run, prepare_block=audit_and_sanitize,
+                                    configure_processor=configure_processor)
     if not dry_run:
         repair.request_training(REQUEST_ID)
     return plan

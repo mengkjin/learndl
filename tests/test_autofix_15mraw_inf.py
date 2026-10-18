@@ -106,7 +106,7 @@ class InfAuditTest(TestCase):
         self.assertEqual(len(stats['examples']), 1)
         self.assertEqual({r['bar'] for r in records}, set(range(16)))
 
-    def test_real_preprocessor_reproduces_source_inf_and_cast_overflow(self):
+    def test_real_preprocessor_records_vwap_evidence_before_fallback(self):
         import polars as pl
         from src.data.preprocess.processors.trade import PrePro_15mraw
         rows = [source_row(minute=i, vwap=2., volume=1., date=20240102) for i in range(16)]
@@ -115,11 +115,23 @@ class InfAuditTest(TestCase):
         rows[2]['low'] = np.nan
         raw = DataBlock.from_polars(pl.DataFrame(rows))
         proc = object.__new__(PrePro_15mraw)
-        block = proc.process_blocks({'15m': raw})
+        proc.frame = 'fit'
+        item = {}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(task, 'load_source_day', return_value=(pd.DataFrame(rows), '/raw/15min.feather')), \
+             patch.object(task.Logger, 'note'):
+            task.configure_processor(proc, item, Path(directory))
+            block = proc.process_blocks({'15m': raw})
+            evidence = item['vwap_fallback_audits'][0]['inf_audit']
+            self.assertEqual(evidence['by_origin'], {'stored_raw_inf': 1})
+            self.assertEqual(evidence['converted_to_nan'], 0)
+            record = json.loads(Path(evidence['evidence']).read_text())
+            self.assertEqual(record['raw_context']['vwap'], 'inf')
+        self.assertEqual(block.values[0, 0, 0, 4], 2.)
         self.assertEqual(block.values.dtype, torch.float32)
         stats, records, _ = self.audit(rows, block.values)
-        self.assertEqual(stats['by_origin'], {'stored_raw_inf': 1, 'float32_cast_overflow': 1})
-        self.assertEqual({r['feature'] for r in records}, {'vwap', 'high'})
+        self.assertEqual(stats['by_origin'], {'float32_cast_overflow': 1})
+        self.assertEqual({r['feature'] for r in records}, {'high'})
 
     def test_source_loader_matches_production_fallback_selection(self):
         import polars as pl
@@ -154,11 +166,25 @@ class MinuteAggregationTest(TestCase):
         np.testing.assert_allclose(result['volume'], 30.)
 
     def test_zero_negative_or_nonfinite_operands_never_generate_inf_vwap(self):
-        for amount, volume in [(4., 0.), (0., 0.), (4., -1.), (np.inf, 2.), (4., np.inf), (1e308, 1e-308)]:
+        for amount, volume in [(4., -1.), (4., np.inf)]:
             with self.subTest(amount=amount, volume=volume):
                 with np.errstate(over='ignore', invalid='ignore'):
                     result = trade_min_reform(self.bars(amount, volume), 15)
                 self.assertTrue(result['vwap'].isna().all())
+
+    def test_zero_volume_and_infinite_quotient_use_aggregated_close(self):
+        for amount, volume in [(4., 0.), (0., 0.), (np.inf, 2.), (-np.inf, 2.), (1e30, 1e-300)]:
+            with self.subTest(amount=amount, volume=volume):
+                bars = self.bars(amount, volume)
+                bars['close'] = np.arange(240.) + 1
+                result = trade_min_reform(bars, 15)
+                np.testing.assert_allclose(result['vwap'], np.arange(15., 241., 15.))
+
+    def test_zero_volume_bad_close_remains_nan(self):
+        bars = self.bars(0., 0.)
+        bars['close'] = np.inf
+        result = trade_min_reform(bars, 15)
+        self.assertTrue(result['vwap'].isna().all())
 
     def test_float32_group_sum_uses_float64_before_overflow(self):
         bars = self.bars(1e38, 1e38).astype({'amount': 'float32', 'volume': 'float32'})
