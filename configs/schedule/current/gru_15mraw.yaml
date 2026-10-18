@@ -42,7 +42,7 @@ callbacks:
 algo:
   resnet_gru:
     hidden_dim:     [64] #  2**5
-    seqlens:        [{'15m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+    seqlens:        [{'15mraw': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
     enc_in_dim:     [32]  # the resnet block input dimension
     enc_att:        [false] 

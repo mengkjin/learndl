@@ -262,6 +262,15 @@ class DataModule(Base.BoundLogger):
             self.setup_loader_kwargs()
             self.setup_loader_inputs()
             self.setup_loader_static()
+        if self.is_fitting:
+            counts = {key: len(self.loader_dict[key]) for key in ('train', 'valid')}
+            if not all(counts.values()):
+                raise ValueError(
+                    f'No usable fit batches: model_date={self.model_date}, '
+                    f'inputs={self.input_keys}, seqlens={self.seq_lens}, batches={counts}. '
+                    'Check DataBlock features/date coverage, labels, missing-value filters '
+                    'and minimum batch size before training.'
+                )
 
     def setup_new_param(
             self , stage : Base.lit.StageAll , 

@@ -42,14 +42,16 @@ class PrePro_15m(TradePreProcessor):
 
 class PrePro_15mraw(TradePreProcessor):
     """
-    15-minute bar preprocessor (key: ``'15m'``).
+    Raw 15-minute OHLCV bars (key: ``'15mraw'``).
 
-    Prices are divided by the daily pre-close. Volume is converted to free-float
-    turnover by allocating day ``turn_fl`` according to each bar's share of the
-    day's intraday volume sum (avoids day/minute volume unit mismatch), then
-    clipped at 200%. The ``volume`` feature is renamed to ``turn_fl``.
+    Keep raw prices and volume; window normalisation happens at model input.
     """
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
+
+    def final_feat(self) -> list[str]:
+        # The parent expects turn_fl, which would discard volume and insert NaNs.
+        return ['open', 'close', 'high', 'low', 'vwap', 'volume']
+
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
         return {
             '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs)}

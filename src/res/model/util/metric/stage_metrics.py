@@ -212,6 +212,8 @@ class EpochMetrics(AggregatedMetrics):
         if f'epoch_{name}' in self.collected_tables:
             return self.collected_tables[f'epoch_{name}']
         batch_table = self.get_table(name)
+        if len(batch_table.index) == 0:
+            raise ValueError(f'No batch metrics for {self.key}: {name}; check the dataloader before training')
         epoch_table = batch_table.mean(axis=0).to_frame().T
         index = batch_table.index
         assert isinstance(index, pd.MultiIndex)

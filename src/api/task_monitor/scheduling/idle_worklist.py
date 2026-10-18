@@ -122,7 +122,10 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
     options = settings() if options is None else options
     resume, force = worklist.get('resume', False), worklist.get('force', False)
     attempts = store.owned(OWNER)
-    for name, revisions in schedules.items():
+    # Explicit post-maintenance requests take precedence over ordinary worklist order.
+    # Existing version/completion checks below still suppress repeat execution.
+    ordered = sorted(schedules.items(), key=lambda item: 'training_request' not in item[1])
+    for name, revisions in ordered:
         if only is not None and name != only:
             continue
         key = version(revisions)

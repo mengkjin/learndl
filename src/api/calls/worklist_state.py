@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import portalocker
+import yaml
 
 from src.proj import PATH
 from src.res.model.util.training_history import file_revision, now, write_json
@@ -32,6 +33,28 @@ class WorklistState:
     def read(self):
         return json.loads(self.path.read_text()) if self.path.exists() else None
 
+    @property
+    def request_path(self) -> Path:
+        return self.root / 'requests' / self.path.name
+
+    def request_training(self, request_id: str):
+        """Request this schedule after maintenance; the idle worker owns GPU execution.
+
+        A stable ID is idempotent and changes only this schedule's revision.
+        Keep the marker after completion so removing it cannot trigger another run.
+        """
+        if not isinstance(request_id, str) or not request_id:
+            raise ValueError('A nonempty training request ID is required')
+        worklist = yaml.safe_load(PATH.sched_worklist.read_text())
+        if self.schedule_name not in worklist.get('fit', []):
+            raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
+        self.revisions(self.schedule_name)  # Verify the schedule config before writing.
+        request = {'id': request_id}
+        with self.lock():
+            if not self.request_path.exists() or json.loads(self.request_path.read_text()) != request:
+                write_json(self.request_path, request)
+        return request
+
     @staticmethod
     def revisions(schedule_name: str):
         from src.res.model.util.config.config import ScheduleConfig
@@ -42,6 +65,9 @@ class WorklistState:
         reset_path = PATH.lc_machine / 'schedule_worklist' / 'reset.json'
         if reset_path.exists():
             revisions['reset_generation'] = {'generation': json.loads(reset_path.read_text())['generation']}
+        request_path = WorklistState(schedule_name).request_path
+        if request_path.exists():
+            revisions['training_request'] = json.loads(request_path.read_text())
         return revisions
 
     @staticmethod

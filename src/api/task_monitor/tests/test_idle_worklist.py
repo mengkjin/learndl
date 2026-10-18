@@ -181,6 +181,38 @@ class IdleTest(unittest.TestCase):
                 idle.reset_worklist(self.store)
         self.assertFalse((self.root / 'schedule_worklist' / 'reset.json').exists())
 
+    def test_targeted_training_request_is_prioritized_and_idempotent(self):
+        original_worklist = self.worklist.read_bytes()
+        original_first = WorklistState.revisions('first')
+        self.save_success('second')
+        # A failure under the old data/config revision must not suppress repair training.
+        self.store.put(dict(id='old-failure', owner=idle.OWNER, task='second', phase='error',
+                            version=idle.version(WorklistState.revisions('second')), returncode=1))
+        state = WorklistState('second')
+        state.request_training('repair-001')
+        requested = WorklistState.revisions('second')
+        state.request_training('repair-001')
+        self.assertEqual(WorklistState.revisions('second'), requested)
+        self.assertEqual(WorklistState.revisions('first'), original_first)
+        self.assertEqual(self.worklist.read_bytes(), original_worklist)
+        self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'second')
+        self.assertIn('idle_worklist', idle.dispatch(self.options, self.store))
+        run = next(run for run in self.store.owned(idle.OWNER) if run['phase'] == 'queued')
+        run['phase'] = 'complete'
+        self.store.put(run)
+        self.save_success('second')
+        state.request_training('repair-001')
+        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+
+    def test_training_request_waits_for_idle_and_requires_worklist_membership(self):
+        with self.assertRaisesRegex(ValueError, 'not in the training worklist'):
+            WorklistState('absent').request_training('repair-001')
+        WorklistState('second').request_training('repair-001')
+        with patch.object(idle, 'idle_reason', return_value='autofix maintenance pending'):
+            self.assertEqual(idle.dispatch(self.options, self.store)['idle_worklist'], 'autofix maintenance pending')
+        self.assertEqual(self.store.owned(idle.OWNER), [])
+        self.assertEqual(idle.dispatch(self.options, self.store)['queued'], 'second')
+
     def test_failure_suppression_reset_and_configuration_change(self):
         idle.dispatch(self.options, self.store)
         request = self.store.owned(idle.OWNER)[0]
@@ -459,7 +491,7 @@ class FitOccupancyTest(unittest.TestCase):
         self.assertNotIn('MemoryMax', worker)
         self.assertIn('TimeoutStartSec=infinity', worker)
         self.assertIn('MemoryMax=1G', plan['units']['learndl-watchdog.service'])
-        self.assertEqual(config['watchdog']['jobs']['idle_worklist']['interval_seconds'], 900)
+        self.assertEqual(config['watchdog']['jobs']['idle_worklist']['interval_seconds'], 120)
 
 
 if __name__ == '__main__':

@@ -18,3 +18,11 @@ fixes:
       email: true
     timeout: 30m
     enabled: true
+  - id: 20261017_repair_15mraw_train_02
+    description: 按需备份重算 15mraw 的 fit/predict DataBlock；两份校验通过后请求 gru_15mraw 优先训练，由训练服务在维护结束且 GPU 空闲时启动。
+    script: scripts/.autofix/repair_15mraw_datablocks.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 12h
+    enabled: true
