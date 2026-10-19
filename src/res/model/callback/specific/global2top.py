@@ -111,7 +111,6 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.loss_weights_set = False
         self.accuracy_computer_set = False
         self.fitting_phase : G2TPhase = 'global'
-        self.set_accuracy_verdict()
 
     def collect_accuracies(self):
         accuracies = pd.concat(self.metrics.attempt_metrics.tables['valid_epoch_accuracies'])
@@ -202,6 +201,12 @@ class SpecificCB_Global2Top(BaseCallBack):
         
     def on_fit_model_start(self):
         self.reset_record()
+        self.set_accuracy_verdict()
+
+    def on_new_attempt(self):
+        # Both quality retries and NaN redos start a fresh network. Keep the
+        # model-level attempt verdict/history, but restart global -> top control.
+        self.reset_record()
 
     def on_batch_metrics_after(self):
         self.set_loss_weights()
@@ -216,7 +221,3 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.check_global_plateau()
         self.check_top_converge()
         self.recall_global_climax()
-
-    
-        
-        
