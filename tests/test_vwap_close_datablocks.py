@@ -223,9 +223,13 @@ class VwapAutofixTest(TestCase):
     def test_manifest_is_valid_and_task_id_is_unique(self):
         from src.api.task_monitor.scheduling.autofix_spec import manifest, validate
         entries = manifest(ROOT / 'runs/autofix/tasks.yaml')
-        item = next(item for item in entries if item['id'] == '20261018_repair_vwap_close_datablocks_05')
+        item = next(item for item in entries if item['id'] == '20261019_repair_vwap_close_datablocks_06')
         validate(ROOT, item)
         self.assertTrue(item['enabled'])
+        previous = next(item for item in entries if item['id'] == '20261018_repair_vwap_close_datablocks_05')
+        self.assertFalse(previous['enabled'])
+        active = [item for item in entries if item['script'] == 'scripts/.autofix/repair_vwap_close_datablocks.py' and item.get('enabled', True)]
+        self.assertEqual(len(active), 1)
 
 
 class RealPipelineTest(TestCase):

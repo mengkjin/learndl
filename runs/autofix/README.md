@@ -8,6 +8,8 @@ Autofix 用来在代码更新后执行明确声明的数据重算、回补或修
 
 ## 最重要的规则
 
+2026-10-19：用户确认 `_05` 已执行，现停用该条目并以新 ID `20261019_repair_vwap_close_datablocks_06` 再执行一次。范围仍为五类数据的十份 fit/predict DataBlock 和相关历史归一化统计，使用复查后的校验逻辑，保留备份、结果邮件及 48 小时超时，不提交训练请求。旧任务账本不清除；新 ID 由服务器按既有维护队列执行一次。
+
 新增任务 `20261018_repair_vwap_close_datablocks_05`：强制重算 `15m/30m/60m/30mcont/week` 的 fit、predict 共十份 DataBlock（用户所称 `30cont` 对应 `30mcont`），并重算其中已支持的 fit 历史归一化统计。仅对 VWAP 的正负 Inf 使用同一 bar/日的 close；close 非有限时置为 NaN，有限 VWAP、其他字段不因该修复改变。预处理在源数据变换前及最终 float32 转换后检查，week 在滚动打包前处理日线。原始库不改写，也不启动新训练。
 
 新任务统一固定截止日，预检全部主源/备用源日期；fit 仅允许排除尚无原始数据的前置历史，predict 不缩窗，week 额外检查四个交易日的预热数据。全部预检通过后备份十份现有 dump 和相关 norm，再逐年重建。报告位于 `data/Interim/autofix_backups/vwap_close_*/report.json`，记录日期范围、备份、VWAP 替换数和无有效 close 数（week 分块边界的源统计可能重叠）。保存前后检查 schema、日期、全 NaN 特征、残余 Inf、证券轴和内容摘要；其他字段若含 Inf 则报错，不进行通用 Inf-to-NaN 替换。失败保留备份与已完成步骤，不自动回滚；dry-run 仅预检。此任务由服务器 watchdog 拉取后执行，本机创建任务不代表服务器已完成重算。
