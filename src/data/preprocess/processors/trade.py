@@ -8,9 +8,9 @@ from src.data.loader import BlockLoader
 from ..core import TradePreProcessor
 from .registry import TRADE_ALLOW_INACTIVE
 
-class _VwapInfCloseMixin:
+class _VwapInfClosePreProcessor(TradePreProcessor):
     """Repair only infinite VWAP, before transforms and after the final cast."""
-    def _repair_vwap_inf(self, block, stage):
+    def _repair_vwap_inf(self, block: DataBlock, stage: str) -> None:
         if block.empty or not {'vwap', 'close'}.issubset(block.feature):
             return
         i_vwap, i_close = [list(block.feature).index(f) for f in ('vwap', 'close')]
@@ -30,7 +30,7 @@ class _VwapInfCloseMixin:
             # Invalid close stays missing; never copy an Inf into VWAP.
             vwap[mask] = torch.where(finite_close[mask], close[mask], torch.nan)
 
-    def process_blocks(self, blocks):
+    def process_blocks(self, blocks: dict[str, DataBlock]) -> DataBlock:
         for source, block in blocks.items():
             self._repair_vwap_inf(block, f'source:{source}')
         block = super().process_blocks(blocks)
@@ -49,7 +49,7 @@ class PrePro_day(TradePreProcessor):
         """Apply price adjustment and return the result."""
         return blocks['day'].adjust_price()
 
-class PrePro_15m(_VwapInfCloseMixin, TradePreProcessor):
+class PrePro_15m(_VwapInfClosePreProcessor):
     """
     15-minute bar preprocessor (key: ``'15m'``).
 
@@ -107,7 +107,7 @@ class PrePro_15mraw(TradePreProcessor):
                 fallback, torch.where(torch.isfinite(close), close, torch.nan), vwap)
         return block
     
-class PrePro_30m(_VwapInfCloseMixin, TradePreProcessor):
+class PrePro_30m(_VwapInfClosePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -121,7 +121,7 @@ class PrePro_30m(_VwapInfCloseMixin, TradePreProcessor):
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
 
-class PrePro_30mcont(_VwapInfCloseMixin, TradePreProcessor):
+class PrePro_30mcont(_VwapInfClosePreProcessor):
     """30-minute bar preprocessor (key: ``'30mcont'``).  Only convert volume to turn_fl."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -134,7 +134,7 @@ class PrePro_30mcont(_VwapInfCloseMixin, TradePreProcessor):
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
     
-class PrePro_60m(_VwapInfCloseMixin, TradePreProcessor):
+class PrePro_60m(_VwapInfClosePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -148,7 +148,7 @@ class PrePro_60m(_VwapInfCloseMixin, TradePreProcessor):
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
     
-class PrePro_week(_VwapInfCloseMixin, TradePreProcessor):
+class PrePro_week(_VwapInfClosePreProcessor):
     """
     5-day rolling OHLCV preprocessor (key: ``'week'``).
 
