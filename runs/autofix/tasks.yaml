@@ -2,6 +2,14 @@
 # watchdog 另发启动流程邮件；同一 ID 最多尝试一次，修改邮件设置不会重跑。
 schema_version: 1
 fixes:
+  - id: 20261018_repair_vwap_close_datablocks_05
+    description: 仅对 15m/30m/60m/30mcont/week 的 Inf VWAP 使用同期 close；预检源日期并备份后强制重算 fit/predict 共十份 DataBlock 和相关历史归一化统计，保存后校验。
+    script: scripts/.autofix/repair_vwap_close_datablocks.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 48h
+    enabled: true
   - id: 20261014_create_open_vwap_datablocks_01
     description: 先生成六组次日 open/VWAP 原始收益标签，再重建 y_open/y_vwap 的 fit 和 predict DataBlock；不改旧收盘价标签。
     script: scripts/.autofix/create_open_vwap_datablocks.py

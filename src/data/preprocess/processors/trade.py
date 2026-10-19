@@ -8,6 +8,35 @@ from src.data.loader import BlockLoader
 from ..core import TradePreProcessor
 from .registry import TRADE_ALLOW_INACTIVE
 
+class _VwapInfCloseMixin:
+    """Repair only infinite VWAP, before transforms and after the final cast."""
+    def _repair_vwap_inf(self, block, stage):
+        if block.empty or not {'vwap', 'close'}.issubset(block.feature):
+            return
+        i_vwap, i_close = [list(block.feature).index(f) for f in ('vwap', 'close')]
+        observer = getattr(self, 'vwap_inf_repair_observer', None)
+        for start in range(0, len(block.date), 64):
+            values = block.values[:, start:start + 64]
+            vwap, close = values[..., i_vwap], values[..., i_close]
+            mask = torch.isinf(vwap)
+            if not mask.any():
+                continue
+            finite_close = torch.isfinite(close)
+            if observer is not None:
+                observer({'stage': stage, 'start': int(block.date[start]),
+                          'end': int(block.date[min(start + 63, len(block.date) - 1)]),
+                          'inf_count': int(mask.sum()),
+                          'close_nonfinite': int((mask & ~finite_close).sum())})
+            # Invalid close stays missing; never copy an Inf into VWAP.
+            vwap[mask] = torch.where(finite_close[mask], close[mask], torch.nan)
+
+    def process_blocks(self, blocks):
+        for source, block in blocks.items():
+            self._repair_vwap_inf(block, f'source:{source}')
+        block = super().process_blocks(blocks)
+        self._repair_vwap_inf(block, 'processed_float32')
+        return block
+
 class PrePro_day(TradePreProcessor):
     """Daily adjusted OHLCV preprocessor (key: ``'day'``).  Applies adjfactor to price columns."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
@@ -20,7 +49,7 @@ class PrePro_day(TradePreProcessor):
         """Apply price adjustment and return the result."""
         return blocks['day'].adjust_price()
 
-class PrePro_15m(TradePreProcessor):
+class PrePro_15m(_VwapInfCloseMixin, TradePreProcessor):
     """
     15-minute bar preprocessor (key: ``'15m'``).
 
@@ -78,7 +107,7 @@ class PrePro_15mraw(TradePreProcessor):
                 fallback, torch.where(torch.isfinite(close), close, torch.nan), vwap)
         return block
     
-class PrePro_30m(TradePreProcessor):
+class PrePro_30m(_VwapInfCloseMixin, TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -92,7 +121,7 @@ class PrePro_30m(TradePreProcessor):
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
 
-class PrePro_30mcont(TradePreProcessor):
+class PrePro_30mcont(_VwapInfCloseMixin, TradePreProcessor):
     """30-minute bar preprocessor (key: ``'30mcont'``).  Only convert volume to turn_fl."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -105,7 +134,7 @@ class PrePro_30mcont(TradePreProcessor):
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
     
-class PrePro_60m(TradePreProcessor):
+class PrePro_60m(_VwapInfCloseMixin, TradePreProcessor):
     """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
     AllowInactive : bool = TRADE_ALLOW_INACTIVE
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
@@ -119,7 +148,7 @@ class PrePro_60m(TradePreProcessor):
         data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
     
-class PrePro_week(TradePreProcessor):
+class PrePro_week(_VwapInfCloseMixin, TradePreProcessor):
     """
     5-day rolling OHLCV preprocessor (key: ``'week'``).
 
