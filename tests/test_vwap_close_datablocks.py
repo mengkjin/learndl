@@ -5,8 +5,9 @@ import tempfile
 from contextlib import ExitStack
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest import TestCase, main
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, PropertyMock, patch
 
 import numpy as np
 import torch
@@ -17,9 +18,13 @@ from src.data.preprocess.processors.trade import (
     PrePro_15m, PrePro_30m, PrePro_60m, PrePro_30mcont, PrePro_week,
 )
 from src.data.util.classes import data_block
+from src.data.loader import BlockLoader
+from src.data.preprocess.hist_norm import PreProHistNorm
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('repair_vwap_close', ROOT / 'scripts/.autofix/repair_vwap_close_datablocks.py')
+if spec is None or spec.loader is None:
+    raise ImportError('Cannot load repair_vwap_close_datablocks.py')
 task = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(task)
 PROCESSORS = {'15m': PrePro_15m, '30m': PrePro_30m, '60m': PrePro_60m,
@@ -189,18 +194,20 @@ class VwapAutofixTest(TestCase):
     def test_fit_allows_only_unavailable_leading_history(self):
         proc = self.procs['15m', 'fit']
         proc.load_end = 30
-        item = {'key': '15m'}
+        item: dict[str, Any] = {'key': '15m'}
         task.check_sources(proc, item, {'15min': np.arange(10, 31), 'day': np.arange(1, 31)})
         self.assertEqual(proc.load_start, 10)
         self.assertEqual(item['source_coverage']['omitted_leading_dates'], list(range(5, 10)))
 
     def test_bad_rebuild_and_same_shape_saved_corruption_are_detected(self):
-        for failure in ('dates', 'vwap', 'other', 'saved'):
+        for failure in ('dates', 'empty_day', 'vwap', 'other', 'saved'):
             with self.subTest(failure=failure):
                 proc = self.procs['15m', 'fit']
                 bad = self.block('15m', 5)
                 if failure == 'dates':
                     bad = bad.slice_date(6, None)
+                elif failure == 'empty_day':
+                    bad.values[:, 3] = torch.nan
                 elif failure in ('vwap', 'other'):
                     bad.values[0, 0, 0, 4 if failure == 'vwap' else 2] = torch.inf
                 proc.load_with_extension.side_effect = lambda **kw: bad
@@ -219,6 +226,66 @@ class VwapAutofixTest(TestCase):
         item = next(item for item in entries if item['id'] == '20261018_repair_vwap_close_datablocks_05')
         validate(ROOT, item)
         self.assertTrue(item['enabled'])
+
+
+class RealPipelineTest(TestCase):
+    def test_real_calendar_year_chunks_norms_and_saved_blocks(self):
+        dates = task.CALENDAR.range(20151001, 20160219)
+        original_factory = task.PrePros.get_processor
+
+        def processor(key, frame, **kwargs):
+            proc = original_factory(key, frame, **kwargs)
+            proc.load_start = 20151102 if frame == 'fit' else 20160201
+            proc.mask = {}  # Synthetic securities have no production listing metadata.
+            return proc
+
+        def raw(_source, key, start, end, feature=None, **kwargs):
+            selected = dates[(dates >= start) & (dates <= end)]
+            bars = {'day': 1, '15min': 16, '30min': 8, '60min': 4}[key]
+            features = ['adjfactor', 'preclose', 'open', 'close', 'high', 'low', 'vwap', 'volume', 'turn_fl']
+            values = torch.ones(3, len(selected), bars, len(features), dtype=torch.float64)
+            prices = 10 + torch.arange(3, dtype=torch.float64)[:, None, None] + torch.arange(len(selected))[None, :, None] * .001
+            values[..., 1:7] = prices[..., None]
+            values[..., 7] = 100.
+            values[..., 8] = 2.
+            for date in (20151231, 20160205):
+                if date in selected:
+                    values[0, list(selected).index(date), 0, 6] = torch.inf
+            return DataBlock(values, [1, 2, 3], selected, features).align_feature(feature)
+
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory)
+            (root / 'blocks').mkdir()
+            for source in ('day', '15min', '30min', '60min'):
+                (root / 'raw' / source).mkdir(parents=True)
+            stack.enter_context(patch.object(task, 'PATH', SimpleNamespace(interim=root)))
+            stack.enter_context(patch.object(data_block, 'PATH', SimpleNamespace(datablock=root / 'blocks')))
+            stack.enter_context(patch.object(task.CALENDAR, 'updated', return_value=20160219))
+            stack.enter_context(patch.object(task.DB, 'dates', return_value=dates))
+            stack.enter_context(patch.object(task.PrePros, 'get_processor', side_effect=processor))
+            stack.enter_context(patch.object(BlockLoader, 'src_path', new_callable=PropertyMock, return_value=root / 'raw'))
+            stack.enter_context(patch.object(DataBlock, 'load_raw', side_effect=raw))
+            stack.enter_context(patch.object(PreProHistNorm, 'norm_path', side_effect=lambda key, frame='fit': root / 'norm' / f'{key}.pt'))
+            stack.enter_context(patch.object(task.Logger, 'note'))
+            result = task.run_task()
+            self.assertEqual(len(result), 10)
+            for item in result:
+                self.assertEqual(item['status'], 'verified')
+                self.assertGreater(sum(row['inf_count'] for row in item['vwap_repairs']), 0)
+                if item['frame'] == 'fit' and item['key'] in task.HistNormTasks:
+                    norm = PreProHistNorm.load_keys([item['key']])[item['key']]
+                    expected_bars = task.BARS[item['key']] * (30 if item['key'] == '30mcont' else 1)
+                    self.assertEqual(tuple(norm.avg.shape), (expected_bars, 6))
+                    self.assertTrue(torch.isfinite(norm.avg).all() and torch.isfinite(norm.std).all())
+
+    def test_overflowed_norm_is_rejected_before_overwriting_existing_norm(self):
+        # All input cells are finite, but float32 reduction can still overflow.
+        block = DataBlock(torch.full((3, 30, 16, 6), 1e38), [1, 2, 3],
+                          np.arange(20160101, 20160131), task.FEATURES)
+        with patch.object(PreProHistNorm, 'save') as save:
+            with self.assertRaisesRegex(ValueError, 'non-finite historical norm'):
+                PreProHistNorm.calculate(block, '15m')
+            save.assert_not_called()
 
 
 if __name__ == '__main__':

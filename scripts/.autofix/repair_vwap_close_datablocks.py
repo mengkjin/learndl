@@ -71,7 +71,12 @@ def validate_block(block, key, expected_dates):
     digest = hashlib.sha256()
     for start in range(0, len(block.date), 64):
         values = block.values[:, start:start + 64].detach().cpu().contiguous()
-        finite |= torch.isfinite(values).any(dim=(0, 1, 2))
+        finite_values = torch.isfinite(values)
+        usable_dates = finite_values.any(dim=(0, 2, 3))
+        if not usable_dates.all():
+            missing = block.date[start:start + 64][~usable_dates.numpy()].tolist()
+            raise ValueError(f'{key}: dates contain no finite data: {missing}')
+        finite |= finite_values.any(dim=(0, 1, 2))
         infs += torch.isinf(values).sum(dim=(0, 1, 2))
         digest.update(memoryview(values.numpy()))
     if infs.any():

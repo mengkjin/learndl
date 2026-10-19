@@ -133,7 +133,9 @@ class PreProHistNorm:
             avg_x[i*inday:(i+1)*inday] = vijs.mean(dim = 0)
             std_x[i*inday:(i+1)*inday] = vijs.std(dim = 0)
 
-        assert avg_x.isnan().sum() + std_x.isnan().sum() == 0 , ((nan_sample == 0).sum())
+        if not torch.isfinite(avg_x).all() or not torch.isfinite(std_x).all():
+            raise ValueError(f'{key}: non-finite historical norm; valid samples='
+                             f'{int((nan_sample == 0).sum())}, range={start}..{end}; not saving')
         
         data = cls(avg_x , std_x)
         data.save(key)

@@ -26,6 +26,8 @@ from src.proj.util.script import ScriptTool
 # verification and maintenance-safe training handoff.
 _spec = importlib.util.spec_from_file_location(
     'repair_15mraw_common', Path(__file__).with_name('repair_15mraw_datablocks.py'))
+if _spec is None or _spec.loader is None:
+    raise ImportError('Cannot load repair_15mraw_datablocks.py')
 repair = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(repair)
 REQUEST_ID = '20261018_repair_15mraw_vwap_coverage_train_04'
