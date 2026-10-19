@@ -1,9 +1,8 @@
 fit:
-  - gru_day_test1
-  - gru_day_test2
-  - gru_day_test3
-  - gru_day_test4
+  - gru_15m_new_rtn
+  - gru_30mcont
+  - gru_15mraw
 
 resume: False
 force: True
-rerun_mark: 0
+rerun_mark: 1
