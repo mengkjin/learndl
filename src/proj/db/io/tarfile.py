@@ -6,6 +6,7 @@ import json
 import io
 
 from pathlib import Path
+from uuid import uuid4
 from typing import Any , TYPE_CHECKING
 from collections.abc import Mapping
 
@@ -76,6 +77,16 @@ def load_tar_meta(path : strPath) -> dict[str, Any]:
             return {}
 
 def save_tar(dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , meta : dict[str, Any] | None = None):
+    """Publish a complete archive atomically, preserving the old file on failure."""
+    path = Path(path)
+    tmp_path = path.with_name(f'.{path.name}.tmp.{uuid4().hex}')
+    try:
+        _write_tar(dfs , tmp_path , meta)
+        tmp_path.replace(path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+def _write_tar(dfs : Mapping[str , pd.DataFrame | pl.DataFrame] , path : strPath , meta : dict[str, Any] | None = None):
     """save multiple dataframes to tar file"""
     with tarfile.open(path, 'w') as tar:  # mode 'w' means not compress
         for name, df in dfs.items():
@@ -118,7 +129,6 @@ def save_dfs_to_tar(
     assert path.name.endswith(TAR_SUFFIXES) , f'{path} is not a tar file'
     if overwrite or not path.exists(): 
         status = 'Overwritten ' if path.exists() else 'File Created'
-        path.unlink(missing_ok=True)
         save_tar(dfs , path , meta = meta)
         Logger.stdout(f'{prefix}{status}: {path}' , indent = indent , vb_level = vb_level , italic = True)
         return True

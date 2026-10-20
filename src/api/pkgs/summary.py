@@ -26,7 +26,7 @@ def display_account_summary(accounts : dict[str , dict[str , Path]] , account_ty
     Returns:
         List of displayed dataframe batches.
     """
-    dfs = {model : PortfolioAccount.EvalPeriodRet(paths) for model , paths in accounts.items()}
+    dfs = {model : PortfolioAccount.EvalPeriodRet(paths , skip_unreadable = True) for model , paths in accounts.items()}
     dfs = concat_dfs_split(dfs , by_max_columns = by_max_columns)
     for i , df in enumerate(dfs):
         caption = f'Summary of {account_type.title()} Account Period Return (Total {len(dfs)} Tables):' if i == 0 else None

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import pandas as pd
 import numpy as np
+import tarfile
 
 from dataclasses import dataclass , asdict
 from functools import cached_property
@@ -361,8 +362,21 @@ class PortfolioAccount:
         return eval_period_ret(self.df.reset_index().loc[:,['end' , 'pf']].rename(columns = {'end' : 'date'}))
 
     @classmethod
-    def EvalPeriodRet(cls , paths : Mapping[str , Base.strPath]) -> pd.DataFrame:
-        accounts = {name : cls.load(path) for name , path in paths.items() if Path(path).exists()}
+    def EvalPeriodRet(cls , paths : Mapping[str , Base.strPath] , * , skip_unreadable : bool = False) -> pd.DataFrame:
+        """Evaluate accounts; summaries may explicitly skip unreadable tar archives."""
+        accounts = {}
+        for name , path in paths.items():
+            if not Path(path).exists():
+                continue
+            try:
+                accounts[name] = cls.load(path)
+            except (tarfile.ReadError , EOFError) as exc:
+                if not skip_unreadable:
+                    raise
+                Logger.warning(
+                    f'Account summary incomplete: skipping unreadable account {name} at {path}: {exc}. '
+                    'Restore or rebuild this archive.'
+                )
         if not accounts:
             return pd.DataFrame()
         return pd.concat({name : account.eval_period_ret() for name , account in accounts.items()}, axis = 1)
