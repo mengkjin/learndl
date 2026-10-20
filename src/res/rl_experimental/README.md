@@ -238,3 +238,64 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s src/res/r
 轨迹新增 `written_off_stock_ids`、`delisting_loss`（初始净值单位）、`delisting_events`（核销持仓数量）、`risk_unsold_holdings` 和 `assets_exhausted`。汇总记录累计损失/事件数；训练 CSV/TensorBoard 记录对应数值分项。质量报告及 manifest 保存逐日风险来源/覆盖缺口；终端与 HtmlCatcher 捕获覆盖摘要及核销事件。
 
 服务器更新代码后先将 JSON 中 `rebuild_snapshot` 设为 `true`，或单独执行 `prepare-real` 创建新目录；先用上方 `replay-baselines --split valid` 验证两条基线，再开始 PPO。`train_experiment` 现在也在 PPO 开始前回放验证期两条基线，并保存 `validation_baseline_metrics.json` 与对应逐日 CSV。重建成功后可将该开关改回 `false`。
+
+## 低换手与季度滚动实验
+
+`example_walk_forward.json` 固定了本阶段研究协议：先在 2017–2020 训练、2021–2022 验证，筛选换手惩罚 `{0, 0.0003, 0.001, 0.003}` 与持仓保留加分 `{0, 0.5}`；种子为 `7/17/29`。筛选 24 次训练，每次 30,000 步；随后原始 RL、仅惩罚、惩罚＋保留三组在 2023Q1–2025Q4 每季度重新训练四年、验证一年，每次 100,000 步，合计 108 次。实际步数按完整 rollout 向上取整。
+
+持仓保留是在标准化 alpha＋actor 排序分数上给符合资格的旧持仓加分，不改变配权网络，也不能绕过 ST/预警过滤。无训练 `retention_rule` 使用同样候选、排序及持仓加分，actor 动作为零，因此配权为等权。继续报告原等权，但以 robust 为主要基准。
+
+主要训练/选模成本为原费用 3.5 bp＋额外摩擦 3 bp；评估额外 `0/1/3/5/10 bp`，分别从账户状态重新执行交易与模型推理。该模型是按成交额统一收费的近似，**不是经过实盘校准的滑点、容量或冲击模型**。`base_fee`、`extra_cost` 分别记录。换手奖励惩罚是额外偏好，不计入交易费用。
+
+```bash
+# 只列出任务与窗口，不训练、不写输出目录
+.venv/bin/python -m src.res.rl_experimental run-walk-forward \
+  src/res/rl_experimental/example_walk_forward.json --dry-run
+
+# 先测量本机/服务器环境；有 CUDA 时自动同时测 CPU 与 CUDA
+.venv/bin/python -m src.res.rl_experimental profile-env \
+  results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz \
+  --output results/rl_experimental/profile --steps 512 --train-steps 512
+
+# 可分两阶段，也可省略 --stage 一次串联
+.venv/bin/python -m src.res.rl_experimental run-walk-forward \
+  src/res/rl_experimental/example_walk_forward.json --stage screen
+.venv/bin/python -m src.res.rl_experimental run-walk-forward \
+  src/res/rl_experimental/example_walk_forward.json --stage quarters
+```
+
+服务器任务列表继续选择 **Train RL Experiment**，把 `config_path` 改成 `src/res/rl_experimental/example_walk_forward.json`。脚本识别 `kind=walk_forward`，将汇总 ZIP/JSON 加到原任务邮件，保留 HtmlCatcher；子训练不单独发送邮件。可用配置中的 `stage` 分阶段运行。新入口读取已经准备好的 v4 快照；需要时先执行 `prepare-real`，不会自动改写数据库或重建已有快照。
+
+### 账户、时间与恢复契约
+
+- 每条方案/种子/成本路径只在首季度从现金开始，之后延续实际持仓、现金和净值；换模型不免费清仓。固定模型对照始终使用首季度 checkpoint。
+- 按决策日选择季度模型，按结算日统计季度收益。内部季度边界的 transition 不丢弃、不重复；整体实验结束日及之后结算的收益排除，避免多出一个只有一天的季度。训练和验证收益不能跨越各自截止日。
+- 新实验使用 `observation_version=2`：账户第二维固定为零，不让模型利用回测结束倒计时；旧配置默认版本 1，旧 checkpoint 仍能读取。
+- 每折只在训练段拟合标准化；同折标准化数组、候选排序及验证基线跨种子复用。训练只保留统计，详细持仓保留在验证/回放轨迹中；自定义 reward 仍收到原上下文。
+- 完成训练的模型、normalizer、指标保存哈希；恢复时校验配置、代码和数据指纹。失败训练重跑该任务，成功任务复用。连续评估失败后从首季度重新回放账户，不跳过失败季度，不重训已完成模型。改变研究配置或代码时应使用新输出目录。
+- `selected.json` 是阶段 A 冻结的参数，带独立指纹，不允许根据季度结果手动改成“更优”参数后继续复用任务。
+
+### 研究判断与输出
+
+主要成本下至少 2/3 种子超过 robust、季度中位数胜率至少 60%、中位数换手不超过 robust 的 1.5 倍、最大回撤恶化不超过 2 个百分点，且额外 5 bp 情景仍保留中位数累计收益优势，才标记 `research_pass=true`。即使通过，`production_ready` 仍为 false；历史 alpha 的样本外来源、资金容量与前向模拟仍需审计。2023–2025 均标为历史开发验证，不作为全新盲测。
+
+`summary/` 含所有连续轨迹、季度收益、种子离散度、5/10/20 日区块重采样、研究门槛判断及离线 HTML；`screen/` 和 `quarters/` 保存完整模型、日志、TensorBoard 与 normalizer。邮件只含汇总包，完整模型留在服务器。Notebook `07_walk_forward_analysis.ipynb` 可在本机读取汇总目录，完全不读取数据库或加载模型。
+
+性能报告分别列出无缓存/详细日志与缓存/精简日志的相同动作序列耗时，并检查净值、换手和费用一致。预计算成本单独记录；计时与 cProfile/tracemalloc 分开，避免把测量开销算成提速。CPU/CUDA 的训练、推理批量 1/4 和验证耗时分别保存。`--train-steps 0` 只测环境。短测 ETA 不包含数据准备和全部成本回放，不是运行时间承诺。
+
+## YAML 配置与服务器空闲调度
+
+服务器脚本默认配置改为 `configs/strategy/rl_experiment.yaml`。文件内同时提供
+`single` 和 `walk_forward` 两套完整参数，通过 `mode` 选择；旧 JSON 路径仍可显式传入。
+默认单次实验，切换到季度方案前检查其行情快照、日期及完整训练计算量。
+
+```bash
+python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
+python scripts/4_train/3_train_rl_experiment.py --config_path src/res/rl_experimental/example_server_experiment.json
+python -m src.api.task_monitor.scheduling.idle_worklist rl-status
+```
+
+自动模式仅响应已提交并同步到服务器的 YAML 修改。修改 `rerun_mark` 可重跑；失败
+不自动重试。等待期间多次修改只运行最新版。每次自动请求有独立输出目录和配置
+来源记录；邮件仍包含任务 HTML 与 ZIP/JSON，不额外发送 RL 结果邮件。
+部署及等待条件见 `runs/scheduling/README.md` 的 RL 实验章节。

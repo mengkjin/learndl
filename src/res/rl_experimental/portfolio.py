@@ -12,6 +12,12 @@ class PortfolioConstraints:
     max_weight: float = 0.03
     fee_rate: float = 0.00035
     selection_scale: float = 1.0
+    holding_bonus: float = 0.0
+    extra_cost_bp: float = 0.0
+
+    @property
+    def total_fee_rate(self) -> float:
+        return self.fee_rate + self.extra_cost_bp * 1e-4
 
     @property
     def max_slots(self) -> int:
@@ -22,7 +28,9 @@ class PortfolioConstraints:
             raise ValueError("candidate_count and max_holdings must be positive")
         if not 0 < self.max_weight <= 1:
             raise ValueError("max_weight must be in (0, 1]")
-        if not 0 <= self.fee_rate < 1:
+        if not np.isfinite(self.holding_bonus) or self.holding_bonus < 0 or not np.isfinite(self.extra_cost_bp) or self.extra_cost_bp < 0:
+            raise ValueError("holding bonus and extra cost must be finite and nonnegative")
+        if not 0 <= self.total_fee_rate < 1:
             raise ValueError("fee_rate must be in [0, 1)")
 
 
@@ -50,12 +58,14 @@ def select_slots(
     current_weights: np.ndarray,
     stock_ids: np.ndarray,
     constraints: PortfolioConstraints,
+    candidates: np.ndarray | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Select candidates plus existing positions into fixed-capacity slots."""
     constraints.validate()
-    eligible = np.flatnonzero(investable)
-    order = np.lexsort((stock_ids[eligible], -alpha[eligible]))
-    candidates = eligible[order[: constraints.candidate_count]]
+    if candidates is None:
+        eligible = np.flatnonzero(investable)
+        order = np.lexsort((stock_ids[eligible], -alpha[eligible]))
+        candidates = eligible[order[: constraints.candidate_count]]
     held = np.flatnonzero(current_weights > 1e-10)
     candidate_set = set(candidates.tolist())
     extras = np.array([i for i in held if i not in candidate_set], dtype=np.int64)
@@ -96,6 +106,7 @@ def project_action(
     investable_mask: np.ndarray,
     stock_ids: np.ndarray,
     constraints: PortfolioConstraints,
+    current_weights: np.ndarray | None = None,
 ) -> tuple[np.ndarray, float, np.ndarray]:
     """Map raw selection/allocation preferences to a legal long-only portfolio."""
     constraints.validate()
@@ -108,6 +119,8 @@ def project_action(
     if not valid.size:
         return weights, 1.0, np.empty(0, dtype=np.int64)
     rank_score = alpha[valid] + constraints.selection_scale * np.clip(action[valid, 0], -10, 10)
+    if current_weights is not None:
+        rank_score += constraints.holding_bonus * (current_weights[valid] > 1e-10)
     order = np.lexsort((stock_ids[valid], -rank_score))
     chosen = valid[order[: constraints.max_holdings]]
     allocation_score = np.logaddexp(0.0, np.clip(action[chosen, 1], -20, 20))

@@ -15,7 +15,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'git_auto_update', 'cli_recovery', 'autofix'}
+JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'rl_experiment', 'git_auto_update', 'cli_recovery', 'autofix'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
@@ -173,6 +173,8 @@ def load_config(directory: Path, host: str) -> dict:
                if key == 'idle_worklist' else set()))
         if key == 'git_auto_update' and (type(job.get('max_seconds', 45)) is not int or not 10 <= job.get('max_seconds', 45) <= 60):
             raise ValueError('git_auto_update max_seconds must be between 10 and 60')
+        if key == 'rl_experiment' and job.get('enabled') and not watchdog['jobs'].get('task_timeouts', {}).get('enabled'):
+            raise ValueError('rl_experiment requires task_timeouts supervision')
         if key == 'idle_worklist':
             if type(job.get('recovery_enabled', True)) is not bool:
                 raise ValueError('recovery_enabled must be a boolean')

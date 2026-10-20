@@ -244,7 +244,7 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
     else:
         invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.watchdog'])
         cron_lines.append(f'*/{tick // 60} * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
-    if config['watchdog']['jobs'].get('idle_worklist', {}).get('enabled'):
+    if any(config['watchdog']['jobs'].get(job, {}).get('enabled') for job in ('idle_worklist', 'rl_experiment')):
         module = 'src.api.task_monitor.scheduling.idle_worklist'
         if config['default_backend'] == 'systemd':
             units['learndl-idle-worklist.service'] = service(root, python, module, ['worker'])

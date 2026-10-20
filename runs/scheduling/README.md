@@ -277,3 +277,44 @@ versions and can cause future idle training to run again, per worklist policy.
 ## Autofix maintenance
 
 `autofix` is an explicitly installed watchdog job and independent systemd worker. The shipped request list is empty. Installation requires Bubblewrap on Linux and initializes a protected, project-external ledger; ordinary code pulls do not initialize it. Calendar triggers deferred by maintenance are persisted and drained before subsequent fixes or idle training. See [Autofix configuration and operations](../autofix/README.md) for one-attempt IDs, script opt-in, notification ownership, sandbox prerequisites, and installation/rollback instructions.
+
+## RL 实验：Git 配置变更后空闲运行一次
+
+`configs/strategy/rl_experiment.yaml` 是完整配置入口。`mode: single` 使用
+`single` 参数；`mode: walk_forward` 使用 `walk_forward` 参数。`enabled` 只控制
+自动调度，手动脚本仍可执行。`rerun_mark` 是重跑标记：修改并提交即可在下一次
+空闲时重新执行；成功、普通失败、崩溃或重启都不会自动重跑同一版本。
+
+将代码和配置提交并同步到服务器后，以普通服务器账号执行一次：
+
+```bash
+bash runs/install_schedules.sh plan --host mengkjin-server
+bash runs/install_schedules.sh apply --host mengkjin-server
+```
+
+检查 plan 后再 apply；apply 会启用定时器，首次发现已启用的配置也会排队。
+后续只需提交 YAML 修改，不必反复安装服务。watchdog 的 `rl_experiment` 作业默认
+120 秒检查一次，复用 `learndl-idle-worklist.service`，不在 watchdog 中训练。
+如需停用，提交 `enabled: false`，或关闭 maintenance 中的 RL 作业并重新 apply。
+禁用只取消尚未启动的请求，不中断正在进行的实验。
+
+```bash
+python -m src.api.task_monitor.scheduling.idle_worklist rl-status
+python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
+```
+
+版本由该文件最后修改的 commit 与内容指纹组成；无关 Git 提交不会触发。
+配置必须已经提交，服务器存在本地修改时暂停启动。服务器忙碌期间仅执行最终同步
+到本地的最新版，不重放未观察到的中间 Git 历史。运行中的任务使用保存的配置副本，
+结束后再考虑新版本。RL 和模型 worklist 同时等待时轮流执行，启动前检查训练锁、
+维护门禁及 GPU 显存占用低于 20%；12 小时无日志输出才超时，不限制总运行时长。
+
+自动输出位于配置结果根目录的 `automatic/<请求编号>` 子目录。原始 YAML、解析
+后的 JSON、Git 来源及结果位置保存在 runtime/scheduling/rl_experiment 下；实验包的
+配置中也包含来源信息。季度实验必须已有兼容行情快照；默认 `stage: all`。如果要
+跨手动调用继续 `screen`/`quarters` 阶段，请使用已有 JSON 及其固定输出目录；新的
+自动请求刻意使用新目录，不继承另一版本的筛选结果。
+
+正常完成或 Python 异常由任务发送一封 HTML 日志和 ZIP/JSON 附件邮件。
+未送达的任务结果、进程被杀等由 watchdog 兜底；`no_email: true` 同时关闭这两种
+通知。运行详情及失败记录可在上述 status 中查看。手动运行不消耗 Git 自动请求。

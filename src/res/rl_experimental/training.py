@@ -37,6 +37,10 @@ class ExperimentConfig:
     max_weight: float = 0.03
     fee_rate: float = 0.00035
     selection_scale: float = 1.0
+    holding_bonus: float = 0.0
+    extra_cost_bp: float = 0.0
+    observation_version: int = 1
+    lean_training: bool = False
     reward_scale: float = 100.0
     reward: RewardConfig | dict[str, Any] = field(default_factory=RewardConfig)
     selection_metric: str = "nav"
@@ -63,6 +67,8 @@ class ExperimentConfig:
             max_weight=self.max_weight,
             fee_rate=self.fee_rate,
             selection_scale=self.selection_scale,
+            holding_bonus=self.holding_bonus,
+            extra_cost_bp=self.extra_cost_bp,
         )
 
 
@@ -101,6 +107,8 @@ def history_metrics(history: list[dict[str, Any]], gamma: float | None = None) -
         "total_fees": float(np.sum([row.get("fee_estimate", 0.0) for row in history])),
     }
     metrics.update({
+        'total_base_fees': float(sum(float(row.get('base_fee', 0)) for row in history)),
+        'total_extra_cost': float(sum(float(row.get('extra_cost', 0)) for row in history)),
         'total_delisting_loss': float(sum(float(row.get('delisting_loss', 0)) for row in history)),
         'delisting_events': float(sum(int(row.get('delisting_events', 0)) for row in history)),
         'assets_exhausted': float(nav[-1] == 0),
@@ -145,7 +153,7 @@ class ValidationCallback(BaseCallback):
     """Flush metrics after train(), never from inside a partially collected rollout."""
 
     ROLLOUT_FIELDS = (
-        "reward", "turnover", "fee_estimate", "cash_weight", "holdings",
+        "reward", "turnover", "fee_estimate", "base_fee", "extra_cost", "cash_weight", "holdings",
         "frozen_holdings", "rejected_buys", "rejected_sells",
         "delisting_loss", "delisting_events", "risk_unsold_holdings", "assets_exhausted",
         "carried_holdings", "missing_data_carried_holdings", "max_held_stale_days",
@@ -294,11 +302,15 @@ def _env(panel: PanelData, interval: tuple[int, int], config: ExperimentConfig, 
         reward_scale=config.reward_scale,
         reward_config=RewardConfig.from_value(config.reward),
         random_start=random_start,
+        observation_version=config.observation_version,
+        record_history=not (random_start and config.lean_training),
         minimum_episode_steps=min(config.rollout_steps, interval[1] - interval[0]),
     )
 
 
-def train_experiment(panel: PanelData, output_dir: str | Path, config: ExperimentConfig) -> dict[str, Any]:
+def train_experiment(panel: PanelData, output_dir: str | Path, config: ExperimentConfig, *,
+                     splits: dict | None = None, evaluate_test: bool = True, prepared: tuple | None = None,
+                     baseline_cache: dict | None = None) -> dict[str, Any]:
     if config.total_timesteps <= 0 or config.eval_freq < 0:
         raise ValueError("total_timesteps must be positive and eval_freq nonnegative")
     if config.selection_metric not in {"nav", "discounted_reward"}:
@@ -306,13 +318,18 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     RewardConfig.from_value(config.reward).validate()
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
-    splits = date_split(panel, config.train_end_date, config.valid_end_date)
+    splits = splits or date_split(panel, config.train_end_date, config.valid_end_date)
     for name, (start, end) in splits.items():
         progress('split', f'{name}: {int(panel.decision_dates[start])}-{int(panel.return_end_dates[end - 1])}, '
                  f'{end - start} transitions')
     progress('train', 'Fitting normalization on training data and initializing PPO')
-    standardizer = Standardizer.fit(panel, *splits["train"])
-    normalized = standardizer.transform(panel)
+    if prepared is None:
+        standardizer = Standardizer.fit(panel, *splits["train"])
+        normalized = standardizer.transform(panel)
+    else:
+        standardizer, normalized = prepared[:2]
+    candidates = (prepared[2] if prepared is not None and len(prepared) > 2 else build_candidate_cache(normalized, config.candidate_count)) if config.lean_training else None
+    panel_contract = prepared[3] if prepared is not None and len(prepared) > 3 else panel.contract()
     standardizer.save_npz(output / "normalizer.npz")
 
     def _train_env(offset: int) -> PortfolioEnv:
@@ -320,11 +337,14 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
 
     def _make_train_env(offset: int):
         def _fn() -> PortfolioEnv:
-            return _train_env(offset)
+            env = _train_env(offset)
+            env.candidate_cache = candidates
+            return env
         return _fn
 
     train_env = DummyVecEnv([_make_train_env(i) for i in range(config.n_envs)])
     valid_env = _env(normalized, splits["valid"], config, random_start=False)
+    valid_env.candidate_cache = candidates
     if config.device.startswith("cuda") and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but torch.cuda.is_available() is false")
     model = PPO(
@@ -344,12 +364,19 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
         verbose=0,
     )
     progress('baseline', 'Evaluating validation equal-weight benchmark')
-    valid_equal_history = replay_baseline(panel, splits["valid"], config.constraints(), "alpha_equal_weight")
+    baseline_cache = {} if baseline_cache is None else baseline_cache
+    def baseline(kind):
+        key = (panel_contract["identity_digest"], tuple(splits["valid"]),
+               config.max_holdings, config.max_weight, config.fee_rate, config.extra_cost_bp, kind)
+        if key not in baseline_cache:
+            baseline_cache[key] = replay_baseline(panel, splits["valid"], config.constraints(), kind)
+        return baseline_cache[key]
+    valid_equal_history = baseline("alpha_equal_weight")
     valid_equal_metrics = history_metrics(valid_equal_history)
     write_history(output / "validation_equal_weight_history.csv", valid_equal_history)
     if panel.is_execution_panel:
         progress('baseline', 'Evaluating validation robust top50 benchmark before PPO')
-        valid_robust_history = replay_baseline(panel, splits['valid'], config.constraints(), 'robust_top50')
+        valid_robust_history = baseline("robust_top50")
         write_history(output / 'validation_robust_top50_history.csv', valid_robust_history)
         (output / 'validation_baseline_metrics.json').write_text(json.dumps({
             'alpha_equal_weight': valid_equal_metrics,
@@ -382,35 +409,39 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     model.save(output / "final_model")
     write_history(output / "validation_history.csv", callback.best_history)
 
-    test_env = _env(normalized, splits["test"], config, random_start=False)
-    best = PPO.load(output / "best_model", env=test_env, device=config.device)
-    progress('test', 'Evaluating best checkpoint on test interval')
-    test_metrics, test_history = evaluate_model(best, test_env)
-    test_metrics["discounted_reward"] = history_metrics(test_history, config.gamma)["discounted_reward"]
-    progress('test', 'Evaluating equal-weight benchmark')
-    baseline_history = replay_baseline(panel, splits["test"], config.constraints(), "alpha_equal_weight")
-    baseline_metrics = history_metrics(baseline_history)
-    write_history(output / "test_history.csv", test_history)
-    write_history(output / "alpha_equal_weight_history.csv", baseline_history)
-    robust_metrics = None
-    test_histories = {"ppo": test_history, "equal_weight": baseline_history}
-    if panel.is_execution_panel:
-        progress('test', 'Evaluating robust top50 benchmark')
-        robust_history = replay_baseline(panel, splits["test"], config.constraints(), "robust_top50")
-        robust_metrics = history_metrics(robust_history)
-        test_histories["robust_top50"] = robust_history
-        write_history(output / "robust_top50_history.csv", robust_history)
+    test_metrics = test_comparison = baseline_metrics = robust_metrics = None
+    test_env = None
+    if evaluate_test:
+        test_env = _env(normalized, splits["test"], config, random_start=False)
+        best = PPO.load(output / "best_model", env=test_env, device=config.device)
+        progress('test', 'Evaluating best checkpoint on test interval')
+        test_metrics, test_history = evaluate_model(best, test_env)
+        test_metrics["discounted_reward"] = history_metrics(test_history, config.gamma)["discounted_reward"]
+        progress('test', 'Evaluating equal-weight benchmark')
+        baseline_history = replay_baseline(panel, splits["test"], config.constraints(), "alpha_equal_weight")
+        baseline_metrics = history_metrics(baseline_history)
+        write_history(output / "test_history.csv", test_history)
+        write_history(output / "alpha_equal_weight_history.csv", baseline_history)
+        robust_metrics = None
+        test_histories = {"ppo": test_history, "equal_weight": baseline_history}
+        if panel.is_execution_panel:
+            progress('test', 'Evaluating robust top50 benchmark')
+            robust_history = replay_baseline(panel, splits["test"], config.constraints(), "robust_top50")
+            robust_metrics = history_metrics(robust_history)
+            test_histories["robust_top50"] = robust_history
+            write_history(output / "robust_top50_history.csv", robust_history)
 
-    test_comparison = compare_metrics(test_metrics, baseline_metrics)
-    for name, history in test_histories.items():
-        for key, value in history_metrics(history).items():
-            model.logger.record(f"test/{name}/{key}", value)
-    for key, value in test_comparison.items():
-        model.logger.record(f"test/comparison/{key}", value)
-    figure = comparison_figure(test_histories)
-    figure.savefig(output / "test_comparison.png", dpi=130)
-    model.logger.record("test/comparison/curves", TensorBoardFigure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
-    model.logger.dump(step=model.num_timesteps)
+        test_comparison = compare_metrics(test_metrics, baseline_metrics)
+        for name, history in test_histories.items():
+            for key, value in history_metrics(history).items():
+                model.logger.record(f"test/{name}/{key}", value)
+        for key, value in test_comparison.items():
+            model.logger.record(f"test/comparison/{key}", value)
+        figure = comparison_figure(test_histories)
+        figure.savefig(output / "test_comparison.png", dpi=130)
+        model.logger.record("test/comparison/curves", TensorBoardFigure(figure, close=True), exclude=("stdout", "log", "json", "csv"))
+        model.logger.dump(step=model.num_timesteps)
+
     model.logger.close()
 
     metadata = {
@@ -442,15 +473,15 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
         "test": test_metrics,
         "alpha_equal_weight_baseline": baseline_metrics,
         "robust_top50_baseline": robust_metrics,
-        "panel_contract": panel.contract(),
+        "panel_contract": panel_contract,
         "stock_ids": panel.stock_ids,
     }
     (output / "metrics.json").write_text(json.dumps(metadata, indent=2, default=_json_default), encoding="utf-8")
-    progress('test', f'Finished: PPO NAV={test_metrics["final_nav"]:.6f}, '
-             f'equal-weight NAV={baseline_metrics["final_nav"]:.6f}; metrics={output / "metrics.json"}')
+    progress("train", f"Finished; metrics={output / 'metrics.json'}")
     train_env.close()
     valid_env.close()
-    test_env.close()
+    if test_env is not None:
+        test_env.close()
     return metadata
 
 
@@ -510,3 +541,13 @@ def _seeded_env(panel: PanelData, interval: tuple[int, int], config: ExperimentC
     env = _env(panel, interval, config, random_start=True)
     env.reset(seed=config.seed + offset)
     return env
+
+
+def build_candidate_cache(panel: PanelData, count: int) -> tuple[np.ndarray, ...]:
+    result = []
+    for alpha, eligible_mask in zip(panel.alpha, panel.investable, strict=True):
+        eligible = np.flatnonzero(eligible_mask)
+        chosen = eligible[np.lexsort((panel.stock_ids[eligible], -alpha[eligible]))[:count]]
+        chosen.flags.writeable = False
+        result.append(chosen)
+    return tuple(result)

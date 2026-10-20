@@ -12,6 +12,16 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Experimental RL portfolio construction")
     sub = result.add_subparsers(dest="command", required=True)
 
+    walk = sub.add_parser("run-walk-forward", help="screen and run resumable quarterly research")
+    walk.add_argument("config", type=Path)
+    walk.add_argument("--dry-run", action="store_true")
+    walk.add_argument("--stage", choices=("all", "screen", "quarters"), default="all")
+    profile = sub.add_parser("profile-env", help="measure environment and CPU/CUDA training")
+    profile.add_argument("data", type=Path)
+    profile.add_argument("--output", required=True, type=Path)
+    profile.add_argument("--steps", type=int, default=512)
+    profile.add_argument("--train-steps", type=int, default=512)
+
     prepare = sub.add_parser("prepare-real", help="audit and export a point-in-time learndl snapshot")
     prepare.add_argument("--alpha", required=True, help="source@name or source@name@column")
     prepare.add_argument("--start", type=int, required=True)
@@ -74,6 +84,14 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = parser().parse_args()
+    if args.command == "run-walk-forward":
+        from .walk_forward import run_walk_forward
+        print(json.dumps(run_walk_forward(args.config, dry_run=args.dry_run, stage=args.stage), indent=2))
+        return
+    if args.command == "profile-env":
+        from .profiling import profile_env
+        print(json.dumps(profile_env(PanelData.load_npz(args.data), args.output, args.steps, args.train_steps), indent=2))
+        return
     if args.command == "run-experiment":
         from .experiment import run_experiment
 

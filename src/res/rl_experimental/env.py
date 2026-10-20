@@ -40,9 +40,20 @@ class PortfolioEnv(gym.Env):
         reward_config: RewardConfig | dict[str, Any] | None = None,
         random_start: bool = False,
         minimum_episode_steps: int = 32,
+        observation_version: int = 1,
+        record_history: bool = True,
+        candidate_cache: tuple[np.ndarray, ...] | None = None,
+        cache_observation: bool = True,
     ) -> None:
         super().__init__()
         episode_range.validate(panel.n_steps)
+        if observation_version not in (1, 2):
+            raise ValueError("unknown observation contract")
+        self.observation_version = observation_version
+        self.record_history = record_history
+        self.candidate_cache = candidate_cache
+        self.cache_observation = cache_observation
+        self._cached_observation = None
         self.panel = panel
         self.episode_range = episode_range
         self.constraints = constraints or PortfolioConstraints()
@@ -100,6 +111,9 @@ class PortfolioEnv(gym.Env):
         self._cash = 1.0
         self._nav = 1.0
         self.history = []
+        self._cached_observation = None
+        if options and "account_state" in options:
+            self.restore_account(options["account_state"])
         obs = self._observation()
         return obs, self._base_info()
 
@@ -112,6 +126,8 @@ class PortfolioEnv(gym.Env):
         return result
 
     def _observation(self) -> dict[str, np.ndarray]:
+        if self.cache_observation and self._cached_observation is not None:
+            return {k: v.copy() for k, v in self._cached_observation.items()}
         t = min(self._time, self.episode_range.end - 1)
         self._slots, self._present, self._can_invest = select_slots(
             self.panel.alpha[t],
@@ -119,6 +135,7 @@ class PortfolioEnv(gym.Env):
             self._weights,
             self.panel.stock_ids,
             self.constraints,
+            None if self.candidate_cache is None else self.candidate_cache[t],
         )
         s = self.constraints.max_slots
         features = np.zeros((s, self.panel.observation_feature_count), dtype=np.float32)
@@ -132,14 +149,35 @@ class PortfolioEnv(gym.Env):
         alpha = self._alpha_zscore(alpha, self._can_invest)
         self._slot_alpha = alpha
         remaining = (self.episode_range.end - t) / max(1, self.episode_range.end - self.episode_range.start)
-        return {
+        result = {
             "features": features,
             "alpha": alpha,
             "current_weights": current,
             "present_mask": self._present.astype(np.float32),
             "investable_mask": self._can_invest.astype(np.float32),
-            "account": np.asarray([self._cash, remaining], dtype=np.float32),
+            "account": np.asarray([self._cash, remaining if self.observation_version == 1 else 0.], dtype=np.float32),
         }
+
+        if self.cache_observation:
+            self._cached_observation = {k: v.copy() for k, v in result.items()}
+        return result
+
+    def export_account(self):
+        return {"weights": self._weights.copy(), "cash": self._cash, "nav": self._nav,
+                "stock_ids": self.panel.stock_ids.copy()}
+
+    def restore_account(self, state):
+        if not np.array_equal(state["stock_ids"], self.panel.stock_ids):
+            raise ValueError("account security mapping mismatch")
+        weights = np.asarray(state["weights"], dtype=np.float32)
+        cash, nav = float(state["cash"]), float(state["nav"])
+        if weights.shape != (self.panel.n_stocks,) or not np.isfinite(weights).all() or np.any(weights < 0) or not np.isfinite([cash, nav]).all() or cash < 0 or nav < 0:
+            raise ValueError("invalid account state")
+        if not np.isclose(weights.sum() + cash, 1. if nav > 0 else 0., atol=1e-5):
+            raise ValueError("account weights/cash do not sum to one (or zero when exhausted)")
+        self._weights = weights.copy()
+        self._cash, self._nav = cash, nav
+        self._cached_observation = None
 
     def _base_info(self) -> dict[str, Any]:
         return {
@@ -170,6 +208,7 @@ class PortfolioEnv(gym.Env):
             self._can_invest,
             slot_ids,
             self.constraints,
+            decision_observation["current_weights"],
         )
         target = np.zeros(self.panel.n_stocks, dtype=np.float32)
         if self._present.any():
@@ -185,7 +224,7 @@ class PortfolioEnv(gym.Env):
                 intraday[self._time],
                 can_buy[self._time],
                 can_sell[self._time],
-                fee_rate=self.constraints.fee_rate,
+                fee_rate=self.constraints.total_fee_rate,
                 max_holdings=self.constraints.max_holdings,
                 max_weight=self.constraints.max_weight,
                 stock_ids=self.panel.stock_ids,
@@ -217,7 +256,7 @@ class PortfolioEnv(gym.Env):
                 target,
                 target_cash,
                 self.panel.forward_returns[self._time],
-                self.constraints.fee_rate,
+                self.constraints.total_fee_rate,
             )
             execution_info = {}
         self._weights = new_weights
@@ -256,14 +295,20 @@ class PortfolioEnv(gym.Env):
             "reward_unscaled": reward / self.reward_scale,
             "turnover": turnover,
             "fee_estimate": fee,
+            "base_fee": previous_nav * turnover * self.constraints.fee_rate,
+            "extra_cost": previous_nav * turnover * self.constraints.extra_cost_bp * 1e-4,
             "cash_weight": self._cash,
             "holdings": int(np.count_nonzero(self._weights > 1e-8)),
+        } | execution_info | {f"reward_component/{key}": value for key, value in reward_result.components.items()}
+        if self.record_history:
+            record.update({
             "selected_stock_ids": self.panel.stock_ids[self._slots[chosen_slots]].copy(),
             "target_weights": slot_weights[chosen_slots].copy(),
             "held_stock_ids": self.panel.stock_ids[self._weights > 1e-8].copy(),
             "held_weights": self._weights[self._weights > 1e-8].copy(),
-        } | execution_info | {f"reward_component/{key}": value for key, value in reward_result.components.items()}
-        self.history.append(record)
+            })
+            self.history.append(record)
+        self._cached_observation = None
         self._time += 1
         terminated = self._time >= self._episode_end or self._nav == 0
         obs = self._observation()

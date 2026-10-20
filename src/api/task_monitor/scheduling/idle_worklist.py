@@ -160,15 +160,30 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
 
 
 def dispatch(options: dict, store: RunStore | None = None) -> dict:
+    from . import rl_experiment as rl
     store = store or RunStore()
     with queue_lock():
-        worklist, schedules, missing = worklist_schedules(store)
+        rl_request = rl.observe(store, throttle=True)
+        # Superseded queues are deferrals, not attempted training. Running jobs
+        # keep their exact snapshot even if the configuration changes.
+        state = rl.status(store)
+        for run in store.owned(OWNER):
+            if run.get('task_kind') == rl.TASK and run['phase'] == 'queued':
+                if state.get('version') != run['version'] or state.get('status') not in {'queued', 'pending'}:
+                    run['phase'] = 'deferred'
+                    store.put(run)
+        worklist, schedules, missing = worklist_schedules(store) if options.get('enabled') else ({}, {}, [])
         diagnostics = {'missing_schedules': missing} if missing else {}
         if any(run['phase'] in ACTIVE for run in store.owned(OWNER)):
+            rl.waiting(store, 'another idle training is queued or active')
             return {'idle_worklist': 'queued or active', **diagnostics}
         if reason := idle_reason(options):
+            rl.waiting(store, reason)
             return {'idle_worklist': reason, **diagnostics}
-        request = _candidate(store, worklist, schedules, options=options)
+        model_request = _candidate(store, worklist, schedules, options=options) if schedules else None
+        last = next((r for r in reversed(store.owned(OWNER)) if r.get('started_at') and r['phase'] != 'deferred'), {})
+        request = (rl_request if rl_request and (not model_request or last.get('task_kind') != rl.TASK)
+                   else model_request)
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -193,7 +208,7 @@ def _launch_admitted(request: dict, store: RunStore) -> int:
     log = runtime_dir() / 'idle_worklist' / f'{request["id"]}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     request.update(phase='starting', started_at=time.time(), uid=os.getuid(), log_path=str(log),
-                   script_email_enabled=True,
+                   script_email_enabled=not request.get('no_email', False),
                    invocation_id=os.environ.get('INVOCATION_ID'),
                    runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), boot_id=boot_id())
     store.put(request)
@@ -253,7 +268,11 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                next_candidate = candidate(store, only=request['task'], options=options) if options.get('enabled') else None
+                if request.get('task_kind') == 'rl_experiment':
+                    from .rl_experiment import observe
+                    next_candidate = observe(store)
+                else:
+                    next_candidate = candidate(store, only=request['task'], options=options) if options.get('enabled') else None
                 if (others or idle_reason(options) or not next_candidate or next_candidate['version'] != request['version']
                         or next_candidate.get('parent_run_id') != request.get('parent_run_id')
                         or next_candidate.get('retry_index') != request.get('retry_index')):
@@ -274,6 +293,14 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
+    if request.get('task_kind') == 'rl_experiment':
+        from .rl_experiment import execute
+        from .recovery import record
+        try:
+            return execute(request, store)
+        except BaseException as exc:
+            record(store, run_id, script_outcome='error', error=f'{type(exc).__name__}: {exc}')
+            raise
     from src.api.calls.research import CarryOutScheduleWorkList
     from src.api.calls.worklist_state import AutomaticDeferred
     from .recovery import record
@@ -331,7 +358,7 @@ def reset(schedule: str, store: RunStore | None = None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['worker', '_child', 'status', 'reset', 'reset-worklist'])
+    parser.add_argument('command', choices=['worker', '_child', 'status', 'rl-status', 'reset', 'reset-worklist'])
     parser.add_argument('schedule_or_run', nargs='?')
     args = parser.parse_args()
     if args.command == 'worker':
@@ -339,11 +366,17 @@ def main() -> int:
     if args.command == 'reset-worklist':
         print(f'Worklist reset: {reset_worklist()}')
         return 0
-    if args.command == 'status':
+    if args.command in {'status', 'rl-status'}:
         from .recovery import evidence
         store = RunStore()
-        print(json.dumps([dict(run, evidence=evidence(store, run['id'])) for run in store.owned(OWNER)],
-                         indent=2, ensure_ascii=False))
+        runs = [dict(run, evidence=evidence(store, run['id'])) for run in store.owned(OWNER)]
+        if args.command == 'rl-status':
+            from .rl_experiment import status
+            result = {'configuration': status(store),
+                      'runs': [run for run in runs if run.get('task_kind') == 'rl_experiment']}
+        else:
+            result = runs  # Preserve the existing status JSON list.
+        print(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     if not args.schedule_or_run:
         parser.error('schedule/run ID required')

@@ -1,0 +1,81 @@
+# 服务器空闲时运行一次；仅已提交并同步到服务器的本文件变更触发自动调度。
+# enabled 只控制自动调度；手动 CLI 仍可运行。修改 rerun_mark 并提交可重新训练。
+# mode: single（单次实验）或 walk_forward（季度滚动，完整方案计算量较大）。
+# recipient: null 沿用项目邮箱；no_email: true 关闭本任务及兜底邮件。
+# single.start/end 是行情范围；train_end_date/valid_end_date 是按时间划分的边界。
+# total_timesteps 是 PPO 训练步数，seed 是随机种子，device 默认 cuda。
+# reward.turnover_penalty 是扣除真实费用后额外施加的换手偏好。
+# walk_forward.seeds 会全部运行；penalties/bonuses 是筛选网格。
+# primary_cost_bp/costs_bp 是额外单边成本（基点），不是替代已有交易费率。
+# panel 必须指向已有兼容快照；季度实验不会隐式准备行情。
+# output/output_root 是结果根目录；自动任务在其 automatic/<请求编号> 下隔离结果。
+# 自动执行默认每版本一次，失败不自动重试；运行期间的新版本在本次结束后等待执行。
+enabled: true
+rerun_mark: initial
+mode: single
+recipient: null
+no_email: false
+single:
+  alpha: pred@gru_day_V1
+  start: 20170104
+  end: 20251230
+  alpha_sample_status: unknown
+  snapshot_dir: results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230
+  output_root: results/rl_experimental/server_runs
+  rebuild_snapshot: true
+  bundle_max_mb: 10
+  recipient: null
+  training:
+    train_end_date: 20230101
+    valid_end_date: 20250101
+    total_timesteps: 100000
+    seed: 7
+    device: cuda
+    eval_freq: 0
+    selection_metric: nav
+    reward:
+      turnover_penalty: 0.0
+      downside_penalty: 0.1
+      concentration_penalty: 0.0
+      custom_function: null
+      custom_params: {}
+walk_forward:
+  kind: walk_forward
+  stage: all
+  panel: results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz
+  output: results/rl_experimental/walk_forward/gru_v1_low_turnover_v1
+  alpha_sample_status: unknown
+  screen:
+    start: 20170101
+    valid_start: 20210101
+    end: 20230101
+  first_quarter: 2023Q1
+  last_quarter: 2025Q4
+  training_years: 4
+  validation_years: 1
+  seeds:
+  - 7
+  - 17
+  - 29
+  penalties:
+  - 0
+  - 0.0003
+  - 0.001
+  - 0.003
+  bonuses:
+  - 0
+  - 0.5
+  primary_cost_bp: 3
+  costs_bp:
+  - 0
+  - 1
+  - 3
+  - 5
+  - 10
+  screen_steps: 30000
+  quarter_steps: 100000
+  training:
+    device: cuda
+  profile_report: results/rl_experimental/profile/profile.json
+  bundle_max_mb: 10
+  recipient: null

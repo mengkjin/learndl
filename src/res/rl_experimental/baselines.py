@@ -63,6 +63,8 @@ def history_metrics(history: list[dict[str, object]]) -> dict[str, float]:
         "total_fees": float(np.sum([_as_float(row.get("fee_estimate", 0.0)) for row in history])),
     }
     metrics.update({
+        'total_base_fees': float(sum(float(row.get('base_fee', 0)) for row in history)),
+        'total_extra_cost': float(sum(float(row.get('extra_cost', 0)) for row in history)),
         'total_delisting_loss': float(sum(float(row.get('delisting_loss', 0)) for row in history)),
         'delisting_events': float(sum(int(row.get('delisting_events', 0)) for row in history)),
         'assets_exhausted': float(nav[-1] == 0),
@@ -167,6 +169,7 @@ def replay_baseline(
     interval: tuple[int, int],
     constraints: PortfolioConstraints,
     kind: BaselineKind,
+    *, account_state: dict | None = None,
 ) -> list[dict[str, object]]:
     """Replay a baseline through the same accounting kernel as the RL agent."""
     start, end = interval
@@ -174,8 +177,15 @@ def replay_baseline(
     cash = 1.0
     nav = 1.0
     history: list[dict[str, object]] = []
+    if account_state is not None:
+        if not np.array_equal(account_state["stock_ids"], panel.stock_ids):
+            raise ValueError("account security mapping mismatch")
+        weights = np.asarray(account_state["weights"], dtype=np.float32).copy()
+        cash, nav = float(account_state["cash"]), float(account_state["nav"])
     execution = panel.execution_arrays() if panel.is_execution_panel else None
     for time_index in range(start, end):
+        if nav == 0:
+            break
         if kind == "alpha_equal_weight":
             target = _equal_weight_target(panel, time_index, constraints)
         elif kind == "robust_top50":
@@ -194,7 +204,7 @@ def replay_baseline(
                 intraday[time_index],
                 can_buy[time_index],
                 can_sell[time_index],
-                fee_rate=constraints.fee_rate,
+                fee_rate=constraints.total_fee_rate,
                 max_holdings=constraints.max_holdings,
                 max_weight=constraints.max_weight,
                 stock_ids=panel.stock_ids,
@@ -220,7 +230,7 @@ def replay_baseline(
         else:
             target_cash = max(0.0, 1.0 - float(target.sum()))
             weights, cash, multiplier, turnover, cost = settle_period(
-                weights, target, target_cash, panel.forward_returns[time_index], constraints.fee_rate
+                weights, target, target_cash, panel.forward_returns[time_index], constraints.total_fee_rate
             )
             extra = {}
         nav *= multiplier
@@ -234,6 +244,8 @@ def replay_baseline(
                 "period_return": multiplier - 1.0,
                 "turnover": turnover,
                 "fee_estimate": previous_nav * cost,
+                "base_fee": previous_nav * turnover * constraints.fee_rate,
+                "extra_cost": previous_nav * turnover * constraints.extra_cost_bp * 1e-4,
                 "cash_weight": cash,
                 "holdings": int(held.sum()),
                 "held_stock_ids": panel.stock_ids[held].copy(),
@@ -243,4 +255,6 @@ def replay_baseline(
         )
         if nav == 0:
             break
+    if account_state is not None:
+        account_state.update(weights=weights, cash=cash, nav=nav)
     return history

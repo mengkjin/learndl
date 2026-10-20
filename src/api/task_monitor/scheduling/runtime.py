@@ -83,8 +83,11 @@ def record_script_email(*, success: bool) -> None:
 
 def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
     """Keep legacy no-script-mail runs covered across a rolling code update."""
-    if run['phase'] == 'deferred':
+    if run['phase'] == 'deferred' or run.get('no_email'):
         return False
+    if run.get('task_kind') == 'rl_experiment':
+        with store.connect() as connection:
+            return connection.execute('SELECT 1 FROM script_mail WHERE run_id=?', (run['id'],)).fetchone() is None
     # Signals, reboot, launcher failure and watchdog termination are distinct
     # from an ordinary Python failure which the script may already have mailed.
     code = run.get('returncode')
@@ -245,7 +248,7 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
         from src.api.calls.worklist_state import WorklistState
-        state = WorklistState(run['task']).read()
+        state = WorklistState(run['task']).read() if run.get('task_kind') != 'rl_experiment' else None
         if state and state.get('revisions') == run.get('revisions'):
             run['completion'] = state
     except (OSError, ValueError):
@@ -338,11 +341,18 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     for event_id, body in rows:
         event = json.loads(body)
         run = event['run']
+        mail_options = ({'recipient': run.get('recipient') or run.get('config', {}).get('recipient')}
+                        if run.get('task_kind') == 'rl_experiment' else {})
+        if run.get('no_email') or (run.get('task_kind') == 'rl_experiment' and event['kind'] == 'started'):
+            with store.connect() as connection:
+                connection.execute('UPDATE events SET sent=-1 WHERE id=?', (event_id,))
+            continue
         if run.get('owner') == 'idle_worklist' and event['kind'] == 'configuration_error':
             # Missing schedules have no process/task record or result email.
             try:
                 sent = sender('Watchdog Idle Worklist - configuration error', event['detail'],
-                              confirmation_message='Learndl worklist configuration alert', queue_on_failure=False)
+                              confirmation_message='Learndl worklist configuration alert', queue_on_failure=False,
+                              **mail_options)
             except Exception:
                 sent = False
             if sent:
@@ -391,7 +401,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                 message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
         if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,
                   attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert',
-                  queue_on_failure=False):
+                  queue_on_failure=False, **mail_options):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
         else:

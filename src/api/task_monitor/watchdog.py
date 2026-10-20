@@ -69,6 +69,7 @@ class _WatchdogContext:
     previous_check: float
     unit_checker: Callable[[str], tuple[bool, str]]
     maintenance: dict[str, Any] = field(default_factory=dict)
+    idle_dispatch_result: JobResult | None = None
 
 
 def _default_state_path() -> Path:
@@ -215,7 +216,10 @@ def _run_autofix(context: _WatchdogContext) -> JobResult:
 
 def _run_idle_worklist(context: _WatchdogContext) -> JobResult:
     from src.api.task_monitor.scheduling.idle_worklist import dispatch
-    return JobResult(stats=dispatch(context.maintenance['jobs']['idle_worklist']))
+    # Both job names feed one arbiter; never scan/dispatch twice in one tick.
+    if context.idle_dispatch_result is None:
+        context.idle_dispatch_result = JobResult(stats=dispatch(context.maintenance['jobs'].get('idle_worklist', {})))
+    return context.idle_dispatch_result
 
 
 def _run_git_auto_update(context: _WatchdogContext) -> JobResult:
@@ -240,9 +244,10 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     if maintenance is None:
         return defaults
     registry = {job.name: job.runner for job in defaults}
+    registry['git_auto_update'] = _run_git_auto_update
     registry['autofix'] = _run_autofix
     registry['idle_worklist'] = _run_idle_worklist
-    registry['git_auto_update'] = _run_git_auto_update
+    registry['rl_experiment'] = _run_idle_worklist
     options = dict(maintenance['jobs'])
     # A code update can precede reinstalling the scheduling snapshot. Recovery
     # is still opt-in through Hub registration; preserve an explicit disable.

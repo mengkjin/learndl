@@ -96,6 +96,8 @@ def exit_reason(store: RunStore, run: dict) -> str:
 
 
 def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | None = None) -> dict:
+    if run.get('task_kind') == 'rl_experiment':
+        return dict(retry=False, recovery_status='RL attempts require a committed configuration/rerun_mark change')
     now = time.time() if now is None else now
     reason = exit_reason(store, run)
     count = int(run.get('retry_index', 0))
