@@ -84,7 +84,7 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
         raise ValueError('worklist resume and force must be YAML booleans')
     rerun_mark = WorklistState.rerun_mark(worklist)
     schedules, missing = {}, []
-    for name in dict.fromkeys(worklist['fit']):
+    for name in dict.fromkeys([*worklist['fit'], *WorklistState.requested_schedules()]):
         try:
             revisions = WorklistState.revisions(name)
         except FileNotFoundError:

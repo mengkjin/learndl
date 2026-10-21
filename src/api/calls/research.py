@@ -19,7 +19,9 @@ class CarryOutScheduleWorkList(DirectCall):
     def get_schedules(cls) -> list[str]:
         from src.res.model.util.config.config import ScheduleConfig
 
-        ret = list(PATH.read_yaml(PATH.sched_worklist)['fit'])
+        from src.api.calls.worklist_state import WorklistState
+        ret = list(dict.fromkeys([*PATH.read_yaml(PATH.sched_worklist)['fit'],
+                                 *WorklistState.requested_schedules()]))
         missing = [name for name in ret if not ScheduleConfig.check_name_exist(name)]
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
@@ -89,7 +91,7 @@ class CarryOutScheduleWorkList(DirectCall):
         if type(resume) is not bool or type(force) is not bool:
             raise ValueError('worklist resume and force must be YAML booleans')
         from src.res.model.util.config.config import ScheduleConfig
-        schedules = list(dict.fromkeys(worklist['fit']))
+        schedules = list(dict.fromkeys([*worklist['fit'], *WorklistState.requested_schedules()]))
         missing = [name for name in schedules if not ScheduleConfig.check_name_exist(name)]
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')

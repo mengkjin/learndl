@@ -32,6 +32,9 @@ class DataModule(Base.BoundLogger):
     DataModule for model fitting / testing / predicting
     """
    
+    # Populated by PredRecorder when preparing linear-model inference.
+    linear_completed_dates: np.ndarray
+
     def __init__(
         self , config : ModelConfig | None = None , 
         use_data : Base.lit.DataBlockTimeFrames = 'fit' , * , 
@@ -440,6 +443,22 @@ class DataModule(Base.BoundLogger):
             effective_count=int(eff_mask.sum().item()) if eff_mask is not None else None,
         )
         
+        if '15m_original' in self.input_keys_data and eff_mask is not None:
+            # Observability only: record label-filtered counts without changing selection.
+            import json
+            audit_dir = self.config.base_path.snapshot('15m_original')
+            audit_dir.mkdir(parents=True, exist_ok=True)
+            audit_path = audit_dir / f'{self.stage}.{self.model_date}.json'
+            audit_tmp = audit_path.with_suffix('.tmp')
+            audit_tmp.write_text(json.dumps({
+                'stage': self.stage, 'model_date': int(self.model_date),
+                'effective_count': int(eff_mask.sum().item()),
+                'dates': self.datas.date[self.date_idx].tolist(),
+                'counts': eff_mask.sum(dim=0).cpu().tolist(),
+                'scope': 'after input/label validity, before train/validation split',
+            }))
+            audit_tmp.replace(audit_path)
+
         self.display_loader_static_stats(x_input , eff_mask)
 
         y_sampled , w_sampled = self.data_operator.standardize_y(self.y_std , eff_mask , self.step_idx)

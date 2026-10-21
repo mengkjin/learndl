@@ -181,6 +181,25 @@ class IdleTest(unittest.TestCase):
                 idle.reset_worklist(self.store)
         self.assertFalse((self.root / 'schedule_worklist' / 'reset.json').exists())
 
+    def test_standalone_autofix_request_keeps_worklist_and_other_revisions(self):
+        original = self.worklist.read_bytes()
+        first = WorklistState.revisions('first')
+        self.assertNotIn('original', idle.worklist_schedules(self.store)[1])
+        state = WorklistState('original')
+        state.request_training('original-001', allow_unlisted=True)
+        revision = state.revisions('original')
+        state.request_training('original-001', allow_unlisted=True)
+        self.assertEqual(state.revisions('original'), revision)
+        self.assertEqual(self.worklist.read_bytes(), original)
+        self.assertEqual(WorklistState.revisions('first'), first)
+        candidate = idle.candidate(self.store)
+        assert candidate is not None
+        self.assertEqual(candidate['task'], 'original')
+        self.save_success('original')
+        candidate = idle.candidate(self.store)
+        assert candidate is not None
+        self.assertNotEqual(candidate['task'], 'original')
+
     def test_targeted_training_request_is_prioritized_and_idempotent(self):
         original_worklist = self.worklist.read_bytes()
         original_first = WorklistState.revisions('first')

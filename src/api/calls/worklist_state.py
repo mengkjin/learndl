@@ -37,23 +37,38 @@ class WorklistState:
     def request_path(self) -> Path:
         return self.root / 'requests' / self.path.name
 
-    def request_training(self, request_id: str):
+    def request_training(self, request_id: str, *, allow_unlisted: bool = False):
         """Request this schedule after maintenance; the idle worker owns GPU execution.
 
         A stable ID is idempotent and changes only this schedule's revision.
         Keep the marker after completion so removing it cannot trigger another run.
+        allow_unlisted enables an explicit standalone experiment without editing the worklist.
         """
         if not isinstance(request_id, str) or not request_id:
             raise ValueError('A nonempty training request ID is required')
         worklist = yaml.safe_load(PATH.sched_worklist.read_text())
-        if self.schedule_name not in worklist.get('fit', []):
+        if not allow_unlisted and self.schedule_name not in worklist.get('fit', []):
             raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
         self.revisions(self.schedule_name)  # Verify the schedule config before writing.
         request = {'id': request_id}
+        if allow_unlisted:
+            request['schedule_name'] = self.schedule_name
         with self.lock():
             if not self.request_path.exists() or json.loads(self.request_path.read_text()) != request:
                 write_json(self.request_path, request)
         return request
+
+    @classmethod
+    def requested_schedules(cls) -> list[str]:
+        """Explicit standalone requests; ordinary worklist requests keep their old shape."""
+        root = PATH.lc_machine / 'schedule_worklist' / 'requests'
+        names = []
+        for path in sorted(root.glob('*.json')):
+            request = json.loads(path.read_text())
+            name = request.get('schedule_name')
+            if isinstance(name, str) and name and cls(name).request_path == path and request.get('id'):
+                names.append(name)
+        return names
 
     @staticmethod
     def revisions(schedule_name: str):
