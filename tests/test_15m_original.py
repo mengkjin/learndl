@@ -105,6 +105,61 @@ class OriginalParity(TestCase):
         actual = yaml.safe_load((ROOT / 'configs/schedule/current/gru_15m_original_rtn.yaml').read_text().replace('15m_original', '15m'))
         self.assertEqual(old, actual)
 
+    def test_runpy_main_entrypoint_actually_invokes_task(self):
+        import runpy
+        task_call = Mock()
+        def script_tool(*args, **kwargs):
+            def decorate(func):
+                def invoke(*args, **kwargs):
+                    # Exercise real module entrypoint and main body without DB writes,
+                    # task locks or real result email from the ScriptTool wrapper.
+                    func.__globals__['run_task'] = task_call
+                    return func(*args, **kwargs)
+                return invoke
+            return decorate
+        with patch('src.proj.util.script.ScriptTool', script_tool):
+            runpy.run_path(str(ROOT / 'scripts/.autofix/create_15m_original.py'), run_name='__main__')
+        task_call.assert_called_once_with(dry_run=False, snapshot_manifest='')
+
+    def test_fresh_script_import_does_not_load_model_or_boost_packages(self):
+        import os
+        import sys
+        code = """
+import importlib.abc, importlib.util, sys
+class RejectModels(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'src.res.model' or fullname.split('.')[0] in {'lightgbm', 'xgboost', 'catboost', 'optuna'}:
+            raise ImportError('unexpected model import: ' + fullname)
+sys.meta_path.insert(0, RejectModels())
+spec = importlib.util.spec_from_file_location('isolated_autofix', 'scripts/.autofix/create_15m_original.py')
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert module.REQUEST_ID.endswith('_02')
+"""
+        with tempfile.TemporaryDirectory() as cache:
+            subprocess.run([sys.executable, '-c', code], cwd=ROOT, check=True,
+                capture_output=True, text=True, timeout=90, env=dict(os.environ, MPLCONFIGDIR=cache))
+
+    def test_audit_window_matches_training_operator_at_ten_percent_boundary(self):
+        from typing import cast
+        from src.res.model.util.config import ModelConfig
+        from src.res.model.util.data.operations import DataOperator
+        from src.res.model.util.data.batch_input_loader import DataloaderParam
+        b = block()
+        b.values[0, 1:4] = torch.nan  # 288 / 2880: exactly 10 percent
+        b.values[1, 1:4] = torch.inf
+        b.values[1, 4, 0, 0] = -torch.inf  # just over 10 percent
+        config = SimpleNamespace(module_type='nn', seq_steps={task.KEY: 1}, input_verify_x_max_nan_ratio=.1)
+        op = DataOperator(cast(ModelConfig, config), DataloaderParam(seqlens={task.KEY: 30}))
+        values = b.values.clone()
+        finite = torch.isfinite(values)
+        values[~finite] = torch.nan
+        DataBlock.autofill_values(values, b.feature, stretch=True)
+        expected = op.finite_position(task.KEY, values, torch.arange(29, 40), finite_mask=finite).sum(0).tolist()
+        self.assertEqual(task.input_eligibility(b)['counts'], expected)
+        self.assertEqual(expected[0], 1)
+
     def test_short_history_has_no_30_day_windows(self):
         self.assertEqual(task.input_eligibility(block(1, 5))["counts"], [])
 
@@ -338,6 +393,10 @@ class OriginalRealPipeline(TestCase):
         self.assertEqual(len(matching), 1)
         validate(ROOT, matching[0])
         self.assertTrue(matching[0]['enabled'])
+        previous = next(item for item in entries if item['id'] == '20261021_create_15m_original_train_01')
+        self.assertFalse(previous['enabled'])
+        self.assertEqual(sum(item.get('enabled', True) for item in entries
+            if item['script'] == matching[0]['script']), 1)
 
 
 if __name__ == '__main__':

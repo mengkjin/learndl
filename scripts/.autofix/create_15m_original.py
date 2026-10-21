@@ -21,9 +21,6 @@ import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
-from src.res.model.util.config import ModelConfig
 from uuid import uuid4
 
 import numpy as np
@@ -34,12 +31,10 @@ from src.proj import CALENDAR, DB, PATH, Load, Logger
 from src.proj.util.script import ScriptTool
 from src.data import DataBlock
 from src.data.preprocess.processors.original_15m import BASELINE_COMMIT, PrePro_15m_original
-from src.res.model.util.data.operations import DataOperator
-from src.res.model.util.data.batch_input_loader import DataloaderParam
 
 KEY = '15m_original'
 SCHEDULE = 'gru_15m_original_rtn'
-REQUEST_ID = '20261021_create_15m_original_train_01'
+REQUEST_ID = '20261021_create_15m_original_train_02'
 FEATURES = ['open', 'close', 'high', 'low', 'vwap', 'turn_fl']
 FRAMES = ('fit', 'predict')
 
@@ -123,8 +118,6 @@ def input_eligibility(block: DataBlock):
 
     Chunk securities, not time: forward filling must preserve the full date history.
     """
-    config = SimpleNamespace(module_type='nn', seq_steps={KEY: 1}, input_verify_x_max_nan_ratio=.1)
-    op = DataOperator(cast(ModelConfig, config), DataloaderParam(seqlens={KEY: 30}))
     index = torch.arange(29, max(29, len(block.date)))
     counts = torch.zeros(len(index), dtype=torch.int64)
     for start in range(0, len(block.secid), 32):
@@ -133,7 +126,14 @@ def input_eligibility(block: DataBlock):
         values[~pre] = torch.nan
         DataBlock.autofill_values(values, block.feature, stretch=True)
         if len(index):
-            counts += op.finite_position(KEY, values, index, finite_mask=pre).sum(dim=0).cpu()
+            # Exact fixed-window equivalent of DataOperator.finite_position for
+            # 15m_original (30 days, step=1, no DivLast). Do not import the model
+            # package here: its __init__ eagerly loads unrelated algorithm stacks.
+            day_missing = (~pre).sum(dim=(2, 3))
+            missing_ratio = day_missing.unfold(1, 30, 1).sum(-1).float() / float(30 * values.shape[2] * values.shape[3])
+            day_unfilled = (~torch.isfinite(values)).sum(dim=(2, 3))
+            completely_filled = day_unfilled.unfold(1, 30, 1).sum(-1) == 0
+            counts += ((missing_ratio <= .1) & completely_filled).sum(dim=0).cpu()
     return {'kind': 'input_only_before_labels_and_period_split',
             'dates': block.date[29:].tolist(), 'counts': counts.tolist()}
 
@@ -271,3 +271,7 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
 @ScriptTool('autofix_create_15m_original')
 def main(dry_run: bool = False, snapshot_manifest: str = '', **kwargs):
     run_task(dry_run=dry_run, snapshot_manifest=snapshot_manifest)
+
+
+if __name__ == '__main__':
+    main()

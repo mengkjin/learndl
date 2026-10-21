@@ -83,7 +83,7 @@ def timeout_seconds(value='12h') -> float:
     return seconds
 
 
-def script_path(root: Path, name: str) -> Path:
+def script_path(root: Path, name: str | None) -> Path:
     if not isinstance(name, str):
         raise ValueError('script must be a relative Python path')
     relative = Path(name)
@@ -144,6 +144,26 @@ def validate(root: Path, item: dict) -> dict:
     main = next((n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'main'), None)
     if main is None or not any(isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'ScriptTool' for n in main.decorator_list):
         raise ValueError('Autofix requires a main function decorated with ScriptTool')
+    # runpy executes the module as __main__; a decorator alone never runs a task.
+    # Reject this omission before spawning a process which would exit 0 without
+    # producing ScriptTool's result/notification handoff.
+    def is_main_guard(node):
+        if not isinstance(node, ast.If) or not isinstance(node.test, ast.Compare):
+            return False
+        test = node.test
+        if len(test.ops) != 1 or not isinstance(test.ops[0], ast.Eq) or len(test.comparators) != 1:
+            return False
+        left, right = test.left, test.comparators[0]
+        return ((isinstance(left, ast.Name) and left.id == '__name__' and
+                 isinstance(right, ast.Constant) and right.value == '__main__') or
+                (isinstance(right, ast.Name) and right.id == '__name__' and
+                 isinstance(left, ast.Constant) and left.value == '__main__'))
+
+    if not any(is_main_guard(node) and any(
+            isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call) and
+            isinstance(stmt.value.func, ast.Name) and stmt.value.func.id == 'main'
+            for stmt in node.body) for node in tree.body if isinstance(node, ast.If)):
+        raise ValueError("Autofix requires an executable if __name__ == '__main__': main() entrypoint")
     schema = metadata.get('parameters', {})
     params = item.get('params', {})
     if not isinstance(schema, dict) or not isinstance(params, dict):

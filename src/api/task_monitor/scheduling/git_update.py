@@ -189,6 +189,9 @@ def _update(root: Path, options: dict) -> dict:
             follow_up.append('dependency/runtime files changed; environment synchronization may be required')
         if any(path.startswith(('runs/scheduling/', 'runs/systemd/')) or path == 'src/api/task_monitor/scheduling/installer.py' for path in changed):
             follow_up.append('scheduling definitions changed; inspect plan/apply separately')
+        if any(path == 'runs/autofix/tasks.yaml' or path.startswith('scripts/.autofix/') for path in changed):
+            follow_up.append('autofix definitions changed; the separate worker validates new enabled IDs; '
+                             'this Git notification does not confirm Autofix startup or completion')
         result.update(status='updated', after=after, changed_files=changed, follow_up=follow_up)
         result['notification_id'] = queue_update_email(result, root)
         return result

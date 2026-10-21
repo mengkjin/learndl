@@ -4,7 +4,7 @@
 
 ## 执行
 
-Autofix `20261021_create_15m_original_train_01` 构建 fit/predict，保存回读并核验后提交独立的 `gru_15m_original_rtn` 训练请求。维护完成且 GPU 空闲时，现有 idle worker 执行该请求。相同请求 ID 幂等，已有 worklist 及其他模型的执行版本不变。Git 同步并由服务器拉取之前，不会在服务器执行。
+Autofix `20261021_create_15m_original_train_02` 构建 fit/predict，保存回读并核验后提交独立的 `gru_15m_original_rtn` 训练请求。维护完成且 GPU 空闲时，现有 idle worker 执行该请求。相同请求 ID 幂等，已有 worklist 及其他模型的执行版本不变。Git 同步并由服务器拉取之前，不会在服务器执行。
 
 任务支持 `dry_run=true` 和可选 `snapshot_manifest`。报告保存在 `PATH.interim/autofix_backups/15m_original_<时间>_<ID>/report.json`。失败不提交训练请求；若第二份缓存失败，第一份可能已保存，原实验缓存备份在报告目录中。没有跨两个缓存的事务回滚。
 
@@ -34,3 +34,9 @@ python -m src.res.model.util.original_comparison \
 训练摘要按共同模型期比较轮数、最终 Trial 重试编号、NaN redo 编号、TrainIC、ValidIC、实际有效样本数。测试从两份 `snapshot/basic_test/test_by_date.feather` 按模型编号、模型日期、submodel、测试日期取交集，再按指标的有限值配对比较 RankIC 和头部表现；不直接比较时间范围不同的总均值。`top5pct` 是收益 zscore，不是百分比收益。缺失文件或指标明确输出 unavailable/null，不以其他期或输入窗口数替代。
 
 网络源码、配置和公式的基线一致性，以及异常输入、缓存读写、任务失败不启动训练、独立请求幂等均有回归测试。
+
+## 第二次任务的启动修正
+
+旧 ID `_01` 已停用，新 ID `_02` 用于重新尝试。已确认的失败原因是脚本遗漏 `if __name__ == '__main__': main()`：进程仅加载定义就以 0 退出，因此没有 ScriptTool 结果和通知接管。现已补齐入口，并让静态清单验证拒绝缺少 main 调用的脚本。Matplotlib 缓存警告不是此次失败原因；子进程缓存改为沙箱内的 `/tmp/learndl-matplotlib`。数据预检不再导入 `src.res.model`：Python 会先执行父包的 `__init__.py`，旧写法因此连带初始化完整模型及其他算法依赖。窗口检查使用固定 30 日、step=1 的等价张量计算，回归测试与训练侧 DataOperator 对照，并在全新 Python 进程中禁止导入模型包验证启动隔离。实际训练请求仍在数据验证完成后提交。
+
+Git 更新邮件的 Follow-up 原来只识别依赖文件和 systemd 定义，`none detected` 不表示 Autofix 没有任务，也不是启动异常。现在 Autofix 清单或脚本变动会明确提示等待独立 worker 验证，并注明 Git 通知不能证明 Autofix 已启动/完成。更新通知与任务结果通知仍是两个独立阶段。

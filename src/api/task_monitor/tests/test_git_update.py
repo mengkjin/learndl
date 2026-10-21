@@ -54,6 +54,13 @@ class GitUpdateTest(unittest.TestCase):
     def update(self):
         return updater.check_and_update({'max_seconds': 45}, root=self.checkout)
 
+    def test_autofix_update_mail_does_not_claim_execution_status(self):
+        self.commit('runs/autofix/tasks.yaml', 'schema_version: 1\nfixes: []\n')
+        result = self.update()
+        self.assertEqual(result['status'], 'updated')
+        self.assertTrue(any('autofix definitions changed' in item for item in result['follow_up']))
+        self.assertTrue(any('does not confirm Autofix startup' in item for item in result['follow_up']))
+
     def test_clean_master_fast_forwards_then_is_up_to_date(self):
         result = self.update()
         self.assertEqual(result['status'], 'updated')

@@ -26,6 +26,9 @@ raise AssertionError("validation must not import me")
 @ScriptTool('fixture')
 def main(start=20200101, **kwargs):
     pass
+
+if __name__ == '__main__':
+    main()
 '''
 
 
@@ -47,6 +50,15 @@ class Fixture(unittest.TestCase):
 
 
 class SpecTests(Fixture):
+    def test_missing_or_non_executing_main_guard_is_rejected(self):
+        guard = "if __name__ == '__main__':\n    main()"
+        for replacement in ('', "if __name__ == '__main__':\n    pass",
+                            "if __name__ != '__main__':\n    main()"):
+            with self.subTest(replacement=replacement):
+                (self.root / 'scripts/fix.py').write_text(SCRIPT.replace(guard, replacement))
+                with self.assertRaisesRegex(ValueError, 'entrypoint'):
+                    validate(self.root, self.item)
+
     def test_static_validation_and_email(self):
         result = validate(self.root, self.item)
         self.assertTrue(result['params']['email'])

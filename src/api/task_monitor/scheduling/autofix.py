@@ -219,6 +219,8 @@ def execute(store, root, row):
     try:
         import importlib.util
         module_spec = importlib.util.spec_from_file_location('learndl_installed_autofix_policy', store.directory / 'policy.py')
+        if module_spec is None or module_spec.loader is None:
+            raise ImportError(f'Cannot load installed Autofix policy: {store.directory / "policy.py"}')
         policy = importlib.util.module_from_spec(module_spec)
         module_spec.loader.exec_module(policy)
         check_tree, command = policy.check_tree, policy.command
@@ -237,7 +239,8 @@ def execute(store, root, row):
         store.update(key, effective=spec, log_path=str(log), nonce=nonce, channel=str(channel))
         if time.monotonic() >= deadline:
             raise TimeoutError('Autofix startup exceeded the execution timeout')
-        env = dict(os.environ, LEARNDL_AUTOFIX_ID=key, LEARNDL_AUTOFIX_NONCE=nonce, PYTHONUNBUFFERED='1')
+        env = dict(os.environ, LEARNDL_AUTOFIX_ID=key, LEARNDL_AUTOFIX_NONCE=nonce,
+                   PYTHONUNBUFFERED='1', MPLCONFIGDIR='/tmp/learndl-matplotlib')
         info_path = store.directory / 'sandbox-info.json'
         with log.open('ab', buffering=0) as output, info_path.open('w') as info:
             separator = invocation.index('--')
