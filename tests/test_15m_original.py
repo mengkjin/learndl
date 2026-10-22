@@ -119,7 +119,7 @@ class OriginalParity(TestCase):
             return decorate
         with patch('src.proj.util.script.ScriptTool', script_tool):
             runpy.run_path(str(ROOT / 'scripts/.autofix/create_15m_original.py'), run_name='__main__')
-        task_call.assert_called_once_with(dry_run=False, snapshot_manifest='')
+        task_call.assert_called_once_with(dry_run=False, snapshot_manifest='', require_continuous_dates=False)
 
     def test_fresh_script_import_does_not_load_model_or_boost_packages(self):
         import os
@@ -135,7 +135,7 @@ spec = importlib.util.spec_from_file_location('isolated_autofix', 'scripts/.auto
 assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-assert module.REQUEST_ID.endswith('_03')
+assert module.REQUEST_ID.endswith('_04')
 """
         with tempfile.TemporaryDirectory() as cache:
             subprocess.run([sys.executable, '-c', code], cwd=ROOT, check=True,
@@ -236,8 +236,9 @@ assert module.REQUEST_ID.endswith('_03')
         b.values[:, :3] = torch.nan
         self.assertEqual(task.audit(b)['leading_empty_dates'], [1, 2, 3])
         b.values[:, 10] = torch.nan
+        self.assertEqual(task.audit(b)['internal_empty_dates'], [11])
         with self.assertRaisesRegex(ValueError, 'internal'):
-            task.audit(b)
+            task.audit(b, require_continuous_dates=True)
 
     def test_preflight_missing_middle_date_fails_without_shortening(self):
         for frame in task.FRAMES:
@@ -249,10 +250,55 @@ assert module.REQUEST_ID.endswith('_03')
                  patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
                  patch.object(task.DB, 'dates', return_value=[d for d in range(4,38) if d != 20]):
                 with self.assertRaises(task.SourceCoverageError) as error:
-                    task.prepare()
+                    task.prepare(require_continuous_dates=True)
             self.assertEqual(proc.load_start, 1)
             self.assertEqual(error.exception.diagnostic['missing_sources']['min'], [20])
             self.assertEqual(error.exception.diagnostic['frame'], frame)
+
+    def test_sparse_source_dates_are_allowed_and_recorded_by_default(self):
+        for frame in task.FRAMES:
+            proc = SimpleNamespace(load_start=1, load_end=40, snapshot=None)
+            with patch.object(task, 'FRAMES', (frame,)), \
+                 patch.object(task, 'PrePro_15m_original', return_value=proc), \
+                 patch.object(task, 'find_snapshot', return_value=(None, {})), \
+                 patch.object(task.CALENDAR, 'updated', return_value=40), \
+                 patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
+                 patch.object(task.DB, 'dates', side_effect=[[4,10,20,37], list(range(1,41))]):
+                _, item = task.prepare()[0]
+            self.assertFalse(proc.require_continuous_dates)
+            self.assertEqual(item['recomputed_dates'], [4,10,20,37])
+            self.assertIn(5, item['skipped_source_dates'])
+            self.assertEqual((proc.load_start, proc.load_end), (4,37))
+
+    def test_sparse_axis_audit_is_optional_but_bad_dates_still_fail(self):
+        b = block().align(date=[1, 5, 10, 40])
+        check = task.audit(b, np.arange(1,41))
+        self.assertIn(2, check['missing_axis_dates'])
+        with self.assertRaisesRegex(ValueError, 'incomplete date coverage'):
+            task.audit(b, np.arange(1,41), require_continuous_dates=True)
+        with self.assertRaisesRegex(ValueError, 'outside expected'):
+            task.audit(b, np.arange(2,41))
+
+    def test_loader_skips_missing_minute_files_only_in_relaxed_mode(self):
+        proc = object.__new__(PrePro_15m_original)
+        proc.source_observer = Mock()
+        raw = pd.DataFrame({'secid': 1, 'minute': np.arange(240),
+            **{key: np.ones(240, dtype=np.float32) for key in
+               ('open', 'close', 'high', 'low', 'vwap', 'amount', 'volume')}})
+        day = DataBlock(torch.ones(1, 3, 1, 2), [1], [1,2,3], ['turn_fl', 'preclose'])
+        with patch('src.data.preprocess.processors.original_15m.CALENDAR.range', return_value=np.array([1,2,3])), \
+             patch('src.data.preprocess.processors.original_15m.DB.load', side_effect=lambda *a, **kw: pd.DataFrame() if a[2] == 2 else raw), \
+             patch.object(proc, 'block_loaders', return_value={'day': Mock(load=Mock(return_value=day))}):
+            actual = proc.process_blocks(proc.load_blocks(1,3))
+            self.assertEqual(actual.date.tolist(), [1,2,3])
+            self.assertTrue(torch.isnan(actual.values[:, 1]).all())
+            proc.source_observer.assert_called_with({'date': 3, 'minute_rows': 240,
+                'amount_dtype': 'float32', 'volume_dtype': 'float32', 'bar_rows': 16})
+            self.assertIn({'date': 2, 'status': 'empty_minute_source'},
+                          [call.args[0] for call in proc.source_observer.call_args_list])
+            proc.require_continuous_dates = True
+            with self.assertRaisesRegex(ValueError, 'missing minute source 2'):
+                proc.load_blocks(1,3)
 
     def test_preflight_trims_both_frames_and_accepts_snapshot_bridge(self):
         for frame in task.FRAMES:
@@ -348,7 +394,7 @@ class OriginalAutofix(TestCase):
     def test_failure_does_not_request_training(self):
         self.procs[1].load_dump.return_value = DataBlock()
         self.procs[1].load_dump.side_effect = None
-        with self.assertRaisesRegex(ValueError, 'schema'):
+        with self.assertRaisesRegex(ValueError, 'saved content differs'):
             task.run_task()
         self.request.assert_not_called()
         report = json.loads(next(self.root.rglob('report.json')).read_text())
@@ -394,8 +440,23 @@ class OriginalAutofix(TestCase):
     def test_missing_returned_axis_fails_before_alignment(self):
         self.procs[0].load_with_extension.side_effect = lambda **kw: block().align(date=[x for x in range(1,41) if x != 20])
         with self.assertRaisesRegex(ValueError, 'incomplete date coverage'):
-            task.run_task()
+            task.run_task(require_continuous_dates=True)
         self.request.assert_not_called()
+
+    def test_relaxed_build_restores_missing_calendar_slots_and_requests_training(self):
+        for proc in self.procs:
+            proc.load_with_extension.side_effect = lambda **kw: block().align(date=[x for x in range(1,41) if x != 20])
+        report = task.run_task()
+        self.request.assert_called_once()
+        self.assertFalse(report['require_continuous_dates'])
+        for item, proc in zip(report['blocks'], self.procs):
+            saved = proc.load_dump()
+            self.assertEqual(saved.date.tolist(), list(range(1,41)))
+            self.assertTrue(torch.isnan(saved.values[:, 19]).all())
+            self.assertEqual(item['missing_axis_dates_before_alignment'], [20])
+            self.assertEqual(item['audit']['internal_empty_dates'], [20])
+            # Still eleven 30-trading-day windows; never compress to 39 dates.
+            self.assertEqual(len(item['input_eligibility']['counts']), 11)
 
     def test_dry_run_no_writes_or_request(self):
         task.run_task(dry_run=True)
@@ -453,8 +514,10 @@ class OriginalRealPipeline(TestCase):
             stack.enter_context(patch.object(task, 'PATH', SimpleNamespace(interim=root, main=ROOT)))
             stack.enter_context(patch.object(data_block, 'PATH', SimpleNamespace(datablock=root / 'blocks')))
             stack.enter_context(patch.object(task.CALENDAR, 'updated', return_value=20160219))
-            stack.enter_context(patch.object(task.DB, 'dates', return_value=dates))
-            stack.enter_context(patch.object(task.DB, 'load', return_value=minute))
+            holes = [20151120, 20160105]
+            source_dates = dates[~np.isin(dates, holes)]
+            stack.enter_context(patch.object(task.DB, 'dates', return_value=source_dates))
+            raw_load = stack.enter_context(patch.object(task.DB, 'load', return_value=minute))
             stack.enter_context(patch.object(task, 'PrePro_15m_original', side_effect=processor))
             stack.enter_context(patch.object(BlockLoader, 'src_path', new_callable=PropertyMock, return_value=root / 'raw'))
             stack.enter_context(patch.object(DataBlock, 'load_raw', side_effect=day))
@@ -463,6 +526,8 @@ class OriginalRealPipeline(TestCase):
             report = task.run_task()
             request.assert_called_once()
             self.assertEqual(report['status'], 'training_requested')
+            self.assertFalse(any(call.args[2] in holes for call in raw_load.call_args_list))
+            self.assertEqual(report['blocks'][0]['audit']['internal_empty_dates'], holes)
             for item in report['blocks']:
                 self.assertEqual(item['status'], 'verified')
                 self.assertTrue(item['minute_sources'])
@@ -475,6 +540,9 @@ class OriginalRealPipeline(TestCase):
         self.assertEqual(len(matching), 1)
         validate(ROOT, matching[0])
         self.assertTrue(matching[0]['enabled'])
+        self.assertFalse(matching[0]['params']['require_continuous_dates'])
+        strict = dict(matching[0], params={**matching[0]['params'], 'require_continuous_dates': True})
+        validate(ROOT, strict)
         previous = next(item for item in entries if item['id'] == '20261021_create_15m_original_train_01')
         self.assertFalse(previous['enabled'])
         self.assertEqual(sum(item.get('enabled', True) for item in entries

@@ -83,7 +83,8 @@ class PrePro_15m_original(TradePreProcessor):
     ENABLED = False
     DateChunkYears = 1
     snapshot: DataBlock | None = None
-    source_start: int | None = None
+    require_continuous_dates: bool = False
+    source_dates: np.ndarray | None = None
     source_observer: Callable[[dict], None] | None = None
 
     def block_loaders(self, **kwargs) -> dict[str, BlockLoader]:
@@ -93,11 +94,19 @@ class PrePro_15m_original(TradePreProcessor):
         dates = CALENDAR.range(start, end)
         parts = []
         for date in dates:
-            if self.source_start is not None and date < self.source_start:
+            if self.source_dates is not None and date not in self.source_dates:
+                if self.require_continuous_dates:
+                    raise ValueError(f'15m_original: missing min/day source {date}')
+                if self.source_observer is not None:
+                    self.source_observer({'date': int(date), 'status': 'missing_min_or_day_source'})
                 continue
             raw = DB.load('trade_ts', 'min', int(date), use_alt=True, vb_level='never')
             if raw.empty:
-                raise ValueError(f'15m_original: missing minute source {date}')
+                if self.require_continuous_dates:
+                    raise ValueError(f'15m_original: missing minute source {date}')
+                if self.source_observer is not None:
+                    self.source_observer({'date': int(date), 'status': 'empty_minute_source'})
+                continue
             required = {'secid', 'minute', 'open', 'high', 'low', 'close', 'amount', 'volume', 'vwap'}
             if not required.issubset(raw.columns):
                 raise ValueError(f'15m_original: missing minute columns {required - set(raw.columns)} on {date}')

@@ -8,6 +8,10 @@
 #     type: bool
 #     default: false
 #     desc: Check sources and provenance without writing or requesting training
+#   require_continuous_dates:
+#     type: bool
+#     default: false
+#     desc: Reject internal missing source dates or completely unusable dates when true
 #   snapshot_manifest:
 #     type: str
 #     default: ''
@@ -34,7 +38,7 @@ from src.data.preprocess.processors.original_15m import BASELINE_COMMIT, PrePro_
 
 KEY = '15m_original'
 SCHEDULE = 'gru_15m_original_rtn'
-REQUEST_ID = '20261021_create_15m_original_train_03'
+REQUEST_ID = '20261021_create_15m_original_train_04'
 FEATURES = ['open', 'close', 'high', 'low', 'vwap', 'turn_fl']
 FRAMES = ('fit', 'predict')
 
@@ -47,7 +51,7 @@ def read_snapshot(path: Path) -> DataBlock:
     return DataBlock(data['values'], data['index']['secid'], data['index']['date'], data['index']['feature'])
 
 
-def audit(block: DataBlock, expected_dates=None):
+def audit(block: DataBlock, expected_dates=None, *, require_continuous_dates: bool = False):
     if block.empty or block.shape[2] != 16 or list(block.feature) != FEATURES:
         raise ValueError('15m_original: invalid/empty schema')
     if block.values.dtype != torch.float32:
@@ -56,8 +60,13 @@ def audit(block: DataBlock, expected_dates=None):
         index = getattr(block, name)
         if not np.array_equal(index, np.unique(index)):
             raise ValueError(f'15m_original: unsorted or duplicate {name}')
-    if expected_dates is not None and not np.array_equal(block.date, expected_dates):
-        raise ValueError('15m_original: incomplete date coverage')
+    missing_dates = []
+    if expected_dates is not None:
+        if len(np.setdiff1d(block.date, expected_dates)):
+            raise ValueError('15m_original: dates outside expected range/calendar')
+        missing_dates = np.setdiff1d(expected_dates, block.date).tolist()
+        if require_continuous_dates and missing_dates:
+            raise ValueError('15m_original: incomplete date coverage')
     digest = hashlib.sha256()
     for index in (block.secid, block.date, block.feature):
         digest.update(json.dumps(index.tolist(), ensure_ascii=True).encode())
@@ -79,10 +88,11 @@ def audit(block: DataBlock, expected_dates=None):
         raise ValueError('15m_original: a feature has no finite values')
     internal_empty = np.setdiff1d(block.date[(block.date >= usable_dates[0]) &
                                             (block.date <= usable_dates[-1])], usable_dates)
-    if len(internal_empty):
+    if require_continuous_dates and len(internal_empty):
         raise ValueError(f'15m_original: internal completely unusable dates {internal_empty.tolist()}')
     return {'sha256': digest.hexdigest(), 'shape': list(block.shape), 'dtype': str(block.values.dtype),
             'features': FEATURES, 'daily': daily,
+            'missing_axis_dates': missing_dates, 'internal_empty_dates': internal_empty.tolist(),
             'leading_empty_dates': block.date[block.date < usable_dates[0]].tolist(),
             'trailing_empty_dates': block.date[block.date > usable_dates[-1]].tolist()}
 
@@ -166,7 +176,7 @@ class SourceCoverageError(ValueError):
         super().__init__(f'{KEY}/{diagnostic["frame"]}: source coverage incomplete: {json.dumps(details)}')
 
 
-def prepare(snapshot_manifest: str = ''):
+def prepare(snapshot_manifest: str = '', *, require_continuous_dates: bool = False):
     cutoff = int(CALENDAR.updated())
     available = {key: np.asarray(sorted(set(DB.dates('trade_ts', key, use_alt=True))))
                  for key in ('min', 'day')}
@@ -176,6 +186,8 @@ def prepare(snapshot_manifest: str = ''):
         proc.load_end = cutoff
         snapshot, provenance = find_snapshot(frame, snapshot_manifest)
         proc.snapshot = snapshot
+        proc.require_continuous_dates = require_continuous_dates
+        proc.source_dates = np.intersect1d(available['min'], available['day'])
         target_start = int(proc.load_start)
         dates = CALENDAR.range(target_start, cutoff)
         covered = np.array([], dtype=np.int64) if snapshot is None else snapshot.date
@@ -189,14 +201,16 @@ def prepare(snapshot_manifest: str = ''):
                 'start': int(usable[0]) if len(usable) else None,
                 'end': int(usable[-1]) if len(usable) else None, 'provenance': provenance,
                 'snapshot_dates': np.intersect1d(actual, covered).tolist(),
-                'recomputed_dates': required.tolist(),
+                'recomputed_dates': np.intersect1d(required, proc.source_dates).tolist(),
+                'skipped_source_dates': np.setdiff1d(required, proc.source_dates).tolist(),
+                'require_continuous_dates': require_continuous_dates,
                 'leading_unavailable_dates': dates[dates < usable[0]].tolist() if len(usable) else dates.tolist(),
                 'trailing_unavailable_dates': dates[dates > usable[-1]].tolist() if len(usable) else [],
                 'missing_sources': missing,
                 'source_ranges': {key: [int(ds[0]), int(ds[-1])] if len(ds) else None
                                   for key, ds in available.items()},
                 'path': str(DataBlock.path_preprocess(KEY, frame))}
-        if not len(usable) or any(missing.values()):
+        if not len(usable) or require_continuous_dates and any(missing.values()):
             item['status'] = 'preflight_failed'
             raise SourceCoverageError(item)
         proc.load_start, proc.load_end = int(usable[0]), int(usable[-1])
@@ -211,9 +225,9 @@ def request_training():
     return WorklistState(SCHEDULE).request_training(context['id'] if context is not None else REQUEST_ID, allow_unlisted=True)
 
 
-def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
+def run_task(dry_run: bool = False, snapshot_manifest: str = '', require_continuous_dates: bool = False):
     if dry_run:
-        jobs = prepare(snapshot_manifest)
+        jobs = prepare(snapshot_manifest, require_continuous_dates=require_continuous_dates)
         result = [item for _, item in jobs]
         Logger.note(json.dumps(result))
         return result
@@ -223,6 +237,7 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
     report_path = folder / 'report.json'
     report = {'baseline_commit': BASELINE_COMMIT, 'historical_snapshot': False,
               'status': 'building', 'schedule': SCHEDULE,
+              'require_continuous_dates': require_continuous_dates,
               'environment': {'python': platform.python_version(), 'torch': torch.__version__,
                               'numpy': np.__version__, 'pandas': pd.__version__},
               'known_differences': ['Global2Top retry correction retained',
@@ -240,7 +255,7 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
     save_report()
     Logger.note(f'15m_original report: {report_path}')
     try:
-        jobs = prepare(snapshot_manifest)
+        jobs = prepare(snapshot_manifest, require_continuous_dates=require_continuous_dates)
         report['blocks'] = [item for _, item in jobs]
         save_report()
         # Back up both experiment targets before replacing either. Production 15m is read only.
@@ -260,8 +275,12 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
             proc.source_observer = item['minute_sources'].append
             block = proc.load_with_extension(reconstruct=True)
             expected = CALENDAR.range(proc.load_start, proc.load_end)
-            # Validate the returned axis before any alignment can hide a missing date.
-            check = audit(block, expected)
+            # Report gaps before alignment; keep calendar slots as NaN so a
+            # 30-day training window never silently becomes 30 observations.
+            before_alignment = audit(block, expected, require_continuous_dates=require_continuous_dates)
+            item['missing_axis_dates_before_alignment'] = before_alignment['missing_axis_dates']
+            block = block.align(date=expected, inplace=True)
+            check = audit(block, expected, require_continuous_dates=require_continuous_dates)
             item['leading_empty_dates'] = check['leading_empty_dates']
             item['trailing_empty_dates'] = check['trailing_empty_dates']
             start = len(check['leading_empty_dates'])
@@ -269,7 +288,7 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
             block = block.slice_date(int(block.date[start]), int(block.date[end - 1]))
             expected = block.date.copy()
             item['saved_start'], item['saved_end'] = int(expected[0]), int(expected[-1])
-            check = audit(block, expected)
+            check = audit(block, expected, require_continuous_dates=require_continuous_dates)
             item['audit'] = check
             item['input_eligibility'] = input_eligibility(block)
             if proc.frame == 'fit' and not any(item['input_eligibility']['counts']):
@@ -280,7 +299,8 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
             proc.save_dump(block)
             del block
             saved = proc.load_dump()
-            if audit(saved, expected) != check:
+            if (not np.array_equal(saved.date, expected)
+                    or audit(saved, expected, require_continuous_dates=require_continuous_dates) != check):
                 raise ValueError(f'{KEY}/{proc.frame}: saved content differs')
             del saved
             item['status'] = 'verified'
@@ -300,8 +320,9 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
 
 
 @ScriptTool('autofix_create_15m_original')
-def main(dry_run: bool = False, snapshot_manifest: str = '', **kwargs):
-    run_task(dry_run=dry_run, snapshot_manifest=snapshot_manifest)
+def main(dry_run: bool = False, snapshot_manifest: str = '', require_continuous_dates: bool = False, **kwargs):
+    run_task(dry_run=dry_run, snapshot_manifest=snapshot_manifest,
+             require_continuous_dates=require_continuous_dates)
 
 
 if __name__ == '__main__':
