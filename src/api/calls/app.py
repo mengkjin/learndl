@@ -51,7 +51,7 @@ class ManageTaskSchedules(DirectCall):
         from src.proj import PATH, Logger
 
         action = self.kwargs.get('action', 'plan')
-        if action not in {'plan', 'status', 'apply', 'rollback'}:
+        if action not in {'plan', 'status', 'apply', 'defer', 'pending', 'cancel', 'rollback'}:
             raise ValueError(f'Unknown scheduling operation: {action}')
         command = ['bash', str(PATH.runs / 'install_schedules.sh'), action]
         if action == 'plan':

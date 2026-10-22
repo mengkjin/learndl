@@ -18,7 +18,9 @@ class SchedulingMenuTest(unittest.TestCase):
         spawn.assert_not_called()
 
     def test_explicit_selection_dispatches_only_selected_action(self):
-        for label, action in [('Preview Changes (default)', 'plan'), ('Install / Update Schedules', 'apply'),
+        for label, action in [('Preview Changes (default)', 'plan'), ('Manual Install / Update', 'apply'),
+                              ('Deferred Install / Update', 'defer'), ('Pending Installation Status', 'pending'),
+                              ('Cancel Pending Installation', 'cancel'),
                               ('View Installation Status', 'status'), ('Roll Back Last Installation', 'rollback')]:
             with self.subTest(action=action), \
                  patch('src.proj.util.cli.AskFor.Options', return_value=MagicMock(valid=True, result=label)), \

@@ -16,13 +16,24 @@ from .runtime import RunStore, members
 
 
 def run(task_id: str, *, deferred: bool = False) -> int:
-    from .maintenance_gate import MaintenanceBusy, configured, permit
+    from .maintenance_gate import MaintenanceBusy, permit
     from .autofix_store import Store, state_dir
+    # Drain on existing triggers too: a first deferred install can be cancelled
+    # before its dedicated drain timer exists. Each replay still acquires admission.
+    if not deferred and state_dir().exists():
+        import portalocker
+        controls = Store(state_dir())
+        if controls.scheduled():
+            try:
+                with portalocker.Lock(str(controls.directory / 'worker.lock'), mode='r+', timeout=0):
+                    run_deferred(controls)
+            except portalocker.LockException:
+                pass
     try:
         with permit(blocking=False, priority=deferred):
             return _run(task_id, retry_busy=deferred)
     except MaintenanceBusy:
-        if configured() and not deferred:
+        if state_dir().exists() and not deferred:
             # Calendar slots in the existing scheduler have minute precision.
             Store(state_dir()).enqueue(task_id, int(time.time() // 60))
         return 75 if deferred else 0
@@ -44,10 +55,9 @@ def run_deferred(store) -> None:
 
 def deferred_worker() -> int:
     import portalocker
-    from .maintenance_gate import configured
     from .autofix_store import Store, state_dir
     from .runtime import process_cgroup
-    if not configured():
+    if not state_dir().exists():
         return 0
     if not (process_cgroup(os.getpid()) or '').endswith('/learndl-deferred.service'):
         raise RuntimeError('Deferred worker must run in its installed systemd service')
@@ -151,13 +161,15 @@ def inherited_lock(lock_group: str) -> bool:
 
 def legacy(task_id: str, arguments: list[str]) -> int:
     """Compatibility shell wrappers enter durable admission after installation."""
-    from .maintenance_gate import configured
+    from .maintenance_gate import permit, pass_fds
+    from .autofix_store import state_dir
     from .installer import normalize_args
     from src.proj import PATH
-    if not configured():
-        return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
-                                '--source=bash', '--email=1', *arguments])
     config = installed_config()
+    if not config or not state_dir().exists():
+        with permit():
+            return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
+                                    '--source=bash', '--email=1', *arguments], pass_fds=pass_fds())
     normalized = normalize_args(arguments)
     if task_id == 'daily_update' and normalized == ['--forfeit_if_done', 'True']:
         normalized = []

@@ -253,7 +253,10 @@ class DirectCallHub(DirectCall):
             actions = {
                 'Preview Changes (default)': 'plan',
                 'View Installation Status': 'status',
-                'Install / Update Schedules': 'apply',
+                'Manual Install / Update': 'apply',
+                'Deferred Install / Update': 'defer',
+                'Pending Installation Status': 'pending',
+                'Cancel Pending Installation': 'cancel',
                 'Roll Back Last Installation': 'rollback',
             }
             flag = AskFor.Options(
@@ -266,7 +269,10 @@ class DirectCallHub(DirectCall):
                 option_help={
                     'Preview Changes (default)': 'Read-only preview with detailed cron and systemd differences.',
                     'View Installation Status': 'Inspect installed schedules and timer status.',
-                    'Install / Update Schedules': 'Apply configured schedules and watchdog settings; preserve existing matching cron.',
+                    'Manual Install / Update': 'Preview, confirm and authenticate; install now or exit if busy.',
+                    'Deferred Install / Update': 'Same immediate installation when idle; if busy, register a background request valid for 24 hours and return.',
+                    'Pending Installation Status': 'Show background installation status and reason.',
+                    'Cancel Pending Installation': 'Cancel a waiting installation and reopen task admission.',
                     'Roll Back Last Installation': 'Restore the previous installation; running business work is not undone.',
                 },
             )

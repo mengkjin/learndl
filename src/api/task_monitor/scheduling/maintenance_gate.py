@@ -9,11 +9,12 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import portalocker
+import psutil
 
 from .autofix_store import ROOT, Store, state_dir
 
 _depth = contextvars.ContextVar('maintenance_depth', default=0)
-_fd = contextvars.ContextVar('maintenance_fd', default=None)
+_fd: contextvars.ContextVar[int | None] = contextvars.ContextVar('maintenance_fd', default=None)
 _kind = contextvars.ContextVar('maintenance_kind', default='shared')
 
 
@@ -72,13 +73,13 @@ def pending(directory):
 
 
 @contextmanager
-def permit(*, exclusive=False, blocking=True, directory=None, priority=False):
+def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None):
     if _depth.get() or sandbox_request() is not None:
         if exclusive and _kind.get() != 'exclusive':
             raise MaintenanceBusy('Cannot upgrade an existing shared lease')
         yield
         return
-    if directory is None and not configured():
+    if directory is None and not state_dir().exists() and not configured():
         yield
         return
     directory = directory or state_dir(ROOT)
@@ -93,12 +94,17 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False):
             _depth.reset(token)
         return
     stream = (directory / 'gate.lock').open('r+')
+    waiter = directory / f'waiting-{os.getpid()}.json'
     previous = os.environ.get('LEARNDL_MAINTENANCE_FD')
     previous_owner = os.environ.get('LEARNDL_MAINTENANCE_OWNER')
     try:
         while True:
             try:
                 with portalocker.Lock(str(directory / 'admission.lock'), mode='r+', timeout=0):
+                    from .install_request import reconcile, ACTIVE
+                    installation = reconcile()
+                    if installation.get('phase') in ACTIVE - {'registering'} and installation.get('id') != installation_id:
+                        raise MaintenanceBusy('An authorized installation is waiting for maintenance access')
                     if any(r['phase'] in {'starting', 'running'} for r in Store(directory).rows()):
                         raise MaintenanceBusy('Autofix execution or crash reconciliation is outstanding')
                     if not exclusive and not priority and pending(directory):
@@ -108,7 +114,10 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False):
             except (portalocker.LockException, MaintenanceBusy):
                 if not blocking:
                     raise MaintenanceBusy('Maintenance execution lock unavailable') from None
+                # Distinguish a parked legacy wrapper from unguarded live work.
+                waiter.write_text(json.dumps({'pid': os.getpid(), 'created': psutil.Process().create_time()}))
                 time.sleep(.5)
+        waiter.unlink(missing_ok=True)
         token, fd_token = _depth.set(1), _fd.set(stream.fileno())
         kind_token = _kind.set('exclusive' if exclusive else 'shared')
         os.set_inheritable(stream.fileno(), True)
@@ -131,4 +140,5 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False):
             # would also revoke children still holding an inherited descriptor.
             # Closing only this copy retains protection until the last child exits.
     finally:
+        waiter.unlink(missing_ok=True)
         stream.close()

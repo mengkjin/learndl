@@ -50,6 +50,9 @@ def desktop_entry(root: Path, python: Path) -> str:
 
 
 def command(argv: list[str], *, input_text: str | None = None) -> str:
+    if argv and argv[0] == 'sudo' and os.environ.get('LEARNDL_INSTALL_BROKER'):
+        from .install_flow import broker_command
+        return broker_command(argv)
     result = subprocess.run(argv, input=input_text, text=True, capture_output=True, check=False)
     if result.returncode:
         raise RuntimeError(f'Command failed ({result.returncode}): {shlex.join(argv)}\n'
@@ -231,8 +234,10 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         units['learndl-autofix.service'] = service(root, python, 'src.api.task_monitor.scheduling.autofix', ['worker']) + 'RestrictAddressFamilies=AF_INET AF_INET6\n'
         units['learndl-autofix.timer'] = ('[Unit]\nDescription=Learndl autofix and deferred task worker\n[Timer]\n'
             'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
-        units['learndl-deferred.service'] = service(root, python, 'src.api.task_monitor.scheduling.runner', ['deferred'])
-        units['learndl-deferred.timer'] = units['learndl-autofix.timer'].replace('autofix and deferred task', 'deferred calendar task')
+    # Installation admission also queues calendar slots when autofix is disabled.
+    units['learndl-deferred.service'] = service(root, python, 'src.api.task_monitor.scheduling.runner', ['deferred'])
+    units['learndl-deferred.timer'] = ('[Unit]\nDescription=Learndl deferred calendar tasks\n[Timer]\n'
+        'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Watchdog always has one trigger, even when individual jobs are disabled.
     tick = config['watchdog']['tick_seconds']
     if config['default_backend'] == 'systemd':
@@ -352,7 +357,7 @@ def validate_unit(name: str, contents: str) -> None:
         raise ValueError('Timer must target its matching project service')
 
 
-def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
+def apply_plan(plan: dict, original_cron: str, directory: Path, *, installation_id=None) -> None:
     # Serialize installation/rollback against dispatch and the full task lifetime,
     # not merely a point-in-time "no active rows" check.
     from .autofix_store import Store, state_dir
@@ -361,7 +366,7 @@ def apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         from .maintenance_gate import permit
         Store(control)
         with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0), \
-             permit(directory=control, exclusive=True, blocking=False):
+             permit(directory=control, exclusive=True, blocking=False, installation_id=installation_id):
             return _apply_plan(plan, original_cron, directory)
     return _apply_plan(plan, original_cron, directory)
 
@@ -420,7 +425,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         if any(r['phase'] in {'starting', 'running'} for r in controls.rows()):
             raise RuntimeError('Wait for the running autofix before changing installation')
         enabled = bool(plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'))
-        if not enabled and controls.scheduled():
+        if not enabled and controls.scheduled() and 'learndl-deferred.service' not in plan['units']:
             raise RuntimeError('Drain deferred calendar tasks before disabling autofix')
     for key in plan['conflicts']:
         if BEGIN in plan['cron']:
@@ -541,13 +546,22 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['plan', 'apply', 'status', 'rollback'])
+    parser.add_argument('action', choices=['plan', 'apply', 'defer', 'pending', 'cancel', 'status', 'rollback'])
     parser.add_argument('--host', default=socket.gethostname().split('.')[0])
     parser.add_argument('--config-dir', type=Path)
     parser.add_argument('--crontab-file', type=Path, help='Read-only offline planning input')
     parser.add_argument('--server-timezone', help='Required for offline planning; apply detects actual timezone')
     parser.add_argument('--diff', action='store_true', help='Show exact cron/unit changes in plan output')
     args = parser.parse_args()
+    if args.action in {'apply', 'defer', 'pending', 'cancel'}:
+        from .install_flow import run_interactive
+        from . import install_request
+        if args.crontab_file or args.server_timezone:
+            parser.error('Installation uses live server configuration')
+        if args.action in {'pending', 'cancel'}:
+            print(json.dumps(install_request.cancel() if args.action == 'cancel' else install_request.reconcile(), indent=2))
+            return 0
+        return run_interactive(deferred=args.action == 'defer', host=args.host, config_dir=args.config_dir)
     from src.proj import PATH
     root = Path(PATH.main)
     if args.crontab_file and args.action != 'plan':
@@ -603,7 +617,13 @@ def main() -> int:
             plan = {'config': backup['config'], 'units': backup['manifest']['units'], 'cron': backup['cron'], 'conflicts': {}, 'global_conflicts': [], 'report': {},
                     'desktop_autostart': backup.get('desktop_autostart'),
                     'timer_states': backup['manifest'].get('timer_states', {})}
-        apply_plan(plan, cron, directory)
+        from . import install_request
+        pending_installation = install_request.reconcile()
+        repair_id = pending_installation.get('id') if pending_installation.get('phase') == 'repair_required' else None
+        apply_plan(plan, cron, directory, installation_id=repair_id)
+        if repair_id:
+            with install_request.lock():
+                install_request.finish(pending_installation, 'failed', 'Installation rolled back explicitly; task admission restored')
     if plan['conflicts']:
         print(json.dumps({'deferred_tasks': plan['conflicts']}, indent=2))
         return 1

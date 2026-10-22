@@ -439,6 +439,8 @@ def run_watchdog(
         from src.proj.util.web.emailer import Email
         email_sender = Email.send
     timeout_delivered = deliver_timeout_events(email_sender)
+    from src.api.task_monitor.scheduling.install_request import deliver as deliver_installation_alerts
+    deliver_installation_alerts(email_sender)
     from src.api.task_monitor.interactive import maintain
     from src.api.task_monitor.cli_recovery import deliver as deliver_cli_alerts
     interactive_delivered = maintain(task_db, email_sender)

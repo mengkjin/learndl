@@ -129,3 +129,23 @@ Watchdog 在后续闲时检查中按列表顺序逐项执行，继续遵循原�
 新版本完成后仍会跳过。也可手动执行 CarryOutScheduleWorkList 消费此版本。
 正在排队或执行自动训练、当前 schedule 被锁定、或存在无法匹配的 schedule 时，重置报错且不更新版本。
 此操作仅作用于当前机器，不会立即启动训练。原有 `reset <schedule>` 仍只解除单个 schedule 的失败重试限制。
+
+### Watchdog 安装：立即执行与按需延迟
+
+CLI Hub → Non-Research Operations → Watchdog / Schedule Management：
+
+- `Manual Install / Update`：先预览差异，再确认和 sudo 授权；空闲时在当前窗口安装，忙碌则退出。
+- `Deferred Install / Update`：相同的预览、确认、授权和前台安装；只有任务或维护锁占用时，才注册 systemd 后台安装任务。注册成功显示请求编号并结束 CLI 提交进程，可退出窗口或断开 SSH。
+- `Pending Installation Status` / `Cancel Pending Installation`：查询或取消等待；已开始的安装事务不能直接取消。
+
+对应命令为 `bash runs/install_schedules.sh apply|defer|pending|cancel`。
+`apply` 现在也要求交互确认；不再作为无确认的自动化安装命令使用。Preview 保持只读。
+
+后台请求最长等待 24 小时，暂缓新的受管理任务，已有任务继续；定时任务进入持久队列。
+等待期间每秒重试安装锁，不以 GPU 空闲作为安装条件。安装成功、失败、取消或超时均保存状态并邮件通知；发送失败由 Watchdog 后续重试。
+服务器重启取消尚在等待的请求，SSH 断开不会取消。安装事务中断则保持阻断，使用原有 Roll Back Last Installation 修复后恢复接纳。
+关闭 autofix 不会关闭安装接纳锁；安装器提供独立的 deferred calendar timer，已有 runner 触发也会补跑积压的定时任务。
+
+授权绑定预览时的配置、调度代码、crontab、受管理 unit 和桌面启动项；等待期间这些输入变化会取消请求，必须重新预览授权。
+后台特权代理使用 `/run/learndl-install/<请求编号>` 中的 root 所有快照，只允许批准过的 unit 内容及固定 systemctl 操作，不保存管理员密码，也不依赖 sudo 缓存。
+请求历史在项目对应的 `~/.local/state/learndl/<项目标识>/installation/` 保存，后台日志可通过请求中显示的 service 名称用 `journalctl -u` 查看。
