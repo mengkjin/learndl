@@ -187,7 +187,7 @@ class Email(BoundLogger, metaclass=NoInstance):
 
     @classmethod
     @contextmanager
-    def _outbox_lock(cls) -> Iterator[bool]:
+    def _outbox_lock(cls, wait_seconds: float = _OUTBOX_LOCK_TIMEOUT) -> Iterator[bool]:
         """Yield whether this process holds the outbox lock.
 
         The wait is bounded so a busy flush cannot stall the caller indefinitely.
@@ -198,7 +198,7 @@ class Email(BoundLogger, metaclass=NoInstance):
         root.mkdir(parents = True , exist_ok = True)
         handle = open(root / '.lock' , 'a+')
         acquired = False
-        deadline = time.monotonic() + _OUTBOX_LOCK_TIMEOUT
+        deadline = time.monotonic() + wait_seconds
         try:
             while True:
                 try:
@@ -288,17 +288,25 @@ class Email(BoundLogger, metaclass=NoInstance):
         os.replace(folder , dest)
 
     @classmethod
-    def _flush_outbox(cls , timeout : int = 20) -> str | None:
+    def _flush_outbox(cls, timeout: int = 20, *, max_messages: int | None = None,
+                      deadline: float | None = None, stats: dict[str, Any] | None = None) -> str | None:
         """Retry queued mail in order.
 
         Returns:
             The connection error text when the network is still down.
             ``None`` when the queue is empty, drained, or only produced SMTP rejections.
         """
+        stats = stats if stats is not None else {}
+        stats.update(attempted=0, sent=0, processed=0)
         for folder in cls._pending_outbox():
+            if (max_messages is not None and stats['processed'] >= max_messages
+                    or deadline is not None and time.monotonic() >= deadline):
+                break
+            stats['processed'] += 1
             try:
                 message , meta = cls._read_outbox(folder)
             except (OSError , ValueError , MessageError) as exc:
+                stats['error'] = str(exc)
                 cls.logger.error(f'Invalid email outbox entry {folder.name}: {exc}')
                 try:
                     cls._move_dead(folder)
@@ -306,8 +314,10 @@ class Email(BoundLogger, metaclass=NoInstance):
                     cls.logger.error(f'Cannot isolate email outbox entry {folder.name}: {move_error}')
                 continue
             try:
+                stats['attempted'] += 1
                 cls._deliver(message , recipient = str(message['To']) if message['To'] else None , timeout = timeout)
             except Exception as exc:
+                stats['error'] = str(exc)
                 if _is_transient(exc):
                     meta['last_error'] = str(exc)
                     cls._write_meta(folder , meta)
@@ -329,7 +339,41 @@ class Email(BoundLogger, metaclass=NoInstance):
             if confirmation:
                 cls.logger.success(f'Send email {confirmation}')
             shutil.rmtree(folder)
+            stats['sent'] += 1
         return None
+
+    @classmethod
+    def retry_pending(cls, *, max_messages: int = 20, max_seconds: float = 20) -> dict[str, Any]:
+        """Retry published outbox entries, never competing with an active sender.
+
+        The budget is checked between messages; an in-flight SMTP transaction is
+        allowed to finish. SMTP acceptance followed by process death can still
+        cause a later retry: this is not an exactly-once transport.
+        """
+        if max_messages <= 0 or max_seconds <= 0:
+            raise ValueError('Email retry budgets must be positive')
+        stats: dict[str, Any] = dict(status='idle', lock_busy=False, attempted=0,
+                                    sent=0, processed=0, remaining=0, error=None)
+        if not MACHINE.emailable:
+            stats['status'] = 'disabled'
+            return stats
+        # Do not create an empty outbox just to inspect it.
+        if not PATH.email_outbox.is_dir():
+            return stats
+        with cls._outbox_lock(wait_seconds=0) as locked:
+            if not locked:
+                stats.update(status='busy', lock_busy=True)
+                stats['remaining'] = len(cls._pending_outbox())
+                return stats
+            try:
+                cls._flush_outbox(max_messages=max_messages,
+                                  deadline=time.monotonic() + max_seconds, stats=stats)
+                stats['status'] = 'error' if stats['error'] else 'complete'
+            except Exception as exc:
+                stats.update(status='error', error=f'{type(exc).__name__}: {exc}')
+                cls.logger.error(f'Email outbox retry failed: {exc}')
+            stats['remaining'] = len(cls._pending_outbox())
+        return stats
 
     @classmethod
     def send(cls , title : str  , 
@@ -343,7 +387,8 @@ class Email(BoundLogger, metaclass=NoInstance):
         """Send one email and retry mail saved from earlier SMTP failures.
 
         The return value is whether this call's message reached SMTP.
-        A queued message returns ``False`` and is retried by a later ``send``.
+        A queued message returns ``False`` and is retried by the watchdog
+        or a later ``send``.
         Callers with their own persistent retry queue must pass
         ``queue_on_failure=False`` so only one queue owns each notification.
         Identical content is not deduplicated: separate calls may be intentional.

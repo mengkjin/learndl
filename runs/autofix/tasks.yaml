@@ -2,6 +2,14 @@
 # watchdog 另发启动流程邮件；同一 ID 最多尝试一次，修改邮件设置不会重跑。
 schema_version: 1
 fixes:
+  - id: 20261021_create_15m_original_train_03
+    description: 允许 fit/predict 首尾源日期缺失，严格检查内部缺口；记录实际覆盖及失败诊断，两份缓存保存核验后请求 gru_15m_original_rtn 训练。
+    script: scripts/.autofix/create_15m_original.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 48h
+    enabled: true
   - id: 20261021_create_15m_original_train_02
     description: 补齐脚本 main 执行入口后重试 15m_original 构建；数据预检不再导入整套模型及无关算法依赖，核验后仍使用独立训练请求启动 gru_15m_original_rtn。
     script: scripts/.autofix/create_15m_original.py
@@ -9,7 +17,7 @@ fixes:
       dry_run: false
       email: true
     timeout: 48h
-    enabled: true
+    enabled: false
   - id: 20261021_create_15m_original_train_01
     description: 独立构建 dd51 公式的 15m_original fit/predict，记录来源和数值差异，保存回读校验后请求 gru_15m_original_rtn 训练；保留 Global2Top 修复。
     script: scripts/.autofix/create_15m_original.py

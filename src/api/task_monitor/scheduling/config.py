@@ -15,7 +15,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'rl_experiment', 'git_auto_update', 'cli_recovery', 'autofix'}
+JOB_NAMES = {'email_outbox', 'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'rl_experiment', 'git_auto_update', 'cli_recovery', 'autofix'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 

@@ -37,6 +37,9 @@ class _FakeTaskDatabase:
 
 class TaskWatchdogTest(unittest.TestCase):
     def setUp(self) -> None:
+        retry = patch('src.proj.util.web.emailer.Email.retry_pending', return_value={'status': 'complete'})
+        self.retry_pending = retry.start()
+        self.addCleanup(retry.stop)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.state_path = Path(self.temp_dir.name) / 'state.json'
         for target in ('src.api.task_monitor.scheduling.runtime.runtime_dir', 'src.api.task_monitor.scheduling.config.runtime_dir'):
@@ -57,6 +60,32 @@ class TaskWatchdogTest(unittest.TestCase):
             task_db=database, units=[], state_path=self.state_path, email_sender=sender,
             now=now, **kwargs,
         )
+
+    def test_email_outbox_runs_each_minute_and_records_stats(self):
+        db = _FakeTaskDatabase({}, {})
+        sender = MagicMock(return_value=True)
+        for now in (1000, 1030, 1060):
+            self._run(db, sender, now=now)
+        self.assertEqual(self.retry_pending.call_count, 2)
+        self.assertEqual(json.loads(self.state_path.read_text())['jobs']['email_outbox']['stats'], {'status': 'complete'})
+
+    def test_email_outbox_old_config_and_explicit_disable(self):
+        from src.api.task_monitor.watchdog import default_jobs
+        old = {'jobs': {'task_lifecycle': {'enabled': True, 'interval_seconds': 60}}}
+        self.assertIn('email_outbox', [j.name for j in default_jobs(old)])
+        old['jobs']['email_outbox'] = {'enabled': False, 'interval_seconds': 60}
+        self.assertNotIn('email_outbox', [j.name for j in default_jobs(old)])
+        self.assertEqual(default_jobs({'jobs': {}}), ())
+
+    def test_email_retry_failure_does_not_block_other_jobs_or_send_alert(self):
+        self.retry_pending.side_effect = OSError('outbox unavailable')
+        db = _FakeTaskDatabase({}, {})
+        sender = MagicMock(return_value=True)
+        self.assertFalse(self._run(db, sender, now=1000))
+        state = json.loads(self.state_path.read_text())
+        self.assertIn('outbox unavailable', state['jobs']['email_outbox']['last_error'])
+        self.assertEqual(state['jobs']['task_lifecycle']['stats']['reconciled_count'], 0)
+        sender.assert_not_called()
 
     def test_newly_killed_task_sends_once_and_retries_delivery(self) -> None:
         db = _FakeTaskDatabase({'train.py@1': {'status': 'killed'}}, {'train.py@1': self.task})

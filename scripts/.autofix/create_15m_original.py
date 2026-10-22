@@ -34,7 +34,7 @@ from src.data.preprocess.processors.original_15m import BASELINE_COMMIT, PrePro_
 
 KEY = '15m_original'
 SCHEDULE = 'gru_15m_original_rtn'
-REQUEST_ID = '20261021_create_15m_original_train_02'
+REQUEST_ID = '20261021_create_15m_original_train_03'
 FEATURES = ['open', 'close', 'high', 'low', 'vwap', 'turn_fl']
 FRAMES = ('fit', 'predict')
 
@@ -63,19 +63,13 @@ def audit(block: DataBlock, expected_dates=None):
         digest.update(json.dumps(index.tolist(), ensure_ascii=True).encode())
     finite = torch.zeros(6, dtype=torch.bool)
     daily = []
-    first_usable = None
-    leading_empty = []
+    usable_dates = []
     for start in range(0, len(block.date), 32):
         values = block.values[:, start:start + 32].detach().cpu().contiguous()
         digest.update(memoryview(values.numpy()))
         f = torch.isfinite(values)
-        for date, usable in zip(block.date[start:start + 32], f.any(dim=(0, 2, 3)).tolist()):
-            if usable:
-                first_usable = int(date)
-            elif first_usable is None:
-                leading_empty.append(int(date))
-            else:
-                raise ValueError(f'15m_original: internal/trailing completely unusable date {date}')
+        usable_dates.extend(int(date) for date, usable in
+                            zip(block.date[start:start + 32], f.any(dim=(0, 2, 3)).tolist()) if usable)
         finite |= f.any(dim=(0, 1, 2))
         infs = torch.isinf(values).sum(dim=(0, 2)).tolist()
         nans = torch.isnan(values).sum(dim=(0, 2)).tolist()
@@ -83,8 +77,14 @@ def audit(block: DataBlock, expected_dates=None):
                      for d, i, n in zip(block.date[start:start + 32], infs, nans))
     if not finite.all():
         raise ValueError('15m_original: a feature has no finite values')
+    internal_empty = np.setdiff1d(block.date[(block.date >= usable_dates[0]) &
+                                            (block.date <= usable_dates[-1])], usable_dates)
+    if len(internal_empty):
+        raise ValueError(f'15m_original: internal completely unusable dates {internal_empty.tolist()}')
     return {'sha256': digest.hexdigest(), 'shape': list(block.shape), 'dtype': str(block.values.dtype),
-            'features': FEATURES, 'daily': daily, 'leading_empty_dates': leading_empty}
+            'features': FEATURES, 'daily': daily,
+            'leading_empty_dates': block.date[block.date < usable_dates[0]].tolist(),
+            'trailing_empty_dates': block.date[block.date > usable_dates[-1]].tolist()}
 
 
 def find_snapshot(frame: str, manifest: str = ''):
@@ -157,6 +157,15 @@ def compare(current: DataBlock, original: DataBlock):
             'current_input_eligibility': input_eligibility(current)}
 
 
+class SourceCoverageError(ValueError):
+    """Keep structured preflight evidence without printing all valid dates."""
+    def __init__(self, diagnostic: dict):
+        self.diagnostic = diagnostic
+        details = {key: diagnostic[key] for key in
+                   ('frame', 'target_start', 'target_end', 'start', 'end', 'source_ranges', 'missing_sources')}
+        super().__init__(f'{KEY}/{diagnostic["frame"]}: source coverage incomplete: {json.dumps(details)}')
+
+
 def prepare(snapshot_manifest: str = ''):
     cutoff = int(CALENDAR.updated())
     available = {key: np.asarray(sorted(set(DB.dates('trade_ts', key, use_alt=True))))
@@ -167,23 +176,30 @@ def prepare(snapshot_manifest: str = ''):
         proc.load_end = cutoff
         snapshot, provenance = find_snapshot(frame, snapshot_manifest)
         proc.snapshot = snapshot
-        # The dd51 fit cache can have a leading all-NaN prefix (e.g. 2007-2009).
-        # Preserve that calendar axis rather than silently shortening the window.
-        if frame == 'fit' and all(len(ds) for ds in available.values()):
-            proc.source_start = max(int(ds[0]) for ds in available.values())
-        dates = CALENDAR.range(proc.load_start, cutoff)
+        target_start = int(proc.load_start)
+        dates = CALENDAR.range(target_start, cutoff)
         covered = np.array([], dtype=np.int64) if snapshot is None else snapshot.date
-        required = np.setdiff1d(dates, covered)
-        leading = required[required < proc.source_start] if proc.source_start is not None else np.array([], dtype=np.int64)
-        required = np.setdiff1d(required, leading)
+        usable = np.intersect1d(dates, np.union1d(covered,
+                                               np.intersect1d(available['min'], available['day'])))
+        actual = CALENDAR.range(int(usable[0]), int(usable[-1])) if len(usable) else np.array([], dtype=np.int64)
+        required = np.setdiff1d(actual, covered)
         missing = {key: np.setdiff1d(required, ds).tolist() for key, ds in available.items()}
-        if not len(dates) or any(missing.values()):
-            raise ValueError(f'{KEY}/{frame}: source coverage incomplete: {missing}')
         item = {'key': KEY, 'frame': frame, 'status': 'preflight_passed',
-                'start': int(dates[0]), 'end': cutoff, 'provenance': provenance,
-                'snapshot_dates': np.intersect1d(dates, covered).tolist(),
-                'recomputed_dates': required.tolist(), 'leading_unavailable_dates': leading.tolist(),
+                'target_start': target_start, 'target_end': cutoff,
+                'start': int(usable[0]) if len(usable) else None,
+                'end': int(usable[-1]) if len(usable) else None, 'provenance': provenance,
+                'snapshot_dates': np.intersect1d(actual, covered).tolist(),
+                'recomputed_dates': required.tolist(),
+                'leading_unavailable_dates': dates[dates < usable[0]].tolist() if len(usable) else dates.tolist(),
+                'trailing_unavailable_dates': dates[dates > usable[-1]].tolist() if len(usable) else [],
+                'missing_sources': missing,
+                'source_ranges': {key: [int(ds[0]), int(ds[-1])] if len(ds) else None
+                                  for key, ds in available.items()},
                 'path': str(DataBlock.path_preprocess(KEY, frame))}
+        if not len(usable) or any(missing.values()):
+            item['status'] = 'preflight_failed'
+            raise SourceCoverageError(item)
+        proc.load_start, proc.load_end = int(usable[0]), int(usable[-1])
         jobs.append((proc, item))
     return jobs
 
@@ -196,9 +212,11 @@ def request_training():
 
 
 def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
-    jobs = prepare(snapshot_manifest)
     if dry_run:
-        return [item for _, item in jobs]
+        jobs = prepare(snapshot_manifest)
+        result = [item for _, item in jobs]
+        Logger.note(json.dumps(result))
+        return result
     folder = PATH.interim / 'autofix_backups' / (
         '15m_original_' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '_' + uuid4().hex[:8])
     folder.mkdir(parents=True, exist_ok=False)
@@ -210,7 +228,7 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
               'known_differences': ['Global2Top retry correction retained',
                   'Current minute/day/label sources and dependencies may differ from historical snapshot',
                   'Input eligibility is not label-filtered training sample count'],
-              'blocks': [item for _, item in jobs]}
+              'blocks': []}
     report['implementation_commit'] = subprocess.check_output(
         ['git', 'rev-parse', 'HEAD'], cwd=PATH.main, text=True).strip()
 
@@ -222,6 +240,9 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
     save_report()
     Logger.note(f'15m_original report: {report_path}')
     try:
+        jobs = prepare(snapshot_manifest)
+        report['blocks'] = [item for _, item in jobs]
+        save_report()
         # Back up both experiment targets before replacing either. Production 15m is read only.
         for proc, item in jobs:
             path = DataBlock.path_preprocess(KEY, proc.frame)
@@ -239,7 +260,15 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
             proc.source_observer = item['minute_sources'].append
             block = proc.load_with_extension(reconstruct=True)
             expected = CALENDAR.range(proc.load_start, proc.load_end)
-            block = block.align(date=expected, inplace=True)
+            # Validate the returned axis before any alignment can hide a missing date.
+            check = audit(block, expected)
+            item['leading_empty_dates'] = check['leading_empty_dates']
+            item['trailing_empty_dates'] = check['trailing_empty_dates']
+            start = len(check['leading_empty_dates'])
+            end = len(block.date) - len(check['trailing_empty_dates'])
+            block = block.slice_date(int(block.date[start]), int(block.date[end - 1]))
+            expected = block.date.copy()
+            item['saved_start'], item['saved_end'] = int(expected[0]), int(expected[-1])
             check = audit(block, expected)
             item['audit'] = check
             item['input_eligibility'] = input_eligibility(block)
@@ -261,6 +290,8 @@ def run_task(dry_run: bool = False, snapshot_manifest: str = ''):
         report['training_request'] = request_training()
         report['status'] = 'training_requested'
     except Exception as exc:
+        if isinstance(exc, SourceCoverageError):
+            report['blocks'] = [exc.diagnostic]
         report.update(status='failed', error=f'{type(exc).__name__}: {exc}')
         raise
     finally:

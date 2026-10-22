@@ -49,8 +49,9 @@ their loaded code until they exit; subsequent processes use the updated code.
   quoted `HH:MM` strings. Alternatively `every_minutes` is a positive divisor of
   1440 and cannot be combined with days/times. Plans represent local wall time.
 - `maintenance.yaml`: watchdog tick, registered jobs, enabled flags, intervals,
-  watched service names and bounded cache prewarming options. Empty/disabled job
-  lists remain disabled; they do not fall back to the built-in defaults.
+  watched service names and bounded cache prewarming options. An explicitly empty
+  job registry stays disabled. Nonempty older snapshots gain missing `cli_recovery`
+  and `email_outbox` defaults; explicit per-job disables remain effective.
 - `hosts/<hostname>.yaml`: timezone, default backend (`systemd` or `cron`), include
   list and explicit task overrides (`enabled`, `backend`, `days`, `times`). Duplicate
   IDs/keys are errors. Override time lists replace the old list completely.
@@ -318,3 +319,21 @@ python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/r
 正常完成或 Python 异常由任务发送一封 HTML 日志和 ZIP/JSON 附件邮件。
 未送达的任务结果、进程被杀等由 watchdog 兜底；`no_email: true` 同时关闭这两种
 通知。运行详情及失败记录可在上述 status 中查看。手动运行不消耗 Git 自动请求。
+
+
+## Pending email retry
+
+`email_outbox` runs every 60 seconds through the existing watchdog. It retries
+only published entries in `PATH.email_outbox`; it does not generate alerts or
+consume other subsystems' notification queues. No timer reinstall is needed for
+an older nonempty watchdog snapshot: the missing job defaults to enabled.
+
+Retries take the same exclusive `.lock` as ordinary email sending, without waiting.
+If a sender is active the job skips that tick. Reading, SMTP delivery and removal
+of each queued message all occur under the lock. Hidden staging directories and
+`dead/` are ignored. A tick processes at most 20 entries with a 20-second budget
+checked between messages; in-flight SMTP is allowed to complete. Network failures
+retain messages for the next tick; SMTP rejections retain the existing dead-letter
+policy. Watchdog state records attempts, sent and remaining counts, lock contention
+and errors. SMTP acceptance followed by a crash before local deletion can still
+result in a later duplicate; this is not an exactly-once delivery protocol.

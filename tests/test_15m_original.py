@@ -135,7 +135,7 @@ spec = importlib.util.spec_from_file_location('isolated_autofix', 'scripts/.auto
 assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-assert module.REQUEST_ID.endswith('_02')
+assert module.REQUEST_ID.endswith('_03')
 """
         with tempfile.TemporaryDirectory() as cache:
             subprocess.run([sys.executable, '-c', code], cwd=ROOT, check=True,
@@ -236,19 +236,58 @@ assert module.REQUEST_ID.endswith('_02')
         b.values[:, :3] = torch.nan
         self.assertEqual(task.audit(b)['leading_empty_dates'], [1, 2, 3])
         b.values[:, 10] = torch.nan
-        with self.assertRaisesRegex(ValueError, 'internal/trailing'):
+        with self.assertRaisesRegex(ValueError, 'internal'):
             task.audit(b)
 
     def test_preflight_missing_middle_date_fails_without_shortening(self):
-        proc = SimpleNamespace(load_start=1, load_end=40, source_start=None, snapshot=None)
+        for frame in task.FRAMES:
+            proc = SimpleNamespace(load_start=1, load_end=40, snapshot=None)
+            with patch.object(task, 'FRAMES', (frame,)), \
+                 patch.object(task, 'PrePro_15m_original', return_value=proc), \
+                 patch.object(task, 'find_snapshot', return_value=(None, {})), \
+                 patch.object(task.CALENDAR, 'updated', return_value=40), \
+                 patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
+                 patch.object(task.DB, 'dates', return_value=[d for d in range(4,38) if d != 20]):
+                with self.assertRaises(task.SourceCoverageError) as error:
+                    task.prepare()
+            self.assertEqual(proc.load_start, 1)
+            self.assertEqual(error.exception.diagnostic['missing_sources']['min'], [20])
+            self.assertEqual(error.exception.diagnostic['frame'], frame)
+
+    def test_preflight_trims_both_frames_and_accepts_snapshot_bridge(self):
+        for frame in task.FRAMES:
+            for sources in (list(range(4, 41)), list(range(1, 38)), list(range(4, 38))):
+                proc = SimpleNamespace(load_start=1, load_end=40, snapshot=None)
+                with patch.object(task, 'FRAMES', (frame,)), \
+                     patch.object(task, 'PrePro_15m_original', return_value=proc), \
+                     patch.object(task, 'find_snapshot', return_value=(None, {})), \
+                     patch.object(task.CALENDAR, 'updated', return_value=40), \
+                     patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
+                     patch.object(task.DB, 'dates', return_value=sources):
+                    _, item = task.prepare()[0]
+                self.assertEqual((proc.load_start, proc.load_end), (sources[0], sources[-1]))
+                self.assertEqual(item['target_start'], 1)
+                self.assertEqual(item['target_end'], 40)
+        proc = SimpleNamespace(load_start=1, load_end=40, snapshot=None)
+        with patch.object(task, 'FRAMES', ('fit',)), \
+             patch.object(task, 'PrePro_15m_original', return_value=proc), \
+             patch.object(task, 'find_snapshot', return_value=(block(20,20), {})), \
+             patch.object(task.CALENDAR, 'updated', return_value=40), \
+             patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
+             patch.object(task.DB, 'dates', return_value=[x for x in range(4,38) if x != 20]):
+            _, item = task.prepare()[0]
+            self.assertEqual(item['snapshot_dates'], [20])
+            self.assertNotIn(20, item['recomputed_dates'])
+
+    def test_preflight_no_common_sources(self):
+        proc = SimpleNamespace(load_start=1, load_end=40, snapshot=None)
         with patch.object(task, 'PrePro_15m_original', return_value=proc), \
              patch.object(task, 'find_snapshot', return_value=(None, {})), \
              patch.object(task.CALENDAR, 'updated', return_value=40), \
              patch.object(task.CALENDAR, 'range', side_effect=lambda a,b: np.arange(a,b+1)), \
-             patch.object(task.DB, 'dates', return_value=[d for d in range(4,41) if d != 20]):
-            with self.assertRaisesRegex(ValueError, 'coverage incomplete'):
+             patch.object(task.DB, 'dates', side_effect=[[1,2], [3,4]]):
+            with self.assertRaisesRegex(ValueError, '"start": null'):
                 task.prepare()
-        self.assertEqual(proc.load_start, 1)
 
     def test_result_comparison_aligns_actual_dates_and_marks_missing(self):
         from src.res.model.util.original_comparison import compare_runs
@@ -314,6 +353,49 @@ class OriginalAutofix(TestCase):
         self.request.assert_not_called()
         report = json.loads(next(self.root.rglob('report.json')).read_text())
         self.assertEqual(report['status'], 'failed')
+
+    def test_preflight_failure_saved_without_request_and_dry_run_no_write(self):
+        with patch.object(task, 'prepare', side_effect=ValueError('internal missing min 20100914')):
+            with self.assertRaisesRegex(ValueError, '20100914'):
+                task.run_task(dry_run=True)
+            self.assertEqual([p.name for p in self.root.iterdir()], ['blocks'])
+            with self.assertRaisesRegex(ValueError, '20100914'):
+                task.run_task()
+        report = json.loads(next(self.root.rglob('report.json')).read_text())
+        self.assertEqual(report['status'], 'failed')
+        self.assertIn('20100914', report['error'])
+        self.request.assert_not_called()
+
+    def test_preflight_error_keeps_structured_source_diagnostics(self):
+        diagnostic = {'frame': 'fit', 'target_start': 1, 'target_end': 40,
+                      'start': 4, 'end': 37, 'source_ranges': {'min': [4,37], 'day': [1,40]},
+                      'missing_sources': {'min': [20], 'day': []}}
+        with patch.object(task, 'prepare', side_effect=task.SourceCoverageError(diagnostic)):
+            with self.assertRaisesRegex(ValueError, 'coverage incomplete'):
+                task.run_task()
+        report = json.loads(next(self.root.rglob('report.json')).read_text())
+        self.assertEqual(report['blocks'], [diagnostic])
+        self.request.assert_not_called()
+
+    def test_trim_empty_edges_before_save_and_validate_readback(self):
+        def edges(**kwargs):
+            b = block()
+            b.values[:, :2] = torch.nan
+            b.values[:, -3:] = torch.nan
+            return b
+        for proc in self.procs:
+            proc.load_with_extension.side_effect = edges
+        report = task.run_task()
+        for item, proc in zip(report['blocks'], self.procs):
+            self.assertEqual((item['saved_start'], item['saved_end']), (3, 37))
+            self.assertEqual(item['trailing_empty_dates'], [38,39,40])
+            self.assertEqual(proc.load_dump().date.tolist(), list(range(3,38)))
+
+    def test_missing_returned_axis_fails_before_alignment(self):
+        self.procs[0].load_with_extension.side_effect = lambda **kw: block().align(date=[x for x in range(1,41) if x != 20])
+        with self.assertRaisesRegex(ValueError, 'incomplete date coverage'):
+            task.run_task()
+        self.request.assert_not_called()
 
     def test_dry_run_no_writes_or_request(self):
         task.run_task(dry_run=True)

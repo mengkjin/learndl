@@ -193,6 +193,11 @@ def _run_task_monitor_cache(context: _WatchdogContext) -> JobResult:
     })
 
 
+def _run_email_outbox(context: _WatchdogContext) -> JobResult:
+    from src.proj.util.web.emailer import Email
+    return JobResult(stats=Email.retry_pending())
+
+
 def _run_task_timeouts(context: _WatchdogContext) -> JobResult:
     from src.api.task_monitor.scheduling.runtime import inspect_timeouts
     return JobResult(stats=inspect_timeouts())
@@ -235,6 +240,7 @@ def _run_cli_recovery(context: _WatchdogContext) -> JobResult:
 def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     """Return the registry; future short maintenance belongs here."""
     defaults = (
+        WatchdogJob('email_outbox', 60, _run_email_outbox),
         WatchdogJob('task_timeouts', TASK_LIFECYCLE_INTERVAL, _run_task_timeouts),
         WatchdogJob('task_lifecycle', TASK_LIFECYCLE_INTERVAL, _run_task_lifecycle),
         WatchdogJob('systemd_unit_probe', UNIT_PROBE_INTERVAL, _run_unit_probe),
@@ -252,6 +258,7 @@ def default_jobs(maintenance: dict | None = None) -> tuple[WatchdogJob, ...]:
     # A code update can precede reinstalling the scheduling snapshot. Recovery
     # is still opt-in through Hub registration; preserve an explicit disable.
     if options:  # An explicitly empty registry continues to mean "disable all".
+        options.setdefault('email_outbox', {'enabled': True, 'interval_seconds': 60})
         options.setdefault('cli_recovery', {'enabled': True, 'interval_seconds': UNIT_PROBE_INTERVAL})
     return tuple(WatchdogJob(name, options[name]['interval_seconds'], registry[name])
                  for name in registry if options.get(name, {}).get('enabled', False))
