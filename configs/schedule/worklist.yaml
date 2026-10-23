@@ -1,8 +1,9 @@
 fit:
-  - gru_15m_new_rtn
-  - gru_30mcont
-  - gru_15mraw
+  - gru_15m_0
+  - gru_15m_1
+  - gru_15m_2
+  - gru_15m_3
 
 resume: False
-force: True
+force: False
 rerun_mark: 1
