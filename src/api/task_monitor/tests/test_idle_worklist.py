@@ -66,6 +66,71 @@ class IdleTest(unittest.TestCase):
                        str(PATH.sched_shared), 'Rerun mark: none'):
             self.assertIn(detail, body)
 
+    def test_completed_standalone_request_skips_yaml_and_preserves_history(self):
+        state = WorklistState('old')
+        state.request_training('old-request', allow_unlisted=True)
+        self.save_success('old')
+        marker, completion = state.request_path.read_bytes(), state.path.read_bytes()
+        # Worklist/reset/model-directory changes must not revive the same request.
+        self.worklist.write_text('fit: []\nforce: true\nrerun_mark: 99\n')
+        (state.root / 'reset.json').write_text('{"generation": "new-reset"}')
+        self.folder.rmdir()
+        self.schedule.unlink()
+        with patch.object(ScheduleConfig, 'find_path', side_effect=AssertionError('YAML lookup')), \
+             patch.object(self.store, 'event') as event:
+            result = idle.dispatch(self.options, self.store)
+            self.assertNotIn('queued', result)
+            self.assertNotIn('missing_schedules', result)
+            event.assert_not_called()
+            # A fresh state/store instance behaves identically after restart.
+            self.assertEqual(WorklistState.requested_schedules(), [])
+            self.assertIsNone(idle.candidate(runtime.RunStore(self.store.path)))
+        self.assertEqual(state.request_path.read_bytes(), marker)
+        self.assertEqual(state.path.read_bytes(), completion)
+
+    def test_completed_request_in_current_worklist_still_checks_yaml(self):
+        state = WorklistState('first')
+        state.request_training('done', allow_unlisted=True)
+        self.save_success('first')
+        with patch.object(ScheduleConfig, 'find_path', return_value=None) as lookup:
+            _, _, missing = idle.worklist_schedules(self.store)
+        self.assertIn('first', missing)
+        lookup.assert_any_call(name='first')
+        # With valid YAML, normal worklist revision rules still apply.
+        self.worklist.write_text('fit: [first]\nforce: false\nrerun_mark: 2\n')
+        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+
+    def test_new_standalone_request_after_success_is_checked_and_eligible(self):
+        state = WorklistState('old')
+        state.request_training('request-1', allow_unlisted=True)
+        self.save_success('old')
+        state.request_training('request-2', allow_unlisted=True)
+        self.worklist.write_text('fit: []\n')
+        with patch.object(ScheduleConfig, 'find_path', return_value=None) as lookup:
+            _, _, missing = idle.worklist_schedules(self.store)
+        self.assertEqual(missing, ['old'])
+        lookup.assert_called_once_with(name='old')
+        self.assertEqual(idle.candidate(self.store)['task'], 'old')
+
+    def test_unfinished_or_unmatched_standalone_request_still_checks_yaml(self):
+        state = WorklistState('old')
+        state.request_training('request-1', allow_unlisted=True)
+        revisions = WorklistState.revisions('old')
+        self.worklist.write_text('fit: []\n')
+        archive = self.root / 'schedule' / 'archive'
+        archive.mkdir(parents=True)
+        (archive / 'old.yaml').write_text('model.module: gru\n')
+        for status in (None, 'running', 'failed', 'success'):
+            with self.subTest(status=status):
+                if status is not None:
+                    # A legacy success without a request ID cannot certify this request.
+                    state.save(status=status, revisions={} if status == 'success' else revisions)
+                with patch.object(PATH, 'sched', archive.parent / 'current'), \
+                     patch.object(ScheduleConfig, 'find_path', return_value=None) as lookup:
+                    _, _, missing = idle.worklist_schedules(self.store)
+                self.assertEqual(missing, ['old'])
+                lookup.assert_called_once_with(name='old')
+
     def test_missing_schedule_reports_while_gpu_busy_or_another_run_active(self):
         for active in (False, True):
             with self.subTest(active=active):

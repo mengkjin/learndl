@@ -60,13 +60,22 @@ class WorklistState:
 
     @classmethod
     def requested_schedules(cls) -> list[str]:
-        """Explicit standalone requests; ordinary worklist requests keep their old shape."""
+        """Pending standalone requests, excluding successful matching request IDs.
+
+        Completion uses saved state only, before any schedule YAML lookup. Callers
+        merge this list with the current worklist, whose validation stays independent.
+        Request markers remain on disk for idempotency and history.
+        """
         root = PATH.lc_machine / 'schedule_worklist' / 'requests'
         names = []
         for path in sorted(root.glob('*.json')):
             request = json.loads(path.read_text())
             name = request.get('schedule_name')
             if isinstance(name, str) and name and cls(name).request_path == path and request.get('id'):
+                previous = cls(name).read() or {}
+                completed_request = previous.get('revisions', {}).get('training_request', {})
+                if previous.get('status') == 'success' and completed_request.get('id') == request['id']:
+                    continue
                 names.append(name)
         return names
 
