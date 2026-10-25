@@ -18,7 +18,7 @@ model:
 input:  # input specification ----------------------------------------------------------------
   type: data # [data , hidden , factor] , specify below
   data.types: 15m # ['day+30m' , 30m , day , ...] , use if input_type is data
-  sequence.lens: {15m: 30}
+  sequence.lens: {15m: 20}
   sequence.steps: {15m: 1}
 
 train:
@@ -42,10 +42,10 @@ callbacks:
 algo:
   resnet_gru:
     hidden_dim:     [64] #  2**5
-    seqlens:        [{'15m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
+    seqlens:        [{'15m': 20}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in_dim:     [32]  # the resnet block input dimension
-    enc_att:        [false] 
+    enc_in_dim:     [16]  # the resnet block input dimension
+    enc_att:        [true] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
     rnn_layers:     [2]

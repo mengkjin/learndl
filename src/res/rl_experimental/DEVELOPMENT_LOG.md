@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-10-23 — 自动 worker 参数隔离修复
+
+- 修复 RL worker 的 `_child RUN_ID` 泄漏到 BackendTaskRecorder 参数解析器，导致训练前报 `Value without argument: _child`。脚本导入和调用期间仅保留脚本路径，成功或异常后恢复原参数；不改变手动 CLI 或通用参数解析规则。
+- 回归测试用真实参数解析器复现原错误，覆盖脚本导入、调用及异常恢复；18 项 RL 调度测试通过，包含 CPU 短训练与附件生成。
+- 更新 `rerun_mark` 为 `20261023-worker-argv-fix`。提交并同步修复后，已启用的服务器调度会将其视为新版本，空闲时重试一次；不需要再次安装 watchdog。
+
 ## 2026-10-14 — 退市全额核销与危险股票硬剔除
 
 - schema v4 新增决策日风险掩码/原因和结算日退市事件；旧契约仍可读取，新 run-experiment 强制重建。

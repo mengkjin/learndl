@@ -1,9 +1,7 @@
 fit:
   - gru_15m_0
   - gru_15m_1
-  - gru_15m_2
-  - gru_15m_3
 
 resume: False
 force: False
-rerun_mark: 1
+rerun_mark: 0

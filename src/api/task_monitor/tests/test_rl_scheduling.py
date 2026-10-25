@@ -188,6 +188,37 @@ class RLSchedulingTest(unittest.TestCase):
             self.assertEqual(rl.execute(request, self.store), 75)
             load.assert_not_called()
 
+    def test_worker_arguments_are_isolated_through_import_and_call(self):
+        from src.api.util.backend.recorder import BackendTaskRecorder
+        request = rl.observe(self.store) | dict(id='argv-test', owner=idle.OWNER, phase='running')
+        self.store.put(request)
+        worker_args = ['idle_worklist.py', '_child', request['id']]
+        script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                def main(**kwargs):
+                    parsed = BackendTaskRecorder.parse_kwargs(kwargs)
+                    self.assertEqual(sys.argv, [str(script)])
+                    self.assertEqual(parsed['config_path'], kwargs['config_path'])
+                    self.assertEqual(parsed['no_email'], request['no_email'])
+                    if fail:
+                        raise RuntimeError('experiment failed')
+                    return SimpleNamespace(success=True, execution_success=True)
+
+                def load(path):
+                    self.assertEqual(path, script)
+                    BackendTaskRecorder.parse_kwargs({})  # Also safe during script import.
+                    return [SimpleNamespace(main=main)]
+
+                with patch.object(sys, 'argv', worker_args), patch.object(rl, 'fit_guard'), \
+                     patch('src.proj.util.filesys.dynamic_import.dynamic_modules', side_effect=load):
+                    if fail:
+                        with self.assertRaisesRegex(RuntimeError, 'experiment failed'):
+                            rl.execute(request, self.store)
+                    else:
+                        self.assertEqual(rl.execute(request, self.store), 0)
+                    self.assertIs(sys.argv, worker_args)
+
     def test_running_version_finishes_before_latest_is_queued(self):
         request = rl.observe(self.store) | dict(id='run', owner=idle.OWNER, phase='running', started_at=1)
         self.store.put(request)

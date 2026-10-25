@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 import time
 from contextlib import contextmanager, ExitStack
 from pathlib import Path
@@ -223,10 +224,17 @@ def execute(request: dict, store) -> int:
         resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2))
         record(store, request['id'], output_directory=config[output_key], config_path=str(resolved))
         script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
-        with as_script_main(script):
-            module = next(iter(dynamic_modules(script)))
-            task = module.main(config_path=str(resolved), recipient=request['config']['recipient'],
-                               no_email=request['no_email'], email=not request['no_email'])
+        # BackendTaskRecorder parses sys.argv even for Python keyword calls.
+        # Never expose the worker's `_child RUN_ID` arguments to ScriptTool.
+        previous_argv = sys.argv
+        sys.argv = [str(script)]
+        try:
+            with as_script_main(script):
+                module = next(iter(dynamic_modules(script)))
+                task = module.main(config_path=str(resolved), recipient=request['config']['recipient'],
+                                   no_email=request['no_email'], email=not request['no_email'])
+        finally:
+            sys.argv = previous_argv
         success = bool(task.success and task.execution_success)
         record(store, request['id'], script_outcome='success' if success else 'error',
                error=None if success else 'RL script failed; see its task log and diagnostic bundle')
