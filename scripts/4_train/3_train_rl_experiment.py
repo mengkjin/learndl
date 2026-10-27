@@ -48,6 +48,7 @@ def main(
     config = Path(config_path).expanduser().resolve()
     content = config.read_text()
     launch = parse_config(content, yaml_format=config.suffix.lower() in {'.yaml', '.yml'})
+    print(f'[RL/run] Selected experiment mode: {launch["mode"]}', flush=True)
     supplied = launch['experiment']
     if no_email or launch['no_email']:
         task.kwargs['email'] = False

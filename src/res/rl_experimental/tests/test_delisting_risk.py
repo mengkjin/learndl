@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -125,7 +126,7 @@ class DelistingRiskTest(unittest.TestCase):
                 return [20230629, 20230630] if key == 'announcement_szse' else []
             def path(self, source, key, date):
                 return SimpleNamespace(exists=lambda: date == 20230629)
-            def load(self, source, key, date):
+            def load(self, source, key, date, **kwargs):
                 if source == 'exposure':
                     return pd.DataFrame({'secid': [1, 9], 'date': [20230629, 20230701]})
                 return pd.DataFrame({'secid': [2, 3], 'date': [date, 20230701],
@@ -155,6 +156,28 @@ class DelistingRiskTest(unittest.TestCase):
         np.testing.assert_array_equal(excluded, [[True, False]])
         np.testing.assert_array_equal(reasons, [[1, 0]])
         self.assertEqual(report['coverage'][0]['missing_exchange_days'], 270)
+
+    def test_empty_announcements_are_quiet_but_weekend_risks_are_preserved(self):
+        calls = []
+        class DB:
+            def dates(self, *args): return [20230624, 20230625, 20230626]
+            def path(self, *args): return Path('/does-not-exist/rl-risk')
+            def load(self, source, key, date, **kwargs):
+                calls.append((key, date, kwargs))
+                if key == 'announcement_szse' and date == 20230624:
+                    return pd.DataFrame({'secid': [2], 'date': [date], 'title': ['可能退市']})
+                return pd.DataFrame()
+        info = SimpleNamespace(get_st=lambda date: pd.DataFrame({'secid': []}))
+        with patch('src.res.rl_experimental.risk.progress') as progress:
+            excluded, _, report = prepare_risk(np.array([20230626]), np.array([1, 2]), DB(), info)
+        np.testing.assert_array_equal(excluded, [[False, True]])
+        self.assertEqual(len(calls), 9)
+        self.assertTrue(all(c[2] == {'vb_level': 'never'} for c in calls))
+        self.assertEqual(report['announcement_file_counts']['bse'],
+                         {'loaded': 3, 'empty': 3, 'empty_weekend': 2})
+        self.assertEqual(report['announcement_file_counts']['szse']['empty'], 2)
+        self.assertEqual(report['coverage'][0]['coverage'], 'incomplete')
+        self.assertTrue(progress.call_args.kwargs['warning'])
 
 
 if __name__ == '__main__':

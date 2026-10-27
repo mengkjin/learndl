@@ -316,6 +316,11 @@ def train_experiment(panel: PanelData, output_dir: str | Path, config: Experimen
     if config.selection_metric not in {"nav", "discounted_reward"}:
         raise ValueError("selection_metric must be nav or discounted_reward")
     RewardConfig.from_value(config.reward).validate()
+    progress('train', f'Effective settings: seed={config.seed}, steps={config.total_timesteps}, '
+             f'turnover_penalty={RewardConfig.from_value(config.reward).turnover_penalty}, '
+             f'holding_bonus={config.holding_bonus}, extra_cost_bp={config.extra_cost_bp}, '
+             f'observation_version={config.observation_version}, lean_training={config.lean_training}, '
+             f'eval_freq={config.eval_freq} (0=every update)')
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     splits = splits or date_split(panel, config.train_end_date, config.valid_end_date)

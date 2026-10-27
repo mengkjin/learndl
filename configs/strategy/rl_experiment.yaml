@@ -11,8 +11,8 @@
 # output/output_root 是结果根目录；自动任务在其 automatic/<请求编号> 下隔离结果。
 # 自动执行默认每版本一次，失败不自动重试；运行期间的新版本在本次结束后等待执行。
 enabled: true
-rerun_mark: '20261023-worker-argv-fix'
-mode: single
+rerun_mark: '20261026-walk-forward-low-turnover'
+mode: walk_forward
 recipient: null
 no_email: false
 single:

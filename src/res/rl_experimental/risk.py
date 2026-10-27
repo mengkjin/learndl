@@ -32,23 +32,34 @@ def prepare_risk(dates, stocks, db, info):
     first = pd.Timestamp(str(int(dates[0]))) - pd.Timedelta(days=89)
     calendar = [int(d.strftime('%Y%m%d')) for d in pd.date_range(first, str(int(dates[-1])))]
     available = {}
+    file_counts = {}
     frames = []
     progress('risk', 'Reading available announcement files (read-only)')
     for exchange in ('bse', 'szse', 'sse'):
         key = f'announcement_{exchange}'
         present = set(int(d) for d in db.dates('crawler', key))
         available[exchange] = present
+        counts = {'loaded': 0, 'empty': 0, 'empty_weekend': 0}
+        file_counts[exchange] = counts
         for date in calendar:
             if date not in present:
                 continue
-            frame = db.load('crawler', key, date)
+            # Empty daily announcement files are normal, including weekends.
+            # Keep reading all dates/exchanges; summarize instead of flooding logs.
+            frame = db.load('crawler', key, date, vb_level='never')
+            counts['loaded'] += 1
             if frame.empty:
+                counts['empty'] += 1
+                counts['empty_weekend'] += int(pd.Timestamp(str(date)).dayofweek >= 5)
                 continue
             frame = frame.loc[frame.title.str.contains(r'可能.*(?:风险警示)|可能.*(?:退市)', regex=True, na=False)].copy()
             # Both publication date and file availability must precede the decision.
             frame['available_date'] = np.maximum(pd.to_numeric(frame['date']), date)
             frames.append(frame)
     announcements = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    progress('risk', 'Announcement files: ' + '; '.join(
+        f'{ex}: loaded={c["loaded"]}, empty={c["empty"]} (weekend={c["empty_weekend"]})'
+        for ex, c in file_counts.items()))
     coverage = []
     for i, date in enumerate(dates):
         date = int(date)
@@ -75,7 +86,8 @@ def prepare_risk(dates, stocks, db, info):
     report = {'rules': ['DATAVENDOR.INFO.get_st', 'warnst: 90 calendar days; 可能.*风险警示 or 可能.*退市'],
               'reason_bits': {'1': 'ST/abnormal', '2': 'announcement warning'},
               'st_cells': int(((reason & 1) != 0).sum()), 'warning_cells': int(((reason & 2) != 0).sum()),
-              'unverified_or_incomplete_dates': incomplete, 'coverage': coverage}
+              'unverified_or_incomplete_dates': incomplete, 'coverage': coverage,
+              'announcement_file_counts': file_counts}
     progress('risk', f'Excluded ST cells={report["st_cells"]}, warning cells={report["warning_cells"]}; '
              f'incomplete/unverified warning coverage={incomplete}/{len(dates)}. '
              'Available rules applied; this is not a complete reproduction of live screening.', warning=bool(incomplete))

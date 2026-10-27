@@ -1,5 +1,17 @@
 # Development log
 
+## 2026-10-26 — 启用季度低换手验证
+
+- 根据用户确认，将自动配置切换为 walk_forward/stage=all，更新 rerun_mark 为 20261026-walk-forward-low-turnover。
+- 启用换手惩罚/持仓保留奖励筛选、2023Q1–2025Q4 季度滚动、seed 7/17/29、3 bp 主成本及 0/1/3/5/10 bp 成本情景；使用已有 v4 快照、轻量环境和每 5 次更新验证。
+- 默认计划为 24 个筛选训练和 108 个季度训练。服务器同步后由共享空闲插槽执行，本机仅校验配置与测试，不启动完整实验。
+
+## 2026-10-26 — 公告空文件日志汇总与实验模式提示
+
+- RL 公告读取使用 DB 的 vb_level='never'，取消逐文件空表提醒；按交易所汇总读取数、空表数及周末空表数，保留在质量报告。继续读取周末和北交所公告，不改变风险判定或缺文件覆盖告警。
+- 脚本启动明确输出 single/walk_forward；训练输出实际换手惩罚、持仓保留奖励、附加成本、观测版本、轻量环境及验证频率，避免把 single 默认实验误认为季度验证。
+- 核查 20261026T030236510995Z：实际运行 single/seed 7，turnover_penalty=0、holding_bonus=0、extra_cost_bp=0、lean_training=false；尚未执行季度方案。未擅自切换自动调度模式。
+
 ## 2026-10-23 — 自动 worker 参数隔离修复
 
 - 修复 RL worker 的 `_child RUN_ID` 泄漏到 BackendTaskRecorder 参数解析器，导致训练前报 `Value without argument: _child`。脚本导入和调用期间仅保留脚本路径，成功或异常后恢复原参数；不改变手动 CLI 或通用参数解析规则。
