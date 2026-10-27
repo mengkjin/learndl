@@ -1,4 +1,7 @@
 fit:
+  - gru_day_new
+  - gru_day_new_1
+  - gru_day_new_2
   - gru_15m_0
   - gru_15m_1
 
