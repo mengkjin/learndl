@@ -100,4 +100,13 @@ fixes:
       dry_run: false
       email: true
     timeout: 2h
+    enabled: false
+  - id: 20261028_resume_rl_5d17935c_02
+    description: 完整则补发 5d17935c 结果；未完成则校验旧模型及原代码版本，提交共享训练插槽只补缺失子任务，再完成测试和邮件。
+    script: scripts/.autofix/recover_or_resume_rl_results.py
+    params:
+      run_directory: results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
+      dry_run: false
+      email: true
+    timeout: 2h
     enabled: true

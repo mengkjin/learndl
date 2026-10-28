@@ -104,6 +104,12 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
     try:
         options = settings()
         if options.get('enabled'):
+            from .rl_resume import candidate as resume_candidate
+            if resume := resume_candidate(store, root):
+                save_state(store, dict(status='pending', mode='walk_forward', version=resume['version'],
+                    resume_request_id=resume['resume_request_id'], output_directory=resume['resume_request']['run_directory'],
+                    updated_at=time.time(), wait_reason=old.get('wait_reason') if old.get('version') == resume['version'] else None))
+                return resume
             # The two watchdog jobs share an arbiter, but RL's configured
             # polling interval still applies when the model job runs faster.
             # Workers always bypass this cache before claiming/starting work.
@@ -203,6 +209,26 @@ def execute(request: dict, store) -> int:
             guards.enter_context(fit_guard())
         except portalocker.LockException:
             return 75
+        if request.get('resume_request_id'):
+            if not settings().get('enabled'):
+                return 75
+            from .rl_resume import recheck
+            doc = recheck(request, PATH.main)
+            record(store, request['id'], output_directory=doc['run_directory'],
+                   config_path=str(Path(doc['run_directory'])/'config.json'), resume_request_id=doc['request_id'])
+            script = PATH.scpt / '4_train' / '4_resume_rl_experiment.py'
+            previous_argv = sys.argv
+            sys.argv = [str(script)]
+            try:
+                with as_script_main(script):
+                    module = next(iter(dynamic_modules(script)))
+                    task = module.main(request_path=request['resume_request_path'], email=not doc['no_email'])
+            finally:
+                sys.argv = previous_argv
+            success = bool(task.success and task.execution_success)
+            record(store, request['id'], script_outcome='success' if success else 'error',
+                   error=None if success else 'RL resumption failed; inspect its audit and task log')
+            return 0 if success else 1
         # Training exceptions (including lock errors inside the experiment) are
         # real failed attempts, never eligibility deferrals.
         try:

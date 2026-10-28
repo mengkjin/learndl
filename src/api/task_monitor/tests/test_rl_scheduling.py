@@ -51,6 +51,62 @@ class RLSchedulingTest(unittest.TestCase):
         self.git('add', rl.CONFIG_PATH)
         self.git('commit', '-qm', 'config')
 
+    def resume_request(self, name='resume-one'):
+        import hashlib
+        from src.api.task_monitor.scheduling.rl_resume import submit
+        run = self.root/'results/rl_experimental/old-run'
+        run.mkdir(parents=True, exist_ok=True)
+        for file in ('config.json', 'identity.json'):
+            (run/file).write_text('{}')
+        (run/'system.json').write_text(json.dumps({'git_revision': 'a'*40}))
+        digest = hashlib.sha256(b'{}').hexdigest()
+        plan = dict(run=str(run), source_commit='a'*40, config_sha256=digest,
+                    identity_sha256=digest, recipient='resume@example.com')
+        return submit(self.root, name, plan), plan
+
+    def test_resume_shared_queue_survives_poll_and_is_consumed_once(self):
+        from src.api.task_monitor.scheduling.rl_resume import submit
+        path, plan = self.resume_request()
+        self.assertEqual(submit(self.root, 'resume-one', plan), path)
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            submit(self.root, 'resume-one', plan | {'recipient': 'other@example.com'})
+        request = rl.observe(self.store)
+        self.assertEqual(request['resume_request_id'], 'resume-one')
+        idle.dispatch(self.options, self.store)
+        queued = [r for r in self.store.owned(idle.OWNER) if r['phase'] == 'queued']
+        self.assertEqual(len(queued), 1)
+        idle.dispatch(self.options, self.store)
+        self.assertEqual(self.store.get(queued[0]['id'])['phase'], 'queued')
+        queued[0]['phase'] = 'error'
+        self.store.put(queued[0])
+        next_request = rl.observe(runtime.RunStore(self.store.path))
+        self.assertNotIn('resume_request_id', next_request)
+        self.resume_request('resume-two')
+        self.assertEqual(rl.observe(self.store)['resume_request_id'], 'resume-two')
+
+    def test_resume_execution_keeps_original_output_and_uses_fit_guard(self):
+        from src.api.task_monitor.scheduling.rl_resume import recheck
+        path, plan = self.resume_request()
+        request = rl.observe(self.store) | dict(id='resume-job', owner=idle.OWNER, phase='running')
+        self.store.put(request)
+        with patch.object(rl, 'fit_guard', side_effect=portalocker.LockException('busy')):
+            self.assertEqual(rl.execute(request, self.store), 75)
+        called = []
+
+        def main(**kwargs):
+            called.append(kwargs)
+            self.assertEqual(len(sys.argv), 1)
+            return SimpleNamespace(success=True, execution_success=True)
+
+        with patch.object(rl, 'fit_guard'), \
+             patch('src.proj.util.filesys.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=main)]):
+            self.assertEqual(rl.execute(request, self.store), 0)
+        self.assertEqual(called[0]['request_path'], str(path))
+        self.assertEqual(evidence(self.store, request['id'])['output_directory'], plan['run'])
+        (Path(plan['run'])/'config.json').write_text('{"changed":true}')
+        with self.assertRaisesRegex(ValueError, 'changed'):
+            recheck(request, self.root)
+
     def test_both_formats_and_invalid_values(self):
         self.assertEqual(rl.read_config(self.path)['mode'], 'single')
         self.doc['mode'] = 'walk_forward'
