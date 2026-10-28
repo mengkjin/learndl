@@ -1,5 +1,13 @@
 # Autofix：发布一次，服务器尝试一次
 
+2026-10-28 新增 `20261028_recover_rl_results_5d17935c_01`：只读核验既有 RL 季度实验
+`5d17935c80694717a8df5fbd055791d4` 的训练预算、产物哈希、测试日期与指标一致性。
+全部通过后，在原运行的独立 `recovery/` 子目录重新打包分析结果，并通过任务邮件发送；
+不训练、不加载模型、不改数据库/原实验结果，也不清除任何调度记录。
+失败只发送诊断与任务 HTML，不生成“成功”包。完整回执在 `recovery/<id>/mail/delivery.json`，
+邮件按 MIME 大小限制分批，部分失败可用 `python -m src.res.rl_experimental.task_mail <mail目录>`
+补发未送达的分批消息。此任务需服务器同步清单后按现有 autofix 队列执行，无需重装服务。
+
 Autofix 用来在代码更新后执行明确声明的数据重算、回补或修复。你在本电脑维护 `tasks.yaml` 并提交 Git，服务器 watchdog 发现请求后交给独立 worker。服务器不修改 Git 中的文件来标记完成，也不需要把执行状态传回本机。
 
 当前清单注册了 `20261014_create_open_vwap_datablocks_01`：先生成六组 open/VWAP 原始标签，再构建 `y_open` / `y_vwap` 的 fit 与 predict DataBlock。其他脚本没有因本功能而自动获得 autofix 准入。

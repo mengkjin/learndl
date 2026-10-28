@@ -20,7 +20,7 @@ from .baselines import replay_baseline
 from .bundle import create_bundle
 from .data import PanelData, Standardizer
 from .env import EpisodeRange, PortfolioEnv
-from .progress import progress
+from .progress import progress, quiet_output
 from .training import ExperimentConfig, build_candidate_cache, history_metrics, train_experiment, write_history
 
 
@@ -349,6 +349,21 @@ def report(summary, output):
 
 
 def run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=None):
+    if dry_run:
+        return _run_walk_forward(config_path, dry_run=True, stage=stage, bundle_ready=bundle_ready)
+    output = Path(load_config(config_path)['output']).resolve()
+    with quiet_output(output/'detail.log'):
+        progress('suite', f'Start {stage}; full logs: {output}/detail.log', milestone=True)
+        try:
+            result = _run_walk_forward(config_path, stage=stage, bundle_ready=bundle_ready)
+        except Exception as exc:
+            progress('suite', f'Failed: {type(exc).__name__}: {exc}', warning=True, milestone=True)
+            raise
+        progress('suite', f'Completed {stage}; bundle: {result["bundle_metadata"]}', milestone=True)
+        return result
+
+
+def _run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=None):
     c = load_config(config_path)
     plan = task_plan(c)
     if dry_run:
@@ -403,6 +418,7 @@ def run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=No
     try:
         selected_path = output/'selected.json'
         if stage in ('screen', 'all'):
+            progress('screen', f'Start {plan["screen_training_tasks"]} screening tasks', milestone=True)
             screen = c['screen']
             sub = slice_panel(panel, screen['start'], screen['end'])
             splits = intervals(sub, screen['start'], screen['valid_start'], screen['end'], screen['end'])
@@ -423,6 +439,7 @@ def run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=No
                         'penalty': choose_screen(results, False), 'retention': choose_screen(results, True)}
             write_json(selected_path, selected)
             write_json(output/'selection_fingerprint.json', {'sha256': hashlib.sha256(selected_path.read_bytes()).hexdigest()})
+            progress('screen', f'Completed screening; frozen choices: {selected}', milestone=True)
             del prepared, cache, sub
         if stage in ('quarters', 'all'):
             if not selected_path.exists():
@@ -443,6 +460,7 @@ def run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=No
                     progress('quarter', f'{fold["name"]}/{arm}/seed-{seed}')
                     train_task(sub, splits, folder, config, prepared, cache)
                 del prepared, cache, sub
+                progress('quarter', f'{fold["name"]}: training/validation complete, {len(selected)*len(c["seeds"])} tasks', milestone=True)
             histories, states = {}, {}
             for fold in plan['folds']:
                 # Evaluate only this decision segment; preserve positions at every boundary.
@@ -473,6 +491,8 @@ def run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=No
                         progress('replay', f'{fold["name"]}/{key}')
                         h = model_replay(sub, interval, folder, cost, state, c['training'].get('device', 'cuda'))
                         histories.setdefault(key, []).extend(add_exhausted_rows(sub, interval, h, state))
+                write_json(output/'evaluation_progress.json', {'completed_quarter': fold['name'], 'paths': len(histories)})
+                progress('quarter', f'{fold["name"]}: test replay complete, {len(histories)} strategy/cost paths', milestone=True)
             # Every strategy/cost must have exactly the same decision/settlement pairs.
             dates = None
             for key, history in histories.items():

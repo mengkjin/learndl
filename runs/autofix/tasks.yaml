@@ -91,3 +91,13 @@ fixes:
       email: true
     timeout: 12h
     enabled: true
+  - id: 20261028_recover_rl_results_5d17935c_01
+    description: 核验 5d17935c 的 132 次训练与 105 条季度测试轨迹；通过后重新打包并发送大小受限的任务结果邮件，不重新训练。
+    script: scripts/.autofix/recover_rl_results.py
+    params:
+      run_id: 5d17935c80694717a8df5fbd055791d4
+      run_directory: results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
+      dry_run: false
+      email: true
+    timeout: 2h
+    enabled: true

@@ -287,7 +287,7 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s src/res/r
 
 服务器脚本默认配置改为 `configs/strategy/rl_experiment.yaml`。文件内同时提供
 `single` 和 `walk_forward` 两套完整参数，通过 `mode` 选择；旧 JSON 路径仍可显式传入。
-默认单次实验，切换到季度方案前检查其行情快照、日期及完整训练计算量。
+当前配置选择季度方案；切换方案前检查其行情快照、日期及完整训练计算量。
 
 ```bash
 python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
@@ -299,3 +299,41 @@ python -m src.api.task_monitor.scheduling.idle_worklist rl-status
 不自动重试。等待期间多次修改只运行最新版。每次自动请求有独立输出目录和配置
 来源记录；邮件仍包含任务 HTML 与 ZIP/JSON，不额外发送 RL 结果邮件。
 部署及等待条件见 `runs/scheduling/README.md` 的 RL 实验章节。
+
+### 精简日志、任务邮件与结果补发（2026-10-28）
+
+季度实验主日志默认每季度两条：训练/验证完成、全部成本情景测试回放完成。
+筛选和整套实验另有开始/完成摘要。完整输出保留在运行目录 `detail.log`，
+每个子训练的 `stdout.log`、`stderr.log`、CSV 和 TensorBoard 继续保存。
+若长时间仍持续产生进展，最多每小时补一条心跳，避免触发 12 小时无输出超时；
+心跳不是独立计时线程，程序真正卡住时不会掩盖超时。
+
+ZIP 分卷不等于邮件大小受限。旧脚本会把所有分卷与 HTML 一并装入单封邮件。
+现在 RL 任务在 HtmlCatcher 关闭之后按 **完整 MIME 编码大小**分组，默认每封
+不超过 18 MiB（工程预算，不是对邮箱供应商限额的声明）。小结果仍为一封任务邮件；
+超限时才发送同一任务的编号分批邮件，不额外另发日志通知。大于 512 KiB 的 HTML
+使用 `.html.gz`，解压后可离线查看。极大附件使用 `.mailpartNNN` 与其 JSON 清单，
+须先按清单顺序拼回原文件，再使用 `analyze-bundle`。普通 8/10 MiB ZIP 分卷无需此步骤。
+
+每封的实际 MIME 大小、收件人、SHA-256、SMTP 接受状态及错误写入
+`bundles/task_mail/<id>/delivery.json`；补发任务的记录在 `recovery/<id>/mail/`。
+SMTP 接受不等于收件箱已收到。部分失败不会重训，也不会把同一封邮件放进全局
+outbox 重复排队。只重试未确认发送的分批邮件：
+
+```bash
+python -m src.res.rl_experimental.task_mail <包含-delivery.json-的目录>
+```
+
+如果进程在发送过程中被中断，`in_flight=true` 表示结果不明，工具拒绝盲目补发；
+先核对邮箱/SMTP 日志，再决定是否重新发送。
+
+Autofix `20261028_recover_rl_results_5d17935c_01` 专门检查运行
+`5d17935c80694717a8df5fbd055791d4`。它核验全部计划训练的状态和模型/normalizer/
+指标哈希、训练预算、冻结选模参数，以及每条测试轨迹对快照日期轴的完整覆盖和
+净值/换手/费用一致性。只读取快照的日期数组，不加载模型或数据库、不重新训练。
+检查通过才创建新结果包；失败只附诊断 JSON 和本次任务 HTML。原模型和结果不改动。
+新包含离线报告、全部测试轨迹、训练更新/验证 CSV 及审计结论，不含行情和模型文件；
+原模型与完整 TensorBoard 保留在服务器。
+
+本机可用 Notebook 07 或 `analyze-bundle` 打开补发包。进程退出码 0 只是正常退出
+证据，不能替代这份产物审计。审计确认的是工程完整性与一致性，不是新的前向实盘验证。

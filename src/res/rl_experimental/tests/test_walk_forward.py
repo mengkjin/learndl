@@ -137,6 +137,33 @@ class WalkForwardTest(unittest.TestCase):
             self.assertEqual(len(report['quarter_returns']['robust/3']), 2)  # No partial July quarter
             model = path/'run/quarters/2023Q1/penalty/seed-7/best_model.zip'
             stamp = model.stat().st_mtime_ns
+            from src.res.rl_experimental.recover_results import recover_suite, audit_suite
+            from src.res.rl_experimental.bundle import analyze_bundle
+            audit, metadata = recover_suite(path/'run', path/'repair')
+            self.assertTrue(audit['complete'], audit['errors'])
+            self.assertEqual(audit['training_tasks_verified'], 8)
+            self.assertEqual(audit['test_paths_verified'], 18)
+            restored = analyze_bundle(metadata, path/'restored')
+            self.assertEqual(json.loads((restored/'summary.json').read_text()), report)
+            self.assertFalse(list(restored.rglob('panel.npz')))
+            self.assertFalse(list(restored.rglob('best_model.zip')))
+            self.assertEqual(model.stat().st_mtime_ns, stamp)
+            # Missing test rows, summary inconsistency and corrupt checkpoints
+            # must never be turned into a recovered success result.
+            csv = path/'run/summary/robust_3.csv'
+            original = csv.read_bytes()
+            rows = pd.read_csv(csv)
+            rows.iloc[:-1].to_csv(csv, index=False)
+            self.assertFalse(audit_suite(path/'run')['complete'])
+            csv.write_bytes(original)
+            before = model.read_bytes()
+            model.write_bytes(b'corrupt')
+            failed, missing = recover_suite(path/'run', path/'failed-repair')
+            self.assertFalse(failed['complete'])
+            self.assertIsNone(missing)
+            self.assertFalse((path/'failed-repair/bundles').exists())
+            model.write_bytes(before)
+            stamp = model.stat().st_mtime_ns
             run_walk_forward(path/'config.json', stage='screen')
             self.assertEqual(model.stat().st_mtime_ns, stamp)
             (path/'run/selected.json').write_text('{}')

@@ -394,7 +394,11 @@ class AutoRunTask(BoundLogger):
                 self.exit_message ,
             ]
             from src.proj.util.web.emailer import Email
-            sent = Email.send(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
+            # Optional task-owned delivery (e.g. size-bounded RL result parts).
+            # It runs after HtmlCatcher closes and must return True only when all
+            # parts reached SMTP. Other tasks retain the existing outbox behavior.
+            sender = getattr(self, 'email_sender', None) or Email.send
+            sent = sender(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
                               confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
             if getattr(self, '_autofix_primary', False):
                 from src.api.task_monitor.scheduling.autofix_sandbox import script_event
