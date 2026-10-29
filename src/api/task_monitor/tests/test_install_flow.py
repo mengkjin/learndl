@@ -1,10 +1,14 @@
 """Installation authorization, immutable privileges and admission without real sudo/systemd."""
 import json
+import os
+import subprocess
+import sys
 import tempfile
 import time
 import unittest
 from contextlib import nullcontext
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.api.task_monitor.scheduling import install_flow as flow
@@ -214,6 +218,55 @@ class InstallationTest(unittest.TestCase):
             self.assertEqual(flow.register(approval), self.row['id'])
         self.assertEqual(requests.current()['phase'], 'waiting')
         transaction.assert_not_called()
+
+    def test_real_generated_plan_passes_privileged_registration(self):
+        from src.api.task_monitor.scheduling.config import load_config
+        from src.proj import PATH
+        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        plan = flow.install.build_plan(config, '', PATH.main, Path(sys.executable), config['timezone'])
+        identifier = 'b' * 32
+        approval = dict(id=identifier, uid=1000, unit=f'learndl-install-{identifier}.service',
+                        allowed_units={name: [contents] for name, contents in plan['units'].items()})
+        payload = self.root / 'approval.json'
+        payload.write_text(json.dumps(approval))
+        staging = self.root / 'privileged-fixture'
+        actual_stat = Path.stat
+        def stat(path, *args, **kwargs):
+            if path == staging:
+                return SimpleNamespace(st_uid=0, st_mode=0o40755)
+            return actual_stat(path, *args, **kwargs)
+        with patch.object(privileged, 'BASE', staging), patch.dict(os.environ, {'SUDO_UID': '1000'}), \
+             patch.object(Path, 'stat', stat), \
+             patch.object(privileged.subprocess, 'run', return_value=SimpleNamespace(returncode=0)) as run:
+            privileged.register(payload)
+        run.assert_called_once()
+        saved = json.loads((staging / identifier / 'approval.json').read_text())
+        self.assertEqual(saved['allowed_units'], approval['allowed_units'])
+        for suffix in ('service', 'timer'):
+            for name in ('email-outbox', 'cli-recovery', 'task-monitor-cache'):
+                self.assertIn(f'learndl-aux-{name}.{suffix}', saved['allowed_units'])
+
+    def test_privileged_registration_rejects_unknown_helpers_before_mutation(self):
+        for name in ('learndl-aux-shell.service', 'learndl-aux-email-outbox.service.extra',
+                     '../learndl-aux-email-outbox.timer', 'ssh.service'):
+            payload = self.root / 'invalid.json'
+            payload.write_text(json.dumps(dict(id='c' * 32, uid=1000,
+                unit='learndl-install-' + 'c' * 32 + '.service', allowed_units={name: ['anything']})))
+            with patch.dict(os.environ, {'SUDO_UID': '1000'}), patch.object(privileged, 'BASE') as base:
+                with self.assertRaisesRegex(ValueError, 'Invalid unit name'):
+                    privileged.register(payload)
+                base.mkdir.assert_not_called()
+
+    def test_registration_error_reports_stderr_without_dumping_frozen_source(self):
+        approval = {key: self.row[key] for key in ('id', 'unit', 'boot_id', 'created_at', 'expires_at')}
+        approval['helper_source'] = '# large frozen helper source'
+        failure = subprocess.CalledProcessError(1, ['sudo', '-c', approval['helper_source']],
+                                               stderr='ValueError: Invalid unit name: fixture.service')
+        with patch.object(flow.subprocess, 'run', side_effect=failure):
+            with self.assertRaisesRegex(RuntimeError, 'Invalid unit name: fixture.service') as caught:
+                flow.register(approval)
+        self.assertNotIn(approval['helper_source'], str(caught.exception))
+        self.assertEqual(requests.current()['phase'], 'failed')
 
     def test_expired_privileges_and_symlinks_are_rejected(self):
         approval = dict(id='a' * 32, expires_at=0, allowed_units={})

@@ -169,8 +169,14 @@ def register(approval: dict) -> str:
             # to import/execute a mutable project file, even during registration.
             source = approval['helper_source']
             frozen = f'from __future__ import annotations\n__source__ = {source!r}\n' + source.replace('from __future__ import annotations\n', '')
-            subprocess.run(['sudo', '-n', '/usr/bin/python3', '-I', '-c', frozen,
-                            'register', str(payload)], check=True)
+            try:
+                subprocess.run(['sudo', '-n', '/usr/bin/python3', '-I', '-c', frozen,
+                                'register', str(payload)], check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as exc:
+                # CalledProcessError includes the entire frozen broker in argv.
+                # Report its actual stderr instead of flooding the terminal.
+                detail = (exc.stderr or exc.stdout or 'No diagnostic output').strip()
+                raise RuntimeError(f'Background registration failed (exit {exc.returncode}):\n{detail[-4000:]}') from None
         # The root supervisor acknowledges creation of the unprivileged worker.
         for _ in range(100):
             if (bundle / 'ready').exists():

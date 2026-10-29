@@ -18,7 +18,7 @@ from pathlib import Path
 
 BASE = Path('/run/learndl-install')
 UNITS = Path('/etc/systemd/system')
-NAME = re.compile(r'learndl-(?:schedule-[a-z][a-z0-9_]*|watchdog|idle-worklist|autofix|deferred)\.(?:service|timer)')
+NAME = re.compile(r'learndl-(?:schedule-[a-z][a-z0-9_]*|watchdog|idle-worklist|autofix|deferred|aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(?:service|timer)')
 
 
 def execute(request: dict, approval: dict) -> str:
@@ -110,8 +110,9 @@ def register(payload: Path) -> None:
         raise ValueError('Invalid authorizing identity')
     if approval['unit'] != f'learndl-install-{approval["id"]}.service':
         raise ValueError('Invalid installation service name')
-    if any(not NAME.fullmatch(name) for name in approval['allowed_units']):
-        raise ValueError('Invalid unit name')
+    invalid = [name for name in approval['allowed_units'] if not NAME.fullmatch(name)]
+    if invalid:
+        raise ValueError(f'Invalid unit name: {", ".join(invalid)}')
     BASE.mkdir(mode=0o755, exist_ok=True)
     if BASE.is_symlink() or BASE.stat().st_uid != 0 or BASE.stat().st_mode & 0o022:
         raise ValueError('Unsafe installation staging directory')
