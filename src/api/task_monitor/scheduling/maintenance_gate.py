@@ -73,7 +73,7 @@ def pending(directory):
 
 
 @contextmanager
-def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None):
+def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None, task_class=None):
     if _depth.get() or sandbox_request() is not None:
         if exclusive and _kind.get() != 'exclusive':
             raise MaintenanceBusy('Cannot upgrade an existing shared lease')
@@ -93,6 +93,7 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
             _fd.reset(fd_token)
             _depth.reset(token)
         return
+    task_class = task_class or ('installation' if exclusive else 'calendar' if priority else 'training')
     stream = (directory / 'gate.lock').open('r+')
     waiter = directory / f'waiting-{os.getpid()}.json'
     previous = os.environ.get('LEARNDL_MAINTENANCE_FD')
@@ -107,13 +108,22 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         raise MaintenanceBusy('An authorized installation is waiting for maintenance access')
                     if any(r['phase'] in {'starting', 'running'} for r in Store(directory).rows()):
                         raise MaintenanceBusy('Autofix execution or crash reconciliation is outstanding')
-                    if not exclusive and not priority and pending(directory):
+                    from .priority import enabled, blocker
+                    modern = enabled()
+                    if not modern and not exclusive and not priority and pending(directory):
                         raise MaintenanceBusy('Autofix is waiting for maintenance access')
                     portalocker.lock(stream, (portalocker.LOCK_EX if exclusive else portalocker.LOCK_SH) | portalocker.LOCK_NB)
+                    try:
+                        reason = blocker(Store(directory), task_class) if modern else None
+                        if reason:
+                            raise MaintenanceBusy(reason)
+                    except BaseException:
+                        portalocker.unlock(stream)
+                        raise
                 break
-            except (portalocker.LockException, MaintenanceBusy):
+            except (portalocker.LockException, MaintenanceBusy) as exc:
                 if not blocking:
-                    raise MaintenanceBusy('Maintenance execution lock unavailable') from None
+                    raise MaintenanceBusy(str(exc) or 'Maintenance execution lock unavailable') from None
                 # Distinguish a parked legacy wrapper from unguarded live work.
                 waiter.write_text(json.dumps({'pid': os.getpid(), 'created': psutil.Process().create_time()}))
                 time.sleep(.5)

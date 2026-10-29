@@ -365,7 +365,7 @@ def worker():
                 (store.directory / 'pending').unlink(missing_ok=True)
                 return worker_observation(store, 'idle', 'No eligible unattempted IDs; inspect task history for conflicts or terminal outcomes')
             (store.directory / 'pending').touch()
-            with permit(exclusive=True, blocking=False), training_code_guard():
+            with permit(exclusive=True, blocking=False, task_class='autofix'), training_code_guard():
                 blocker = training_blocker() or recorded_task_blocker()
                 if blocker:
                     return worker_observation(store, 'waiting', blocker)

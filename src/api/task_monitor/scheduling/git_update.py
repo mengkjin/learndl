@@ -141,11 +141,53 @@ def check_and_update(options: dict, *, root: Path | None = None) -> dict:
     directory.mkdir(parents=True, exist_ok=True)
     from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with permit(exclusive=True, blocking=False), portalocker.Lock(str(directory / 'git_update.lock'), mode='a', timeout=0):
-            return _update(root, options)
+        with permit(exclusive=True, blocking=False, task_class='git'):
+            from . import priority
+            if priority.enabled():
+                from .autofix_store import Store, state_dir
+                controls = Store(state_dir())
+                current = priority.read(controls)
+                if current['phase'] not in {'checkout', 'blocked'}:
+                    priority.write(controls, dict(current, phase='draining'))
+            with portalocker.Lock(str(directory / 'git_update.lock'), mode='a', timeout=0):
+                return _admitted_update(root, options)
     except (portalocker.LockException, MaintenanceBusy):
-        return {'status': 'deferred', 'reason': 'another automatic update is in progress'}
+        return {'status': 'deferred', 'reason': 'execution/code lease occupied; Git retains priority'}
 
+
+def _admitted_update(root, options):
+    from . import priority
+    if not priority.enabled():
+        return _update(root, options)
+    from .autofix_store import Store, state_dir
+    store = Store(state_dir())
+    state = priority.read(store)
+    if state['phase'] in {'checkout', 'blocked'}:
+        # This is a fresh process after an attempted checkout. Never
+        # import/dispatch work from the process that changed the tree.
+        deadline = time.monotonic() + options.get('max_seconds', 45)
+        try:
+            reason = repository_blocker(root, deadline)
+            head = _git(root, ['rev-parse', 'HEAD'], deadline)
+            if reason or head != state.get('target'):
+                raise GitUpdateError(reason or 'checkout HEAD differs from the intended target')
+        except (OSError, GitUpdateError) as exc:
+            priority.write(store, dict(state, phase='blocked', reason=str(exc)))
+            return {'status': 'blocked', 'reason': str(exc)}
+        priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'verified_head': head})
+        return {'status': 'verified', 'after': head}
+    if options.get('enabled') is False:
+        priority.write(store, {'phase': 'idle', 'last_completed': time.time()})
+        return {'status': 'disabled'}
+    try:
+        result = _update(root, options)
+    except Exception as exc:
+        # Even a notice/database error after merge must end this Python process.
+        result = {'status': 'error', 'reason': f'{type(exc).__name__}: {exc}',
+                  'checkout_attempted': priority.read(store)['phase'] == 'checkout'}
+    if not result.get('checkout_attempted'):
+        priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'result': result})
+    return result
 
 def _update(root: Path, options: dict) -> dict:
     deadline = time.monotonic() + options.get('max_seconds', 45)
@@ -180,6 +222,13 @@ def _update(root: Path, options: dict) -> dict:
             return dict(result, status='deferred', reason=reason)
         if deadline - time.monotonic() < 10:
             return dict(result, status='deferred', reason='insufficient remaining checkout time budget')
+        from . import priority
+        if priority.enabled():
+            from .autofix_store import Store, state_dir
+            store = Store(state_dir())
+            # Intent precedes the first write to the checkout; crashes remain
+            # blocked until a new process verifies the exact intended commit.
+            priority.write(store, dict(priority.read(store), phase='checkout', target=target, before=before))
         result['checkout_attempted'] = True
         _git(root, ['-c', 'merge.autostash=false', 'merge', '--ff-only', '--no-edit', '--no-overwrite-ignore', target], deadline)
         after = _git(root, ['rev-parse', 'HEAD'], deadline)

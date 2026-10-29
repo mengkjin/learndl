@@ -173,6 +173,8 @@ python -m src.api.task_monitor.scheduling.autofix status
 
 ## 调度与互斥
 
+新版调度需重新执行安装器 plan/apply：Git 到期检查优先，日常到期任务/补跑先于 autofix，autofix 先于下一次自动训练或 RL；已有受管任务正常结束。辅助邮件、CLI 恢复、缓存维护改为独立服务，不占数据维护通道。训练最终领取前会刷新清单，多个模型排队不会持续插队。详见 [调度版本 2 与验收](../scheduling/README.md#启动优先级与独立辅助服务调度版本-2)。
+
 Watchdog 只做短检查，长任务由独立 `learndl-autofix.service` 执行。补跑定时任务由 `learndl-deferred.service` 执行，保留普通任务的运行环境。两种 worker 互斥，补跑队列优先。普通受管任务持有共享维护许可，autofix 持有独占许可。修复等待期间不再启动新的空闲训练；已有任务自然结束。新到期的定时任务持久排队，不因维护锁忙而丢弃；先补跑到期任务，再处理 autofix 和空闲训练。
 
 已存在的日更、周更、回补 shell 入口在启用本功能后转入相同 runner。普通任务自身原有锁仍有效。直接启动未接入 `ScriptTool`／训练生命周期的自定义程序、旧进程或外部编辑器不受保证；启用前应让旧任务结束。自动 Git 更新也参与维护互斥，不会在修复运行中换代码。

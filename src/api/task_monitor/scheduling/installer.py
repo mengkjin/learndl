@@ -180,6 +180,14 @@ def service(root: Path, python: Path, module: str, args: list[str]) -> str:
             'NoNewPrivileges=true\nUMask=0077\n')
 
 
+def protected_service(root, python, kind, args=()):
+    from .autofix_store import state_dir
+    value = service(root, python, 'placeholder', [])
+    command_line = ' '.join(unit_quote(str(v)) for v in
+                            [python, state_dir() / 'worker_bootstrap.py', kind, *args])
+    return re.sub(r'^ExecStart=.*$', lambda _: 'ExecStart=' + command_line, value, flags=re.MULTILINE)
+
+
 def unit_path(path: Path) -> str:
     """WorkingDirectory is a path directive, not a shell/ExecStart argument."""
     value = str(path)
@@ -201,6 +209,7 @@ def next_times(slots: set, timezone: str) -> list[str]:
 
 
 def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone: str) -> dict:
+    config = dict(config, scheduler_version=2)
     coverage, conflicts, global_conflicts = cron_coverage(cron, config, root, local_timezone)
     desired: dict[str, set] = {key: set() for key in config['tasks']}
     for schedule in config['schedules'].values():
@@ -223,21 +232,32 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
             continue
         name = PREFIX + key
         if missing and task['backend'] == 'systemd':
-            units[name + '.service'] = service(root, python, 'src.api.task_monitor.scheduling.runner', ['run', key])
+            units[name + '.service'] = protected_service(root, python, 'calendar', [key])
             calendars = '\n'.join(f'OnCalendar={DAYS[day].title()} *-*-* {minute // 60:02}:{minute % 60:02}:00 {config["timezone"]}' for day, minute in sorted(missing))
             units[name + '.timer'] = f'[Unit]\nDescription=Learndl schedule {key}\n[Timer]\n{calendars}\nAccuracySec=1s\nPersistent=false\n[Install]\nWantedBy=timers.target\n'
         elif missing:
-            invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.scheduling.runner', 'run', key])
+            from .autofix_store import state_dir
+            invocation = shlex.join([str(python), str(state_dir() / 'worker_bootstrap.py'), 'calendar', key])
             for day, minute in sorted(missing):
                 cron_lines.append(f'{minute % 60} {minute // 60} * * {day} cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
     if config['watchdog']['jobs'].get('autofix', {}).get('enabled'):
-        units['learndl-autofix.service'] = service(root, python, 'src.api.task_monitor.scheduling.autofix', ['worker']) + 'RestrictAddressFamilies=AF_INET AF_INET6\n'
+        units['learndl-autofix.service'] = protected_service(root, python, 'autofix') + 'RestrictAddressFamilies=AF_INET AF_INET6\n'
         units['learndl-autofix.timer'] = ('[Unit]\nDescription=Learndl autofix and deferred task worker\n[Timer]\n'
             'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Installation admission also queues calendar slots when autofix is disabled.
-    units['learndl-deferred.service'] = service(root, python, 'src.api.task_monitor.scheduling.runner', ['deferred'])
+    units['learndl-deferred.service'] = protected_service(root, python, 'deferred')
     units['learndl-deferred.timer'] = ('[Unit]\nDescription=Learndl deferred calendar tasks\n[Timer]\n'
         'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
+    # Independent helper timers do not await SMTP/cache/desktop work in watchdog.
+    from .auxiliary import NAMES
+    for job in NAMES:
+        if job != 'email_outbox' and not config['watchdog']['jobs'].get(job, {}).get('enabled'):
+            continue
+        name = 'learndl-aux-' + job.replace('_', '-')
+        limit = max(60, config['watchdog']['jobs'].get(job, {}).get('max_seconds', 20) + 30) if job == 'task_monitor_cache' else 120
+        units[name + '.service'] = protected_service(root, python, job).replace('TimeoutStartSec=infinity', f'TimeoutStartSec={limit}s')
+        units[name + '.timer'] = ('[Unit]\nDescription=Learndl auxiliary worker\n[Timer]\n'
+            'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Watchdog always has one trigger, even when individual jobs are disabled.
     tick = config['watchdog']['tick_seconds']
     if config['default_backend'] == 'systemd':
@@ -250,16 +270,16 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.watchdog'])
         cron_lines.append(f'*/{tick // 60} * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
     if any(config['watchdog']['jobs'].get(job, {}).get('enabled') for job in ('idle_worklist', 'rl_experiment')):
-        module = 'src.api.task_monitor.scheduling.idle_worklist'
         if config['default_backend'] == 'systemd':
-            units['learndl-idle-worklist.service'] = service(root, python, module, ['worker'])
+            units['learndl-idle-worklist.service'] = protected_service(root, python, 'training')
             units['learndl-idle-worklist.service'] += (
                 'ExecStopPost=' + ' '.join(unit_quote(str(value)) for value in
                                           [python, '-m', 'src.api.task_monitor.scheduling.recovery']) + '\n')
             units['learndl-idle-worklist.timer'] = ('[Unit]\nDescription=Learndl queued idle training\n[Timer]\n'
                 'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
         else:
-            invocation = shlex.join([str(python), '-m', module, 'worker'])
+            from .autofix_store import state_dir
+            invocation = shlex.join([str(python), str(state_dir() / 'worker_bootstrap.py'), 'training'])
             cron_lines.append(f'* * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
     if any('%' in line for line in cron_lines):
         raise ValueError('Percent signs in cron paths are unsupported')
@@ -334,7 +354,19 @@ def validate_unit(name: str, contents: str) -> None:
             expected = ['-m', 'src.api.task_monitor.scheduling.runner', 'deferred']
         if name == 'learndl-idle-worklist.service':
             expected = ['-m', 'src.api.task_monitor.scheduling.idle_worklist', 'worker']
-        if argv[1:] != expected:
+        from .autofix_store import state_dir
+        kind = {'learndl-autofix.service': 'autofix', 'learndl-deferred.service': 'deferred',
+                'learndl-idle-worklist.service': 'training'}.get(name)
+        arguments = []
+        if name.startswith(PREFIX):
+            kind, arguments = 'calendar', [name.removeprefix(PREFIX).removesuffix('.service')]
+        if name.startswith('learndl-aux-'):
+            kind = name.removeprefix('learndl-aux-').removesuffix('.service').replace('-', '_')
+            if kind not in {'email_outbox', 'cli_recovery', 'task_monitor_cache'}:
+                raise ValueError('Unexpected auxiliary worker')
+            expected = None
+        protected = [str(state_dir() / 'worker_bootstrap.py'), kind, *arguments] if kind else None
+        if argv[1:] != expected and argv[1:] != protected:
             raise ValueError('Unexpected service command')
         if 'ExecStopPost' in fields:
             if name != 'learndl-idle-worklist.service' or len(fields['ExecStopPost']) != 1:
@@ -386,7 +418,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if actual_desktop is not None and actual_desktop not in (previous.get('desktop_autostart'), desired_desktop, interrupted_desktop):
         raise RuntimeError(f'Desktop autostart was externally changed: {desktop}')
     for name in previous['units']:
-        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name):
+        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
@@ -409,7 +441,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
-            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name):
+            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
                 raise ValueError('Invalid transaction unit name')
             path = UNIT_DIR / name
             if path.exists():
@@ -431,7 +463,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         if BEGIN in plan['cron']:
             before, managed = plan['cron'].split(BEGIN, 1)
             block, after = managed.split(END, 1)
-            kept = [line for line in block.splitlines() if f'run {key} ' not in line]
+            kept = [line for line in block.splitlines() if f'run {key} ' not in line and f'calendar {key} ' not in line]
             plan['cron'] = before + BEGIN + '\n' + '\n'.join(line for line in kept if line) + '\n' + END + after
         for name in list(plan['units']):
             if name.startswith(PREFIX + key + '.'):
@@ -443,7 +475,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             plan['config']['tasks'][key] = old_config['tasks'][key]
     if plan['conflicts'] and BEGIN in original_cron:
         block = original_cron.split(BEGIN, 1)[1].split(END, 1)[0]
-        preserved = [line for line in block.splitlines() if any(f'run {key} ' in line for key in plan['conflicts'])]
+        preserved = [line for line in block.splitlines() if any(f'run {key} ' in line or f'calendar {key} ' in line for key in plan['conflicts'])]
         if preserved:
             if BEGIN not in plan['cron']:
                 plan['cron'] += BEGIN + '\n' + END + '\n'
@@ -463,12 +495,22 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         if old_config and old_config.get('autofix_initialized'):
             Store(control)
         policy_matches = (control / 'policy.py').exists() and (control / 'policy.py').read_bytes() == Path(__file__).with_name('autofix_sandbox.py').read_bytes()
+    if plan['config'] and plan['config'].get('scheduler_version', 1) >= 2:
+        from .autofix_store import state_dir
+        bootstrap = state_dir() / 'worker_bootstrap.py'
+        policy_matches = policy_matches and bootstrap.exists() and bootstrap.read_bytes() == Path(__file__).with_name('worker_bootstrap.py').read_bytes()
+        settings = state_dir() / 'worker-settings.json'
+        policy_matches = policy_matches and settings.exists() and json.loads(settings.read_text()) == {'root': str(Path(__file__).resolve().parents[4]), 'runtime': str(directory)}
+        if old_config and old_config.get('scheduler_version', 1) >= 2:
+            from .priority import read
+            from .autofix_store import Store
+            read(Store(state_dir()))  # Missing authority is never silently reset.
     if not recovering and policy_matches and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
         print('Already up to date')
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
-    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred)\.(timer|service)', name) for name in names):
+    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name) for name in names):
         raise ValueError('Invalid managed unit name')
     with tempfile.TemporaryDirectory(prefix='learndl-install-') as temp:
         stage = Path(temp)
@@ -479,14 +521,24 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             command(['systemd-analyze', 'verify', *[str(stage / name) for name in plan['units']]])
         if read_cron() != original_cron:
             raise RuntimeError('Crontab changed during planning; rerun installer')
-        if plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'):
+        if plan['config'] and (plan['config'].get('scheduler_version', 1) >= 2 or plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled')):
             from .autofix_sandbox import preflight
             from .autofix_store import initialize, state_dir, ROOT
-            preflight()
+            if plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'):
+                preflight()
             control = state_dir(ROOT)
             if old_config and old_config.get('autofix_initialized') and not control.exists():
                 raise RuntimeError('Autofix ledger disappeared; restore it instead of reinitializing')
             initialize(control, ROOT)
+            if plan['config'].get('scheduler_version', 1) >= 2:
+                from .priority import initialize as initialize_priority
+                from .autofix_store import Store
+                initialize_priority(Store(control))
+                bootstrap = Path(__file__).with_name('worker_bootstrap.py')
+                temporary_bootstrap = control / 'worker_bootstrap.tmp'
+                temporary_bootstrap.write_bytes(bootstrap.read_bytes())
+                temporary_bootstrap.replace(control / 'worker_bootstrap.py')
+                atomic_json(control / 'worker-settings.json', {'root': str(ROOT), 'runtime': str(directory)})
             # Policy is installed explicitly, never replaced by the sandboxed script.
             source = Path(__file__).with_name('autofix_sandbox.py')
             policy = control / 'policy.py'
@@ -594,6 +646,8 @@ def main() -> int:
             for name in sorted(set(previous['units']) | set(plan['units'])):
                 print(''.join(difflib.unified_diff(previous['units'].get(name, '').splitlines(True), plan['units'].get(name, '').splitlines(True), fromfile='current/' + name, tofile='planned/' + name)))
         if args.action == 'status':
+            from .priority import status as priority_status
+            print(json.dumps({'scheduling_priority': priority_status()}, indent=2, ensure_ascii=False))
             from src.api.task_monitor.cli_recovery import load, state_path
             print(json.dumps({'cli_recovery': load(state_path())}, indent=2))
             directory = runtime_dir()

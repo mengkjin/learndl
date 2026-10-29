@@ -162,7 +162,7 @@ def load_config(directory: Path, host: str) -> dict:
         raise ValueError('tick_seconds must be a whole-minute divisor of 3600')
     if not isinstance(watchdog['units'], list) or any(not re.fullmatch(r'[A-Za-z0-9_.@:-]+', unit) for unit in watchdog['units']):
         raise ValueError('Invalid systemd unit list')
-    if any(unit.startswith('learndl-schedule-') or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service', 'learndl-autofix.service', 'learndl-deferred.service'} for unit in watchdog['units']):
+    if any(unit.startswith(('learndl-schedule-', 'learndl-aux-')) or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service', 'learndl-autofix.service', 'learndl-deferred.service'} for unit in watchdog['units']):
         raise ValueError('Scheduled oneshot units cannot be probed as persistent services')
     for key, job in watchdog['jobs'].items():
         if key not in JOB_NAMES:

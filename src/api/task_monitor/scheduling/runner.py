@@ -18,6 +18,19 @@ from .runtime import RunStore, members
 def run(task_id: str, *, deferred: bool = False) -> int:
     from .maintenance_gate import MaintenanceBusy, permit
     from .autofix_store import Store, state_dir
+    from .priority import enabled
+    if enabled() and not deferred:
+        import portalocker
+        controls = Store(state_dir())
+        # Register before admission. The same minute slot never launches twice.
+        with portalocker.Lock(str(controls.directory / 'admission.lock'), mode='r+', timeout=10):
+            controls.enqueue(task_id, int(os.environ.get('LEARNDL_SCHEDULE_SLOT', int(time.time() // 60))))
+        try:
+            with portalocker.Lock(str(controls.directory / 'worker.lock'), mode='r+', timeout=0):
+                run_deferred(controls)
+        except portalocker.LockException:
+            pass
+        return 0
     # Drain on existing triggers too: a first deferred install can be cancelled
     # before its dedicated drain timer exists. Each replay still acquires admission.
     if not deferred and state_dir().exists():
@@ -40,6 +53,9 @@ def run(task_id: str, *, deferred: bool = False) -> int:
 
 
 def run_deferred(store) -> None:
+    from .priority import enabled
+    if enabled():
+        return _run_priority_queue(store)
     for key, task in store.scheduled():
         # Persist before starting: a dead launcher must not blindly duplicate it.
         store.schedule_state(key, 'starting')
@@ -50,6 +66,24 @@ def run_deferred(store) -> None:
             raise
         store.schedule_state(key, 'queued' if code == 75 else 'finished')
         if code == 75:
+            break
+
+
+def _run_priority_queue(store):
+    from .maintenance_gate import MaintenanceBusy, permit
+    for key, task in store.scheduled():
+        try:
+            with permit(blocking=False, task_class='calendar'):
+                store.schedule_state(key, 'starting')
+                try:
+                    code = _run(task, retry_busy=True)
+                except BaseException:
+                    store.schedule_state(key, 'unknown')
+                    raise
+                store.schedule_state(key, 'queued' if code == 75 else 'finished')
+                if code == 75:
+                    break
+        except MaintenanceBusy:
             break
 
 

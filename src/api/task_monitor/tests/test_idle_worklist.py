@@ -342,6 +342,18 @@ class IdleTest(unittest.TestCase):
             self.assertEqual(launch.call_args.args[0]['task'], 'first')
             self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
 
+    def test_worker_priority_refusal_does_not_claim_starting(self):
+        from src.api.task_monitor.scheduling.maintenance_gate import MaintenanceBusy
+        idle.dispatch(self.options, self.store)
+        with patch.object(idle, 'settings', return_value=self.options), patch.object(idle, '_launch') as launch, \
+             patch('src.api.task_monitor.scheduling.maintenance_gate.permit', side_effect=MaintenanceBusy('autofix waiting: repair')):
+            self.assertEqual(idle.worker(), 0)
+            launch.assert_not_called()
+        request = self.store.owned(idle.OWNER)[0]
+        self.assertEqual(request['phase'], 'queued')
+        self.assertIn('repair', request['blocked_by'])
+        self.assertEqual(self.store.active(), [])
+
     def test_launch_registration_gate_and_start_mail_retry(self):
         idle.dispatch(self.options, self.store)
         request = self.store.owned(idle.OWNER)[0]

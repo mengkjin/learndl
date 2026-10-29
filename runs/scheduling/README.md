@@ -229,13 +229,14 @@ supervised; do not disable `task_timeouts` while automatic work is running.
 
 ## Automatic master updates
 
-`git_auto_update` runs every 300 seconds, on server platforms only, at the end of
-watchdog after health checks and notification delivery. Enable/configure it in
+`git_auto_update` runs at its configured interval (currently 60 seconds), on server platforms only.
+With scheduler version 2 it is attempted before new data work; older installations
+retain Git-last behavior until installer apply. Enable/configure it in
 `maintenance.yaml` and publish that configuration with installer plan/apply.
 Each check has a 45-second Git command budget; errors wait until the next poll.
-Only the existing `origin` remote's `master` is fetched. A successful update queues and immediately attempts one email containing the host,
+Only the existing `origin` remote's `master` is fetched. A successful update queues one email for the independent mail worker containing the host,
 update time, before/after commit hashes, changed files and required follow-up.
-Failed delivery is retried on subsequent watchdog ticks from a persistent outbox
+Failed delivery is retried by the mail worker from a persistent outbox
 in `runs.sqlite`; already delivered commit transitions are not mailed again.
 Unchanged, deferred and failed pulls do not produce success mail. SMTP cannot
 promise exactly-once delivery if the process dies after sending but before saving
@@ -384,3 +385,64 @@ result in a later duplicate; this is not an exactly-once delivery protocol.
 旧接口没有传 ID 时，超限邮件使用内容指纹复用回执，小邮件仍视为独立调用。
 底层 `_deliver` 只接受上限内的单封邮件。已有实验报告账本仍可恢复，新报告复用统一打包模块。
 SMTP 接受与本地回执落盘之间仍有极小的崩溃重复窗口，不能保证严格 exactly-once。
+
+
+## 启动优先级与独立辅助服务（调度版本 2）
+
+执行一次 `runs/install_schedules.sh plan` / `runs/install_schedules.sh apply` 后启用。
+无需卸载旧 watchdog；仅拉取 Git 或重启 watchdog 不会启用新版服务结构。
+`apply` 保留 autofix ID 账本、训练记录和定时任务队列；`rollback` 恢复此前安装快照，
+不清空执行历史。未 apply 的旧快照继续使用旧调度方式。
+
+启动顺序为：
+
+1. 到期的 `git_auto_update` 优先获得安全空档。
+2. `email_outbox`、`cli_recovery`、`task_monitor_cache` 在各自独立服务中运行，不占数据维护许可，也不等待彼此完成。
+3. 到期日常任务及补跑优先，其次 autofix，最后自动训练/RL（含一次性 A/B 实验）。
+
+优先级约束新任务的准入，不中断正在执行的受管任务，不拆开一个任务内部的多个模型。
+定时任务仍保留原有组内锁与普通任务共享许可；autofix 独占维护许可。
+训练与 RL 保留原有轮换、GPU 空闲条件及恢复策略。连续的高优先级日常任务可以推迟 autofix；
+连续排队的训练不能越过已发现的 autofix。
+
+独立 timer 同时唤醒时，在同一准入锁下做最终检查。训练领取前重新读取 autofix 清单，
+不依赖 watchdog 已经扫描或 `pending` 文件已经出现；排队中的训练记录不算正在执行。
+日常任务先登记计划时间槽，再申请许可，同一时间槽重复触发不会再执行。
+等待不消耗 autofix 的一次尝试，失败重跑仍必须新增 ID。
+
+Git 网络失败、工作区有修改等未改动代码的失败，记录后允许继续使用现有代码。
+Git 因任务仍运行而等待时保留优先权，辅助工作仍可运行；当进入代码锁排空阶段时，
+停止新的辅助执行，已有辅助执行有硬超时。尝试替换代码后当前 watchdog 不再派发任务，
+下一轮新进程核对目标 commit、分支与工作区。结果不明会保持暂停，不自动 reset 或清理。
+修复运行期间不自动替换代码。受管 worker 由项目外的引导文件先取得代码读锁，再导入业务模块。
+
+辅助服务分别是：
+
+- `learndl-aux-email-outbox.service`：邮件重试与调度通知投递；最大运行 120 秒。
+- `learndl-aux-cli-recovery.service`：已注册 CLI 的恢复检查；最大运行 120 秒。
+- `learndl-aux-task-monitor-cache.service`：缓存维护；最大运行时间为配置的 `max_seconds + 30`，最低 60 秒。
+
+各服务有独立 timer、单实例锁和状态文件。CLI 注册/会话条件、缓存间隔及邮件重试间隔仍有效。
+关闭 `email_outbox` job 只关闭普通脚本邮件 outbox 重试，调度告警投递服务仍保留。
+主 watchdog 只登记事件；普通邮件仍使用原来的脚本邮件队列，调度事件由独立通知队列负责，
+不把失败调度邮件再次加入脚本队列。SMTP 在发送成功但回执未保存的崩溃窗口仍可能重复投递。
+
+查询 `runs/install_schedules.sh status` 可看到调度版本、Git 状态、日常/autofix 队列、各辅助服务状态。
+辅助状态位于 `PATH.runtime/scheduling/auxiliary/`，运行状态 `running` 若对应服务已经失败，表示进程中断；
+下一次到期检查会重试辅助工作。训练 `status` 的 `blocked_by`、autofix `status` 的 worker observation
+说明等待原因。服务日志使用 `journalctl -u <服务名>` 查看。
+
+### Linux 上线验收
+
+在测试实例、空 autofix 清单下执行安装器 plan/apply；不要为了测试改写生产修复 ID。
+检查 status 出现 `scheduler_version: 2`，三个辅助 timer 都启用，并检查各自 journal。
+运行下面的临时夹具验收（不会启动真实训练、修复或部署生产服务）：
+
+```bash
+LEARNDL_SYSTEMD_ACCEPTANCE=1 .venv/bin/python -m unittest src.api.task_monitor.tests.test_priority_linux -v
+```
+
+该测试要求 Linux、可用的 `systemd-run --user` 和 Bubblewrap；创建的临时测试单元自动回收。
+另运行 `python -m unittest src.api.task_monitor.tests.test_priority -v` 验证优先级、Git 核验和后台通知边界。
+生产启用后观察一次自然发生的“当前训练结束 → 日常补跑 → autofix → 下一次训练”，
+不要手工重置账本来制造验收场景。本机 macOS 测试不代表 Linux/systemd 隔离验收已经通过。

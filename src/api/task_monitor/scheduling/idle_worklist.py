@@ -199,8 +199,9 @@ def _launch(request: dict, store: RunStore) -> int:
     try:
         with permit(blocking=False):
             return _launch_admitted(request, store)
-    except MaintenanceBusy:
-        request['phase'] = 'deferred'
+    except MaintenanceBusy as exc:
+        request['blocked_by'] = str(exc)
+        request['phase'] = 'queued'
         store.put(request)
         return DEFERRED
 
@@ -257,8 +258,9 @@ def _launch_admitted(request: dict, store: RunStore) -> int:
 def worker() -> int:
     """Minutely independent trigger; a queue item is required to do any work."""
     from src.proj.util.script.script_lock import ScriptLock
+    from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with ScriptLock('idle_worklist_worker', timeout=1, wait_time=2):
+        with ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases:
             store = RunStore()
             with queue_lock():
                 queued = [run for run in store.owned(OWNER) if run['phase'] == 'queued']
@@ -282,7 +284,15 @@ def worker() -> int:
                         or next_candidate.get('parent_run_id') != request.get('parent_run_id')
                         or next_candidate.get('retry_index') != request.get('retry_index')):
                     return 0
-                # Claim durably before releasing the short queue lock.
+                # Claim only after final priority admission; retain that lease
+                # through _launch, including descendants and final writes.
+                try:
+                    leases.enter_context(permit(blocking=False))
+                except MaintenanceBusy as exc:
+                    request.update(phase='queued', blocked_by=str(exc))
+                    store.put(request)
+                    return 0
+                request.pop('blocked_by', None)
                 request.update(phase='starting', started_at=time.time())
                 store.put(request)
             return _launch(request, store)

@@ -211,10 +211,17 @@ def _run_autofix(context: _WatchdogContext) -> JobResult:
         if not configured():
             return JobResult(stats={'status': 'not installed; run scheduling plan/apply'})
         stats = tick()
-        stats['notifications_delivered'] = deliver(Email.send)
+        from src.api.task_monitor.scheduling.priority import enabled
+        if not enabled():
+            stats['notifications_delivered'] = deliver(Email.send)
     except Exception as exc:
         from src.api.task_monitor.scheduling.autofix import control_failure
-        control_failure(exc, Email.send)
+        from src.api.task_monitor.scheduling.priority import enabled
+        if enabled():
+            from src.api.task_monitor.scheduling.auxiliary import control_error
+            control_error(exc)
+        else:
+            control_failure(exc, Email.send)
         raise
     return JobResult(stats=stats)
 
@@ -229,7 +236,7 @@ def _run_idle_worklist(context: _WatchdogContext) -> JobResult:
 
 def _run_git_auto_update(context: _WatchdogContext) -> JobResult:
     from src.api.task_monitor.scheduling.git_update import check_and_update
-    return JobResult(stats=check_and_update(context.maintenance['jobs']['git_auto_update']))
+    return JobResult(stats=check_and_update(context.maintenance['jobs'].get('git_auto_update', {})))
 
 
 def _run_cli_recovery(context: _WatchdogContext) -> JobResult:
@@ -376,6 +383,7 @@ def run_watchdog(
     from src.api.task_monitor.scheduling.config import installed_config
     config = installed_config()
     maintenance = config['watchdog'] if config else {}
+    parallel = bool(config and config.get('scheduler_version', 1) >= 2 and jobs is None)
     if units is None and config:
         units = maintenance['units']
     try:
@@ -390,6 +398,30 @@ def run_watchdog(
     unit_probe_ran = False
 
     selected_jobs = tuple(jobs if jobs is not None else default_jobs(maintenance if config else None))
+    if parallel:
+        from src.api.task_monitor.scheduling.priority import git_due
+        from src.api.task_monitor.scheduling.autofix_store import Store, state_dir
+        from src.api.task_monitor.scheduling.auxiliary import NAMES
+        git_job = next((job for job in selected_jobs if job.name == 'git_auto_update'),
+                       WatchdogJob('git_auto_update', 60, _run_git_auto_update))
+        checkout_attempted = False
+        try:
+            if git_due(Store(state_dir())):
+                result = git_job.runner(context)
+                checkout_attempted = bool(result.stats.get('checkout_attempted'))
+                _record_job(state, git_job, started_at=check_time, finished_at=time.time(), result=result)
+                _save_state(state_path, state)
+                if result.stats.get('checkout_attempted'):
+                    return result.stats.get('status') == 'updated'
+                if result.stats.get('status') in {'error', 'blocked'}:
+                    job_errors.append(f'git_auto_update: {result.stats.get("reason", "unknown failure")}')
+                    state['jobs']['git_auto_update']['last_error'] = job_errors[-1]
+        except Exception as exc:
+            if checkout_attempted:
+                return False
+            _record_job(state, git_job, started_at=check_time, finished_at=time.time(), result=None, error=exc)
+            job_errors.append(f'git_auto_update: {type(exc).__name__}: {exc}')
+        selected_jobs = tuple(job for job in selected_jobs if job.name not in {*NAMES, 'git_auto_update'})
     for job in selected_jobs:
         if job.name == 'git_auto_update':
             continue  # Updating code must be the very last operation in this process.
@@ -430,6 +462,13 @@ def run_watchdog(
     })
     state.update({'last_run_at': check_time, 'last_job_errors': job_errors})
     _save_state(state_path, state)
+    if parallel:
+        from src.api.task_monitor.scheduling.auxiliary import publish
+        publish(state, unit_failures, unit_probe_ran)
+        # The helper owns receipts; only newly discovered events need publishing.
+        state['alerts']['pending_tasks'] = []
+        _save_state(state_path, state)
+        return not job_errors
     delivered = _deliver_alerts(
         task_db=task_db, state=state, unit_failures=unit_failures,
         state_path=state_path, email_sender=email_sender,

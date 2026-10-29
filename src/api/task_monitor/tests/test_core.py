@@ -105,6 +105,16 @@ class TaskMonitorRepositoryTest(unittest.TestCase):
         self.assertTrue(is_background_source('SystemD'))
         self.assertFalse(is_background_source('script'))
 
+    def test_independent_helper_health_uses_worker_heartbeat(self):
+        directory = self.root / 'scheduling'
+        (directory / 'auxiliary').mkdir(parents=True)
+        (directory / 'installed.json').write_text(json.dumps({'scheduler_version': 2, 'watchdog': {
+            'tick_seconds': 60, 'jobs': {'task_monitor_cache': {'enabled': True, 'interval_seconds': 900}}}}))
+        (directory / 'auxiliary/task_monitor_cache.json').write_text(json.dumps({'last_success_at': 99_900}))
+        with patch('src.api.task_monitor.core.time.time', return_value=100_000):
+            health = TaskMonitorRepository(self.db_path, self.root).watchdog_health('task_monitor_cache', 200)
+        self.assertFalse(health.stale)
+
     def test_pid_reuse_is_treated_as_stopped(self) -> None:
         task = TaskItem('a.py', status='running', pid=123, start_time=100)
         with patch('src.api.util.backend.task.process.check_status', return_value='running'):
