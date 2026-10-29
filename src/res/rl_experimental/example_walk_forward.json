@@ -18,6 +18,6 @@
   "quarter_steps": 100000,
   "training": {"device": "cuda"},
   "profile_report": "results/rl_experimental/profile/profile.json",
-  "bundle_max_mb": 10,
+  "bundle_max_mb": 20,
   "recipient": null
 }

@@ -6,7 +6,7 @@
   "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230",
   "output_root": "results/rl_experimental/server_runs",
   "rebuild_snapshot": true,
-  "bundle_max_mb": 10,
+  "bundle_max_mb": 20,
   "recipient": null,
   "training": {
     "train_end_date": 20230101,

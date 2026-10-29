@@ -155,7 +155,7 @@ RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风�
   src/res/rl_experimental/example_local_experiment.json --no-email
 ```
 
-附件包含 TensorBoard、CSV 轨迹、指标、图、HTML 报告、最佳/最终 checkpoint、归一化参数和数据清单，不包含 `panel.npz`。超过 `bundle_max_mb` 时生成 `.part001` 等分卷；每封邮件附一卷和同一份 `.parts.json`。每卷和包内文件都有大小及 SHA-256。邮件失败只影响 delivery 状态，不会重跑训练：
+附件包含 TensorBoard、CSV 轨迹、指标、图、HTML 报告、最佳/最终 checkpoint、归一化参数和数据清单，不包含 `panel.npz`。超过 `bundle_max_mb` 时生成 `.zip.001`、`.zip.002` 等分卷；默认及硬上限为每卷 20,000,000 字节，压缩后按最少卷数均分。全部下载到同一目录后，用 Keka / 7-Zip 打开 `.zip.001` 即可解压。旧附件可将所有 `.zip.partNNN` 改名为 `.zip.NNN` 后解压（使用下方 analyze-bundle 校验时仍需保留清单中的原文件名）。每封邮件附一卷和同一份 `.parts.json`。每卷和包内文件都有大小及 SHA-256。邮件失败只影响 delivery 状态，不会重跑训练：
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental resend-bundle \

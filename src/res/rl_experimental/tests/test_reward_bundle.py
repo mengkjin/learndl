@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -88,10 +90,45 @@ class BundleTest(unittest.TestCase):
             metadata = create_bundle(self._run(root), root / "bundles", max_part_bytes=120)
             definition = json.loads(metadata.read_text())
             self.assertGreater(len(definition["parts"]), 1)
-            extracted = analyze_bundle(metadata, root / "received")
+            self.assertEqual(definition["parts"][0]["name"], "run-1.zip.001")
+            sizes = [part["size"] for part in definition["parts"]]
+            self.assertLessEqual(max(sizes), 120)
+            self.assertLessEqual(max(sizes)-min(sizes), 1)
+            extracted = analyze_bundle(metadata.parent / definition["parts"][0]["name"], root / "received")
             self.assertTrue((extracted / "report.html").is_file())
             self.assertFalse((extracted / "panel.npz").exists())
             self.assertTrue((extracted / "local_analysis.json").is_file())
+
+    @unittest.skipUnless(shutil.which('7zz') or shutil.which('7z'), 'requires 7-Zip')
+    def test_numeric_zip_volumes_extract_without_project_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = self._run(root)
+            metadata = create_bundle(run, root / 'bundles', max_part_bytes=120)
+            definition = json.loads(metadata.read_text())
+            first = metadata.parent / definition['parts'][0]['name']
+            subprocess.run([shutil.which('7zz') or shutil.which('7z'), 'x', str(first),
+                            f'-o{root}/unpacked'], check=True, capture_output=True)
+            for name in ('report.html', 'best_model.zip', 'status.json'):
+                self.assertEqual((root/'unpacked'/name).read_bytes(), (run/name).read_bytes())
+
+    def test_legacy_part_names_still_verify_and_extract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            metadata = create_bundle(self._run(root), root / 'bundles', max_part_bytes=120)
+            definition = json.loads(metadata.read_text())
+            for part in definition['parts']:
+                old_name = part['name'].replace('.zip.', '.zip.part')
+                (metadata.parent/part['name']).rename(metadata.parent/old_name)
+                part['name'] = old_name
+            metadata.write_text(json.dumps(definition))
+            extracted = analyze_bundle(metadata.parent/definition['parts'][0]['name'], root/'received')
+            self.assertEqual((extracted/'report.html').read_text(), '<h1>ok</h1>')
+            bodies = []
+            send_bundle(metadata, transport=lambda title, body, recipient, files: bodies.append(body) or True)
+            self.assertEqual(bodies[0],
+                             'Run: run-1\nAttachment: run-1.zip.part001\n'
+                             'Keep the .parts.json file beside all parts, then run analyze-bundle locally.')
 
     def test_corrupt_part_and_unsafe_archive_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

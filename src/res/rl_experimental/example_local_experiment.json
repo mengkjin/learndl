@@ -6,7 +6,7 @@
   "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20250102_20250228",
   "output_root": "results/rl_experimental/local_validation_runs",
   "rebuild_snapshot": false,
-  "bundle_max_mb": 10,
+  "bundle_max_mb": 20,
   "recipient": null,
   "training": {
     "total_timesteps": 4096,

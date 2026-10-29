@@ -35,7 +35,7 @@ DEFAULT_RUN_CONFIG: dict[str, Any] = {
     "snapshot_dir": "results/rl_experimental/snapshots/pred_gru_day_V1_20250102_20250228",
     "output_root": "results/rl_experimental/server_runs",
     "rebuild_snapshot": False,
-    "bundle_max_mb": 10,
+    "bundle_max_mb": 20,
     "recipient": None,
     "training": {
         "total_timesteps": 4096,

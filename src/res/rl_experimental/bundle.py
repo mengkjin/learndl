@@ -31,11 +31,12 @@ def _run_files(run: Path) -> list[Path]:
     return result
 
 
-def create_bundle(run_dir: str | Path, bundle_dir: str | Path, max_part_bytes: int = 10 * 1024 * 1024) -> Path:
+def create_bundle(run_dir: str | Path, bundle_dir: str | Path, max_part_bytes: int = 20_000_000) -> Path:
     run = Path(run_dir).resolve()
     target = Path(bundle_dir).resolve()
     if max_part_bytes <= 0:
         raise ValueError("max_part_bytes must be positive")
+    max_part_bytes = min(max_part_bytes, 20_000_000)
     target.mkdir(parents=True, exist_ok=True)
     manifest_path = run / "package_manifest.json"
     files = [path for path in _run_files(run) if path != manifest_path]
@@ -59,12 +60,14 @@ def create_bundle(run_dir: str | Path, bundle_dir: str | Path, max_part_bytes: i
         parts = [archive]
     else:
         with archive.open("rb") as source:
-            index = 1
-            while chunk := source.read(max_part_bytes):
-                part = target / f"{archive.name}.part{index:03d}"
+            size = archive.stat().st_size
+            count = (size + max_part_bytes - 1) // max_part_bytes
+            length, remainder = divmod(size, count)
+            for index in range(1, count + 1):
+                chunk = source.read(length + (index <= remainder))
+                part = target / f"{archive.name}.{index:03d}"
                 part.write_bytes(chunk)
                 parts.append(part)
-                index += 1
         archive.unlink()
     archive_digest = hashlib.sha256()
     for part in parts:
@@ -97,7 +100,9 @@ def _parts(metadata: Path) -> tuple[dict[str, Any], list[Path]]:
 def _resolve_metadata(source: Path) -> Path:
     if source.name.endswith(".parts.json"):
         return source
-    if source.suffix == ".zip" or ".zip.part" in source.name:
+    if source.suffix == ".zip" or ".zip.part" in source.name or (
+        ".zip." in source.name and source.suffix[1:].isdigit()
+    ):
         run_id = source.name.split(".zip", 1)[0]
         candidate = source.parent / f"{run_id}.parts.json"
         if candidate.is_file():
@@ -191,6 +196,9 @@ def send_bundle(
             f"Run: {definition['run_id']}\nAttachment: {part.name}\n"
             "Keep the .parts.json file beside all parts, then run analyze-bundle locally."
         )
+        # Preserve legacy message content: its durable delivery ID also fixes the payload.
+        if ".zip." in part.name and part.suffix[1:].isdigit():
+            body += "\nOr open .zip.001 with Keka / 7-Zip after downloading all parts into one folder."
         sent = bool(transport(title, body, recipient, [part, metadata]))
         states[part.name] = {"sent": sent, "attempted_at": datetime.now(timezone.utc).isoformat()}
         delivery = {"run_id": definition["run_id"], "recipient": recipient, "parts": states}

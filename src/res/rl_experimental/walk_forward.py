@@ -84,7 +84,7 @@ def load_config(path):
     c.setdefault('training_years', 4)
     c.setdefault('validation_years', 1)
     c.setdefault('training', {})
-    c.setdefault('bundle_max_mb', 10)
+    c.setdefault('bundle_max_mb', 20)
     c.setdefault('alpha_sample_status', 'unknown')
     if len(set(c['seeds'])) != len(c['seeds']) or not c['seeds']:
         raise ValueError('seeds must be nonempty and unique')
