@@ -4,13 +4,14 @@ Direct calls related to computer operations of this project.
 from __future__ import annotations
 
 import subprocess
+import sys
 from datetime import datetime
 
 from src.proj import MACHINE , Logger , PATH
 from src.proj.core import StrEnum
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo', 'ProjectStorageReport', 'BrowseStorageReport']
+__all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo', 'ProjectStorageReport']
 
 
 class ProjectStorageReport(DirectCall):
@@ -20,12 +21,13 @@ class ProjectStorageReport(DirectCall):
 
     def run(self):
         from pathlib import Path
-        from src.proj.util.cli.prompts import prompt_text
+        from src.proj.util.cli.prompts import prompt_text, prompt_confirm
         from src.proj.util.filesys.storage_report import generate_report, format_size
 
         root = self.kwargs.get('root')
         output = self.kwargs.get('output')
-        if root is None:
+        interactive = sys.stdin.isatty() and sys.stdout.isatty()
+        if root is None and interactive:
             entered = prompt_text(f'Scan root [Enter = {PATH.production}]')
             if entered is None:
                 return None
@@ -35,7 +37,7 @@ class ProjectStorageReport(DirectCall):
                 if entered is None:
                     return None
                 output = entered.strip() or None
-        root = Path(root).expanduser().resolve(strict=True)
+        root = Path(root or PATH.production).expanduser().resolve(strict=True)
         if output is None:
             output = root / 'results' / 'storage_reports' / f'storage_{datetime.now():%Y%m%d_%H%M%S_%f}.html'
         else:
@@ -67,29 +69,25 @@ class ProjectStorageReport(DirectCall):
                 Logger.stdout('Storage report email sent successfully.')
             else:
                 Logger.alert1('Report saved locally; email was not sent. Check email logs for retry or configuration status.')
+        if interactive and prompt_confirm('是否在本地浏览器打开报告？（Ctrl+C 停止浏览服务）', default=False):
+            try:
+                self._open_local_report(report)
+            except Exception as exc:
+                Logger.error(f'Report saved, but local browsing failed: {exc}')
         return {'report': report, 'scan': scan, 'email_sent': sent}
 
-
-class BrowseStorageReport(DirectCall):
-    """Browse a saved report's directory snapshot on its original computer; Ctrl+C stops the service."""
-
-    category = 'Computer'
-
-    def run(self):
-        from pathlib import Path
-        from src.proj.util.cli.prompts import prompt_text
+    @staticmethod
+    def _open_local_report(report):
+        import webbrowser
         from src.proj.util.filesys.storage_browser import StorageReportServer
 
-        report = self.kwargs.get('report')
-        if report is None:
-            report = prompt_text('HTML report path (relative to production project, or absolute)')
-            if report is None or not report.strip():
-                return None
-        report = Path(report).expanduser()
-        if not report.is_absolute():
-            report = PATH.production / report
         with StorageReportServer(report) as server:
             Logger.stdout(f'Browse storage report: {server.url}\nPress Ctrl+C to stop.')
+            try:
+                if not webbrowser.open_new_tab(server.url):
+                    Logger.alert1('Could not open a browser automatically; open the URL above on this computer.')
+            except Exception as exc:
+                Logger.alert1(f'Could not open a browser: {exc}. Open the URL above on this computer.')
             try:
                 server.serve_forever()
             except KeyboardInterrupt:

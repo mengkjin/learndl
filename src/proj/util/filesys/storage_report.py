@@ -93,13 +93,15 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
             is_dir = stat.S_ISDIR(info.st_mode)
             node.is_dir = is_dir
             key = (info.st_dev, info.st_ino)
+            if stat.S_ISLNK(info.st_mode):
+                node.target = os.readlink(path)
             if not is_dir and info.st_nlink > 1:
                 if key in seen:
+                    if on_node:
+                        on_node(node, parent_id)
                     return node
                 seen.add(key)
             node.size = node.own = info.st_blocks * 512
-            if stat.S_ISLNK(info.st_mode):
-                node.target = os.readlink(path)
             if is_dir:
                 with os.scandir(path) as iterator:
                     names = sorted(entry.name for entry in iterator)
@@ -111,16 +113,14 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                     child = walk(path / name, child_parts, retain, node.node_id)
                     node.size += child.size
                     node.complete = node.complete and child.complete
-                    # Only directories and links are report rows; ordinary files are aggregated.
-                    reportable = child.is_dir or child.target is not None or not child.complete
-                    node.has_children = node.has_children or reportable
-                    if retain and reportable:
+                    node.has_children = True
+                    if retain:
                         node.children.append(child)
                     else:
                         node.own += child.size
         except OSError as exc:
             error(node, exc)
-        if on_node and (node.is_dir or node.target is not None or not node.complete):
+        if on_node:
             on_node(node, parent_id)
         return node
 
@@ -143,6 +143,12 @@ def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
                        for child in sorted(node.children, key=lambda child: (-child.size, child.path)))
     button = ('<button class="load-next" type="button" hidden>加载下一层</button>'
               if node.is_dir and node.has_children and not node.children else '')
+    if not node.is_dir:
+        kind = '链接' if node.target is not None else '文件'
+        return (f'<div class="node file" data-path="{escape(node.path, quote=True)}" '
+                f'data-id="{node.node_id}" data-size="{node.size}">'
+                f'<div class="entry-row"><span><small class="kind">{kind}</small> {label}{link}{warning}</span>'
+                f'<b>{format_size(node.size)}</b><small>{percentage}</small></div></div>')
     return (f'<details class="node" data-path="{escape(node.path, quote=True)}" '
             f'data-id="{node.node_id}" data-size="{node.size}" {"open" if depth == 0 else ""}>'
             f'<summary><span>{label}{link}{warning}{button}</span><b>{format_size(node.size)}</b>'
@@ -158,11 +164,13 @@ def render_html(scan: StorageScan) -> str:
 <style>
 body{font:15px system-ui,sans-serif;max-width:1200px;margin:32px auto;padding:0 20px;background:#f5f7fb;color:#17243b}
 header,.tree{background:white;padding:24px;border-radius:12px;margin-bottom:20px}h1{margin-top:0}
-summary{cursor:pointer;padding:10px 4px;border-bottom:1px solid #e5e9f0;display:flex;gap:16px}
-summary:before{content:'▸'}details[open]>summary:before{content:'▾'}summary span{flex:1;overflow-wrap:anywhere}
-summary b{white-space:nowrap}summary small{width:64px;text-align:right}.children{margin-left:22px}
+summary,.entry-row{padding:10px 4px;border-bottom:1px solid #e5e9f0;display:flex;gap:16px}
+summary{cursor:pointer}summary:before{content:'▸'}details[open]>summary:before{content:'▾'}
+summary span,.entry-row span{flex:1;overflow-wrap:anywhere}.entry-row:before{content:'·'}
+summary b,.entry-row b{white-space:nowrap}summary small,.entry-row>small{width:64px;text-align:right}
+.kind{color:#667085;font-size:11px}.children{margin-left:22px}
 .load-next{font:inherit;font-size:12px;padding:3px 7px;margin:0 0 0 10px}strong{color:#b54708}input,select,button{padding:9px;margin:5px}
-input{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
+input[type="search"]{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
 </style><header><h1>项目磁盘占用报告</h1>''' + f'''
 <meta name="storage-report-id" content="{scan.report_id}">
 <p>根目录：{escape(str(scan.root))}</p>
@@ -171,24 +179,31 @@ input{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
 <p>开始：{escape(scan.started)} · 完成：{escape(scan.finished)}</p>
 <p>按分配磁盘块统计，包含目录自身；父子合计不能重复相加。软链接不跟随；硬链接仅计入稳定遍历顺序遇到的首个路径。
 显示层级以下的内容全部计入合计。扫描期间文件可能变化；跨文件系统的挂载目录也会扫描，剩余空间仅对应根目录所在文件系统。</p>
-<p id="browse-status">静态报告：在生成报告的计算机上，通过 CLI 的 Browse Storage Report 启动动态浏览。附件不会连接本机服务。</p>
-<label>搜索路径（已加载目录） <input id="search" type="search" placeholder="例如 DataBase 或 gru"></label>
+<p id="browse-status">静态报告：交互运行 Project Storage Report 后选择本地打开，即可动态浏览文件和文件夹。附件不会连接本机服务。</p>
+<label>搜索路径（已加载文件及文件夹） <input id="search" type="search" placeholder="例如 DataBase 或 gru"></label>
 <label>同级排序 <select id="sort"><option value="size">占用降序</option><option value="name">路径名称</option></select></label>
+<label><input id="hide-special" type="checkbox" checked>隐藏以 . / ~ 开头的文件和文件夹（总占用不变）</label>
 <button id="expand">全部展开</button><button id="collapse">全部折叠</button></header>
 <main class="tree">{render_node(scan.node, scan.node.size, 0)}</main>
 <footer><h2>扫描错误：{scan.error_count}</h2><p>最多展示前 100 条错误。</p><ul>{errors}</ul></footer>
 ''' + '''<script>
 const storageBase = null; // STORAGE_SESSION
-const allNodes=()=>[...document.querySelectorAll('details.node')];
+const allNodes=()=>[...document.querySelectorAll('.node')];
+function isSpecialPath(path){
+ return path!=='.' && path.split('/').some(part=>part.startsWith('.')||part.startsWith('~'));
+}
 function applySearch(reset=false){
  const nodes=allNodes();
  const q=document.querySelector('#search').value.toLowerCase();
+ const hideSpecial=document.querySelector('#hide-special').checked;
  for(const node of [...nodes].reverse()){
   const match=node.dataset.path.toLowerCase().includes(q);
-  const descendant=[...node.querySelector('.children').children].some(child=>!child.hidden);
-  node.hidden=!!q&&!match&&!descendant;
-  if(q) node.open=!node.hidden;
-  else if(reset) node.open=node===nodes[0];
+  const descendant=[...(node.querySelector('.children')?.children||[])].some(child=>!child.hidden);
+  node.hidden=(hideSpecial&&isSpecialPath(node.dataset.path)) || (!!q&&!match&&!descendant);
+  if(node.tagName==='DETAILS'){
+   if(q) node.open=!node.hidden;
+   else if(reset) node.open=node===nodes[0];
+  }
  }
 }
 function applySort(){
@@ -200,9 +215,11 @@ function applySort(){
  }
 }
 document.querySelector('#search').oninput=()=>applySearch(true);
+document.querySelector('#hide-special').onchange=()=>applySearch();
+applySearch();
 document.querySelector('#sort').onchange=applySort;
-document.querySelector('#expand').onclick=()=>allNodes().forEach(node=>node.open=true);
-document.querySelector('#collapse').onclick=()=>allNodes().forEach((node,i)=>node.open=i===0);
+document.querySelector('#expand').onclick=()=>allNodes().filter(n=>n.tagName==='DETAILS').forEach(node=>node.open=true);
+document.querySelector('#collapse').onclick=()=>allNodes().filter(n=>n.tagName==='DETAILS').forEach((node,i)=>node.open=i===0);
 function enableLoading(){
  if(storageBase) document.querySelectorAll('.load-next').forEach(button=>button.hidden=false);
 }
@@ -217,16 +234,22 @@ document.querySelector('.tree').addEventListener('click',async event=>{
  if(!storageBase||button.disabled) return;
  const node=button.closest('details.node');
  button.disabled=true; button.textContent='加载中…';
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),15000);
  try{
   const response=await fetch(storageBase+'children?id='+encodeURIComponent(node.dataset.id),
-                             {signal:AbortSignal.timeout(15000),credentials:'omit'});
-  if(!response.ok) throw new Error('HTTP '+response.status);
+                             {signal:controller.signal,credentials:'omit'});
+  if(!response.ok) throw new Error('HTTP '+response.status+': '+await response.text());
   const data=await response.json();
   node.querySelector('.children').innerHTML=data.html;
   node.open=true; button.remove(); enableLoading(); applySort(); applySearch();
  }catch(error){
-  button.disabled=false; button.textContent='加载失败，重试';
+  button.disabled=false;
+  const reason=error.name==='AbortError' ? '请求超时' : error.message;
+  button.textContent='加载失败，重试（'+reason+'）';
   button.title='请确认本机浏览服务仍在运行。'+error.message;
+ }finally{
+  clearTimeout(timeout);
  }
 });
 </script></html>'''

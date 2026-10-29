@@ -7,7 +7,8 @@ import platform
 import secrets
 import sqlite3
 import uuid
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from threading import Lock
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -50,7 +51,7 @@ class SnapshotIndex:
 
     def finish(self, scan: StorageScan, content: str) -> None:
         metadata = {
-            'version': '1', 'report_id': scan.report_id, 'machine': machine_identity(),
+            'version': '2', 'report_id': scan.report_id, 'machine': machine_identity(),
             'root': str(scan.root), 'started': scan.started, 'finished': scan.finished,
             'html_sha256': hashlib.sha256(content.encode('utf-8')).hexdigest(), 'ready': '1',
         }
@@ -58,7 +59,7 @@ class SnapshotIndex:
         self.connection.commit()
 
 
-class StorageReportServer(HTTPServer):
+class StorageReportServer(ThreadingHTTPServer):
     """One report per loopback session. The caller owns serve_forever/server_close."""
 
     def __init__(self, report: str | Path):
@@ -67,6 +68,7 @@ class StorageReportServer(HTTPServer):
         if not index.is_file():
             raise ValueError('Missing snapshot index. Regenerate this report to enable dynamic browsing.')
         self.connection = sqlite3.connect(index.as_uri() + '?mode=ro', uri=True, check_same_thread=False)
+        self.index_lock = Lock()
         self.connection.row_factory = sqlite3.Row
         try:
             self.connection.execute('PRAGMA query_only=ON')
@@ -74,7 +76,7 @@ class StorageReportServer(HTTPServer):
                 raise ValueError('Corrupt snapshot index')
             metadata = dict(self.connection.execute('SELECT key, value FROM metadata'))
             content = report.read_bytes()
-            if metadata.get('version') != '1' or metadata.get('ready') != '1':
+            if metadata.get('version') not in {'1', '2'} or metadata.get('ready') != '1':
                 raise ValueError('Incomplete or unsupported snapshot index')
             if metadata.get('machine') != machine_identity():
                 raise ValueError('Dynamic browsing is only available on the computer that generated this report')
@@ -100,21 +102,28 @@ class StorageReportServer(HTTPServer):
 
     def server_close(self):
         super().server_close()
-        self.connection.close()
+        with self.index_lock:
+            self.connection.close()
 
     def children(self, node_id: int) -> dict:
-        parent = self.connection.execute('SELECT * FROM nodes WHERE node_id=?', (node_id,)).fetchone()
-        if parent is None or not parent['is_dir']:
-            raise KeyError(node_id)
-        children = self.connection.execute(
-            'SELECT * FROM nodes WHERE parent_id=? ORDER BY size DESC, path', (node_id,)
-        ).fetchall()
+        with self.index_lock:
+            parent = self.connection.execute('SELECT * FROM nodes WHERE node_id=?', (node_id,)).fetchone()
+            if parent is None or not parent['is_dir']:
+                raise KeyError(node_id)
+            children = self.connection.execute(
+                'SELECT * FROM nodes WHERE parent_id=? ORDER BY size DESC, path', (node_id,)
+            ).fetchall()
         nodes = [StorageNode(**{key: row[key] for key in row.keys() if key != 'parent_id'}) for row in children]
         return {'node_id': node_id, 'html': ''.join(render_node(node, parent['size']) for node in nodes)}
 
 
 class _ReportHandler(BaseHTTPRequestHandler):
     server: StorageReportServer
+
+    def setup(self):
+        super().setup()
+        # Browsers can preconnect without immediately sending an HTTP request.
+        self.connection.settimeout(15)
 
     def log_message(self, *args):
         pass
@@ -128,7 +137,10 @@ class _ReportHandler(BaseHTTPRequestHandler):
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # A timed-out browser may disconnect before a large response completes.
 
     def do_GET(self):
         host = f'127.0.0.1:{self.server.server_port}'

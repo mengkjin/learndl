@@ -79,11 +79,10 @@ class DirectCallHub(DirectCall):
         from src.api.calls.script import KillRunningScript
         from src.api.calls.source_code import CheckCodeIssues
         from src.api.calls.test import TestCode
-        from src.api.calls.computer import ProjectStorageReport, BrowseStorageReport
+        from src.api.calls.computer import ProjectStorageReport
 
         return [
             ('Project Storage Report', ProjectStorageReport, ProjectStorageReport.get_description()),
-            ('Browse Storage Report', BrowseStorageReport, BrowseStorageReport.get_description()),
             ('Launch Streamlit App', LaunchApp, 'Open the Streamlit interactive app in a new pane.'),
             ('Launch Learndl Monitor', LaunchTaskMonitor, 'Monitor running scripts, host resources, and finished tasks; confirm before killing a task.'),
             ('Watchdog / Schedule Management', ManageTaskSchedules,

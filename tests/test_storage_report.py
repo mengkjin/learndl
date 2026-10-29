@@ -8,6 +8,7 @@ import threading
 import urllib.request
 import urllib.error
 import json
+import socket
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -22,6 +23,10 @@ class StorageReportTest(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        for name in ('stdin', 'stdout'):
+            tty = patch(f'sys.{name}.isatty', return_value=False)
+            tty.start()
+            self.addCleanup(tty.stop)
 
     def file(self, relative, content=b'x' * 8192):
         path = self.root / relative
@@ -160,8 +165,11 @@ class StorageReportTest(unittest.TestCase):
         from src.api.calls.launcher import DirectCallHub
         from types import SimpleNamespace
         with patch.object(computer, 'PATH', SimpleNamespace(production=self.root)), \
-             patch('src.proj.util.cli.prompts.prompt_text', side_effect=['', '']):
+             patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
+             patch('src.proj.util.cli.prompts.prompt_text', side_effect=['', '']), \
+             patch('src.proj.util.cli.prompts.prompt_confirm', return_value=False) as confirm:
             result = ProjectStorageReport.go(email=False)
+        confirm.assert_called_once()
         self.assertEqual(result['scan'].root, self.root.resolve())
         self.assertIn(('Project Storage Report', ProjectStorageReport),
                       [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
@@ -191,8 +199,14 @@ class StorageReportTest(unittest.TestCase):
             self.assertNotIn('models/nn/gru/archive/0', result)
             self.assertIn('class="load-next"', result)
             self.assertEqual(result, server.children(parent['node_id'])['html'])
-            for leaf in ('empty', 'snapshot', 'link'):
+            for leaf in ('empty', 'link'):
                 self.assertFalse(rows[f'models/nn/gru/{leaf}']['has_children'])
+            self.assertTrue(rows['models/nn/gru/snapshot']['has_children'])
+            files = server.children(rows['models/nn/gru/snapshot']['node_id'])['html']
+            self.assertIn('models/nn/gru/snapshot/a', files)
+            self.assertIn('class="node file"', files)
+            self.assertNotIn('<details', files)
+            self.assertNotIn('load-next', files)
             self.assertNotIn('本层占用', report.read_text())
             self.assertIn('const storageBase = null;', report.read_text())
             self.assertNotIn('const storageBase = null;', server.page.decode())
@@ -216,6 +230,7 @@ class StorageReportTest(unittest.TestCase):
         with StorageReportServer(report) as server:
             rows = {row['path']: row for row in server.connection.execute('SELECT * FROM nodes')}
             self.assertEqual(rows['models/nn/gru/b']['size'], second.stat().st_blocks * 512)
+            self.assertEqual(rows['models/nn/gru/b/duplicate']['size'], 0)
             self.assertFalse(rows['models/nn/gru']['complete'])
             rendered = server.children(rows['models/nn/gru']['node_id'])['html']
             self.assertIn('&lt;img', rendered)
@@ -290,14 +305,79 @@ class StorageReportTest(unittest.TestCase):
                 server.shutdown()
                 thread.join(timeout=3)
 
+    def test_idle_browser_connection_does_not_block_loading(self):
+        from src.proj.util.filesys.storage_browser import _ReportHandler
+        _, report = self.snapshot()
+        accepted = threading.Event()
+        setup = _ReportHandler.setup
+
+        def ready(handler):
+            setup(handler)
+            accepted.set()
+
+        with StorageReportServer(report) as server, patch.object(_ReportHandler, 'setup', ready):
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            idle = socket.create_connection(server.server_address, timeout=2)
+            try:
+                self.assertTrue(accepted.wait(2))
+                with urllib.request.urlopen(server.url + 'children?id=1', timeout=2) as response:
+                    self.assertEqual(json.load(response)['node_id'], 1)
+            finally:
+                idle.close()
+                server.shutdown()
+                thread.join(timeout=3)
+
+    def test_hidden_entries_remain_in_snapshot_and_totals(self):
+        for path in ('.hidden/a', '~backup/a', 'normal/.file', 'normal/~file', 'normal/visible'):
+            self.file(path)
+        scan, report = generate_report(self.root, self.root / 'report.html')
+        nodes = self.nodes(scan.node)
+        self.assertIn('.hidden', nodes)
+        self.assertIn('normal/~file', nodes)
+        self.assertEqual(scan.node.size, scan.node.own + sum(n.size for n in scan.node.children))
+        page = report.read_text()
+        self.assertIn('id="hide-special" type="checkbox" checked', page)
+        self.assertIn('applySearch();', page)
+        self.assertNotIn('AbortSignal.timeout', page)
+
     def test_browse_cli_stops_and_closes_service(self):
-        from src.api.calls.computer import BrowseStorageReport
         from src.api.calls.launcher import DirectCallHub
         _, report = self.snapshot()
-        with patch.object(StorageReportServer, 'serve_forever', side_effect=KeyboardInterrupt):
-            BrowseStorageReport.go(report=report)
-        self.assertIn(('Browse Storage Report', BrowseStorageReport),
-                      [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
+        with patch.object(StorageReportServer, 'serve_forever', side_effect=KeyboardInterrupt), \
+             patch('webbrowser.open_new_tab', return_value=True) as opened:
+            ProjectStorageReport._open_local_report(report)
+        self.assertTrue(opened.call_args.args[0].startswith('http://127.0.0.1:'))
+        self.assertNotIn('Browse Storage Report', [label for label, _, _ in DirectCallHub._source_code_entries()])
+
+    def test_interactive_open_after_email_and_noninteractive_no_prompt(self):
+        from src.proj.util.web.emailer import Email
+        events = []
+        with patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
+             patch.object(Email, 'send', side_effect=lambda *a, **kw: events.append('email') or False), \
+             patch('src.proj.util.cli.prompts.prompt_confirm', side_effect=lambda *a, **kw: events.append('prompt') or True), \
+             patch.object(ProjectStorageReport, '_open_local_report', side_effect=lambda p: events.append('open')):
+            result = ProjectStorageReport.go(root=self.root)
+        self.assertEqual(events, ['email', 'prompt', 'open'])
+        self.assertTrue(result['report'].is_file())
+        with patch('src.proj.util.cli.prompts.prompt_confirm') as confirm, \
+             patch('src.proj.util.cli.prompts.prompt_text') as prompt, \
+             patch.object(ProjectStorageReport, '_open_local_report') as opened:
+            ProjectStorageReport.go(root=self.root, email=False)
+        confirm.assert_not_called()
+        prompt.assert_not_called()
+        opened.assert_not_called()
+
+    def test_static_file_rows(self):
+        self.file('readme.txt')
+        self.file('src/file<name>.py')
+        scan = scan_storage(self.root)
+        nodes = self.nodes(scan.node)
+        self.assertIn('readme.txt', nodes)
+        self.assertIn('src/file<name>.py', nodes)
+        page = render_html(scan)
+        self.assertIn('file&lt;name&gt;.py', page)
+        self.assertIn('class="node file"', page)
 
 
 if __name__ == '__main__':
