@@ -125,3 +125,6 @@ input.final.refresh: false
 model.module.linear: linear
 model.interval.linear: 20
 model.window.linear: 0
+
+# Opt-in first-batch metric/diagnostic optimizations; false preserves legacy paths.
+train.experimental_metrics_fastpath: false

@@ -216,7 +216,11 @@ class SummaryWriter(BaseCallBack):
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:
             self.hidden_rankics.append(self.metrics.rankic_function.hidden_rankic(self.batch_data))
-            self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.T))
+            if self.config['train.experimental_metrics_fastpath']:
+                with torch.no_grad():
+                    self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.detach().T))
+            else:
+                self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.T))
 
     def add_hidden_summaries(self):
         if self.HIDDEN_FEATURE_MODE:

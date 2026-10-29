@@ -184,6 +184,8 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
         last = next((r for r in reversed(store.owned(OWNER)) if r.get('started_at') and r['phase'] != 'deferred'), {})
         request = (rl_request if rl_request and (not model_request or last.get('task_kind') != rl.TASK)
                    else model_request)
+        from .nn_metrics_ab import observe as observe_nn_ab
+        request = (observe_nn_ab(store) if options.get('enabled') else None) or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -268,7 +270,10 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                if request.get('task_kind') == 'rl_experiment':
+                if request.get('task_kind') == 'nn_metrics_ab':
+                    from .nn_metrics_ab import observe
+                    next_candidate = observe(store) if options.get('enabled') else None
+                elif request.get('task_kind') == 'rl_experiment':
                     from .rl_experiment import observe
                     next_candidate = observe(store)
                 else:
@@ -293,6 +298,14 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
+    if request.get('task_kind') == 'nn_metrics_ab':
+        from .nn_metrics_ab import execute
+        from .recovery import record
+        try:
+            return execute(request, store)
+        except BaseException as exc:
+            record(store, run_id, script_outcome='error', error=f'{type(exc).__name__}: {exc}')
+            raise
     if request.get('task_kind') == 'rl_experiment':
         from .rl_experiment import execute
         from .recovery import record

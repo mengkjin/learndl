@@ -74,3 +74,6 @@ torch_compile: true
 torch_compile.mode: default       # default | reduce-overhead | max-autotune
 torch_compile.fullgraph: false
 torch_compile.stage: fit          # fit | test | both
+
+# Opt-in first-batch metric/diagnostic optimizations; false preserves legacy paths.
+experimental_metrics_fastpath: false

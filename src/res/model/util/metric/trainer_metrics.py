@@ -18,6 +18,7 @@ from src.res.model.util.trainer import BaseTrainer , TrainerPipeline
 from .functions import LossFunction , AccuracyFunction , RankICFunction
 from .aggregator import MetricAggregator , AggregatorType
 from .metric_result import EpochMetricResult
+from .fast_metrics import FastBatchMetrics, FastEpochMetrics, ReusingAccuracyFunction
 from .stage_metrics import BatchMetrics , EpochMetrics , AttemptMetrics , ModelMetrics
 
 __all__ = ['TrainerMetrics']
@@ -38,6 +39,7 @@ class TrainerMetrics(TrainerPipeline):
         assert self.config.criterion_loss , 'criterion_loss cannot be empty'
         assert self.config.criterion_accuracy , 'criterion_accuracy cannot be empty'
 
+        self.experimental_fastpath = bool(self.config['train.experimental_metrics_fastpath'])
         self.rankic_function = RankICFunction()
         self.aggregator = MetricAggregator()
         self.stage_metrics = {}
@@ -48,25 +50,29 @@ class TrainerMetrics(TrainerPipeline):
     @property
     def batch_metrics(self) -> BatchMetrics:
         if 'batch' not in self.stage_metrics:
-            self.stage_metrics['batch'] = BatchMetrics(self.aggregator)
+            cls = FastBatchMetrics if self.experimental_fastpath else BatchMetrics
+            self.stage_metrics['batch'] = cls(self.aggregator)
         return self.stage_metrics['batch']
 
     @property
     def epoch_train_metrics(self) -> EpochMetrics:
         if 'epoch_train' not in self.stage_metrics:
-            self.stage_metrics['epoch_train'] = EpochMetrics(self.aggregator)
+            cls = FastEpochMetrics if self.experimental_fastpath else EpochMetrics
+            self.stage_metrics['epoch_train'] = cls(self.aggregator)
         return self.stage_metrics['epoch_train']
 
     @property
     def epoch_valid_metrics(self) -> EpochMetrics:
         if 'epoch_valid' not in self.stage_metrics:
-            self.stage_metrics['epoch_valid'] = EpochMetrics(self.aggregator)
+            cls = FastEpochMetrics if self.experimental_fastpath else EpochMetrics
+            self.stage_metrics['epoch_valid'] = cls(self.aggregator)
         return self.stage_metrics['epoch_valid']
 
     @property
     def epoch_test_metrics(self) -> EpochMetrics:
         if 'epoch_test' not in self.stage_metrics:
-            self.stage_metrics['epoch_test'] = EpochMetrics(self.aggregator)
+            cls = FastEpochMetrics if self.experimental_fastpath else EpochMetrics
+            self.stage_metrics['epoch_test'] = cls(self.aggregator)
         return self.stage_metrics['epoch_test']
 
     @property
@@ -117,7 +123,8 @@ class TrainerMetrics(TrainerPipeline):
         else:
             losses = {}
         accuracies = self.accuracy_function.accuracies(batch_data, self.which_output , self.which_label , dataset = dataset)
-        rankic = self.rankic_function.rankic(batch_data)
+        reused_rankic = getattr(self.accuracy_function, 'last_rankic', None) if self.experimental_fastpath else None
+        rankic = reused_rankic if reused_rankic is not None else self.rankic_function.rankic(batch_data)
         self.batch_metrics.set_values(losses , accuracies , rankic)
         return self
 
@@ -167,7 +174,12 @@ class TrainerMetrics(TrainerPipeline):
         self.model_param  = model_param
         net = _get_net(model)
         self.loss_function = LossFunction(self.config.criterion_loss , net , self.ignore_loss , self.multilosses_kwargs)
-        self.accuracy_function = AccuracyFunction(self.config.criterion_accuracy , net , self.ignore_accuracy)
+        if self.experimental_fastpath:
+            self.accuracy_function = ReusingAccuracyFunction(
+                self.config.criterion_accuracy, net, self.ignore_accuracy,
+                model_param=self.model_param, label_count=len(self.config.labels))
+        else:
+            self.accuracy_function = AccuracyFunction(self.config.criterion_accuracy , net , self.ignore_accuracy)
         
         self.model_metrics.new(self.status.stage , self.status.model_num , self.status.model_date , self.status.model_submodel)
         self.new_attempt()
@@ -194,7 +206,12 @@ class TrainerMetrics(TrainerPipeline):
         self.model_param  = model_param
         net = _get_net(model)
         self.loss_function = LossFunction(self.config.criterion_loss , net , self.ignore_loss , self.multilosses_kwargs)
-        self.accuracy_function = AccuracyFunction(self.config.criterion_accuracy , net , self.ignore_accuracy)
+        if self.experimental_fastpath:
+            self.accuracy_function = ReusingAccuracyFunction(
+                self.config.criterion_accuracy, net, self.ignore_accuracy,
+                model_param=self.model_param, label_count=len(self.config.labels))
+        else:
+            self.accuracy_function = AccuracyFunction(self.config.criterion_accuracy , net , self.ignore_accuracy)
         self.model_metrics.new()
         self.attempt_metrics.new()
         self.epoch_train_metrics.new('train')

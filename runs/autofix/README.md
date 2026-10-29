@@ -252,3 +252,34 @@ LEARNDL_AUTOFIX_SANDBOX_TESTS=1 python -m unittest src.api.task_monitor.tests.te
 ```
 
 还应在服务器用一次性的测试脚本和独立测试项目，验收 systemd cgroup 清理、超时、维护期间定时任务排队、脚本业务失败邮件和启动失败邮件。macOS 上通过的单元测试不能替代 Linux/systemd 验收。
+
+## 默认 NN 指标优化四次 short test
+
+`20261029_nn_metrics_ab_01` 只提交一次性实验请求，不在 autofix 无 GPU 沙箱内训练。
+维护结束后，已启用的 idle_worklist worker 等待共享 GPU 插槽空闲，顺序执行
+`legacy_1 → fast_1 → fast_2 → legacy_2`。每次独立 Python 进程，随机种子为
+`20261029`，调用当前默认 `ModelTrainer.GO(short_test=True, stage=0, resume=0, selection=0)`。
+只覆盖隔离模型名称、随机种子和 `train.experimental_metrics_fastpath`；默认开关不改变。
+
+请求 ID 成功或失败后均不自动重跑，重试必须用新的 autofix ID。每次 short test
+最多两小时，普通业务失败会继续剩余测试；整体被终止则保留磁盘上的部分记录并由
+watchdog 告警。执行前若同 ID 结果目录已存在则拒绝覆盖。无需修改 systemd 单元，
+需一并发布本次调度、脚本及 fastpath 代码；仅在本机新增清单不会启动服务器任务。
+
+结果保存在 `results/nn_training_review/server_ab/<请求ID>/`：
+
+- `evidence/suite.json`：服务器、Git 提交/工作区状态、四次结果和耗时汇总。
+- `evidence/<轮次>/console.log`、`run.json`、`gpu_before.json`、`gpu_after.json`：
+  标准输出/错误、有效配置、PyTorch/CUDA、阶段耗时和 GPU 状态。
+- `evidence/<轮次>/model/`：configs、archive 权重、snapshot 指标/预测/TensorBoard、results 报告。
+- `evidence/source/`：默认模型配置及本次指标实现快照。
+- `bundle/`：带 SHA256 清单的 ZIP 或分片；`mail/delivery.json`：分批邮件回执。
+
+完成邮件沿用项目默认收件人，包含 suite.json 与完整结果包；autofix 提交邮件只代表
+请求已排队。结果邮件由训练脚本发出，超大附件分批。需要补发时使用
+`python -m src.res.rl_experimental.task_mail <结果目录>/mail`，只补发未发送的邮件，不重跑训练。
+
+本机收到附件后将 parts.json 和所有 ZIP 分片放在同一目录，按 parts.json 的顺序
+校验各分片 SHA256、拼接 ZIP 后解压，再按 package_manifest.json 校验文件。随后比较四次模型、预测和指标。
+服务器 GPU 的随机性、编译和缓存可能影响结果；suite 中耗时下降不代表数值等价已确认。
+后续本机分析应先检查相同逻辑两次的波动，再检查新旧差异。正式训练保持默认旧逻辑。

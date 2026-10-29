@@ -110,3 +110,11 @@ fixes:
       email: true
     timeout: 2h
     enabled: true
+  - id: 20261029_nn_metrics_ab_01
+    description: 提交默认 NN 四次 short test（旧新新旧），在共享 GPU 插槽执行，保存日志、计时和完整分析产物并邮件发送。
+    script: scripts/.autofix/request_nn_metrics_ab.py
+    params:
+      dry_run: false
+      email: true
+    timeout: 10m
+    enabled: true
