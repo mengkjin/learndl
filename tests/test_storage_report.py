@@ -3,11 +3,17 @@ import os
 import subprocess
 import sys
 import tempfile
+import sqlite3
+import threading
+import urllib.request
+import urllib.error
+import json
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.proj.util.filesys.storage_report import scan_storage, render_html, write_report
+from src.proj.util.filesys.storage_report import scan_storage, render_html, write_report, generate_report
+from src.proj.util.filesys.storage_browser import StorageReportServer
 from src.api.calls.computer import ProjectStorageReport
 
 
@@ -73,7 +79,7 @@ class StorageReportTest(unittest.TestCase):
         original = os.scandir
 
         def scandir(path):
-            if Path(path).name == 'blocked':
+            if not isinstance(path, int) and Path(path).name == 'blocked':
                 raise PermissionError('test denied')
             return original(path)
 
@@ -134,6 +140,7 @@ class StorageReportTest(unittest.TestCase):
                     send.return_value = outcome
                 result = ProjectStorageReport.go(root=self.root)
                 self.assertTrue(result['report'].is_file())
+                self.assertTrue(result['report'].with_suffix('.sqlite3').is_file())
                 self.assertEqual(result['email_sent'], outcome is True)
                 self.assertEqual(send.call_args.kwargs['attachments'], [result['report']])
                 self.assertIsNone(send.call_args.kwargs['recipient'])
@@ -157,6 +164,139 @@ class StorageReportTest(unittest.TestCase):
             result = ProjectStorageReport.go(email=False)
         self.assertEqual(result['scan'].root, self.root.resolve())
         self.assertIn(('Project Storage Report', ProjectStorageReport),
+                      [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
+
+    def snapshot(self):
+        self.file('models/nn/gru/archive/0/2025/a')
+        self.file('models/nn/gru/snapshot/a')
+        (self.root / 'models/nn/gru/empty').mkdir()
+        (self.root / 'models/nn/gru/link').symlink_to(self.root, target_is_directory=True)
+        return generate_report(self.root, self.root / 'report.html')
+
+    def test_deep_snapshot_and_no_rescan(self):
+        scan, report = self.snapshot()
+        default = self.nodes(scan.node)
+        self.assertNotIn('models/nn/gru/archive', default)
+        self.assertTrue(default['models/nn/gru'].has_children)
+        with StorageReportServer(report) as server:
+            rows = {row['path']: row for row in server.connection.execute('SELECT * FROM nodes')}
+            self.assertIn('models/nn/gru/archive/0/2025', rows)
+            for path, node in default.items():
+                self.assertEqual(rows[path]['size'], node.size)
+            parent = rows['models/nn/gru']
+            # Mutating a file after generation must never change the indexed result.
+            self.file('models/nn/gru/archive/0/2025/a', b'changed')
+            result = server.children(parent['node_id'])['html']
+            self.assertIn('models/nn/gru/archive', result)
+            self.assertNotIn('models/nn/gru/archive/0', result)
+            self.assertIn('class="load-next"', result)
+            self.assertEqual(result, server.children(parent['node_id'])['html'])
+            for leaf in ('empty', 'snapshot', 'link'):
+                self.assertFalse(rows[f'models/nn/gru/{leaf}']['has_children'])
+            self.assertNotIn('本层占用', report.read_text())
+            self.assertIn('const storageBase = null;', report.read_text())
+            self.assertNotIn('const storageBase = null;', server.page.decode())
+
+    def test_index_hardlinks_errors_and_safe_rendering(self):
+        first = self.file('models/nn/gru/a/first')
+        second = self.root / 'models/nn/gru/b'
+        second.mkdir()
+        os.link(first, second / 'duplicate')
+        self.file('models/nn/gru/blocked/a')
+        self.file('models/nn/gru/<img onerror="bad()">/a')
+        original = os.scandir
+
+        def scandir(path):
+            if not isinstance(path, int) and Path(path).name == 'blocked':
+                raise PermissionError('simulated')
+            return original(path)
+
+        with patch('os.scandir', side_effect=scandir):
+            scan, report = generate_report(self.root, self.root / 'report.html')
+        with StorageReportServer(report) as server:
+            rows = {row['path']: row for row in server.connection.execute('SELECT * FROM nodes')}
+            self.assertEqual(rows['models/nn/gru/b']['size'], second.stat().st_blocks * 512)
+            self.assertFalse(rows['models/nn/gru']['complete'])
+            rendered = server.children(rows['models/nn/gru']['node_id'])['html']
+            self.assertIn('&lt;img', rendered)
+            self.assertNotIn('<img', rendered)
+            self.assertIn('统计不完整', rendered)
+        self.assertFalse(scan.node.complete)
+
+    def test_reject_missing_corrupt_mismatched_and_foreign_index(self):
+        scan = scan_storage(self.root)
+        old = write_report(scan, self.root / 'old.html')
+        with self.assertRaisesRegex(ValueError, 'Regenerate'):
+            StorageReportServer(old)
+        _, report = self.snapshot()
+        with patch('src.proj.util.filesys.storage_browser.machine_identity', return_value='foreign'):
+            with self.assertRaisesRegex(ValueError, 'computer'):
+                StorageReportServer(report)
+        original = report.read_bytes()
+        report.write_bytes(original + b'changed')
+        with self.assertRaisesRegex(ValueError, 'match'):
+            StorageReportServer(report)
+        report.write_bytes(original)
+        report.with_suffix('.sqlite3').write_bytes(b'corrupt')
+        with self.assertRaises(sqlite3.DatabaseError):
+            StorageReportServer(report)
+
+    def test_failed_generation_publishes_no_report(self):
+        output = self.root / 'report.html'
+        with patch('src.proj.util.filesys.storage_browser.SnapshotIndex.add', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                generate_report(self.root, output)
+        self.assertFalse(output.exists())
+        self.assertFalse(output.with_suffix('.sqlite3').exists())
+        self.assertFalse(list(self.root.glob('.storage-stage-*')))
+        original_link = os.link
+
+        def link(source, destination):
+            if Path(destination) == output:
+                raise OSError('publication failed')
+            return original_link(source, destination)
+
+        with patch('os.link', side_effect=link), self.assertRaises(OSError):
+            generate_report(self.root, output)
+        self.assertFalse(output.exists())
+        self.assertFalse(output.with_suffix('.sqlite3').exists())
+
+    def test_http_scope_and_read_only_queries(self):
+        _, report = self.snapshot()
+        with StorageReportServer(report) as server:
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                with urllib.request.urlopen(server.url) as response:
+                    self.assertIn('本机动态浏览', response.read().decode())
+                    self.assertIsNone(response.headers.get('Access-Control-Allow-Origin'))
+                with urllib.request.urlopen(server.url + 'children?id=1') as response:
+                    self.assertEqual(json.load(response)['node_id'], 1)
+                for suffix in ('children?id=999999', 'children?id=../etc/passwd',
+                               'children?id=1&path=/etc/passwd', 'children?id=1&id=2',
+                               '../report.html', 'index.sqlite3', 'children?id=0'):
+                    with self.subTest(suffix=suffix), self.assertRaises(urllib.error.HTTPError) as raised:
+                        urllib.request.urlopen(server.url + suffix)
+                    self.assertEqual(raised.exception.code, 404)
+                for headers in ({'Host': 'foreign.invalid'}, {'Origin': 'https://foreign.invalid'},
+                                {'Sec-Fetch-Site': 'cross-site'}):
+                    request = urllib.request.Request(server.url, headers=headers)
+                    with self.assertRaises(urllib.error.HTTPError) as raised:
+                        urllib.request.urlopen(request)
+                    self.assertEqual(raised.exception.code, 403)
+                with self.assertRaises(sqlite3.OperationalError):
+                    server.connection.execute('DELETE FROM nodes')
+            finally:
+                server.shutdown()
+                thread.join(timeout=3)
+
+    def test_browse_cli_stops_and_closes_service(self):
+        from src.api.calls.computer import BrowseStorageReport
+        from src.api.calls.launcher import DirectCallHub
+        _, report = self.snapshot()
+        with patch.object(StorageReportServer, 'serve_forever', side_effect=KeyboardInterrupt):
+            BrowseStorageReport.go(report=report)
+        self.assertIn(('Browse Storage Report', BrowseStorageReport),
                       [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
 
 

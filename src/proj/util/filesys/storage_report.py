@@ -6,6 +6,8 @@ import os
 import shutil
 import stat
 import time
+import tempfile
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +23,8 @@ class StorageNode:
     target: str | None = None
     is_dir: bool = False
     children: list[StorageNode] = field(default_factory=list)
+    node_id: int = 0
+    has_children: bool = False
 
 
 @dataclass
@@ -34,6 +38,7 @@ class StorageScan:
     disk_free: int
     errors: list[str]
     error_count: int
+    report_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 def display_depth(parts: tuple[str, ...]) -> int:
@@ -54,7 +59,9 @@ def format_size(value: int) -> str:
     raise AssertionError('unreachable')
 
 
-def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None = None) -> StorageScan:
+def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None = None, *,
+                 on_node: Callable[[StorageNode, int | None], None] | None = None,
+                 exclude: Path | None = None) -> StorageScan:
     root = Path(root).expanduser().resolve(strict=True)
     if not root.is_dir():
         raise NotADirectoryError(root)
@@ -73,10 +80,11 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
         if len(errors) < 100:
             errors.append(f'{node.path}: {exc}')
 
-    def walk(path: Path, parts: tuple[str, ...], visible: bool) -> StorageNode:
+    def walk(path: Path, parts: tuple[str, ...], visible: bool, parent_id: int | None = None) -> StorageNode:
         nonlocal entries, last_progress
         node = StorageNode('/'.join(parts) or '.')
         entries += 1
+        node.node_id = entries
         if progress and time.monotonic() - last_progress >= 2:
             progress(f'Scanned {entries:,} entries: {node.path}')
             last_progress = time.monotonic()
@@ -96,18 +104,24 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                 with os.scandir(path) as iterator:
                     names = sorted(entry.name for entry in iterator)
                 for name in names:
+                    if path / name == exclude:
+                        continue
                     child_parts = (*parts, name)
                     retain = visible and len(child_parts) <= display_depth(child_parts)
-                    child = walk(path / name, child_parts, retain)
+                    child = walk(path / name, child_parts, retain, node.node_id)
                     node.size += child.size
                     node.complete = node.complete and child.complete
                     # Only directories and links are report rows; ordinary files are aggregated.
-                    if retain and (child.is_dir or child.target is not None or not child.complete):
+                    reportable = child.is_dir or child.target is not None or not child.complete
+                    node.has_children = node.has_children or reportable
+                    if retain and reportable:
                         node.children.append(child)
                     else:
                         node.own += child.size
         except OSError as exc:
             error(node, exc)
+        if on_node and (node.is_dir or node.target is not None or not node.complete):
+            on_node(node, parent_id)
         return node
 
     node = walk(root, (), True)
@@ -118,22 +132,25 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                        entries, disk.total, disk.free, errors, error_count)
 
 
+def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
+    """Shared escaped rendering for snapshot rows and lazily fetched rows."""
+    escape = html.escape
+    percentage = f'{node.size / parent_size:.1%}' if parent_size else '—'
+    label = escape(node.path.rsplit('/', 1)[-1])
+    warning = '' if node.complete else ' <strong>统计不完整</strong>'
+    link = f' → {escape(node.target)}' if node.target is not None else ''
+    children = ''.join(render_node(child, node.size, depth + 1)
+                       for child in sorted(node.children, key=lambda child: (-child.size, child.path)))
+    button = ('<button class="load-next" type="button" hidden>加载下一层</button>'
+              if node.is_dir and node.has_children and not node.children else '')
+    return (f'<details class="node" data-path="{escape(node.path, quote=True)}" '
+            f'data-id="{node.node_id}" data-size="{node.size}" {"open" if depth == 0 else ""}>'
+            f'<summary><span>{label}{link}{warning}{button}</span><b>{format_size(node.size)}</b>'
+            f'<small>{percentage}</small></summary><div class="children">{children}</div></details>')
+
+
 def render_html(scan: StorageScan) -> str:
     escape = html.escape
-
-    def row(node: StorageNode, parent_size: int, depth: int) -> str:
-        percentage = f'{node.size / parent_size:.1%}' if parent_size else '—'
-        label = escape(node.path.rsplit('/', 1)[-1])
-        warning = '' if node.complete else ' <strong>统计不完整</strong>'
-        link = f' → {escape(node.target)}' if node.target is not None else ''
-        children = ''.join(row(child, node.size, depth + 1)
-                           for child in sorted(node.children, key=lambda child: (-child.size, child.path)))
-        own = (f'<p class="own">本层占用：{format_size(node.own)}'
-               '（目录自身及未单列内容）</p>')
-        return (f'<details class="node" data-path="{escape(node.path, quote=True)}" '
-                f'data-size="{node.size}" {"open" if depth == 0 else ""}>'
-                f'<summary><span>{label}{link}{warning}</span><b>{format_size(node.size)}</b>'
-                f'<small>{percentage}</small></summary>{own}<div class="children">{children}</div></details>')
 
     errors = ''.join(f'<li>{escape(error)}</li>' for error in scan.errors)
     return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
@@ -144,40 +161,74 @@ header,.tree{background:white;padding:24px;border-radius:12px;margin-bottom:20px
 summary{cursor:pointer;padding:10px 4px;border-bottom:1px solid #e5e9f0;display:flex;gap:16px}
 summary:before{content:'▸'}details[open]>summary:before{content:'▾'}summary span{flex:1;overflow-wrap:anywhere}
 summary b{white-space:nowrap}summary small{width:64px;text-align:right}.children{margin-left:22px}
-.own{color:#667085;font-size:12px;margin:8px 24px}strong{color:#b54708}input,select,button{padding:9px;margin:5px}
+.load-next{font:inherit;font-size:12px;padding:3px 7px;margin:0 0 0 10px}strong{color:#b54708}input,select,button{padding:9px;margin:5px}
 input{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
 </style><header><h1>项目磁盘占用报告</h1>''' + f'''
+<meta name="storage-report-id" content="{scan.report_id}">
 <p>根目录：{escape(str(scan.root))}</p>
 <p>项目占用：<b>{format_size(scan.node.size)}</b> · 状态：{'完整' if scan.node.complete else '统计不完整'} · 扫描条目：{scan.entries:,}</p>
 <p>根目录所在文件系统：总容量 {format_size(scan.disk_total)} · 剩余 {format_size(scan.disk_free)}</p>
 <p>开始：{escape(scan.started)} · 完成：{escape(scan.finished)}</p>
 <p>按分配磁盘块统计，包含目录自身；父子合计不能重复相加。软链接不跟随；硬链接仅计入稳定遍历顺序遇到的首个路径。
 显示层级以下的内容全部计入合计。扫描期间文件可能变化；跨文件系统的挂载目录也会扫描，剩余空间仅对应根目录所在文件系统。</p>
-<label>搜索路径 <input id="search" type="search" placeholder="例如 DataBase 或 gru"></label>
+<p id="browse-status">静态报告：在生成报告的计算机上，通过 CLI 的 Browse Storage Report 启动动态浏览。附件不会连接本机服务。</p>
+<label>搜索路径（已加载目录） <input id="search" type="search" placeholder="例如 DataBase 或 gru"></label>
 <label>同级排序 <select id="sort"><option value="size">占用降序</option><option value="name">路径名称</option></select></label>
 <button id="expand">全部展开</button><button id="collapse">全部折叠</button></header>
-<main class="tree">{row(scan.node, scan.node.size, 0)}</main>
+<main class="tree">{render_node(scan.node, scan.node.size, 0)}</main>
 <footer><h2>扫描错误：{scan.error_count}</h2><p>最多展示前 100 条错误。</p><ul>{errors}</ul></footer>
 ''' + '''<script>
-const nodes=[...document.querySelectorAll('details.node')];
-document.querySelector('#search').addEventListener('input',event=>{
- const q=event.target.value.toLowerCase();
+const storageBase = null; // STORAGE_SESSION
+const allNodes=()=>[...document.querySelectorAll('details.node')];
+function applySearch(reset=false){
+ const nodes=allNodes();
+ const q=document.querySelector('#search').value.toLowerCase();
  for(const node of [...nodes].reverse()){
   const match=node.dataset.path.toLowerCase().includes(q);
   const descendant=[...node.querySelector('.children').children].some(child=>!child.hidden);
   node.hidden=!!q&&!match&&!descendant;
-  node.open=q ? !node.hidden : node===nodes[0];
+  if(q) node.open=!node.hidden;
+  else if(reset) node.open=node===nodes[0];
  }
-});
-document.querySelector('#sort').addEventListener('change',event=>{
+}
+function applySort(){
+ const mode=document.querySelector('#sort').value;
  for(const container of document.querySelectorAll('.children')){
   const children=[...container.children];
-  children.sort((a,b)=>event.target.value==='size' ? Number(b.dataset.size)-Number(a.dataset.size)||a.dataset.path.localeCompare(b.dataset.path) : a.dataset.path.localeCompare(b.dataset.path));
+  children.sort((a,b)=>mode==='size' ? Number(b.dataset.size)-Number(a.dataset.size)||a.dataset.path.localeCompare(b.dataset.path) : a.dataset.path.localeCompare(b.dataset.path));
   container.append(...children);
  }
+}
+document.querySelector('#search').oninput=()=>applySearch(true);
+document.querySelector('#sort').onchange=applySort;
+document.querySelector('#expand').onclick=()=>allNodes().forEach(node=>node.open=true);
+document.querySelector('#collapse').onclick=()=>allNodes().forEach((node,i)=>node.open=i===0);
+function enableLoading(){
+ if(storageBase) document.querySelectorAll('.load-next').forEach(button=>button.hidden=false);
+}
+if(storageBase){
+ document.querySelector('#browse-status').textContent='本机动态浏览：加载首次扫描的目录快照，不重新扫描磁盘。';
+ enableLoading();
+}
+document.querySelector('.tree').addEventListener('click',async event=>{
+ const button=event.target.closest('.load-next');
+ if(!button) return;
+ event.preventDefault(); event.stopPropagation();
+ if(!storageBase||button.disabled) return;
+ const node=button.closest('details.node');
+ button.disabled=true; button.textContent='加载中…';
+ try{
+  const response=await fetch(storageBase+'children?id='+encodeURIComponent(node.dataset.id),
+                             {signal:AbortSignal.timeout(15000),credentials:'omit'});
+  if(!response.ok) throw new Error('HTTP '+response.status);
+  const data=await response.json();
+  node.querySelector('.children').innerHTML=data.html;
+  node.open=true; button.remove(); enableLoading(); applySort(); applySearch();
+ }catch(error){
+  button.disabled=false; button.textContent='加载失败，重试';
+  button.title='请确认本机浏览服务仍在运行。'+error.message;
+ }
 });
-document.querySelector('#expand').onclick=()=>nodes.forEach(node=>node.open=true);
-document.querySelector('#collapse').onclick=()=>nodes.forEach(node=>node.open=node===nodes[0]);
 </script></html>'''
 
 
@@ -188,3 +239,34 @@ def write_report(scan: StorageScan, output: str | Path) -> Path:
     with output.open('x', encoding='utf-8') as stream:
         stream.write(render_html(scan))
     return output
+
+
+def generate_report(root: str | Path, output: str | Path,
+                    progress: Callable[[str], Any] | None = None) -> tuple[StorageScan, Path]:
+    """Stage a same-scan directory index and publish HTML last, without overwriting."""
+    from .storage_browser import SnapshotIndex
+
+    output = Path(output).expanduser().absolute()
+    index = output.with_suffix('.sqlite3')
+    if output == index:
+        raise ValueError('Report output must not use the .sqlite3 extension')
+    if output.exists() or index.exists():
+        raise FileExistsError(f'Report or index already exists: {output}')
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.storage-stage-', dir=output.parent) as temporary:
+        stage = Path(temporary).resolve()
+        with SnapshotIndex(stage / 'index.sqlite3') as writer:
+            scan = scan_storage(root, progress, on_node=writer.add, exclude=stage)
+            content = render_html(scan)
+            writer.finish(scan, content)
+        staged_html = stage / 'report.html'
+        staged_html.write_text(content, encoding='utf-8')
+        # Atomic no-clobber publication; an interrupted run can leave an orphan index,
+        # but never an HTML report referring to an unfinished index.
+        os.link(stage / 'index.sqlite3', index)
+        try:
+            os.link(staged_html, output)
+        except BaseException:
+            index.unlink()
+            raise
+    return scan, output

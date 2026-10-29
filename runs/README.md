@@ -16,6 +16,22 @@ uv run --frozen python -c 'from src.api.calls.computer import ProjectStorageRepo
 
 报告可离线浏览，支持目录折叠、路径搜索和同级排序。数据库展示到数据集、模型展示到模型名称，中间数据和导出分别展示到子用途和因子/模型/组合；更深层文件仍计入合计。按实际分配磁盘块统计，包含隐藏目录，不跟随软链接，硬链接只计一次；出现读取错误时会标记不完整。仅支持提供 `st_blocks` 的系统（如 Linux/macOS）。扫描期间文件可能变化，报告不是文件系统快照，也不会删除任何文件。
 
+### 按需查看下一层目录
+
+新报告会在 HTML 旁保存同名 `.sqlite3` 目录索引。索引来自首次扫描，保留所有目录的汇总；邮件只附加 HTML，不附加索引。
+
+在**生成报告的计算机**上，从 CLI 选择 **Non-Research Operations → Browse Storage Report** 并输入报告路径。也可运行：
+
+```bash
+uv run --frozen python -c 'from src.api.calls.computer import BrowseStorageReport; BrowseStorageReport.go(report="results/storage_reports/storage_<timestamp>.html")'
+```
+
+浏览器打开终端打印的 `http://127.0.0.1:<port>/<session>/` 网址。在默认最底层且仍有子目录的节点名称右侧，点击“加载下一层”即可继续查看；每次只加载一层，加载过的内容会复用。显示的仍是首次扫描时的大小，不会重新扫描磁盘。搜索和全部展开只作用于已加载目录。
+
+服务仅监听本机，使用随机端口与会话地址，不自动启动浏览器；按 Ctrl+C 停止。服务停止后，页面已加载内容仍可查看，未加载内容需重新启动服务并打开新网址。直接打开 HTML 或邮件附件保持静态模式，不会连接任何本机服务。
+
+HTML 与索引需要一起保留，旧报告、索引缺失或损坏、报告被修改或与索引不匹配时，需要重新生成。索引包含生成机器指纹；Linux 使用机器 ID，其余系统使用主机名和网卡标识摘要，因此更改这些机器标识后也需重新生成报告。删除报告时可同时删除其同名 `.sqlite3` 文件。
+
 ## 文件结构
 
 ```

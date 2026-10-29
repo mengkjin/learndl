@@ -10,7 +10,7 @@ from src.proj import MACHINE , Logger , PATH
 from src.proj.core import StrEnum
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo', 'ProjectStorageReport']
+__all__ = ['SuspendThisMachine' , 'ChangePowerMode' , 'PrintDiskSpaceInfo', 'ProjectStorageReport', 'BrowseStorageReport']
 
 
 class ProjectStorageReport(DirectCall):
@@ -21,7 +21,7 @@ class ProjectStorageReport(DirectCall):
     def run(self):
         from pathlib import Path
         from src.proj.util.cli.prompts import prompt_text
-        from src.proj.util.filesys.storage_report import scan_storage, write_report, format_size
+        from src.proj.util.filesys.storage_report import generate_report, format_size
 
         root = self.kwargs.get('root')
         output = self.kwargs.get('output')
@@ -45,8 +45,7 @@ class ProjectStorageReport(DirectCall):
         if output.exists():
             raise FileExistsError(f'Report already exists: {output}')
         Logger.stdout(f'Scanning project storage: {root}')
-        scan = scan_storage(root, progress=Logger.stdout)
-        report = write_report(scan, output)
+        scan, report = generate_report(root, output, progress=Logger.stdout)
         Logger.stdout(f'Storage report saved: {report}')
         sent = None
         if self.kwargs.get('email', True):
@@ -69,6 +68,32 @@ class ProjectStorageReport(DirectCall):
             else:
                 Logger.alert1('Report saved locally; email was not sent. Check email logs for retry or configuration status.')
         return {'report': report, 'scan': scan, 'email_sent': sent}
+
+
+class BrowseStorageReport(DirectCall):
+    """Browse a saved report's directory snapshot on its original computer; Ctrl+C stops the service."""
+
+    category = 'Computer'
+
+    def run(self):
+        from pathlib import Path
+        from src.proj.util.cli.prompts import prompt_text
+        from src.proj.util.filesys.storage_browser import StorageReportServer
+
+        report = self.kwargs.get('report')
+        if report is None:
+            report = prompt_text('HTML report path (relative to production project, or absolute)')
+            if report is None or not report.strip():
+                return None
+        report = Path(report).expanduser()
+        if not report.is_absolute():
+            report = PATH.production / report
+        with StorageReportServer(report) as server:
+            Logger.stdout(f'Browse storage report: {server.url}\nPress Ctrl+C to stop.')
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                Logger.stdout('Storage report browser stopped.')
 
 class SuspendThisMachine(DirectCall):
     """Suspend the machine if not windows and no running python scripts"""
