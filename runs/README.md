@@ -2,6 +2,20 @@
 
 本文件夹包含了用于自动化运行和启动learndl项目的Shell脚本。
 
+## 项目磁盘占用报告
+
+在项目 CLI 中选择 **Non-Research Operations → Project Storage Report**，输入扫描根目录和 HTML 输出路径；直接回车使用生产项目目录与默认报告路径。
+
+也可在项目根目录运行（默认发送邮件附件）：
+
+```bash
+uv run --frozen python -c 'from src.api.calls.computer import ProjectStorageReport; ProjectStorageReport.go(root=".")'
+```
+
+`root` 支持绝对路径；`output` 可指定 HTML 文件路径，相对路径基于扫描根目录。默认输出到 `results/storage_reports/storage_<timestamp>.html`，已有文件不会覆盖。传入 `email=False` 可只保存本地报告；`recipient="you@example.com"` 可覆盖默认收件人，否则沿用项目邮箱配置（发送给发件邮箱）。发送失败仍保留报告，并沿用现有邮件队列的重试机制。
+
+报告可离线浏览，支持目录折叠、路径搜索和同级排序。数据库展示到数据集、模型展示到模型名称，中间数据和导出分别展示到子用途和因子/模型/组合；更深层文件仍计入合计。按实际分配磁盘块统计，包含隐藏目录，不跟随软链接，硬链接只计一次；出现读取错误时会标记不完整。仅支持提供 `st_blocks` 的系统（如 Linux/macOS）。扫描期间文件可能变化，报告不是文件系统快照，也不会删除任何文件。
+
 ## 文件结构
 
 ```
