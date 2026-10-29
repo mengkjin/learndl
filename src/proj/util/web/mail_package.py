@@ -16,6 +16,7 @@ from email.message import EmailMessage, Message
 from pathlib import Path
 
 MAX_BYTES = 30_000_000
+MAX_ATTACHMENT_BYTES = 20_000_000
 BODY_BYTES = 1_000_000
 
 
@@ -86,10 +87,31 @@ def fingerprint(message: Message) -> str:
     return digest(json.dumps(item(message), ensure_ascii=False, sort_keys=True).encode())
 
 
+def attachment_capacity(budget: int) -> int:
+    """Largest raw attachment fitting the Base64/CRLF budget, capped at 20 MB."""
+    low, high = 0, MAX_ATTACHMENT_BYTES
+    while low < high:
+        middle = (low + high + 1) // 2
+        encoded = 4 * ((middle + 2) // 3)
+        if encoded + 2 * ((encoded + 75) // 76) <= budget:
+            low = middle
+        else:
+            high = middle - 1
+    return low
+
+
+def balanced_sizes(size: int, cap: int) -> list[int]:
+    """Minimum number of volumes, differing by at most one byte."""
+    count = max(1, (size + cap - 1) // cap)
+    quotient, remainder = divmod(size, count)
+    return [quotient + (index < remainder) for index in range(count)]
+
+
 def needs_preparation(message: Message, limit: int = MAX_BYTES) -> bool:
     return len(wire(message)) > limit or any(
-        p.get_content_maintype() == 'text' and not p.get_filename()
-        and len(p.as_bytes(policy=policy.SMTP)) > BODY_BYTES
+        (bool(p.get_filename()) and len(decoded(p)) > MAX_ATTACHMENT_BYTES)
+        or (p.get_content_maintype() == 'text' and not p.get_filename()
+            and len(p.as_bytes(policy=policy.SMTP)) > BODY_BYTES)
         for p in message.walk() if not p.is_multipart())
 
 
@@ -189,7 +211,7 @@ def prepare(message: Message, directory: Path, batch_id: str, limit: int = MAX_B
         for number, (name, data) in enumerate(files, 1):
             entry = {'name': name, 'size': len(data), 'sha256': digest(data)}
             manifest['attachments'].append(entry)
-            if len(build([(name, data)])) <= limit:
+            if len(data) <= MAX_ATTACHMENT_BYTES and len(build([(name, data)])) <= limit:
                 prepared.append((name, data))
                 continue
             package_name = f'{batch_key}-{number:03d}'
@@ -197,7 +219,7 @@ def prepare(message: Message, directory: Path, batch_id: str, limit: int = MAX_B
             with zipfile.ZipFile(buf, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
                 archive.writestr(name, data)
             zipped = buf.getvalue()
-            if len(build([(package_name+'.zip', zipped)])) <= limit:
+            if len(zipped) <= MAX_ATTACHMENT_BYTES and len(build([(package_name+'.zip', zipped)])) <= limit:
                 prepared.append((package_name+'.zip', zipped))
                 entry['package'] = package_name+'.zip'
                 continue
@@ -207,28 +229,31 @@ def prepare(message: Message, directory: Path, batch_id: str, limit: int = MAX_B
             work = directory / f'.compress-{number}'
             work.mkdir()
             (work / name).write_bytes(data)
-            output = work / 'volumes'
-            output.mkdir()
-            cap = min(20_000_000, int((limit - len(build([]))) * .70))
+            archive_path = work / (package_name+'.7z')
             try:
-                while cap >= 1024:
-                    for p in output.iterdir():
-                        p.unlink()
-                    result = subprocess.run([executable, 'a', '-t7z', '-mx=1', f'-v{cap}b',
-                                             str(output / (package_name+'.7z')), '--', name],
-                                            cwd=work, capture_output=True, timeout=300)
-                    if result.returncode:
-                        raise RuntimeError(f'7-Zip failed ({result.returncode}): {result.stderr.decode(errors="replace")[:500]}')
-                    parts = [(p.name, p.read_bytes()) for p in sorted(output.iterdir())]
-                    if not parts:
-                        raise RuntimeError('7-Zip produced no volumes')
-                    if all(len(build([part])) <= limit for part in parts):
-                        prepared.extend(parts)
-                        entry['volumes'] = [dict(name=n, size=len(d), sha256=digest(d)) for n, d in parts]
-                        break
-                    cap = int(cap * .8)
-                else:
+                # Compress once, then split the archive stream into balanced volumes.
+                # 7-Zip/Keka reassemble .7z.001, .002, ... before extracting.
+                result = subprocess.run([executable, 'a', '-t7z', '-mx=1',
+                                         str(archive_path), '--', name],
+                                        cwd=work, capture_output=True, timeout=300)
+                if result.returncode:
+                    raise RuntimeError(f'7-Zip failed ({result.returncode}): {result.stderr.decode(errors="replace")[:500]}')
+                size = archive_path.stat().st_size
+                volume_name = package_name+'.7z.001'
+                overhead = len(build([(volume_name, b'')]))
+                cap = attachment_capacity(limit - overhead)
+                if cap < 1024:
                     raise ValueError('Cannot fit archive volumes in mail size budget')
+                lengths = balanced_sizes(size, cap)
+                parts = []
+                with archive_path.open('rb') as archive:
+                    for index, length in enumerate(lengths, 1):
+                        part = (f'{package_name}.7z.{index:03d}', archive.read(length))
+                        if len(build([part])) > limit:
+                            raise ValueError('Archive volume exceeds mail size budget')
+                        parts.append(part)
+                prepared.extend(parts)
+                entry['volumes'] = [dict(name=n, size=len(d), sha256=digest(d)) for n, d in parts]
             finally:
                 shutil.rmtree(work)
         # Keep manifests small and independently usable even for many attachments.

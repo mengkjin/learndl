@@ -133,6 +133,8 @@ class PackageTest(unittest.TestCase):
         actual = (destination/'out/中文报告.pdf').read_bytes()
         self.assertEqual(actual, data)
         self.assertEqual(package.digest(actual), result['attachments'][0]['sha256'])
+        sizes = [part['size'] for part in result['attachments'][0]['volumes']]
+        self.assertLessEqual(max(sizes)-min(sizes), 1)
         for part in result['attachments'][0]['volumes']:
             self.assertEqual(package.digest(files[part['name']]), part['sha256'])
 
@@ -143,6 +145,28 @@ class PackageTest(unittest.TestCase):
         self.assertEqual(found['same.txt'], files[0][1])
         self.assertEqual(found['2-same.txt'], files[1][1])
         self.assertEqual(found['unsafe.txt'], files[2][1])
+
+    def test_balanced_volume_sizes_and_capacity(self):
+        self.assertEqual(package.balanced_sizes(45_000_000, 20_000_000), [15_000_000]*3)
+        self.assertEqual(package.balanced_sizes(40_000_000, 20_000_000), [20_000_000]*2)
+        lengths = package.balanced_sizes(40_000_001, 20_000_000)
+        self.assertEqual(sum(lengths), 40_000_001)
+        self.assertLessEqual(max(lengths)-min(lengths), 1)
+        self.assertEqual(package.attachment_capacity(29_900_000), 20_000_000)
+        budget = 39000
+        cap = package.attachment_capacity(budget)
+        for size, fits in ((cap, True), (cap+1, False)):
+            encoded = 4*((size+2)//3)
+            self.assertEqual(encoded + 2*((encoded+75)//76) <= budget, fits)
+
+    def test_attachment_limit_applies_even_when_whole_mail_fits(self):
+        msg = message(attachments=[('report.html', b'x'*20_000_001)])
+        self.assertLess(len(package.wire(msg)), package.MAX_BYTES)
+        result = package.prepare(msg, self.root, 'attachment-limit')
+        self.assertTrue(result['transformed'])
+        files = attachments(self.root, result)
+        self.assertTrue(any(name.endswith('.zip') for name in files))
+        self.assertTrue(all(len(raw) <= 20_000_000 for raw in files.values()))
 
     def test_actual_30mb_limit(self):
         msg = message(attachments=[('near-limit.bin', b'x'*21_930_000)])

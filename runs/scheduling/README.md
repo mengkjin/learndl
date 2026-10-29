@@ -341,6 +341,7 @@ result in a later duplicate; this is not an exactly-once delivery protocol.
 ## 邮件大小、积压恢复与告警
 
 邮件默认以 **30,000,000 字节的完整 SMTP MIME** 为上限（含 Base64、正文、邮件头和 CRLF）。
+单个附件或分卷最多 **20,000,000 字节**；分卷先完成压缩，再根据附件容量和 MIME 剩余容量计算最少卷数，均分各卷（大小相差最多 1 字节）。例如压缩后 45 MB 分为三卷、每卷 15 MB。已生成的队列分卷保持原样，避免影响发送回执。
 长正文转为完整 UTF-8 文件；过大 HTML/PDF 先打 ZIP；仍超限时生成标准 `.7z.001` 分卷。
 每封编号邮件独立记录成功状态，下载全部分卷到同一目录，用 7-Zip 或 Keka 打开第一卷。
 普通 ZIP 可直接解压。相关 HTML 的内嵌资源保存在 MHTML 中，需支持 MHTML 的阅读器。
