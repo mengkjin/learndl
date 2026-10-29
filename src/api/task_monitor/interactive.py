@@ -177,7 +177,7 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
                 try:
                     sent = email_sender(f'Learndl reconstruction {task.status}: {meta["key"]}/{meta["frame"]}',
                                         body, attachments=[], confirmation_message='Interactive reconstruction alert',
-                                        queue_on_failure=False)
+                                        queue_on_failure=False, delivery_id=f'interactive:{task.id}:{task.status}')
                 except Exception:
                     sent = False
                 if sent:

@@ -178,7 +178,8 @@ def send_bundle(
             from src.proj.util.web.emailer import Email
 
             message = Email.message(title, body, address, attachments=attachments)
-            return Email.send_with_smtplib(message, address, confirmation_message="RL experiment bundle")
+            return Email.send_with_smtplib(message, address, confirmation_message="RL experiment bundle",
+                                           delivery_id=f"rl-bundle:{metadata}:{attachments[0].name}")
 
     states = dict(previous.get("parts", {}))
     total = len(parts)

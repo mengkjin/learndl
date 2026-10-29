@@ -169,7 +169,8 @@ def deliver(sender):
             event = json.loads(raw)
             try:
                 sent = sender(f'Autofix {event["kind"]} - {event.get("id", "tasks.yaml")}', _mail_body(event),
-                              confirmation_message='Learndl autofix alert', queue_on_failure=False)
+                              confirmation_message='Learndl autofix alert', queue_on_failure=False,
+                              delivery_id=f'autofix:{key}')
             except Exception:
                 sent = False
             if sent:
@@ -325,7 +326,8 @@ def control_failure(error, sender):
             return
         sent = sender('Autofix control failure - ' + socket.gethostname(),
                       f'Autofix is paused. No execution ledger has been recreated.\n{type(error).__name__}: {error}\nRestore the existing control state before resuming.',
-                      confirmation_message='Learndl autofix control alert', queue_on_failure=False)
+                      confirmation_message='Learndl autofix control alert', queue_on_failure=False,
+                      delivery_id=f'autofix-control:{key}')
         if sent:
             db.execute('UPDATE notices SET sent=1 WHERE id=?', (key,))
 

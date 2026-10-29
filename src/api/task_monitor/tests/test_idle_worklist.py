@@ -449,6 +449,9 @@ class IdleTest(unittest.TestCase):
             runtime.deliver_timeout_events(send, self.store)
             self.assertEqual(send.call_count, 3)
             self.assertIn('finished', send.call_args.args[0])
+            self.assertEqual(send.call_args_list[1].args, send.call_args_list[2].args)
+            self.assertEqual(send.call_args_list[1].kwargs['delivery_id'],
+                             send.call_args_list[2].kwargs['delivery_id'])
 
     def test_legacy_result_mail_suppressed_only_when_script_already_sent(self):
         run = dict(id='legacy-receipt', owner=idle.OWNER, task='first', phase='complete',

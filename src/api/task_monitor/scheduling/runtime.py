@@ -352,6 +352,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             try:
                 sent = sender('Watchdog Idle Worklist - configuration error', event['detail'],
                               confirmation_message='Learndl worklist configuration alert', queue_on_failure=False,
+                              delivery_id=f'watchdog-event:{event_id}',
                               **mail_options)
             except Exception:
                 sent = False
@@ -399,9 +400,16 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                         f'Rerun mark: {run.get("rerun_mark", "none")}\n')
             for name, revision in run.get('revisions', {}).items():
                 message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
+        # Freeze dynamic elapsed/recovery text on the first attempt. A durable
+        # delivery ID must refer to the same payload on every subsequent retry.
+        if 'delivery_message' not in event:
+            event['delivery_message'] = message
+            with store.connect() as connection:
+                connection.execute('UPDATE events SET body=? WHERE id=?', (json.dumps(event), event_id))
+        message = event['delivery_message']
         if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,
                   attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert',
-                  queue_on_failure=False, **mail_options):
+                  queue_on_failure=False, delivery_id=f'watchdog-event:{event_id}', **mail_options):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
         else:

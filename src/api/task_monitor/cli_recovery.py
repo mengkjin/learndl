@@ -231,7 +231,8 @@ def deliver(email_sender, path: Path | None = None) -> bool:
         sent = email_sender('Learndl CLI recovery paused',
                             f'Three CLI recovery attempts failed.\nProject: {state.get("root")}\n'
                             f'Error: {notice["error"]}\nState: {path}\nUse recovery resume after correcting the desktop session.',
-                            attachments=[], confirmation_message='CLI recovery alert', queue_on_failure=False)
+                            attachments=[], confirmation_message='CLI recovery alert', queue_on_failure=False,
+                            delivery_id=f'cli-recovery:{path}:{notice["time"]}')
     except Exception:
         return False
     if sent:

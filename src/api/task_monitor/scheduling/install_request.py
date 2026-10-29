@@ -102,7 +102,8 @@ def deliver(sender) -> bool:
             sent = sender(f'Watchdog installation - {row["phase"]}',
                           f'Request: {row["id"]}\nStatus: {row["phase"]}\n{row.get("reason", "")}\n'
                           f'Service: {row.get("unit", "")}\n',
-                          confirmation_message='Learndl installation notification', queue_on_failure=False)
+                          confirmation_message='Learndl installation notification', queue_on_failure=False,
+                          delivery_id=f'install:{row["id"]}:{row["phase"]}')
         except Exception:
             sent = False
         if sent:

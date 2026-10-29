@@ -337,3 +337,49 @@ retain messages for the next tick; SMTP rejections retain the existing dead-lett
 policy. Watchdog state records attempts, sent and remaining counts, lock contention
 and errors. SMTP acceptance followed by a crash before local deletion can still
 result in a later duplicate; this is not an exactly-once delivery protocol.
+
+## 邮件大小、积压恢复与告警
+
+邮件默认以 **30,000,000 字节的完整 SMTP MIME** 为上限（含 Base64、正文、邮件头和 CRLF）。
+长正文转为完整 UTF-8 文件；过大 HTML/PDF 先打 ZIP；仍超限时生成标准 `.7z.001` 分卷。
+每封编号邮件独立记录成功状态，下载全部分卷到同一目录，用 7-Zip 或 Keka 打开第一卷。
+普通 ZIP 可直接解压。相关 HTML 的内嵌资源保存在 MHTML 中，需支持 MHTML 的阅读器。
+
+服务器须能在 watchdog 的 PATH 中找到 `7zz` 或 `7z`；工具缺失时大邮件会被保留并隔离，
+其他小邮件仍会发送。安装工具后显式重新入队即可。代码更新不需要重新安装 watchdog。
+
+只读检查（不发送邮件、不创建队列目录）：
+
+```bash
+.venv/bin/python -m src.proj.util.web.mail_queue inspect
+```
+
+输出包含压缩工具、原邮件大小、每卷结果、重试时间、连接冷却、通知发送状态及文件位置。
+现有旧队列无需手动转换；下一轮 watchdog 会自动处理。小邮件优先于超大历史邮件。
+转换使用暂存目录和原子发布，发送成功后原 `.eml`、元数据、分卷及回执存入 `.archive/`。
+失败隔离到 `dead/`；备份和隔离区不会自动删除，注意长期磁盘占用。
+
+修正工具/配置问题后，将隔离批次重新入队（不立即发送，保留成功分卷回执）：
+
+```bash
+.venv/bin/python -m src.proj.util.web.mail_queue retry BATCH_ID
+```
+
+外部调用方自行管理重试的 `.external/` 回执使用以下命令重置未成功分卷，然后由原调用方重试：
+
+```bash
+.venv/bin/python -m src.proj.util.web.mail_queue retry RECEIPT_ID --external
+```
+
+单封提交失败延后 1、5、15、60 分钟重试，5 次后隔离；明确永久拒绝立即隔离。
+连续两次连接失败或一次认证失败触发全局冷却，不消耗未提交邮件的失败次数。
+失败超过 5 分钟仍未恢复时发送小型摘要，隔离事件进入下一轮通知；通知受冷却和发送预算约束。
+相同错误不重复通知，变化最多每 30 分钟合并一次；已告警问题恢复后发送恢复摘要。
+警告自身失败只延后重试，不产生递归警告。SMTP 完全不可用时先查看本地检查输出。
+
+开发接口：普通 `Email.send` 由共享队列负责重试。外部重试使用
+`queue_on_failure=False, delivery_id="稳定事件ID"`，或给 `send_with_smtplib` 传 `delivery_id`；
+回执只由调用方重试，不进入 watchdog 的自动发送列表。相同 ID 的内容必须不变。
+旧接口没有传 ID 时，超限邮件使用内容指纹复用回执，小邮件仍视为独立调用。
+底层 `_deliver` 只接受上限内的单封邮件。已有实验报告账本仍可恢复，新报告复用统一打包模块。
+SMTP 接受与本地回执落盘之间仍有极小的崩溃重复窗口，不能保证严格 exactly-once。

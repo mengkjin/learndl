@@ -5,9 +5,11 @@ import json , os , shutil , ssl , smtplib , time , uuid
 from collections.abc import Iterator
 from contextlib import contextmanager , suppress
 from datetime import datetime , timezone
-from email import encoders , message_from_bytes
+from email import encoders, policy
 from email.message import Message
-from email.errors import MessageError
+from email.parser import BytesParser
+from .mail_package import MAX_BYTES, needs_preparation, wire
+from .mail_queue import MailQueue
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -41,18 +43,6 @@ def _get_email_setting(name : str , server : ServerType = 'netease') -> Any:
         return 25 if MACHINE.platform_server else 465
     assert name in _EmailSettings , f'{name} is not set in email settings'
     return _EmailSettings.get(name.lower() , None)
-
-def _is_transient(exc : BaseException) -> bool:
-    """Return whether *exc* is a connection failure that should stop the drain.
-
-    ``SMTPException`` subclasses ``OSError``. Authentication and recipient
-    refusals are therefore excluded before the generic socket check.
-    """
-    if isinstance(exc , (smtplib.SMTPServerDisconnected , smtplib.SMTPConnectError)):
-        return True
-    if isinstance(exc , smtplib.SMTPException):
-        return False
-    return isinstance(exc , (TimeoutError , ConnectionError , OSError , ssl.SSLError))
 
 def _atomic_write(path : Path , data : bytes) -> None:
     """Replace *path* only after the new bytes are flushed."""
@@ -94,6 +84,7 @@ class Email(BoundLogger, metaclass=NoInstance):
         Email.send('Report' , 'body' , attachments = EmailAttachment(
             'results/detailed_alpha_data.xlsx' , filename = 'detailed_alpha_data_gru.xlsx'))
     """
+    max_message_bytes: int = MAX_BYTES
     smtp_server : str = _get_email_setting('smtp_server')
     smtp_port : int | Literal['auto'] = _get_email_setting('smtp_port')
     sender : str = _get_email_setting('sender')
@@ -149,41 +140,71 @@ class Email(BoundLogger, metaclass=NoInstance):
         return cls.smtp_port
 
     @classmethod
-    def _deliver(cls , message : Message , recipient : str | None = None , timeout : int = 20) -> None:
-        """Hand *message* to SMTP; propagate submission errors, not cleanup errors."""
-        smtp_port = cls._resolved_smtp_port()
-        assert smtp_port in [465, 587, 25] , f'smtp_port must be 465, 587, or 25, got {smtp_port}'
-        default_context = ssl.create_default_context()
-        if smtp_port == 465:
-            smtp_server = smtplib.SMTP_SSL(cls.smtp_server, smtp_port, context=default_context, timeout=timeout)
-        else:
-            smtp_server = smtplib.SMTP(cls.smtp_server, smtp_port, timeout=timeout)
-        try:
-            if smtp_port != 465:
-                smtp_server.starttls(context = default_context)
-            smtp_server.login(cls.sender , cls.password)
-            smtp_server.send_message(message , from_addr = cls.sender , to_addrs = cls.recipient(recipient))
-        finally:
-            # QUIT/close failures must neither hide the submission error nor
-            # turn an accepted message into a retry (and a duplicate).
-            try:
-                with suppress(OSError):
-                    smtp_server.quit()
-            finally:
-                with suppress(OSError):
-                    smtp_server.close()
+    def _queue(cls):
+        return MailQueue(cls, PATH.email_outbox)
 
     @classmethod
-    def send_with_smtplib(cls , message , recipient : str | None = None , confirmation_message : str | None = None ,
-                          timeout : int = 20) -> bool:
+    def _deliver(cls , message : Message , recipient : str | None = None , timeout : int = 20) -> None:
+        """Submit one bounded MIME message, preserving the exact failure stage."""
+        raw = wire(message)
+        if len(raw) > cls.max_message_bytes:
+            error = ValueError(f'MIME size {len(raw)} exceeds {cls.max_message_bytes}; prepare a batch first')
+            error.mail_stage = 'prepare'
+            raise error
+        smtp_port = cls._resolved_smtp_port()
+        if smtp_port not in (465, 587, 25):
+            raise ValueError(f'Unsupported SMTP port: {smtp_port}')
+        stage, server = 'connect', None
         try:
-            cls._deliver(message , recipient , timeout)
-        except Exception as e:
-            cls.logger.error(f'Error : sending email went wrong: {e}')
+            context = ssl.create_default_context()
+            if smtp_port == 465:
+                server = smtplib.SMTP_SSL(cls.smtp_server, smtp_port, context=context, timeout=timeout)
+            else:
+                server = smtplib.SMTP(cls.smtp_server, smtp_port, timeout=timeout)
+                stage = 'tls'
+                server.starttls(context=context)
+            stage = 'auth'
+            server.login(cls.sender, cls.password)
+            stage = 'submit'
+            # sendmail accepts bytes without regenerating MIME or line endings.
+            refused = server.sendmail(cls.sender, cls.recipient(recipient), raw)
+            if refused:
+                raise smtplib.SMTPRecipientsRefused(refused)
+        except Exception as error:
+            error.mail_stage = stage
+            raise
+        finally:
+            if server is not None:
+                try:
+                    with suppress(OSError):
+                        server.quit()
+                finally:
+                    with suppress(OSError):
+                        server.close()
+
+    @classmethod
+    def send_with_smtplib(cls, message, recipient=None, confirmation_message=None,
+                          timeout: int = 20, *, delivery_id: str | None = None) -> bool:
+        """Caller-owned retry with per-part receipts; never enqueue an automatic copy.
+
+        Supply a stable delivery_id for an external event. Large legacy calls without
+        an ID use a content fingerprint; small unidentified calls remain independent.
+        """
+        if not MACHINE.emailable:
             return False
-        if confirmation_message:
+        if delivery_id is None and not needs_preparation(message, cls.max_message_bytes):
+            delivery_id = uuid.uuid4().hex
+        try:
+            with cls._outbox_lock() as locked:
+                if not locked:
+                    return False
+                sent = cls._queue().external(message, recipient, delivery_id, timeout)
+        except Exception as error:
+            cls.logger.error(f'Email external delivery failed: {type(error).__name__}: {error}')
+            return False
+        if sent and confirmation_message:
             cls.logger.success(f'Send email {confirmation_message}')
-        return True
+        return sent
 
     @classmethod
     @contextmanager
@@ -231,7 +252,8 @@ class Email(BoundLogger, metaclass=NoInstance):
 
     @classmethod
     def _read_outbox(cls , folder : Path) -> tuple[Message , dict[str , Any]]:
-        message = message_from_bytes((folder / 'message.eml').read_bytes())
+        with (folder / 'message.eml').open('rb') as stream:
+            message = BytesParser(policy=policy.default).parse(stream)
         meta = json.loads((folder / 'meta.json').read_text(encoding = 'utf-8'))
         if not isinstance(meta , dict):
             raise ValueError('Email metadata must be an object')
@@ -263,6 +285,8 @@ class Email(BoundLogger, metaclass=NoInstance):
                 'attempts' : attempts ,
                 'last_error' : last_error ,
                 'created_at' : datetime.now(timezone.utc).isoformat() ,
+                'subject': str(message.get('Subject', '')),
+                'source_bytes': (staging / 'message.eml').stat().st_size,
             }
             cls._write_meta(staging , meta)
             _fsync_dir(staging)
@@ -272,7 +296,7 @@ class Email(BoundLogger, metaclass=NoInstance):
             shutil.rmtree(staging , ignore_errors = True)
             raise
         _fsync_dir(root)
-        cls.logger.error(f'Email queued for later delivery: {dest.name}: {last_error}')
+        cls.logger.stdout(f'Email queued: {dest.name}' + (f': {last_error}' if last_error else ''))
         return dest
 
     @classmethod
@@ -288,59 +312,10 @@ class Email(BoundLogger, metaclass=NoInstance):
         os.replace(folder , dest)
 
     @classmethod
-    def _flush_outbox(cls, timeout: int = 20, *, max_messages: int | None = None,
+    def _flush_outbox(cls, timeout: int = 20, *, max_messages: int | None = 20,
                       deadline: float | None = None, stats: dict[str, Any] | None = None) -> str | None:
-        """Retry queued mail in order.
-
-        Returns:
-            The connection error text when the network is still down.
-            ``None`` when the queue is empty, drained, or only produced SMTP rejections.
-        """
-        stats = stats if stats is not None else {}
-        stats.update(attempted=0, sent=0, processed=0)
-        for folder in cls._pending_outbox():
-            if (max_messages is not None and stats['processed'] >= max_messages
-                    or deadline is not None and time.monotonic() >= deadline):
-                break
-            stats['processed'] += 1
-            try:
-                message , meta = cls._read_outbox(folder)
-            except (OSError , ValueError , MessageError) as exc:
-                stats['error'] = str(exc)
-                cls.logger.error(f'Invalid email outbox entry {folder.name}: {exc}')
-                try:
-                    cls._move_dead(folder)
-                except OSError as move_error:
-                    cls.logger.error(f'Cannot isolate email outbox entry {folder.name}: {move_error}')
-                continue
-            try:
-                stats['attempted'] += 1
-                cls._deliver(message , recipient = str(message['To']) if message['To'] else None , timeout = timeout)
-            except Exception as exc:
-                stats['error'] = str(exc)
-                if _is_transient(exc):
-                    meta['last_error'] = str(exc)
-                    cls._write_meta(folder , meta)
-                    cls.logger.error(f'Email outbox still unreachable, keep {folder.name}: {exc}')
-                    return str(exc)
-                if isinstance(exc , smtplib.SMTPException):
-                    attempts = meta.get('attempts' , 0) + 1
-                    meta['attempts'] = attempts
-                    meta['last_error'] = str(exc)
-                    if attempts >= _DEAD_LETTER_ATTEMPTS:
-                        cls._move_dead(folder , meta)
-                        cls.logger.error(f'Email moved to dead letter after {attempts} rejections: {folder.name}: {exc}')
-                    else:
-                        cls._write_meta(folder , meta)
-                        cls.logger.error(f'Email rejected, will retry ({attempts}/{_DEAD_LETTER_ATTEMPTS}): {exc}')
-                    continue
-                raise
-            confirmation = str(meta.get('confirmation_message') or '')
-            if confirmation:
-                cls.logger.success(f'Send email {confirmation}')
-            shutil.rmtree(folder)
-            stats['sent'] += 1
-        return None
+        cls._queue().flush(timeout=timeout, max_messages=max_messages, deadline=deadline, stats=stats)
+        return 'SMTP connection cooling down' if cls._queue().cooling() else None
 
     @classmethod
     def retry_pending(cls, *, max_messages: int = 20, max_seconds: float = 20) -> dict[str, Any]:
@@ -368,7 +343,8 @@ class Email(BoundLogger, metaclass=NoInstance):
             try:
                 cls._flush_outbox(max_messages=max_messages,
                                   deadline=time.monotonic() + max_seconds, stats=stats)
-                stats['status'] = 'error' if stats['error'] else 'complete'
+                stats['status'] = 'cooldown' if cls._queue().cooling() else ('error' if stats['error'] else 'complete')
+                stats['next_retry_at'] = cls._queue().state().get('next_retry_at', 0)
             except Exception as exc:
                 stats.update(status='error', error=f'{type(exc).__name__}: {exc}')
                 cls.logger.error(f'Email outbox retry failed: {exc}')
@@ -376,58 +352,34 @@ class Email(BoundLogger, metaclass=NoInstance):
         return stats
 
     @classmethod
-    def send(cls , title : str  , 
-             body : str = 'This is test! Hello, World!' ,
-             recipient : str | None = None , * , 
-             attachments : AttachmentSpec | list[AttachmentSpec] | None = None ,
-             project_attachments : bool = False ,
-             title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:' ,
-             confirmation_message : str = '' ,
-             queue_on_failure : bool = True) -> bool:
-        """Send one email and retry mail saved from earlier SMTP failures.
+    def send(cls, title: str, body: str = 'This is test! Hello, World!', recipient: str | None = None, *,
+             attachments: AttachmentSpec | list[AttachmentSpec] | None = None,
+             project_attachments: bool = False, title_prefix: str | None = f'Learndl [{MACHINE.nickname}]:',
+             confirmation_message: str = '', queue_on_failure: bool = True,
+             delivery_id: str | None = None) -> bool:
+        """Prepare bounded mail; True only when all parts have SMTP acceptance.
 
-        The return value is whether this call's message reached SMTP.
-        A queued message returns ``False`` and is retried by the watchdog
-        or a later ``send``.
-        Callers with their own persistent retry queue must pass
-        ``queue_on_failure=False`` so only one queue owns each notification.
-        Identical content is not deduplicated: separate calls may be intentional.
+        Automatic mail has a single durable outbox owner. External callers use
+        queue_on_failure=False and a stable delivery_id to retry only unsent parts.
         """
         if not MACHINE.emailable:
             cls.logger.alert1(f'{MACHINE.name} is not available for email, skip sending email')
             return False
-
+        message = cls.message(title, body, recipient, attachments=attachments,
+                              project_attachments=project_attachments, title_prefix=title_prefix)
+        if not queue_on_failure:
+            return cls.send_with_smtplib(message, recipient, confirmation_message, delivery_id=delivery_id)
+        # Publish before network work. A competing worker can safely deliver this entry.
+        folder = cls._enqueue(message, confirmation_message, '')
+        del message
         with cls._outbox_lock() as locked:
-            if locked:
-                blocked = cls._flush_outbox()
-            else:
-                blocked = None
-                cls.logger.alert1('Email outbox lock busy, skip retry and send the current message only')
-
-            message = cls.message(
-                title , body , recipient ,
-                attachments = attachments ,
-                project_attachments = project_attachments ,
-                title_prefix = title_prefix ,
-            )
-            if blocked is not None:
-                cls.logger.error(f'Error : sending email deferred, smtp unreachable: {blocked}')
-                if queue_on_failure:
-                    cls._enqueue(message , confirmation_message , blocked)
+            if not locked:
                 return False
-            try:
-                cls._deliver(message , recipient)
-            except Exception as exc:
-                cls.logger.error(f'Error : sending email went wrong: {exc}')
-                if _is_transient(exc) or isinstance(exc , smtplib.SMTPException):
-                    if queue_on_failure:
-                        attempts = 0 if _is_transient(exc) else 1
-                        cls._enqueue(message , confirmation_message , str(exc) , attempts = attempts)
-                    return False
-                raise
-            if confirmation_message:
-                cls.logger.success(f'Send email {confirmation_message}')
-            return True
+            cls._flush_outbox(deadline=time.monotonic()+20)
+            backup = PATH.email_outbox / '.archive' / folder.name / 'payload' / 'manifest.json'
+            if backup.exists():
+                return all(item['sent'] for item in json.loads(backup.read_text())['messages'])
+        return False
 
     @classmethod
     def print_info(cls , server : ServerType = 'netease'):

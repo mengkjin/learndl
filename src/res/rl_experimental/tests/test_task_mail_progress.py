@@ -86,7 +86,7 @@ class TaskMailTest(unittest.TestCase):
             self.assertEqual(len(record['messages']), 3)
             self.assertEqual([x['sent'] for x in record['messages']], [True, False, True])
             names = [p.get_filename() for m in calls for p in m.walk() if p.get_filename()]
-            self.assertIn('task.html.gz', names)
+            self.assertTrue(any(name.endswith('.zip') and 'part' not in name for name in names))
             self.assertTrue(retry_delivery(root/'mail', transport=deliver))
             self.assertEqual(len(calls), 4)
             record = json.loads((root/'mail/delivery.json').read_text())
@@ -106,7 +106,8 @@ class TaskMailTest(unittest.TestCase):
             self.assertFalse(mail('Result', 'body', attachments=files))
             self.assertEqual(len(calls), 1)
             self.assertEqual(len([p for p in calls[0].walk() if p.get_filename()]), 3)
-            (root/'mail/message-001.eml').write_text('tampered')
+            record = json.loads((root/'mail/delivery.json').read_text())
+            (root/'mail'/record['messages'][0]['file']).write_text('tampered')
             with self.assertRaisesRegex(ValueError, 'checksum'):
                 retry_delivery(root/'mail', transport=lambda *_: True)
 

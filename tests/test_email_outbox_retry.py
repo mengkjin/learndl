@@ -46,10 +46,11 @@ class OutboxRetryTest(unittest.TestCase):
             self.enqueue(str(i))
         self.deliver.side_effect = ConnectionError('offline')
         stats = Email.retry_pending()
-        self.assertEqual((stats['attempted'], stats['sent'], stats['remaining']), (1,0,3))
+        self.assertEqual((stats['attempted'], stats['sent'], stats['remaining']), (2,0,3))
         self.assertIn('offline', stats['error'])
         self.deliver.reset_mock(side_effect=True)
-        stats = Email.retry_pending(max_messages=2)
+        with patch('src.proj.util.web.mail_queue.time.time', return_value=time.time()+61):
+            stats = Email.retry_pending(max_messages=2)
         self.assertEqual((stats['sent'], stats['remaining']), (2,1))
         self.assertEqual([str(c.args[0]['Subject']) for c in self.deliver.call_args_list], ['0', '1'])
         self.assertEqual(Email.retry_pending()['sent'], 1)
@@ -66,8 +67,7 @@ class OutboxRetryTest(unittest.TestCase):
     def test_rejections_reach_dead_letter_and_corrupt_entries_are_isolated(self):
         folder = self.enqueue()
         self.deliver.side_effect = smtplib.SMTPRecipientsRefused({'nobody': (550, b'rejected')})
-        for _ in range(emailer._DEAD_LETTER_ATTEMPTS):
-            Email.retry_pending()
+        Email.retry_pending()  # Permanent recipient refusal isolates immediately.
         self.assertFalse(folder.exists())
         self.assertTrue((self.root / 'dead' / folder.name).exists())
         broken = self.root / 'broken'
@@ -119,7 +119,7 @@ with patch.object(emailer, 'PATH', SimpleNamespace(email_outbox=root)), patch.ob
             stats = Email.retry_pending()
             self.assertTrue(stats['lock_busy'])
             self.deliver.assert_not_called()
-            self.assertEqual(len(Email._pending_outbox()), 1)
+            self.assertEqual(len(Email._pending_outbox()), 1 if mode == 'retry' else 2)
             (self.root / '.release').touch()
             output, error = child.communicate(timeout=30)
             self.assertEqual(child.returncode, 0, error)
