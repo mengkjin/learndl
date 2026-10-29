@@ -6,3 +6,8 @@
 - set criterion.weight to true to improve top performance
 - set enc_in to true can slightly improve results, but set enc_att to true will dampen them (overfit possible)
 - global2top waits testing
+
+## 15m resnet gru model
+
+- to predict rtn_lag1_10 is better than predicting std_lag1_10 in overall return and stability, slightly lower IC
+- enc_dim 16 is better than enc_dim 64

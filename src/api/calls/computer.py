@@ -21,22 +21,19 @@ class ProjectStorageReport(DirectCall):
 
     def run(self):
         from pathlib import Path
-        from src.proj.util.cli.prompts import prompt_text, prompt_confirm
+        from src.proj.util.cli.prompts import prompt_confirm
         from src.proj.util.filesys.storage_report import generate_report, format_size
 
         root = self.kwargs.get('root')
         output = self.kwargs.get('output')
         interactive = sys.stdin.isatty() and sys.stdout.isatty()
-        if root is None and interactive:
-            entered = prompt_text(f'Scan root [Enter = {PATH.production}]')
-            if entered is None:
+        open_local = False
+        if interactive:
+            open_local = prompt_confirm(
+                'Open the report locally when ready? (Ctrl+C stops the browsing service)', default=False,
+            )
+            if open_local is None:
                 return None
-            root = entered.strip() or PATH.production
-            if output is None:
-                entered = prompt_text('HTML output path [Enter = results/storage_reports/<timestamp>.html]')
-                if entered is None:
-                    return None
-                output = entered.strip() or None
         root = Path(root or PATH.production).expanduser().resolve(strict=True)
         if output is None:
             output = root / 'results' / 'storage_reports' / f'storage_{datetime.now():%Y%m%d_%H%M%S_%f}.html'
@@ -69,7 +66,7 @@ class ProjectStorageReport(DirectCall):
                 Logger.stdout('Storage report email sent successfully.')
             else:
                 Logger.alert1('Report saved locally; email was not sent. Check email logs for retry or configuration status.')
-        if interactive and prompt_confirm('是否在本地浏览器打开报告？（Ctrl+C 停止浏览服务）', default=False):
+        if open_local:
             try:
                 self._open_local_report(report)
             except Exception as exc:

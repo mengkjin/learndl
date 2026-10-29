@@ -24,7 +24,7 @@ trading_ports:
   use_daily:
     alpha: 
       - factor@ht_master_combined
-      - factor@df_scores_v0
+      - factor@hy_scores_v5
       - factor@df_scores_v3
       - gru_day_V1
 

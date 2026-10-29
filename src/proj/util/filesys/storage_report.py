@@ -137,14 +137,14 @@ def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
     escape = html.escape
     percentage = f'{node.size / parent_size:.1%}' if parent_size else '—'
     label = escape(node.path.rsplit('/', 1)[-1])
-    warning = '' if node.complete else ' <strong>统计不完整</strong>'
+    warning = '' if node.complete else ' <strong>Incomplete</strong>'
     link = f' → {escape(node.target)}' if node.target is not None else ''
     children = ''.join(render_node(child, node.size, depth + 1)
                        for child in sorted(node.children, key=lambda child: (-child.size, child.path)))
-    button = ('<button class="load-next" type="button" hidden>加载下一层</button>'
+    button = ('<button class="load-next" type="button" hidden>Load next level</button>'
               if node.is_dir and node.has_children and not node.children else '')
     if not node.is_dir:
-        kind = '链接' if node.target is not None else '文件'
+        kind = 'Link' if node.target is not None else 'File'
         return (f'<div class="node file" data-path="{escape(node.path, quote=True)}" '
                 f'data-id="{node.node_id}" data-size="{node.size}">'
                 f'<div class="entry-row"><span><small class="kind">{kind}</small> {label}{link}{warning}</span>'
@@ -159,8 +159,8 @@ def render_html(scan: StorageScan) -> str:
     escape = html.escape
 
     errors = ''.join(f'<li>{escape(error)}</li>' for error in scan.errors)
-    return '''<!doctype html><html lang="zh-CN"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><title>项目磁盘占用报告</title>
+    return '''<!doctype html><html lang="en"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>Project Storage Report</title>
 <style>
 body{font:15px system-ui,sans-serif;max-width:1200px;margin:32px auto;padding:0 20px;background:#f5f7fb;color:#17243b}
 header,.tree{background:white;padding:24px;border-radius:12px;margin-bottom:20px}h1{margin-top:0}
@@ -171,21 +171,21 @@ summary b,.entry-row b{white-space:nowrap}summary small,.entry-row>small{width:6
 .kind{color:#667085;font-size:11px}.children{margin-left:22px}
 .load-next{font:inherit;font-size:12px;padding:3px 7px;margin:0 0 0 10px}strong{color:#b54708}input,select,button{padding:9px;margin:5px}
 input[type="search"]{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
-</style><header><h1>项目磁盘占用报告</h1>''' + f'''
+</style><header><h1>Project Storage Report</h1>''' + f'''
 <meta name="storage-report-id" content="{scan.report_id}">
-<p>根目录：{escape(str(scan.root))}</p>
-<p>项目占用：<b>{format_size(scan.node.size)}</b> · 状态：{'完整' if scan.node.complete else '统计不完整'} · 扫描条目：{scan.entries:,}</p>
-<p>根目录所在文件系统：总容量 {format_size(scan.disk_total)} · 剩余 {format_size(scan.disk_free)}</p>
-<p>开始：{escape(scan.started)} · 完成：{escape(scan.finished)}</p>
-<p>按分配磁盘块统计，包含目录自身；父子合计不能重复相加。软链接不跟随；硬链接仅计入稳定遍历顺序遇到的首个路径。
-显示层级以下的内容全部计入合计。扫描期间文件可能变化；跨文件系统的挂载目录也会扫描，剩余空间仅对应根目录所在文件系统。</p>
-<p id="browse-status">静态报告：交互运行 Project Storage Report 后选择本地打开，即可动态浏览文件和文件夹。附件不会连接本机服务。</p>
-<label>搜索路径（已加载文件及文件夹） <input id="search" type="search" placeholder="例如 DataBase 或 gru"></label>
-<label>同级排序 <select id="sort"><option value="size">占用降序</option><option value="name">路径名称</option></select></label>
-<label><input id="hide-special" type="checkbox" checked>隐藏以 . / ~ 开头的文件和文件夹（总占用不变）</label>
-<button id="expand">全部展开</button><button id="collapse">全部折叠</button></header>
+<p>Root: {escape(str(scan.root))}</p>
+<p>Project usage: <b>{format_size(scan.node.size)}</b> · Status: {'Complete' if scan.node.complete else 'Incomplete'} · Scanned entries: {scan.entries:,}</p>
+<p>Root filesystem: total {format_size(scan.disk_total)} · Free {format_size(scan.disk_free)}</p>
+<p>Started: {escape(scan.started)} · Finished: {escape(scan.finished)}</p>
+<p>Sizes use allocated disk blocks, including directories themselves. Do not add parent and child totals together. Symbolic links are not followed; hard links are counted only at the first path in stable traversal order.
+Totals include all deeper contents. Files may change during the scan. Mounted directories on other filesystems are included; free space refers only to the root filesystem.</p>
+<p id="browse-status">Static report: choose local browsing when starting Project Storage Report to explore deeper files and folders. Attachments do not connect to a local service.</p>
+<label>Search loaded paths <input id="search" type="search" placeholder="e.g. DataBase or gru"></label>
+<label>Sort siblings <select id="sort"><option value="size">Size (largest first)</option><option value="name">Path name</option></select></label>
+<label><input id="hide-special" type="checkbox" checked>Hide names starting with . or ~ (totals unchanged)</label>
+<button id="expand">Expand all</button><button id="collapse">Collapse all</button></header>
 <main class="tree">{render_node(scan.node, scan.node.size, 0)}</main>
-<footer><h2>扫描错误：{scan.error_count}</h2><p>最多展示前 100 条错误。</p><ul>{errors}</ul></footer>
+<footer><h2>Scan errors: {scan.error_count}</h2><p>Showing up to the first 100 errors.</p><ul>{errors}</ul></footer>
 ''' + '''<script>
 const storageBase = null; // STORAGE_SESSION
 const allNodes=()=>[...document.querySelectorAll('.node')];
@@ -224,7 +224,7 @@ function enableLoading(){
  if(storageBase) document.querySelectorAll('.load-next').forEach(button=>button.hidden=false);
 }
 if(storageBase){
- document.querySelector('#browse-status').textContent='本机动态浏览：加载首次扫描的目录快照，不重新扫描磁盘。';
+ document.querySelector('#browse-status').textContent='Local browsing: loading the original scan snapshot without rescanning the disk.';
  enableLoading();
 }
 document.querySelector('.tree').addEventListener('click',async event=>{
@@ -233,7 +233,7 @@ document.querySelector('.tree').addEventListener('click',async event=>{
  event.preventDefault(); event.stopPropagation();
  if(!storageBase||button.disabled) return;
  const node=button.closest('details.node');
- button.disabled=true; button.textContent='加载中…';
+ button.disabled=true; button.textContent='Loading…';
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),15000);
  try{
@@ -245,9 +245,9 @@ document.querySelector('.tree').addEventListener('click',async event=>{
   node.open=true; button.remove(); enableLoading(); applySort(); applySearch();
  }catch(error){
   button.disabled=false;
-  const reason=error.name==='AbortError' ? '请求超时' : error.message;
-  button.textContent='加载失败，重试（'+reason+'）';
-  button.title='请确认本机浏览服务仍在运行。'+error.message;
+  const reason=error.name==='AbortError' ? 'Request timed out' : error.message;
+  button.textContent='Load failed — retry ('+reason+')';
+  button.title='Check that the local browsing service is still running. '+error.message;
  }finally{
   clearTimeout(timeout);
  }

@@ -166,10 +166,11 @@ class StorageReportTest(unittest.TestCase):
         from types import SimpleNamespace
         with patch.object(computer, 'PATH', SimpleNamespace(production=self.root)), \
              patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
-             patch('src.proj.util.cli.prompts.prompt_text', side_effect=['', '']), \
+             patch('src.proj.util.cli.prompts.prompt_text') as path_prompt, \
              patch('src.proj.util.cli.prompts.prompt_confirm', return_value=False) as confirm:
             result = ProjectStorageReport.go(email=False)
         confirm.assert_called_once()
+        path_prompt.assert_not_called()
         self.assertEqual(result['scan'].root, self.root.resolve())
         self.assertIn(('Project Storage Report', ProjectStorageReport),
                       [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
@@ -235,7 +236,7 @@ class StorageReportTest(unittest.TestCase):
             rendered = server.children(rows['models/nn/gru']['node_id'])['html']
             self.assertIn('&lt;img', rendered)
             self.assertNotIn('<img', rendered)
-            self.assertIn('统计不完整', rendered)
+            self.assertIn('Incomplete', rendered)
         self.assertFalse(scan.node.complete)
 
     def test_reject_missing_corrupt_mismatched_and_foreign_index(self):
@@ -283,7 +284,7 @@ class StorageReportTest(unittest.TestCase):
             thread.start()
             try:
                 with urllib.request.urlopen(server.url) as response:
-                    self.assertIn('本机动态浏览', response.read().decode())
+                    self.assertIn('Local browsing', response.read().decode())
                     self.assertIsNone(response.headers.get('Access-Control-Allow-Origin'))
                 with urllib.request.urlopen(server.url + 'children?id=1') as response:
                     self.assertEqual(json.load(response)['node_id'], 1)
@@ -350,15 +351,20 @@ class StorageReportTest(unittest.TestCase):
         self.assertTrue(opened.call_args.args[0].startswith('http://127.0.0.1:'))
         self.assertNotIn('Browse Storage Report', [label for label, _, _ in DirectCallHub._source_code_entries()])
 
-    def test_interactive_open_after_email_and_noninteractive_no_prompt(self):
+    def test_interactive_prompt_before_scan_and_open_after_email(self):
         from src.proj.util.web.emailer import Email
+        from src.proj.util.filesys.storage_report import generate_report as generate
         events = []
+        def record_scan(*args, **kwargs):
+            events.append('scan')
+            return generate(*args, **kwargs)
         with patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
+             patch('src.proj.util.filesys.storage_report.generate_report', side_effect=record_scan), \
              patch.object(Email, 'send', side_effect=lambda *a, **kw: events.append('email') or False), \
              patch('src.proj.util.cli.prompts.prompt_confirm', side_effect=lambda *a, **kw: events.append('prompt') or True), \
              patch.object(ProjectStorageReport, '_open_local_report', side_effect=lambda p: events.append('open')):
             result = ProjectStorageReport.go(root=self.root)
-        self.assertEqual(events, ['email', 'prompt', 'open'])
+        self.assertEqual(events, ['prompt', 'scan', 'email', 'open'])
         self.assertTrue(result['report'].is_file())
         with patch('src.proj.util.cli.prompts.prompt_confirm') as confirm, \
              patch('src.proj.util.cli.prompts.prompt_text') as prompt, \
@@ -378,6 +384,15 @@ class StorageReportTest(unittest.TestCase):
         page = render_html(scan)
         self.assertIn('file&lt;name&gt;.py', page)
         self.assertIn('class="node file"', page)
+        self.assertIn('lang="en"', page)
+        self.assertNotRegex(page, r'[\u3400-\u4dbf\u4e00-\u9fff]')
+
+    def test_cancel_initial_prompt_does_not_scan(self):
+        with patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
+             patch('src.proj.util.cli.prompts.prompt_confirm', return_value=None), \
+             patch('src.proj.util.filesys.storage_report.generate_report') as generate:
+            self.assertIsNone(ProjectStorageReport.go(root=self.root, email=False))
+        generate.assert_not_called()
 
 
 if __name__ == '__main__':
