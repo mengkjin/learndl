@@ -290,7 +290,9 @@ class MailQueue:
             finally:
                 shutil.rmtree(staging, ignore_errors=True)
         original, _ = self.api._read_outbox(folder)
-        if fingerprint(original) != content:
+        if (fingerprint(original) != content
+                and fingerprint(original, normalize_body_newlines=True)
+                != fingerprint(message, normalize_body_newlines=True)):
             raise ValueError('delivery_id reused with changed email content')
         del original
         try:

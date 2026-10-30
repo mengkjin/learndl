@@ -74,15 +74,24 @@ def decoded(part: Message) -> bytes | None:
     return part.get_payload(decode=True)
 
 
-def fingerprint(message: Message) -> str:
+def fingerprint(message: Message, *, normalize_body_newlines: bool = False) -> str:
     """Ignore randomly generated MIME boundaries, dates and Message-IDs on retries."""
     def item(part):
         headers = [(k.lower(), str(policy.default.header_factory(k, str(v)))) for k, v in part.items()
                    if k.lower() not in {'content-type', 'mime-version', 'date', 'message-id'}]
         header = policy.default.header_factory('Content-Type', str(part.get('Content-Type', 'text/plain')))
         params = [part.get_content_type(), {k: v for k, v in header.params.items() if k != 'boundary'}]
-        payload = ([item(p) for p in part.get_payload()] if part.is_multipart()
-                   else digest(decoded(part) or b''))
+        if part.is_multipart():
+            payload = [item(p) for p in part.get_payload()]
+        else:
+            data = decoded(part) or b''
+            # SMTP and local MIME serialization use CRLF and LF respectively.
+            # Only inline text is equivalent under this conversion; attachment
+            # bytes must remain exact. Keep default fingerprints/receipt IDs stable.
+            if (normalize_body_newlines and part.get_content_maintype() == 'text'
+                    and not part.get_filename() and part.get_content_disposition() != 'attachment'):
+                data = data.replace(b'\r\n', b'\n')
+            payload = digest(data)
         return headers, params, payload
     return digest(json.dumps(item(message), ensure_ascii=False, sort_keys=True).encode())
 

@@ -178,6 +178,43 @@ class PackageTest(unittest.TestCase):
 
 
 class QueueTest(unittest.TestCase):
+    def test_task_result_mail_through_external_receipt(self):
+        from src.res.rl_experimental.task_mail import TaskResultMail, retry_delivery
+        attachment = self.root/'benchmark.log'
+        attachment.write_text('completed\n')
+        def transport(msg, recipient):
+            return Email.send_with_smtplib(msg, recipient, delivery_id='benchmark-result')
+        sender = TaskResultMail(self.root/'task-mail', email_api=Email, transport=transport)
+        self.assertTrue(sender('Benchmark', 'status: success\nrows: 202\n',
+                               'test@example.invalid', attachments=[attachment]))
+        self.assertTrue(retry_delivery(self.root/'task-mail', transport=transport))
+        self.assertEqual(self.deliver.call_count, 1)
+
+    def test_external_smtp_body_newlines_and_existing_failed_receipt(self):
+        incoming = message_from_bytes(package.wire(message(body='first line\nsecond line\n',
+            attachments=[('result.csv', b'a,b\r\n1,2\r\n')])))
+        # Reproduce a receipt created by the old implementation: local as_bytes
+        # converts the unencoded inline body from CRLF to LF before reading it.
+        key = package.digest(b'old-failed-delivery')
+        folder = self.root/'.external'/key
+        folder.mkdir(parents=True)
+        (folder/'message.eml').write_bytes(incoming.as_bytes())
+        package.atomic_json(folder/'meta.json', {'attempts': 0, 'subject': 'report'})
+        stored = message_from_bytes((folder/'message.eml').read_bytes())
+        self.assertNotEqual(package.fingerprint(incoming), package.fingerprint(stored))
+        self.assertTrue(Email.send_with_smtplib(incoming, delivery_id='old-failed-delivery'))
+        self.assertEqual(self.deliver.call_count, 1)
+        self.assertTrue(Email.send_with_smtplib(incoming, delivery_id='old-failed-delivery'))
+        self.assertEqual(self.deliver.call_count, 1)  # Already delivered; never resend.
+
+    def test_external_still_rejects_changed_body_or_attachment(self):
+        original = message(body='first\nsecond\n', attachments=[('result.csv', b'a\r\nb')])
+        self.assertTrue(Email.send_with_smtplib(original, delivery_id='immutable'))
+        for changed in (message(body='first\nCHANGED\n', attachments=[('result.csv', b'a\r\nb')]),
+                        message(body='first\nsecond\n', attachments=[('result.csv', b'a\nb')])):
+            self.assertFalse(Email.send_with_smtplib(changed, delivery_id='immutable'))
+        self.assertEqual(self.deliver.call_count, 1)
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
