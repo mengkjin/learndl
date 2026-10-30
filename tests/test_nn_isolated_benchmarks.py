@@ -69,6 +69,32 @@ class HiddenCorrExperimentTests(TestCase):
             self.assertTrue(all(not row['qualified'] for row in report['rows'] if row['implementation']=='wrong'))
             self.assertTrue(args.output.exists())
 
+    def test_precision_summary_and_tolerance_ratio(self):
+        check=hidden.compare(torch.tensor([0.,2.]),torch.tensor([0.,1.]),torch.float32)
+        self.assertEqual(check['total_count'],2)
+        self.assertEqual(check['failed_pct'],50.)
+        self.assertEqual(check['worst_tolerance']['index'],[1])
+        self.assertEqual(check['worst_tolerance']['baseline'],1.)
+        self.assertEqual(check['worst_tolerance']['candidate'],2.)
+        self.assertAlmostEqual(check['worst_tolerance']['tolerance_ratio'],1/1.1e-5)
+        report={'validation':[dict(case='example',candidate='joint_stats',dtype='torch.float32',
+                                   passed=False,checks={'gradient/weight':check})]}
+        summary=hidden.accuracy_report(report)
+        self.assertIn('parameter_gradient',summary)
+        self.assertIn('elements=1/2',summary)
+        self.assertIn('baseline=1.0, candidate=2.0',summary)
+        self.assertIn('failed scenarios: example',summary)
+        self.assertEqual(report['accuracy_rows'][0]['worst_index'],[1])
+        json.dumps(report,allow_nan=False)
+
+    def test_precision_nonfinite_and_scalar_diagnostics(self):
+        result=hidden.compare(torch.tensor(float('nan')),torch.tensor(float('nan')),torch.float32)
+        self.assertIsNone(result['worst_tolerance'])
+        result=hidden.compare(torch.tensor(1e-7),torch.tensor(0.),torch.float32)
+        self.assertTrue(result['passed'])
+        self.assertEqual(result['worst_tolerance']['index'],[])
+        self.assertLess(result['worst_tolerance']['tolerance_ratio'],1)
+
     def test_backward_never_accumulates(self):
         x=torch.randn(30,4,requires_grad=True)
         for _ in range(3):hidden.timed_call(hidden.joint_stats,x,True)
@@ -87,6 +113,26 @@ class CommonExperimentTests(TestCase):
         with patch.object(common,'environment',return_value={'torch':torch.__version__}), \
              patch('src.proj.util.web.task_mail.TaskResultMail',return_value=sender):
             return common.run_cli(common.parser_for('test','test'),execute,'test',argv)
+
+    def test_precision_csv_and_mail_attachment(self):
+        import csv
+        with tempfile.TemporaryDirectory() as root:
+            def execute(args,report):
+                check=hidden.compare(torch.tensor([2.]),torch.tensor([1.]),torch.float32)
+                report['validation']=[dict(case='precision',candidate='joint_stats',dtype='torch.float32',
+                                           passed=False,loss=check)]
+                print(hidden.accuracy_report(report))
+                raise RuntimeError('precision failed')
+            sender=Mock(return_value=True)
+            with self.assertRaisesRegex(RuntimeError,'precision failed'):
+                self.invoke(execute,root,sender)
+            path=Path(root)/'output.accuracy.csv'
+            with path.open() as stream: rows=list(csv.DictReader(stream))
+            self.assertEqual(rows[0]['worst_baseline'],'1.0')
+            self.assertEqual(rows[0]['failed_count'],'1')
+            self.assertIn(path.resolve(),sender.call_args.kwargs['attachments'])
+            self.assertIn('max_tolerance_ratio',sender.call_args.args[1])
+            self.assertIn('precision',Path(root,'output.log').read_text())
 
     def test_disabled_machine_keeps_results_without_mail_errors(self):
         with tempfile.TemporaryDirectory() as root, patch('src.proj.env.MACHINE.emailable', False):

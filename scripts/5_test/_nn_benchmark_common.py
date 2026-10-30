@@ -60,6 +60,15 @@ def persist(path, report):
         writer.writerows({k:json.dumps(v) if isinstance(v,(list,dict)) else v for k,v in row.items()} for row in rows)
 
 
+    if 'accuracy_rows' in report:
+        rows=report['accuracy_rows']
+        fields=list(dict.fromkeys(k for row in rows for k in row)) or ['passed']
+        with path.with_suffix('.accuracy.csv').open('w',newline='') as stream:
+            writer=csv.DictWriter(stream,fieldnames=fields)
+            writer.writeheader()
+            writer.writerows({k:json.dumps(v) if isinstance(v,(list,dict)) else v for k,v in row.items()} for row in rows)
+
+
 def send_results(args, report):
     from src.proj.env import MACHINE
     if not MACHINE.emailable:
@@ -73,7 +82,11 @@ def send_results(args, report):
             f"Results: {args.output}\n"
             "Local function/storage costs only; not end-to-end training speedup.\n"
             f"Error: {report.get('traceback', 'none')}")
+    if report.get('accuracy_summary'):
+        body += '\n\n'+report['accuracy_summary']
     attachments = [args.output.with_suffix(ext) for ext in ('.json','.csv','.log')]
+    if args.output.with_suffix('.accuracy.csv').is_file():
+        attachments.append(args.output.with_suffix('.accuracy.csv'))
     if not TaskResultMail(directory)(f"NN {report['experiment']} - {report['status']}", body,
                                      args.recipient, attachments=attachments):
         raise RuntimeError('Mail not fully delivered; retry only delivery with: '
@@ -86,7 +99,7 @@ def run_cli(parser, execute, name, argv=None):
     if args.repeats < 3: parser.error('--repeats must be at least 3')
     args.output = args.output.resolve()
     if args.output.suffix != '.json': parser.error('--output must end in .json')
-    if any(args.output.with_suffix(ext).exists() for ext in ('.json','.csv','.log','.mail')):
+    if any(args.output.with_suffix(ext).exists() for ext in ('.json','.csv','.log','.mail','.accuracy.csv')):
         parser.error('Output exists; choose a new --output path')
     args.output.parent.mkdir(parents=True, exist_ok=True)
     report = dict(experiment=name, status='running', rows=[], validation=[], arguments={

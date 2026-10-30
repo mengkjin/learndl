@@ -2,9 +2,13 @@
 
 uv run python scripts/5_test/benchmark_nn_hidden_corr.py --device cuda
 Default: FP32 timings, FP32/FP64 validation, JSON/CSV/log and result email.
+Precision summaries appear in the console and email; .accuracy.csv contains
+per-check errors, failure counts and worst-location baseline/candidate values.
 A numerical failure preserves all evidence, continues other cases, then exits nonzero.
 """
 import copy
+import math
+import numpy as np
 import statistics
 import warnings
 
@@ -61,11 +65,79 @@ def compare(actual, expected, dtype, *, finite_required=True):
     relative = difference / b[finite].abs().double().clamp_min(torch.finfo(dtype).tiny)
     bad = (~close).nonzero(as_tuple=False)
     # Scalar mismatch nonzero() has shape (1,0); retain [[]] as its location.
+    def number(value):
+        value=float(value)
+        return value if math.isfinite(value) else str(value)
+    total=a.numel()
+    diff=(a.double()-b.double()).abs()
+    allowed=atol+rtol*b.double().abs()
+    ratio=diff/allowed
+    worst=None
+    if finite.any():
+        flat=int(ratio.masked_fill(~finite,-1).reshape(-1).argmax())
+        index=list(np.unravel_index(flat,tuple(a.shape))) if a.ndim else []
+        worst=dict(index=[int(i) for i in index],baseline=number(b.reshape(-1)[flat]),
+                   candidate=number(a.reshape(-1)[flat]),abs_error=number(diff.reshape(-1)[flat]),
+                   allowed_error=number(allowed.reshape(-1)[flat]),tolerance_ratio=number(ratio.reshape(-1)[flat]))
     return dict(passed=bool(close.all()), max_abs_error=float(difference.max()) if difference.numel() else None,
-                max_rel_error=float(relative.max()) if relative.numel() else None,
-                failed_count=int((~close).sum()), first_failed_indices=bad[:5].cpu().tolist(),
+                mean_abs_error=float(difference.mean()) if difference.numel() else None,
+                max_rel_error=number(relative.max()) if relative.numel() else None,
+                total_count=total, failed_count=int((~close).sum()),
+                failed_pct=100*int((~close).sum())/total if total else 0.,
+                worst_tolerance=worst, first_failed_indices=bad[:5].cpu().tolist(),
                 actual_nonfinite=int((~torch.isfinite(a)).sum()), expected_nonfinite=int((~torch.isfinite(b)).sum()),
                 rtol=rtol, atol=atol)
+
+
+def accuracy_report(report):
+    """Flatten accuracy checks for CSV and readable console/email summaries."""
+    rows=[]
+    for case in report.get('validation',[]):
+        checks=case.get('checks') or {k:case[k] for k in ('loss','gradient') if k in case}
+        if not checks:
+            checks={'exception':dict(passed=case['passed'],baseline_error=case.get('baseline_error'),
+                                     candidate_error=case.get('candidate_error'))}
+        for metric,check in checks.items():
+            row=dict(candidate=case['candidate'],dtype=case['dtype'],case=case['case'],
+                     exceptional=case.get('exceptional',False),metric=metric,**check)
+            worst=row.pop('worst_tolerance',None) or {}
+            row.update({f'worst_{k}':v for k,v in worst.items()})
+            rows.append(row)
+    report['accuracy_rows']=rows
+    groups={}
+    for row in rows:
+        metric=row['metric']
+        category='parameter_gradient' if metric.startswith('gradient/') else (
+            'updated_parameter' if metric.startswith('updated_parameter/') else metric)
+        groups.setdefault((row['candidate'],row['dtype'],category,row['exceptional']),[]).append(row)
+    lines=['Accuracy: |candidate - baseline| <= atol + rtol * |baseline|.',
+           'Tolerance ratio <= 1 passes; relative error alone can be large near zero.',
+           'Exceptional cases test NaN/Inf/error compatibility, not usable numerical accuracy.']
+    def fmt(value):
+        return f'{value:.3e}' if isinstance(value,(float,int)) else str(value if value is not None else 'n/a')
+    for (candidate,dtype,category,exceptional),items in groups.items():
+        failures=[r for r in items if not r['passed']]
+        count=sum(r.get('failed_count',0) for r in items)
+        total=sum(r.get('total_count',0) for r in items)
+        max_abs=max((r['max_abs_error'] for r in items if r.get('max_abs_error') is not None),default=None)
+        finite_ratios=[r for r in items if isinstance(r.get('worst_tolerance_ratio'),(float,int))]
+        worst=max(finite_ratios,key=lambda r:r['worst_tolerance_ratio'],default=None)
+        lines.append(f'{candidate} {dtype} {category}{" [exceptional]" if exceptional else ""}: '
+                     f'{"FAIL" if failures else "PASS"}; failed checks={len(failures)}/{len(items)}, '
+                     f'elements={count}/{total}; max_abs={fmt(max_abs)}; '
+                     f'max_tolerance_ratio={fmt(worst.get("worst_tolerance_ratio") if worst else None)}')
+        # Show the worst finite difference even on passing checks, not just a bool.
+        if worst:
+            lines.append(f'  worst: {worst["case"]} / {worst["metric"]}, index={worst["worst_index"]}; '
+                         f'baseline={worst["worst_baseline"]}, candidate={worst["worst_candidate"]}, '
+                         f'abs_diff={fmt(worst["worst_abs_error"])}, allowed={fmt(worst["worst_allowed_error"])}')
+        nonfinite=sum(r.get('actual_nonfinite',0) for r in items)
+        if nonfinite: lines.append(f'  candidate nonfinite elements={nonfinite}; consult accuracy CSV for compatibility results.')
+        if failures:
+            lines.append('  failed scenarios: '+', '.join(dict.fromkeys(r['case'] for r in failures)))
+    report['accuracy_summary']='\n'.join(lines)
+    return report['accuracy_summary']
+
 
 
 def value_and_gradient(fn, value, container=None):
@@ -176,13 +248,16 @@ def execute(args,report):
         for name,x,exceptional,container in validation_cases(device,dtype):
             report['validation'].extend(check_case(x,name,exceptional=exceptional,container=container))
         report['validation'].extend(validate_network(device,dtype))
+        accuracy_report(report)
         persist(args.output,report)
+    print(accuracy_report(report),flush=True)
     sync=(lambda:torch.cuda.synchronize(device)) if device.type=='cuda' else lambda:None
     for n in args.sizes:
         for d in args.hidden_dims:
             x=torch.randn(n,d,device=device,requires_grad=True)
             checks=check_case(x,f'timing_{n}x{d}')
             report['validation'].extend(checks)
+            accuracy_report(report)
             for backward in (False,True):
                 calls={label:lambda fn=fn:timed_call(fn,x,backward) for label,fn in FUNCTIONS.items()}
                 samples,loops=timed_variants(calls,args.repeats,sync)
@@ -205,7 +280,9 @@ def execute(args,report):
     report['validation_summary']=qualification
     for row in report['rows']:
         row['qualified']=row['implementation']=='legacy' or qualification[row['implementation']]
+    print(accuracy_report(report),flush=True)
     persist(args.output,report)
+    print(f'Accuracy details: {args.output.with_suffix(".accuracy.csv")}',flush=True)
     print('Candidate qualification:',qualification,flush=True)
     if not all(qualification.values()):
         raise RuntimeError('Candidate validation failed; timings are diagnostic only. See JSON validation entries.')
