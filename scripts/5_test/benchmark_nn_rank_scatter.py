@@ -5,9 +5,9 @@ Defaults to CUDA when available; --device cpu or --device cuda:1 overrides it.
 Optional: --repeats 15 --output results/rank_server.json.
 Writes JSON, CSV and a console log; emails results using project mail settings.
 Use --no-email for local testing; --recipient overrides the default recipient.
-Full suite adds crossover sizes, layouts, distributions, dtypes and weighted Spearman.
-Default sizes focus on 4096; --thresholds 4096 5000 compares inclusive hybrid
-thresholds and the disabled switch with legacy/scatter in the same timing blocks.
+Compares legacy rank/rank_pct with scatter functions and Spearman with its switch
+off/on (fixed threshold 5000). candidate_ms is the tested production implementation.
+Full suite adds layouts, distributions, dtypes and weighted Spearman.
 """
 import argparse
 import contextlib
@@ -26,20 +26,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import torch
-from src.func.tensor import rank, rank_pct, rank_scatter, rank_hybrid, rank_pct_hybrid
-from src.func.metric import pearson, spearman
-
-
-def rank_pct_scatter(x, *, dim=0):
-    # Preserve legacy flattening and the count of non-NaNs (including Inf).
-    if dim is None:
-        return rank_pct_scatter(x.flatten(), dim=0).reshape(x.shape)
-    result = rank_scatter(x, dim=dim)
-    return result / (~result.isnan()).sum(dim=dim, keepdim=True)
-
-
-def spearman_scatter(x, y, w=None, dim=None):
-    return pearson(rank_scatter(x, dim=dim), rank_scatter(y, dim=dim), w, dim)
+from src.func.tensor import rank, rank_pct, rank_scatter, rank_pct_scatter
+from src.func.metric import spearman
 
 
 def validate(device):
@@ -79,7 +67,7 @@ def validate(device):
                 x[0]=torch.nan; y[1]=torch.inf
             for dim in (None,0,-2):
                 for w in (None,torch.rand(257,1,device=device)):
-                    a=spearman(x,y,w,dim); b=spearman_scatter(x,y,w,dim)
+                    a=spearman(x,y,w,dim,scatter_enabled=False); b=spearman(x,y,w,dim)
                     torch.testing.assert_close(a,b,rtol=0,atol=0,equal_nan=True)
                     if distribution != 'nonfinite':
                         assert torch.isfinite(a).all()
@@ -127,37 +115,26 @@ def scenarios(device,sizes,suite):
             yield dict(name=f'{n}x32/{variant}',dim=dim,distribution=variant),x,y,w
 
 
-def measure(old,new,device,repeats,variants=None):
-    functions = [old, new, *(variants or {}).values()]
+def measure(old,new,device,repeats):
     def sync():
         if device.type=='cuda': torch.cuda.synchronize(device)
         elif device.type=='mps': torch.mps.synchronize()
-    for _ in range(5):
-        for fn in functions: fn()
+    for _ in range(5): old(); new()
     sync()
     start=time.perf_counter(); old(); sync()
     loops=max(1,min(1000,int(.02/max(time.perf_counter()-start,1e-6))))
-    samples=[[] for _ in functions]
+    samples=[[],[]]
     for block in range(repeats):
-        order = list(range(len(functions)))
-        shift = block % len(functions)
-        order = order[shift:] + order[:shift]
-        if block % 2: order.reverse()
-        for idx in order:
-            fn=functions[idx]
+        for idx in ((0,1) if block%2==0 else (1,0)):
+            fn=(old,new)[idx]
             sync(); start=time.perf_counter()
             for _ in range(loops): fn()
             sync(); samples[idx].append((time.perf_counter()-start)*1000/loops)
-    a,b=map(statistics.median,samples[:2])
-    extra = {}
-    for label, values in zip(variants or {}, samples[2:]):
-        median = statistics.median(values)
-        extra.update({label+'_ms':median, label+'_speedup':a/median,
-                      label+'_time_reduction_pct':100*(1-median/a)})
-    return {**extra,'legacy_ms':a,'scatter_ms':b,'speedup':a/b,'time_reduction_pct':100*(1-b/a),
+    a,b=map(statistics.median,samples)
+    return {'legacy_ms':a,'candidate_ms':b,'speedup':a/b,'time_reduction_pct':100*(1-b/a),
             'samples_ms':samples,'legacy_min_ms':min(samples[0]),'legacy_max_ms':max(samples[0]),
-            'scatter_min_ms':min(samples[1]),'scatter_max_ms':max(samples[1]),
-            'scatter_faster_blocks':sum(b<a for a,b in zip(*samples[:2])),'calls_per_block':loops}
+            'candidate_min_ms':min(samples[1]),'candidate_max_ms':max(samples[1]),
+            'candidate_faster_blocks':sum(b<a for a,b in zip(*samples)),'calls_per_block':loops}
 
 
 def main():
@@ -166,16 +143,12 @@ def main():
     parser.add_argument('--device',default='auto')
     parser.add_argument('--repeats',type=int,default=9)
     parser.add_argument('--suite',choices=('basic','full'),default='full')
-    parser.add_argument('--sizes',type=int,nargs='+',default=[200,2000,4000,4095,4096,4097,4200,4600,5000,10000])
-    parser.add_argument('--thresholds',type=int,nargs='+',default=[4096,5000],
-                        help='Hybrid thresholds, inclusive; compare each with legacy and scatter')
+    parser.add_argument('--sizes',type=int,nargs='+',default=[200,2000,4999,5000,10000])
     parser.add_argument('--no-email',action='store_true')
     parser.add_argument('--recipient',default=None)
     args=parser.parse_args()
     if any(n < 1 for n in args.sizes):
         parser.error('--sizes must be positive')
-    if any(n < 1 for n in args.thresholds) or len(set(args.thresholds)) != len(args.thresholds):
-        parser.error('--thresholds must be positive and unique')
     if args.repeats < 3:
         parser.error('--repeats must be at least 3')
     args.output=args.output.resolve()
@@ -244,10 +217,10 @@ def execute(args):
     report={'torch':torch.__version__,'device':str(device),'platform':platform.platform(),
             'threads':torch.get_num_threads(),'seed':20261029,'repeats':args.repeats,
             'cuda_available':torch.cuda.is_available(),
-            'method':'5 warmups; rotating/reversing variant blocks; median milliseconds per call; data allocation excluded; CUDA synchronized; dtype recorded per case; Spearman nonfinite-row filtering excluded',
+            'method':'5 warmups; 9 alternating old/new blocks by default; median milliseconds per call; data allocation excluded; CUDA synchronized; dtype recorded per case; Spearman nonfinite-row filtering excluded',
             'gpu':torch.cuda.get_device_name(device) if device.type=='cuda' else None,
             'cuda_version':torch.version.cuda,'cudnn':torch.backends.cudnn.version(),
-            'thresholds':args.thresholds,'sample_labels':['legacy','scatter','hybrid_off',*[f'hybrid_{t}' for t in args.thresholds]],
+            'spearman_scatter_threshold':5000,'sample_labels':['legacy','candidate'],
             'status':'running','suite':args.suite,'sizes':args.sizes,'rows':[]}
     report['git_commit']=probe(['git','rev-parse','HEAD'])
     report['gpu_before']=probe(['nvidia-smi']) if device.type=='cuda' else None
@@ -262,36 +235,22 @@ def execute(args):
                 for op,old,new in (
                     ('rank',lambda:rank(x,dim=dim),lambda:rank_scatter(x,dim=dim)),
                     ('rank_pct',lambda:rank_pct(x,dim=dim),lambda:rank_pct_scatter(x,dim=dim)),
-                    ('spearman',lambda:spearman(x,y,weight,dim),lambda:spearman_scatter(x,y,weight,dim))):
+                    ('spearman',lambda:spearman(x,y,weight,dim,scatter_enabled=False),lambda:spearman(x,y,weight,dim))):
                     # Raw nonfinite inputs are useful for ranking; finite filtered
                     # Spearman is measured separately to avoid trivial NaN comparisons.
                     if op=='spearman' and not torch.isfinite(x).all():
                         continue
-                    # Build dispatch outside timing; timed rank paths add only the
-                    # actual API switch/shape check, not an operation-name branch.
-                    def make_hybrid(enabled, threshold):
-                        if op == 'rank':
-                            return lambda:rank_hybrid(x,dim=dim,enabled=enabled,threshold=threshold)
-                        if op == 'rank_pct':
-                            return lambda:rank_pct_hybrid(x,dim=dim,enabled=enabled,threshold=threshold)
-                        return lambda:pearson(rank_hybrid(x,dim=dim,enabled=enabled,threshold=threshold),
-                                              rank_hybrid(y,dim=dim,enabled=enabled,threshold=threshold),weight,dim)
-                    variants = {'hybrid_off':make_hybrid(False,5000)}
-                    variants.update({f'hybrid_{t}':make_hybrid(True,t) for t in args.thresholds})
-                    for fn in variants.values():
-                        torch.testing.assert_close(old(),fn(),rtol=0,atol=0,equal_nan=True)
                     report['current_case']=dict(case,operation=op)
                     save_report(args.output,report)
                     torch.testing.assert_close(old(),new(),rtol=0,atol=0,equal_nan=True)
                     row=dict(case,shape=list(x.shape),dtype=str(x.dtype),strides=list(x.stride()),
                              contiguous=x.is_contiguous(),weighted=weight is not None,operation=op,
-                             **measure(old,new,device,args.repeats,variants))
+                             **measure(old,new,device,args.repeats))
                     row['sort_length']=x.numel() if dim is None else x.shape[dim]
                     report['rows'].append(row)
                     save_report(args.output,report)
-                    print(f"{case['name']} {op}: {row['legacy_ms']:.4f} -> {row['scatter_ms']:.4f} ms "
+                    print(f"{case['name']} {op}: {row['legacy_ms']:.4f} -> {row['candidate_ms']:.4f} ms "
                           f"({row['speedup']:.2f}x; time reduction {row['time_reduction_pct']:.1f}%)",flush=True)
-                    print('  '+ '; '.join(f'{label}: {row[label+"_ms"]:.4f} ms ({row[label+"_time_reduction_pct"]:.1f}%)' for label in variants),flush=True)
         report['status']='success'
     except BaseException:
         report['status']='failed'
@@ -300,8 +259,7 @@ def execute(args):
     finally:
         report['gpu_after']=probe(['nvidia-smi']) if device.type=='cuda' else None
         save_report(args.output,report)
-        fields=['name','shape','dtype','strides','contiguous','weighted','dim','distribution','operation','legacy_ms','scatter_ms','speedup','time_reduction_pct','calls_per_block']
-        fields += ['sort_length'] + [label+suffix for label in report['sample_labels'][2:] for suffix in ('_ms','_speedup','_time_reduction_pct')]
+        fields=['name','shape','dtype','strides','contiguous','weighted','dim','distribution','operation','sort_length','legacy_ms','candidate_ms','speedup','time_reduction_pct','calls_per_block']
         with args.output.with_suffix('.csv').open('w',newline='') as stream:
             writer=csv.DictWriter(stream,fieldnames=fields,extrasaction='ignore')
             writer.writeheader(); writer.writerows(report['rows'])

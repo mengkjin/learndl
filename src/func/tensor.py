@@ -396,35 +396,12 @@ def rank_scatter(x: Tensor, *, dim: int | None = 0) -> Tensor:
     return result
 
 
-def rank_hybrid(x: Tensor, *, dim: int | None = 0,
-                enabled: bool = False, threshold: int = 5000) -> Tensor:
-    """Opt-in scatter at axis length >= threshold; disabled uses legacy rank.
-
-    Shape metadata only: no tensor reduction or device synchronization. Threshold
-    is tunable per device; 5000 is a conservative experimental default.
-    """
-    if not enabled:
-        return rank(x, dim=dim)
+def rank_pct_scatter(x: Tensor, *, dim: int | None = 0) -> Tensor:
+    """Scatter percentile ranks, preserving legacy ties, NaNs and Inf counts."""
     assert x.ndim <= 3, x.shape
-    if threshold < 1:
-        raise ValueError('threshold must be positive')
-    if x.ndim == 0:
-        return rank(x, dim=dim)
-    length = x.numel() if dim is None else x.shape[dim]
-    return rank_scatter(x, dim=dim) if length >= threshold else rank(x, dim=dim)
-
-
-def rank_pct_hybrid(x: Tensor, *, dim: int | None = 0,
-                    enabled: bool = False, threshold: int = 5000) -> Tensor:
-    """Opt-in hybrid percentile ranks with legacy non-NaN denominator."""
-    if not enabled:
-        return rank_pct(x, dim=dim)
-    assert x.ndim <= 3, x.shape
-    if threshold < 1:
-        raise ValueError('threshold must be positive')
     if dim is None:
-        return rank_pct_hybrid(x.flatten(), dim=0, enabled=True, threshold=threshold).reshape(x.shape)
-    result = rank_hybrid(x, dim=dim, enabled=True, threshold=threshold)
+        return rank_pct_scatter(x.flatten(), dim=0).reshape(x.shape)
+    result = rank_scatter(x, dim=dim)
     return result / (~result.isnan()).sum(dim=dim, keepdim=True)
 
 

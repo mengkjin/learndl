@@ -62,29 +62,22 @@ class RankBenchmarkTest(TestCase):
         self.assertTrue(any(w is not None for _,_,_,w in cases))
         self.assertTrue(any(x.dtype==torch.float16 for _,x,_,_ in cases))
 
-    def test_hybrid_switch_axis_and_boundary(self):
-        from src.func import tensor
-        for shape,dim in [((4095,2),0),((4096,2),0),((4097,2),0),
-                          ((2,4096),-1),((64,64),None)]:
-            x=torch.randint(-3,4,shape).float()
-            x.reshape(-1)[0]=torch.nan
-            length=x.numel() if dim is None else x.shape[dim]
-            original=tensor.rank_scatter
-            with patch.object(tensor,'rank_scatter',wraps=original) as scatter:
-                actual=tensor.rank_hybrid(x,dim=dim,enabled=True,threshold=4096)
-                self.assertEqual(scatter.called,length>=4096)
-            torch.testing.assert_close(actual,tensor.rank(x,dim=dim),rtol=0,atol=0,equal_nan=True)
-            torch.testing.assert_close(tensor.rank_pct_hybrid(x,dim=dim,enabled=True,threshold=4096),
-                                       tensor.rank_pct(x,dim=dim),rtol=0,atol=0,equal_nan=True)
-            with patch.object(tensor,'rank_scatter',side_effect=AssertionError('disabled')):
-                torch.testing.assert_close(tensor.rank_hybrid(x,dim=dim),tensor.rank(x,dim=dim),rtol=0,atol=0,equal_nan=True)
+    def test_spearman_dispatch_and_legacy_switch(self):
+        from src.func import metric
+        for shape,dim in [((4999,1),0),((5000,1),0),((1,5000),-1),((100,50),None)]:
+            x=torch.randn(shape); y=torch.randn(shape)
+            x=x.round(decimals=1); y=y.round(decimals=1)
+            expected=metric.spearman(x,y,dim=dim,scatter_enabled=False)
+            with patch.object(metric,'rank_scatter',wraps=metric.rank_scatter) as scatter:
+                actual=metric.spearman(x,y,dim=dim)
+                length=x.numel() if dim is None else x.shape[dim]
+                self.assertEqual(scatter.called,length>=5000)
+            torch.testing.assert_close(actual,expected,rtol=0,atol=0,equal_nan=True)
+            with patch.object(metric,'rank_scatter',side_effect=AssertionError('disabled')):
+                metric.spearman(x,y,dim=dim,scatter_enabled=False)
 
-    def test_hybrid_empty_scalar_and_validation(self):
-        from src.func.tensor import rank_hybrid,rank_pct_hybrid,rank,rank_pct
-        for x in (torch.tensor(2.),torch.empty(0,3),torch.tensor([float('inf'),float('nan'),1.])):
-            for dim in (None,0):
-                for new,old in ((rank_hybrid,rank),(rank_pct_hybrid,rank_pct)):
-                    torch.testing.assert_close(new(x,dim=dim,enabled=True,threshold=1),old(x,dim=dim),rtol=0,atol=0,equal_nan=True)
-        with self.assertRaises(ValueError):rank_hybrid(torch.ones(2),enabled=True,threshold=0)
-        for fn in (rank_hybrid,rank_pct_hybrid):
-            with self.assertRaises(AssertionError):fn(torch.ones(1,1,1,1),dim=None,enabled=True)
+    def test_scatter_percentiles_preserve_legacy(self):
+        from src.func.tensor import rank_pct,rank_pct_scatter
+        for x in (torch.tensor(2.),torch.empty(0,3),torch.tensor([[1.,float('nan')],[1.,float('inf')]]).T):
+            for dim in (None,0,-1):
+                torch.testing.assert_close(rank_pct_scatter(x,dim=dim),rank_pct(x,dim=dim),rtol=0,atol=0,equal_nan=True)
