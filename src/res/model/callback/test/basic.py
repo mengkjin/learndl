@@ -105,12 +105,16 @@ class BasicTestResult(BaseCallBack):
                 std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
                 pred_rank = subdf['pred'].rank(pct=True)
                 return std_rtn.loc[pred_rank < 0.05].mean()
-            rankic_rtn_df = grouped.apply(df_rankic_rtn , include_groups = False).rename(columns={'pred':'rankic_rtn'})[['rankic_rtn']]
-            rankic_std_df = grouped.apply(df_rankic_std , include_groups = False).rename(columns={'pred':'rankic_std'})[['rankic_std']]
-            top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'rtn_lag1_10':'top5pct'})[['top5pct']]
-            mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'rtn_lag1_10':'mid20pct'})[['mid20pct']]
-            bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'rtn_lag1_10':'bot5pct'})[['bot5pct']]
-            new_df = rankic_rtn_df.join(rankic_std_df).join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
+            if self.callback_fastpath['basic_test']:
+                from ..experimental import basic_group_stats
+                new_df = grouped.apply(basic_group_stats, include_groups=False).reset_index()
+            else:
+                rankic_rtn_df = grouped.apply(df_rankic_rtn , include_groups = False).rename(columns={'pred':'rankic_rtn'})[['rankic_rtn']]
+                rankic_std_df = grouped.apply(df_rankic_std , include_groups = False).rename(columns={'pred':'rankic_std'})[['rankic_std']]
+                top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'rtn_lag1_10':'top5pct'})[['top5pct']]
+                mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'rtn_lag1_10':'mid20pct'})[['mid20pct']]
+                bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'rtn_lag1_10':'bot5pct'})[['bot5pct']]
+                new_df = rankic_rtn_df.join(rankic_std_df).join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
         if df.empty:
             df = new_df
         elif not new_df.empty:

@@ -180,6 +180,7 @@ class FastpathTest(TestCase):
         for enabled in (False, True):
             callback = SimpleNamespace(
                 HIDDEN_FEATURE_MODE=True, config={'train.experimental_metrics_fastpath': enabled},
+                callback_fastpath={'summary_hidden_rank': False, 'hidden_rank_threshold': 5000},
                 batch_data=data, metrics=SimpleNamespace(rankic_function=RankICFunction()),
                 hidden_rankics=[], hidden_correlations=[])
             SummaryWriter.append_batch_hidden_summary(callback)

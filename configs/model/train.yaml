@@ -77,3 +77,12 @@ torch_compile.stage: fit          # fit | test | both
 
 # Opt-in first-batch metric/diagnostic optimizations; false preserves legacy paths.
 experimental_metrics_fastpath: false
+
+# Independently opt-in; leave all disabled until server evidence is reviewed.
+experimental_callback_fastpath:
+  summary_latest: false
+  summary_hidden_rank: false
+  decision_local: false
+  basic_test: false
+  dispatch: false
+  hidden_rank_threshold: 5000

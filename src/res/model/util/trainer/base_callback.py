@@ -26,6 +26,11 @@ class BaseCallBack(TrainerPipeline):
         self.bound_with(trainer)
         self.kwargs = kwargs
 
+    @cached_property
+    def callback_fastpath(self):
+        from src.res.model.callback.experimental import options
+        return options(self.config)
+
     def get_info(self) -> tuple[str , str , str]:
         """return class name , class key parameters and class docstring"""
         args = {k:getattr(self , k) for k in self.CB_KEY_PARAMS}

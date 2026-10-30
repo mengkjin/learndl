@@ -57,7 +57,9 @@ class EarlyStoppage(BaseCallBack):
             self.add_stop_event('Valid Peaked' , self.peak_epoch)
         else:
             valid_converged = arr_converge(self.metrics.attempt_metrics.total_accuracies, self.converge_patience)
-            train_converged = arr_converge(self.metrics.attempt_metrics.total_losses, self.converge_patience)
+            train_converged = False
+            if not self.callback_fastpath['decision_local'] or self.converge_dataset == 'any':
+                train_converged = arr_converge(self.metrics.attempt_metrics.total_losses, self.converge_patience)
             if valid_converged:
                 self.add_stop_event('Valid Converged' , self.status[-self.converge_patience])
             elif self.converge_dataset == 'any' and train_converged:
