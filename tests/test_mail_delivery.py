@@ -251,6 +251,7 @@ class QueueTest(unittest.TestCase):
         self.assertEqual(self.deliver.call_count, 1)
 
     def setUp(self):
+        self.enterContext(patch('src.proj.env.MACHINE.emailable', True))
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.root = Path(tmp.name)

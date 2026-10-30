@@ -30,8 +30,20 @@ def save_json(path, value):
     atomic_json(path, value)
 
 
+def _skip_disabled() -> bool:
+    from src.proj.env import MACHINE
+    if MACHINE.emailable:
+        return False
+    print('[Task/mail] skipped: email disabled on this machine', flush=True)
+    return True
+
+
 class TaskResultMail:
-    """Opt-in AutoRunTask sender; max_bytes bounds serialized MIME, not ZIPs."""
+    """Opt-in sender; True means delivered or disabled by machine policy.
+
+    Disabled delivery is a successful no-op, without creating SMTP receipts.
+    max_bytes bounds serialized MIME, not ZIPs.
+    """
 
     def __init__(self, directory, *, max_bytes=MAX_BYTES, email_api=None, transport=None):
         self.directory = Path(directory).resolve()
@@ -41,6 +53,8 @@ class TaskResultMail:
 
     def __call__(self, title, body, recipient=None, *, attachments=None,
                  project_attachments=False, confirmation_message=''):
+        if _skip_disabled():
+            return True
         if self.email_api is None:
             from src.proj.util.web.emailer import Email
             self.email_api = Email
@@ -64,7 +78,9 @@ class TaskResultMail:
 
 
 def retry_delivery(directory, *, transport=None):
-    """Send only messages without SMTP acceptance; preserve all receipts/errors."""
+    """Retry unsent mail; disabled machines return True without touching receipts."""
+    if _skip_disabled():
+        return True
     directory = Path(directory)
     with portalocker.Lock(directory/'.send.lock', timeout=0):
         return _retry_delivery(directory, transport=transport)
@@ -76,11 +92,8 @@ def _retry_delivery(directory, *, transport=None):
     state = json.loads(ledger.read_text())
     if transport is None:
         from src.proj.util.web.emailer import Email
-        from src.proj.env import MACHINE
 
         def transport(message, recipient):
-            if not MACHINE.emailable:
-                raise RuntimeError('Email disabled on this machine')
             # Existing ledgers can still contain oversized legacy MIME messages.
             # The external receipt records any sub-parts without a second queue owner.
             from src.proj.util.web.mail_package import fingerprint

@@ -37,6 +37,52 @@ class FakeEmail:
 
 
 class TaskMailTest(unittest.TestCase):
+    def setUp(self):
+        self.enterContext(patch('src.proj.env.MACHINE.emailable', True))
+
+    def test_disabled_machine_skips_before_preparing_or_consuming_attachments(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch('src.proj.env.MACHINE.emailable', False), \
+             patch('src.proj.util.web.task_mail.prepare') as prepare, \
+             patch('src.proj.util.web.emailer.Email.send_with_smtplib') as smtp, \
+             patch('src.proj.Proj.email_attachments.pop_all') as pop:
+            directory = Path(tmp)/'mail'
+            api = Mock()
+            self.assertTrue(TaskResultMail(directory, email_api=api)(
+                'result', 'body', attachments=[Path(tmp)/'missing.html'], project_attachments=True))
+            api.message.assert_not_called()
+            prepare.assert_not_called()
+            smtp.assert_not_called()
+            pop.assert_not_called()
+            custom = Mock()
+            self.assertTrue(TaskResultMail(directory, transport=custom)('result', 'body'))
+            custom.assert_not_called()
+            self.assertFalse(directory.exists())
+
+    def test_disabled_retry_preserves_old_failure_receipts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            ledger = directory/'delivery.json'
+            original = b'{"status":"failed","messages":[{"sent":false,"attempts":1}]}'
+            ledger.write_bytes(original)
+            with patch('src.proj.env.MACHINE.emailable', False), \
+                 patch('src.proj.util.web.emailer.Email.send_with_smtplib') as smtp:
+                self.assertTrue(retry_delivery(directory))
+                self.assertTrue(retry_delivery(directory/'not-created'))
+                smtp.assert_not_called()
+            self.assertEqual(ledger.read_bytes(), original)
+            self.assertEqual(list(directory.iterdir()), [ledger])
+
+    def test_enabled_default_transport_failure_is_still_reported(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch('src.proj.env.MACHINE.emailable', True), \
+             patch('src.proj.util.web.emailer.Email.send_with_smtplib', return_value=False) as smtp:
+            self.assertFalse(TaskResultMail(tmp, email_api=FakeEmail)('result', 'body'))
+            smtp.assert_called_once()
+            record = json.loads((Path(tmp)/'delivery.json').read_text())
+            self.assertEqual(record['status'], 'failed')
+            self.assertEqual(record['messages'][0]['attempts'], 1)
+
     def test_autorun_uses_opt_in_sender_and_records_only_full_delivery(self):
         from src.proj.util.script.autorun import AutoRunTask
         from src.proj.util.web.emailer import Email

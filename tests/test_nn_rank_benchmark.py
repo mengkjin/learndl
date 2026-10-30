@@ -16,6 +16,17 @@ spec.loader.exec_module(bench)
 
 
 class RankBenchmarkTest(TestCase):
+    def setUp(self):
+        enabled = patch('src.proj.env.MACHINE.emailable', True)
+        enabled.start()
+        self.addCleanup(enabled.stop)
+
+    def test_disabled_machine_skips_without_reading_results(self):
+        with patch('src.proj.env.MACHINE.emailable', False), \
+             patch('src.proj.util.web.task_mail.TaskResultMail') as sender:
+            bench.send_results(SimpleNamespace(output=Path('/missing/report.json'), recipient=None))
+            sender.assert_not_called()
+
     def test_success_sends_closed_log_and_all_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'result.json'

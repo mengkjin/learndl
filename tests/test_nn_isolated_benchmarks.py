@@ -104,12 +104,35 @@ class StorageExperimentTests(TestCase):
 
 
 class CommonExperimentTests(TestCase):
+    def setUp(self):
+        enabled = patch('src.proj.env.MACHINE.emailable', True)
+        enabled.start()
+        self.addCleanup(enabled.stop)
+
     def invoke(self,execute,root,sender,no_email=False):
         argv=['--output',str(Path(root)/'output.json'),'--repeats','3']
         if no_email:argv+=['--no-email']
         with patch.object(common,'environment',return_value={'torch':torch.__version__}), \
              patch('src.proj.util.web.task_mail.TaskResultMail',return_value=sender):
             return common.run_cli(common.parser_for('test','test'),execute,'test',argv)
+
+    def test_disabled_machine_keeps_results_without_mail_errors(self):
+        with tempfile.TemporaryDirectory() as root, patch('src.proj.env.MACHINE.emailable', False):
+            sender = Mock(side_effect=AssertionError('must not send'))
+            report = self.invoke(lambda args, report: None, root, sender)
+            self.assertEqual(report['status'], 'success')
+            self.assertTrue(Path(root, 'output.json').exists())
+            self.assertFalse(Path(root, 'output.mail').exists())
+            sender.assert_not_called()
+
+    def test_disabled_machine_preserves_original_validation_error(self):
+        with tempfile.TemporaryDirectory() as root, patch('src.proj.env.MACHINE.emailable', False):
+            sender = Mock(side_effect=AssertionError('must not send'))
+            def execute(args, report):
+                raise RuntimeError('Candidate validation failed')
+            with self.assertRaisesRegex(RuntimeError, 'Candidate validation failed'):
+                self.invoke(execute, root, sender)
+            sender.assert_not_called()
 
     def test_success_mail_after_log_closed(self):
         with tempfile.TemporaryDirectory() as root:

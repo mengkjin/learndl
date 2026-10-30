@@ -184,6 +184,10 @@ def main():
 
 
 def send_results(args):
+    from src.proj.env import MACHINE
+    if not MACHINE.emailable:
+        print('Mail skipped: email disabled on this machine', flush=True)
+        return
     from src.proj.util.web.task_mail import TaskResultMail
     report=json.loads(args.output.read_text())
     rows=report.get('rows',[])

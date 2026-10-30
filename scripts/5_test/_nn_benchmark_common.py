@@ -61,6 +61,10 @@ def persist(path, report):
 
 
 def send_results(args, report):
+    from src.proj.env import MACHINE
+    if not MACHINE.emailable:
+        print('Mail skipped: email disabled on this machine', flush=True)
+        return
     from src.proj.util.web.task_mail import TaskResultMail
     directory = args.output.with_suffix('.mail')
     body = (f"{report['experiment']}: {report['status']}\n"
