@@ -381,6 +381,53 @@ def rank_pct(x : Tensor , * , dim : int | None = 0) -> Tensor:
 
     return x_rank
 
+
+def rank_scatter(x: Tensor, *, dim: int | None = 0) -> Tensor:
+    """Ordinal ranks using an inverse permutation; preserve legacy ties and NaNs."""
+    assert x.ndim <= 3, x.shape
+    if dim is None or x.ndim == 0:
+        return rank_scatter(x.flatten(), dim=0).reshape(x.shape)
+    order = x.argsort(dim=dim)
+    shape = [1] * x.ndim
+    shape[dim] = x.shape[dim]
+    positions = torch.arange(x.shape[dim], device=x.device, dtype=order.dtype).reshape(shape).expand_as(order)
+    result = torch.empty_like(order).scatter_(dim, order, positions).to(torch.float32) + 1
+    result[x.isnan()] = nan
+    return result
+
+
+def rank_hybrid(x: Tensor, *, dim: int | None = 0,
+                enabled: bool = False, threshold: int = 5000) -> Tensor:
+    """Opt-in scatter at axis length >= threshold; disabled uses legacy rank.
+
+    Shape metadata only: no tensor reduction or device synchronization. Threshold
+    is tunable per device; 5000 is a conservative experimental default.
+    """
+    if not enabled:
+        return rank(x, dim=dim)
+    assert x.ndim <= 3, x.shape
+    if threshold < 1:
+        raise ValueError('threshold must be positive')
+    if x.ndim == 0:
+        return rank(x, dim=dim)
+    length = x.numel() if dim is None else x.shape[dim]
+    return rank_scatter(x, dim=dim) if length >= threshold else rank(x, dim=dim)
+
+
+def rank_pct_hybrid(x: Tensor, *, dim: int | None = 0,
+                    enabled: bool = False, threshold: int = 5000) -> Tensor:
+    """Opt-in hybrid percentile ranks with legacy non-NaN denominator."""
+    if not enabled:
+        return rank_pct(x, dim=dim)
+    assert x.ndim <= 3, x.shape
+    if threshold < 1:
+        raise ValueError('threshold must be positive')
+    if dim is None:
+        return rank_pct_hybrid(x.flatten(), dim=0, enabled=True, threshold=threshold).reshape(x.shape)
+    result = rank_hybrid(x, dim=dim, enabled=True, threshold=threshold)
+    return result / (~result.isnan()).sum(dim=dim, keepdim=True)
+
+
 def rankic_2d(x : Tensor , y : Tensor , * , dim : int | None = 0 , universe : OptTensor = None , min_coverage = 0.5):
     """Rank correlation on 2-D tensors with coverage gating (uses ``corrwith`` on rank_pct).
 
