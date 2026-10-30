@@ -30,7 +30,7 @@ def main(run_id: str = '5d17935c80694717a8df5fbd055791d4',
          dry_run: bool = False, **kwargs):
     from src.res.rl_experimental.bundle import bundle_attachments
     from src.res.rl_experimental.recover_results import audit_suite, recover_suite, read_json
-    from src.res.rl_experimental.task_mail import TaskResultMail
+    from src.proj.util.web.task_mail import TaskResultMail
 
     root = Path(PATH.main).resolve()
     run = (root/run_directory).resolve()

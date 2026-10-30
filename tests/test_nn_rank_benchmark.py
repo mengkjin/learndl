@@ -26,7 +26,7 @@ class RankBenchmarkTest(TestCase):
                 print('completed marker')
             with patch.object(bench.sys,'argv',['benchmark','--output',str(output),'--recipient','test@example.com']), \
                  patch.object(bench,'execute',side_effect=execute), \
-                 patch('src.res.rl_experimental.task_mail.TaskResultMail',return_value=sender):
+                 patch('src.proj.util.web.task_mail.TaskResultMail',return_value=sender):
                 bench.main()
             sender.assert_called_once()
             self.assertEqual(sender.call_args.args[2],'test@example.com')
@@ -39,7 +39,7 @@ class RankBenchmarkTest(TestCase):
             sender=Mock(return_value=True)
             with patch.object(bench.sys,'argv',['benchmark','--output',str(output)]), \
                  patch.object(bench,'execute',side_effect=ValueError('simulated failure')), \
-                 patch('src.res.rl_experimental.task_mail.TaskResultMail',return_value=sender):
+                 patch('src.proj.util.web.task_mail.TaskResultMail',return_value=sender):
                 with self.assertRaisesRegex(ValueError,'simulated failure'): bench.main()
             sender.assert_called_once()
             self.assertEqual(json.loads(output.read_text())['status'],'failed')
@@ -49,7 +49,7 @@ class RankBenchmarkTest(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output=Path(tmp)/'result.json'
             bench.save_report(output,{'status':'success','rows':[]})
-            with patch('src.res.rl_experimental.task_mail.TaskResultMail',return_value=Mock(return_value=False)):
+            with patch('src.proj.util.web.task_mail.TaskResultMail',return_value=Mock(return_value=False)):
                 with self.assertRaisesRegex(RuntimeError,'retry only delivery'):
                     bench.send_results(SimpleNamespace(output=output,recipient=None))
 

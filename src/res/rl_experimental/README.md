@@ -321,7 +321,7 @@ SMTP 接受不等于收件箱已收到。部分失败不会重训，也不会把
 outbox 重复排队。只重试未确认发送的分批邮件：
 
 ```bash
-python -m src.res.rl_experimental.task_mail <包含-delivery.json-的目录>
+python -m src.proj.util.web.task_mail <包含-delivery.json-的目录>
 ```
 
 如果进程在发送过程中被中断，`in_flight=true` 表示结果不明，工具拒绝盲目补发；

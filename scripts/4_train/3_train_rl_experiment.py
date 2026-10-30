@@ -58,7 +58,7 @@ def main(
     def attach_bundle(metadata: Path) -> None:
         if task.email:
             from uuid import uuid4
-            from src.res.rl_experimental.task_mail import TaskResultMail
+            from src.proj.util.web.task_mail import TaskResultMail
             task.email_sender = TaskResultMail(metadata.parent/'task_mail'/uuid4().hex)
             for attachment in bundle_attachments(metadata):
                 Proj.email_attachments.append(attachment)

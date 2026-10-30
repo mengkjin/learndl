@@ -13,7 +13,7 @@
 全部通过后，在原运行的独立 `recovery/` 子目录重新打包分析结果，并通过任务邮件发送；
 不训练、不加载模型、不改数据库/原实验结果，也不清除任何调度记录。
 失败只发送诊断与任务 HTML，不生成“成功”包。完整回执在 `recovery/<id>/mail/delivery.json`，
-邮件按 MIME 大小限制分批，部分失败可用 `python -m src.res.rl_experimental.task_mail <mail目录>`
+邮件按 MIME 大小限制分批，部分失败可用 `python -m src.proj.util.web.task_mail <mail目录>`
 补发未送达的分批消息。此任务需服务器同步清单后按现有 autofix 队列执行，无需重装服务。
 
 Autofix 用来在代码更新后执行明确声明的数据重算、回补或修复。你在本电脑维护 `tasks.yaml` 并提交 Git，服务器 watchdog 发现请求后交给独立 worker。服务器不修改 Git 中的文件来标记完成，也不需要把执行状态传回本机。
@@ -279,7 +279,7 @@ watchdog 告警。执行前若同 ID 结果目录已存在则拒绝覆盖。无�
 
 完成邮件沿用项目默认收件人，包含 suite.json 与完整结果包；autofix 提交邮件只代表
 请求已排队。结果邮件由训练脚本发出，超大附件分批。需要补发时使用
-`python -m src.res.rl_experimental.task_mail <结果目录>/mail`，只补发未发送的邮件，不重跑训练。
+`python -m src.proj.util.web.task_mail <结果目录>/mail`，只补发未发送的邮件，不重跑训练。
 
 本机收到附件后将 parts.json 和所有 ZIP 分片放在同一目录，按 parts.json 的顺序
 校验各分片 SHA256、拼接 ZIP 后解压，再按 package_manifest.json 校验文件。随后比较四次模型、预测和指标。

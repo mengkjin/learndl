@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from .bundle import _sha256, create_bundle
-from .task_mail import save_json
+from src.proj.util.web.task_mail import save_json
 
 ARMS = ('original', 'penalty', 'retention')
 

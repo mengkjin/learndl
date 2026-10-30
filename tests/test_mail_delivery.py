@@ -178,8 +178,43 @@ class PackageTest(unittest.TestCase):
 
 
 class QueueTest(unittest.TestCase):
+    def test_long_filename_real_task_mail_and_legacy_receipt(self):
+        from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
+        paths = []
+        for suffix in ('.json', '.csv', '.log'):
+            path = self.root/f'rank_scatter_20261030_111402_554012{suffix}'
+            path.write_text('benchmark results\n')
+            paths.append(path)
+        def transport(msg, recipient):
+            key = package.digest(b'long-filenames')
+            folder = self.root/'.external'/key
+            if not folder.exists():
+                folder.mkdir(parents=True)
+                (folder/'message.eml').write_bytes(msg.as_bytes())
+                package.atomic_json(folder/'meta.json', {'attempts': 0})
+                stored, _ = Email._read_outbox(folder)
+                # The previous CRLF-body-only fix still fails on these real names.
+                self.assertNotEqual(package.fingerprint(stored, normalize_body_newlines=True),
+                                    package.fingerprint(msg, normalize_body_newlines=True))
+            return Email.send_with_smtplib(msg, recipient, delivery_id='long-filenames')
+        directory = self.root/'long-task.mail'
+        sender = TaskResultMail(directory, email_api=Email, transport=transport)
+        self.assertTrue(sender('NN rank benchmark - success', 'Results: 202\nValidation: exact\n',
+                               'test@example.invalid', attachments=paths))
+        self.assertTrue(retry_delivery(directory, transport=transport))
+        self.assertEqual(self.deliver.call_count, 1)
+
+    def test_folded_headers_preserve_attachment_name_protection(self):
+        long_name = 'rank_scatter_20261030_111402_554012.json'
+        first = message_from_bytes(package.wire(message(attachments=[(long_name, b'{}')])))
+        other = message_from_bytes(package.wire(message(attachments=[(long_name+'.changed', b'{}')])))
+        self.assertTrue(Email.send_with_smtplib(first, delivery_id='name-protection'))
+        self.assertFalse(Email.send_with_smtplib(other, delivery_id='name-protection'))
+        self.assertIn('headers', str(Email.logger.error.call_args))
+        self.assertEqual(self.deliver.call_count, 1)
+
     def test_task_result_mail_through_external_receipt(self):
-        from src.res.rl_experimental.task_mail import TaskResultMail, retry_delivery
+        from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
         attachment = self.root/'benchmark.log'
         attachment.write_text('completed\n')
         def transport(msg, recipient):

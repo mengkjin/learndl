@@ -22,7 +22,7 @@ def main(request_path: str, **kwargs):
     from src.res.rl_experimental.recover_results import audit_suite, recover_suite, read_json
     from src.res.rl_experimental.resume import resume_suite
     from src.res.rl_experimental.bundle import bundle_attachments
-    from src.res.rl_experimental.task_mail import TaskResultMail, save_json
+    from src.proj.util.web.task_mail import TaskResultMail, save_json
     if not os.environ.get('LEARNDL_MANAGED_RUN'):
         raise RuntimeError('Use a shared idle-worker resume request; do not run GPU recovery inside autofix or directly')
     path = Path(request_path).resolve()

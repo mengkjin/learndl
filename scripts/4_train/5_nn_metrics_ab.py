@@ -17,7 +17,7 @@ def main(request_id: str = '20261029_nn_metrics_ab_01', **kwargs):
     from src.proj.util.script import AutoRunTask
     from src.res.model.diagnostics.nn_metrics_ab import run_suite, save
     from src.res.rl_experimental.bundle import create_bundle, bundle_attachments
-    from src.res.rl_experimental.task_mail import TaskResultMail
+    from src.proj.util.web.task_mail import TaskResultMail
     if not re.fullmatch(r'[A-Za-z0-9_-]+', request_id):
         raise ValueError('Invalid request ID')
     parent = PATH.main/'results/nn_training_review/server_ab'/request_id

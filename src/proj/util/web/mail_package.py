@@ -7,6 +7,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import uuid
@@ -74,12 +75,21 @@ def decoded(part: Message) -> bytes | None:
     return part.get_payload(decode=True)
 
 
-def fingerprint(message: Message, *, normalize_body_newlines: bool = False) -> str:
+def fingerprint(message: Message, *, normalize_body_newlines: bool = False,
+                normalize_header_folding: bool = False) -> str:
     """Ignore randomly generated MIME boundaries, dates and Message-IDs on retries."""
+    def parsed_header(name, value):
+        value = str(value)
+        if normalize_header_folding:
+            # header_factory expects an unfolded field value. compat32 exposes
+            # CRLF continuations while policy.default already unfolds them.
+            value = re.sub(r'\r?\n[ \t]+', ' ', value)
+        return policy.default.header_factory(name, value)
+
     def item(part):
-        headers = [(k.lower(), str(policy.default.header_factory(k, str(v)))) for k, v in part.items()
+        headers = [(k.lower(), str(parsed_header(k, v))) for k, v in part.items()
                    if k.lower() not in {'content-type', 'mime-version', 'date', 'message-id'}]
-        header = policy.default.header_factory('Content-Type', str(part.get('Content-Type', 'text/plain')))
+        header = parsed_header('Content-Type', part.get('Content-Type', 'text/plain'))
         params = [part.get_content_type(), {k: v for k, v in header.params.items() if k != 'boundary'}]
         if part.is_multipart():
             payload = [item(p) for p in part.get_payload()]
@@ -94,6 +104,28 @@ def fingerprint(message: Message, *, normalize_body_newlines: bool = False) -> s
             payload = digest(data)
         return headers, params, payload
     return digest(json.dumps(item(message), ensure_ascii=False, sort_keys=True).encode())
+
+
+def serialization_differences(left: Message, right: Message) -> list[str]:
+    """Name differing MIME fields without exposing recipients, bodies or filenames."""
+    a, b = list(left.walk()), list(right.walk())
+    differences = []
+    if len(a) != len(b):
+        differences.append('mime.part_count')
+    for index, (x, y) in enumerate(zip(a, b)):
+        hx, hy = copy.copy(x), copy.copy(y)
+        hx.set_payload(''); hy.set_payload('')
+        if fingerprint(hx, normalize_body_newlines=True, normalize_header_folding=True) != fingerprint(
+                hy, normalize_body_newlines=True, normalize_header_folding=True):
+            differences.append(f'mime[{index}].headers')
+        if not x.is_multipart() and not y.is_multipart():
+            dx, dy = decoded(x) or b'', decoded(y) or b''
+            if all(p.get_content_maintype() == 'text' and not p.get_filename()
+                   and p.get_content_disposition() != 'attachment' for p in (x, y)):
+                dx, dy = dx.replace(b'\r\n', b'\n'), dy.replace(b'\r\n', b'\n')
+            if dx != dy:
+                differences.append(f'mime[{index}].payload')
+    return differences
 
 
 def attachment_capacity(budget: int) -> int:

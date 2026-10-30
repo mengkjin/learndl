@@ -208,7 +208,7 @@ def main():
 
 
 def send_results(args):
-    from src.res.rl_experimental.task_mail import TaskResultMail
+    from src.proj.util.web.task_mail import TaskResultMail
     report=json.loads(args.output.read_text())
     rows=report.get('rows',[])
     body=(f"NN rank/scatter benchmark: {report['status']}\n"
@@ -223,7 +223,7 @@ def send_results(args):
                  if args.output.with_suffix(ext).is_file()]
     if not sender(f"NN rank benchmark - {report['status']}",body,args.recipient,attachments=attachments):
         raise RuntimeError(f'Mail not fully delivered; retry only delivery with: '
-                           f'python -m src.res.rl_experimental.task_mail {directory}')
+                           f'python -m src.proj.util.web.task_mail {directory}')
     print(f'Result mail sent; receipt: {directory / "delivery.json"}',flush=True)
 
 

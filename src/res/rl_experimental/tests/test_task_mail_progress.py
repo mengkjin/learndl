@@ -14,7 +14,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from src.res.rl_experimental.progress import progress, quiet_output
-from src.res.rl_experimental.task_mail import TaskResultMail, retry_delivery
+from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
 
 
 class FakeEmail:

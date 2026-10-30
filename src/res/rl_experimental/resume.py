@@ -21,7 +21,7 @@ from pathlib import Path
 from .bundle import _sha256
 from .progress import progress, quiet_output
 from .recover_results import read_json
-from .task_mail import save_json
+from src.proj.util.web.task_mail import save_json
 
 PREFIX = 'src.res.rl_experimental'
 SOURCE = 'src/res/rl_experimental'

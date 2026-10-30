@@ -13,7 +13,7 @@ import uuid
 from email import message_from_bytes, policy
 from pathlib import Path
 
-from .mail_package import atomic_bytes, atomic_json, digest, fingerprint, fsync_dir, prepare
+from .mail_package import atomic_bytes, atomic_json, digest, fingerprint, fsync_dir, prepare, serialization_differences
 
 DELAYS = (60, 300, 900, 3600)
 
@@ -291,9 +291,11 @@ class MailQueue:
                 shutil.rmtree(staging, ignore_errors=True)
         original, _ = self.api._read_outbox(folder)
         if (fingerprint(original) != content
-                and fingerprint(original, normalize_body_newlines=True)
-                != fingerprint(message, normalize_body_newlines=True)):
-            raise ValueError('delivery_id reused with changed email content')
+                and fingerprint(original, normalize_body_newlines=True, normalize_header_folding=True)
+                != fingerprint(message, normalize_body_newlines=True, normalize_header_folding=True)):
+            raise ValueError('delivery_id reused with changed email content; '
+                             f'differing fields: {serialization_differences(original, message)}; '
+                             f'stored receipt: {folder}; compare message.eml with the task mail payload')
         del original
         try:
             manifest = self.prepare_folder(folder)
