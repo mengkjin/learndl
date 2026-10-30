@@ -138,9 +138,6 @@ class SummaryWriter(BaseCallBack):
     def add_total_metric(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
         def get_metric(ds , metric):
-            if self.callback_fastpath['summary_latest']:
-                from ..experimental import latest
-                return latest(self.metrics.attempt_metrics, ds, metric)
             return self.metrics.attempt_metrics.latest(ds , metric)
         for metric in ['accuracy' , 'loss' , 'rankic']:
             data = {'train':get_metric('train' , metric), 'valid':get_metric('valid' , metric)}
@@ -218,9 +215,7 @@ class SummaryWriter(BaseCallBack):
 
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:
-            self.hidden_rankics.append(self.metrics.rankic_function.hidden_rankic(
-                self.batch_data, hybrid_threshold=(self.callback_fastpath['hidden_rank_threshold']
-                    if self.callback_fastpath['summary_hidden_rank'] else None)))
+            self.hidden_rankics.append(self.metrics.rankic_function.hidden_rankic(self.batch_data))
             if self.config['train.experimental_metrics_fastpath']:
                 with torch.no_grad():
                     self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.detach().T))

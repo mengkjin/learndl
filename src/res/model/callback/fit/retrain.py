@@ -38,14 +38,6 @@ class BadAttemptRetrain(BaseCallBack):
         self.max_nan_redo = max_nan_redo
         self.lr_multiplier = lr_multiplier        
 
-    def _decision_best_epoch(self):
-        cache = getattr(self, '_local_decision_cache', None)
-        if cache is None:
-            return self.metrics.attempt_metrics.best_epoch()
-        if 'best' not in cache:
-            cache['best'] = self.metrics.attempt_metrics.best_epoch()
-        return cache['best']
-
     @property
     def _end_effective_epoch(self) -> int | None:
         ev = self.status.end_attempt_event
@@ -53,7 +45,7 @@ class BadAttemptRetrain(BaseCallBack):
 
     @property
     def _attempt_best_ic(self) -> float | None:
-        best_epoch = self._decision_best_epoch()
+        best_epoch = self.metrics.attempt_metrics.best_epoch()
         return None if not best_epoch else float(best_epoch.valid_rankic)
 
     @property
@@ -73,7 +65,7 @@ class BadAttemptRetrain(BaseCallBack):
 
     @property
     def is_low_ic(self):
-        best_epoch = self._decision_best_epoch()
+        best_epoch = self.metrics.attempt_metrics.best_epoch()
         best_attempt_ic = self.metrics.model_metrics.best_ic
         low_ic = best_epoch and best_epoch.valid_rankic < self.min_ic and best_attempt_ic < self.min_ic
         return low_ic
@@ -89,15 +81,6 @@ class BadAttemptRetrain(BaseCallBack):
         self.is_nanloss = self.metrics.epoch_train_metrics.nanloss
 
     def on_fit_epoch_end_before(self):
-        if not self.callback_fastpath['decision_local']:
-            return self._check_retrain()
-        self._local_decision_cache = {}
-        try:
-            return self._check_retrain()
-        finally:
-            self.__dict__.pop('_local_decision_cache', None)
-
-    def _check_retrain(self):
         if not self.is_nanloss and (not self.status.loop_end or self.status.attempt >= self.max_attempt):
             return
         if self.is_nanloss and self.remain_nan_redo <= 0:

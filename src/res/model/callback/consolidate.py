@@ -22,31 +22,17 @@ class ConsolidateCallBack(BaseCallBack):
         
     def at_enter(self , hook , *args , **kwargs):
         self.logger.stdout(f'In Stage [{self.status.stage}], Hook {hook} start' , vb_level = VbLevelCallback)
-        fast = self.callback_fastpath['dispatch']
-        for cb in self.callbacks_for_hook(hook):
-            if fast or cb.is_hook_implemented(hook):
+        for cb in self.callbacks:
+            if cb.is_hook_implemented(hook):
                 cb.logger.stdout(f'{hook} start' , vb_level = VbLevelCallback)
                 cb.at_enter(hook , *args , **kwargs)
 
     def at_exit(self, hook , *args , **kwargs):
-        fast = self.callback_fastpath['dispatch']
-        for cb in self.callbacks_for_hook(hook):
-            if fast or cb.is_hook_implemented(hook):
+        for cb in self.callbacks:
+            if cb.is_hook_implemented(hook):
                 cb.logger.stdout(f'{hook} end' , vb_level = VbLevelCallback)
                 cb.at_exit(hook , *args , **kwargs)
         self.logger.stdout(f'In Stage [{self.status.stage}], Hook {hook} end' , vb_level = VbLevelCallback)
-        if hook == 'on_fit_model_restart':
-            self.rebuild_dispatch()
-
-    def callbacks_for_hook(self, hook):
-        return self._hook_callbacks.get(hook, ()) if self.callback_fastpath['dispatch'] else self.callbacks
-
-    def rebuild_dispatch(self):
-        hooks = set(self.all_hooks)
-        for cb in self.callbacks:
-            hooks.update(getattr(cb, 'implemented_hooks', ()))
-        self._hook_callbacks = {hook: tuple(cb for cb in self.callbacks if cb.is_hook_implemented(hook))
-                                for hook in hooks} if self.callback_fastpath['dispatch'] else {}
 
     def print_out(self , vb_level : Base.lit.VerbosityLevel = 2 , min_key_len = -1):
         infos = [cb.get_info() for cb in self.callbacks]
@@ -67,7 +53,6 @@ class ConsolidateCallBack(BaseCallBack):
         callbacks = self.get_callbacks_by_order()
         callbacks = self.resolving_callbacks(callbacks)
         self.callbacks = callbacks
-        self.rebuild_dispatch()
 
     def get_callbacks_by_order(self) -> list[BaseCallBack]:
         callback_classes = [self.get_callback_class(cb) for cb in self.config.callbackes]

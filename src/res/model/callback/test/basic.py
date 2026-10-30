@@ -2,7 +2,6 @@
 Callback to perform basic test of RankIC
 """
 from __future__ import annotations
-import warnings
 import pandas as pd
 import numpy as np
 from typing import Any
@@ -11,7 +10,27 @@ from src.proj import Save , Load
 
 from src.res.model.util import BaseCallBack
 
-__all__ = ['BasicTestResult']
+__all__ = ['BasicTestResult', 'basic_group_stats']
+
+def basic_group_stats(frame: pd.DataFrame) -> pd.Series:
+    """Compute the five model evaluation statistics for one complete-case group.
+
+    Callers remove missing predictions and either evaluation label before grouping.
+    Reuse pandas average ranks and sample-standardized returns across statistics.
+    """
+    pred_rank = frame['pred'].rank()
+    pct = pred_rank / frame['pred'].count()
+    rtn = frame['rtn_lag1_10']
+    standardized = (rtn - rtn.mean()) / (rtn.std() + 1e-6)
+    return pd.Series({
+        'rankic_rtn': pred_rank.corr(rtn.rank()),
+        'rankic_std': pred_rank.corr(frame['std_lag1_10'].rank()),
+        'top5pct': standardized.loc[pct >= .95].mean(),
+        'mid20pct': standardized.loc[(pct >= .4) & (pct < .6)].mean(),
+        'bot5pct': standardized.loc[pct < .05].mean(),
+    })
+
+
 class BasicTestResult(BaseCallBack):
     """Basic Test of RankIC against unified eval labels (rtn/std_lag1_10)."""
 
@@ -80,41 +99,7 @@ class BasicTestResult(BaseCallBack):
             new_df = pd.DataFrame(columns=self.test_df_cols)
         else:
             grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
-            def df_rankic_rtn(subdf : pd.DataFrame , **kwargs):
-                with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
-                    warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
-                    return subdf[['pred']].corrwith(subdf['rtn_lag1_10'], method='spearman')
-            def df_rankic_std(subdf : pd.DataFrame , **kwargs):
-                with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', message='An input array is constant; the correlation coefficient is not defined' , category=RuntimeWarning)
-                    warnings.filterwarnings('ignore', message='invalid value encountered in divide' , category=RuntimeWarning)
-                    return subdf[['pred']].corrwith(subdf['std_lag1_10'], method='spearman')
-            def df_top5pct(subdf : pd.DataFrame , **kwargs):
-                rtn = subdf['rtn_lag1_10']
-                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
-                pred_rank = subdf['pred'].rank(pct=True)
-                return std_rtn.loc[pred_rank >= 0.95].mean()
-            def mid_20pct(subdf : pd.DataFrame , **kwargs):
-                rtn = subdf['rtn_lag1_10']
-                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
-                pred_rank = subdf['pred'].rank(pct=True)
-                return std_rtn.loc[(pred_rank >= 0.4) & (pred_rank < 0.6)].mean()
-            def df_bot5pct(subdf : pd.DataFrame , **kwargs):
-                rtn = subdf['rtn_lag1_10']
-                std_rtn = (subdf[['rtn_lag1_10']] - rtn.mean()) / (rtn.std() + 1e-6)
-                pred_rank = subdf['pred'].rank(pct=True)
-                return std_rtn.loc[pred_rank < 0.05].mean()
-            if self.callback_fastpath['basic_test']:
-                from ..experimental import basic_group_stats
-                new_df = grouped.apply(basic_group_stats, include_groups=False).reset_index()
-            else:
-                rankic_rtn_df = grouped.apply(df_rankic_rtn , include_groups = False).rename(columns={'pred':'rankic_rtn'})[['rankic_rtn']]
-                rankic_std_df = grouped.apply(df_rankic_std , include_groups = False).rename(columns={'pred':'rankic_std'})[['rankic_std']]
-                top5pct_df = grouped.apply(df_top5pct , include_groups = False).rename(columns={'rtn_lag1_10':'top5pct'})[['top5pct']]
-                mid20pct_df = grouped.apply(mid_20pct , include_groups = False).rename(columns={'rtn_lag1_10':'mid20pct'})[['mid20pct']]
-                bot5pct_df = grouped.apply(df_bot5pct , include_groups = False).rename(columns={'rtn_lag1_10':'bot5pct'})[['bot5pct']]
-                new_df = rankic_rtn_df.join(rankic_std_df).join(top5pct_df).join(mid20pct_df).join(bot5pct_df).reset_index(drop=False)
+            new_df = grouped.apply(basic_group_stats, include_groups=False).reset_index()
         if df.empty:
             df = new_df
         elif not new_df.empty:

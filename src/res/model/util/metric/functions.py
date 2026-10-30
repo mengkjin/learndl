@@ -176,20 +176,12 @@ class RankICFunction:
         value = self(data, which_output = None , which_label = 0).mean()
         return value
         
-    def hidden_rankic(self , data : BatchData , which_label : int = 0 , require_grad : bool = False, *, hybrid_threshold: int | None = None) -> torch.Tensor:
+    def hidden_rankic(self , data : BatchData , which_label : int = 0 , require_grad : bool = False) -> torch.Tensor:
         assert not require_grad , 'hidden accuracies do not support require_grad'
         hidden = data.output.hidden
         label = data.input.y[...,which_label:which_label+1]
         with _Grads(require_grad):
-            calculator = self.rankic_calculator
-            if hybrid_threshold is not None:
-                from src.res.model.callback.experimental import HybridSpearman
-                # Clone only the component wrapper; preserve its selection/alignment.
-                from copy import copy
-                from src.res.algo.nn.loss.accuracy import Spearman
-                if type(calculator.calculator) is Spearman:
-                    calculator = copy(calculator)
-                    calculator.calculator = HybridSpearman(hybrid_threshold)
-            accu = calculator(pred = hidden , label = label , dim = 0)
+            # Built-in Spearman shares the >=5000 scatter path; custom calculators stay intact.
+            accu = self.rankic_calculator(pred = hidden , label = label , dim = 0)
             assert isinstance(accu , Tensor) , f'hidden rankic value should be a Tensor, but got {accu}'
             return accu

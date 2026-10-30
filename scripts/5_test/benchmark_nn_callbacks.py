@@ -1,7 +1,7 @@
-"""Run callback microbenchmarks; add --short-tests for four gated training runs.
+"""Run callback microbenchmarks; add --short-tests for four repeatability training runs.
 
 Example: uv run python scripts/5_test/benchmark_nn_callbacks.py --device cuda --short-tests
-Default: all five candidates, nine alternating blocks, email JSON/CSV/log/evidence.
+Default: three integrated paths, nine alternating blocks, email JSON/CSV/log/evidence.
 Use --only summary_latest basic_test or --no-email for focused local tests.
 Retry mail without training: python -m src.proj.util.web.task_mail <output>/mail
 """

@@ -301,8 +301,10 @@ class AttemptMetrics(AggregatedMetrics):
         return [df[col].item() for df in self.tables[f'{dataset}_epoch_totals']]
 
     def latest(self , dataset : Base.lit.DatasetFit , metric : Base.lit.MetricType) -> float:
-        metrics = self.total_metrics(dataset , metric)
-        return metrics[-1] if metrics else 0.
+        # Each epoch table has one row; reading the last avoids scanning history.
+        tables = self.tables[f'{dataset}_epoch_totals']
+        col = 'rankic' if metric == 'rankic' else f'total_{metric}'
+        return tables[-1][col].item() if tables else 0.
 
     def latest_epoch(self) -> EpochMetricResult | None:
         if len(self.indices['valid_epoch']) != len(self.indices['train_epoch']):

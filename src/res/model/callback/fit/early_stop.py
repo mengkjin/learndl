@@ -47,6 +47,14 @@ class EarlyStoppage(BaseCallBack):
         self.peak_epoch = self.status.current
         self.peak_epoch_metrics = None
 
+    @property
+    def valid_converged(self) -> bool:
+        return arr_converge(self.metrics.attempt_metrics.total_accuracies, self.converge_patience)
+
+    @property
+    def train_converged(self) -> bool:
+        return arr_converge(self.metrics.attempt_metrics.total_losses, self.converge_patience)
+
     def check_early_stoppage(self):
         latest_epoch_metrics = self.metrics.attempt_metrics.latest_epoch()
         if self.metrics.compare_epochs(latest_epoch_metrics, self.peak_epoch_metrics): 
@@ -55,15 +63,11 @@ class EarlyStoppage(BaseCallBack):
 
         if self.peak_epoch and (self.status.epoch - self.peak_epoch.epoch >= self.peak_patience):
             self.add_stop_event('Valid Peaked' , self.peak_epoch)
-        else:
-            valid_converged = arr_converge(self.metrics.attempt_metrics.total_accuracies, self.converge_patience)
-            train_converged = False
-            if not self.callback_fastpath['decision_local'] or self.converge_dataset == 'any':
-                train_converged = arr_converge(self.metrics.attempt_metrics.total_losses, self.converge_patience)
-            if valid_converged:
-                self.add_stop_event('Valid Converged' , self.status[-self.converge_patience])
-            elif self.converge_dataset == 'any' and train_converged:
-                self.add_stop_event('Train Converged' , self.status[-self.converge_patience])
+        elif self.valid_converged:
+            self.add_stop_event('Valid Converged' , self.status[-self.converge_patience])
+        elif self.converge_dataset == 'any' and self.train_converged:
+            self.add_stop_event('Train Converged' , self.status[-self.converge_patience])
+
     def add_stop_event(self , reason : str , effect_epoch : EpochRecord):
         self.status.add_epoch_event(
             FittingEventType.END_ATTEMPT , reason.replace(' ' , '') , epoch = effect_epoch.epoch , 

@@ -1,86 +1,67 @@
-# Callback efficiency experiment
+# Callback measurement
 
-All five switches default to false; the first-batch metrics fastpath is independent.
-Current baseline already includes Spearman scatter dispatch at length 5000. Do not
-count that merged change as a new callback gain.
+The accepted callback changes are integrated; there are no callback fastpath
+switches. Old saved `train.experimental_callback_fastpath` settings are ignored.
+The independent first-batch `train.experimental_metrics_fastpath` setting remains
+unchanged.
+
+- `AttemptMetrics.latest()` reads the last epoch table without traversing history.
+- `BasicTestResult` groups once and calls `basic_group_stats()` in its module.
+  The helper expects rows with nonmissing predictions and both evaluation labels;
+  it preserves average ties, sample standard deviation and original bucket edges.
+- Hidden RankIC uses the ordinary metric component and shared Spearman ranking:
+  each input with sorting length >= 5000 uses scatter. Custom calculators remain
+  intact. This shared ranking optimization predates the callback integration;
+  it is not an additional callback speed gain. No wrapper copies or separate
+  threshold setting are needed.
+- Retraining and callback dispatch retain their original paths. Early stopping
+  retains the separately approved conditional short-circuit calculation; it has
+  no experiment switch or cache.
 
 ## Server execution
 
-From the repository root:
-
-```bash
+```sh
+uv run python scripts/5_test/benchmark_nn_callbacks.py --device cuda
 uv run python scripts/5_test/benchmark_nn_callbacks.py --device cuda --short-tests
 ```
 
-Nine alternating microbenchmark blocks precede four independent default short tests
-in old/new/new/old order. Both arms explicitly disable the metrics fastpath. Each
-candidate must have lower median time and at least 7/9 faster blocks in every applicable
-case before entering the new arm. No eligible candidate means four baseline controls.
-The child verifies effective switches after configuration flattening.
+The microbenchmark compares the three integrated paths with independent reference
+calculations: full-history reads, five groupby passes, and double-argsort ranking.
+Reference calculations live only in the diagnostics module, not in training.
+Use `--only summary_latest basic_test` to focus the run. Hidden cases default to
+2000/4095/4096/4097/5000 rows and 32/64 dimensions; the production threshold stays
+5000. The `--sizes` option changes test sizes, not production behavior.
 
-For microbenchmarks only:
+Five warmups precede at least nine alternating timed blocks. Isolated CUDA timing
+synchronizes at block boundaries. JSON preserves raw samples, comparison errors,
+call counts, absolute savings, variability, device and Git metadata; CSV summarizes
+the cases and the console log records failures. A microbenchmark pass is evidence
+for that case only, not proof of end-to-end training improvement.
 
-```bash
-uv run python scripts/5_test/benchmark_nn_callbacks.py --device cuda --only summary_latest basic_test
+`--short-tests` runs four identical default-model short tests with a fixed seed
+and the first-batch metric switch disabled. These are repeatability/profile runs,
+not old/new A/B runs. It compares decisions, weights, diagnostics and exported
+results and reports stage times without asserting before/after gains. Each run
+records actual callbacks, effective configuration, diagnostic rounds, detailed
+analysis, export submission/completion and host waits. It preserves source and
+model evidence. Hook timings are host timings without per-hook GPU synchronization;
+async completion latency includes queueing and I/O. Fresh runs do not measure
+snapshot recovery. Existing historical A/B evidence remains in the results folder.
+
+The reusable `CallbackProfile` context manager lives in
+`src/res/model/diagnostics/callback_profile.py`; it patches only during measurement
+and restores methods on exit. Normal training does not enable this profiler.
+
+## Mail
+
+Mail is sent through `src.proj.util.web.task_mail` after logs close, with JSON,
+CSV, log and zipped evidence attached. Use `--no-email` for local verification.
+A delivery failure preserves all results and can be retried without training:
+
+```sh
+uv run python -m src.proj.util.web.task_mail <output>/mail
 ```
 
-`--sizes` controls diagnostic input lengths. Defaults cover 2000, 4095, 4096, 4097,
-5000, hidden widths 32/64, and thresholds 4096/5000. `--threshold 4096` changes which
-threshold governs eligibility; default is 5000. `--repeats` must be at least 9.
-Use `--no-email` locally; `--output` must be a new directory. Explicit CUDA requests
-fail when unavailable. No scheduler or automatic server run is created.
-
-## Configuration
-
-`train.experimental_callback_fastpath` contains:
-
-- `summary_latest`: last-table reads for six total-metric summaries.
-- `summary_hidden_rank`: diagnostic-only ranking at `hidden_rank_threshold`.
-- `decision_local`: unused convergence branch elimination and one-decision best reuse.
-- `basic_test`: single grouped pass, shared average-tie ranking and standardization.
-- `dispatch`: ordered hook lists, rebuilt at initialization and model restart.
-- `hidden_rank_threshold`: positive integer, default 5000; five switches default false.
-
-Nested and flattened dotted keys are supported. Missing keys remain off. Custom
-hidden calculators retain their existing path. No changes to training policies,
-setup, HiddenCorr loss, diagnostic frequency, aggregation, or TensorBoard copying.
-DetailedAlphaAnalysis, StatusDisplay, CallbackTimer and LearnRateReset are measured,
-not rewritten. Disabled callbacks are not credited as savings.
-
-## Evidence and email
-
-Outputs live under `results/nn_training_review/callbacks_<timestamp>/`:
-`report.json`, `summary.csv`, `console.log`; with short tests, per-child logs,
-effective configs, profiles, model artifacts and source snapshots are also retained.
-The CSV covers microbenchmarks. Raw block samples, call counts, errors, selected
-flags and full-training observations are in JSON. Child `wall_seconds` excludes
-imports; parent `process_seconds` includes them.
-
-Closed logs, CSV, JSON and a zipped evidence bundle are mailed through the shared
-`src.proj.util.web.task_mail` implementation, including failed runs. Model outputs
-are included, market input caches are not. Retry failed delivery without training:
-
-```bash
-uv run python -m src.proj.util.web.task_mail <output-directory>/mail
-```
-
-## Timing and acceptance
-
-Profiles report host inclusive/exclusive durations, not isolated GPU kernel time.
-Do not sum nested inclusive durations. Only isolated GPU microbenchmark blocks
-synchronize; full runs do not synchronize every hook. Temporary measurement patches
-are restored on success/failure and are never installed during normal training.
-
-Profiles distinguish ordinary/diagnostic train+validation intervals, hidden rank,
-corrcoef, aggregation, metric reads, TensorBoard operations/copying, factor/portfolio
-analysis, plots, export submission and async waits. Async completion latency includes
-queueing and I/O after submission, not worker compute alone. Existing detailed-analysis
-logs retain loading substeps. Four default short tests are fresh executions, not
-proof of resumed-analysis performance.
-
-Events, model selection, weights, predictions and configuration (apart from run names
-and experimental switches) must agree. Hidden diagnostics allow rtol=1e-6/atol=1e-7;
-basic statistics allow rtol=1e-10/atol=1e-12, with matching NaNs and table structure.
-Tolerances are never automatically widened. Every run, including outliers, is kept.
-Overlapping or slower full-run timings are labelled “未证实提速”; two runs per arm
-cannot establish statistical significance. Production defaults remain off.
+Output defaults to a new folder under `results/nn_training_review`; an existing
+`--output` directory is rejected to protect previous evidence. No scheduled job
+is installed.
