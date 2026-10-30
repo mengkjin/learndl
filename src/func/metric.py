@@ -79,7 +79,10 @@ def mse(x : torch.Tensor , y : torch.Tensor , w = None, dim = None , reduction='
     f = torch.mean if reduction == 'mean' else torch.sum
     return f(w * (x - y).square() , dim=dim)
 
-def spearman(x : torch.Tensor , y : torch.Tensor , w = None , dim = None , *, scatter_enabled: bool = True, **kwargs):
+def spearman(
+    x : torch.Tensor , y : torch.Tensor , w = None , dim = None , *, 
+    scatter_enabled: bool = True, scatter_threshold: int = 5000, **kwargs
+):
     """Spearman rank correlation via ranking then Pearson.
 
     Args:
@@ -97,8 +100,8 @@ def spearman(x : torch.Tensor , y : torch.Tensor , w = None , dim = None , *, sc
     if scatter_enabled:
         x_length = x.numel() if dim is None or x.ndim == 0 else x.shape[dim]
         y_length = y.numel() if dim is None or y.ndim == 0 else y.shape[dim]
-        x = rank_scatter(x, dim=dim) if x_length >= 5000 else rank(x, dim=dim)
-        y = rank_scatter(y, dim=dim) if y_length >= 5000 else rank(y, dim=dim)
+        x = rank_scatter(x, dim=dim) if x_length >= scatter_threshold else rank(x, dim=dim)
+        y = rank_scatter(y, dim=dim) if y_length >= scatter_threshold else rank(y, dim=dim)
     else:
         x, y = rank(x, dim=dim), rank(y, dim=dim)
     return pearson(x , y , w , dim , **kwargs)
