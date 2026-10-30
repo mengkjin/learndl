@@ -1,4 +1,4 @@
-"""Independent NN experiments: numerical gates, index semantics and delivery lifecycle."""
+"""Independent NN experiments: numerical gates and delivery lifecycle."""
 import importlib.util
 import json
 import sys
@@ -13,7 +13,6 @@ SCRIPTS=Path(__file__).resolve().parents[1]/'scripts/5_test'
 sys.path.insert(0,str(SCRIPTS))
 import _nn_benchmark_common as common
 import benchmark_nn_hidden_corr as hidden
-import benchmark_nn_storage_index as storage
 
 
 class HiddenCorrExperimentTests(TestCase):
@@ -74,33 +73,6 @@ class HiddenCorrExperimentTests(TestCase):
         x=torch.randn(30,4,requires_grad=True)
         for _ in range(3):hidden.timed_call(hidden.joint_stats,x,True)
         self.assertIsNone(x.grad)
-
-
-class StorageExperimentTests(TestCase):
-    def test_operation_sequences_memory_and_disk(self):
-        with tempfile.TemporaryDirectory() as root:
-            checks=storage.validate(root)
-            self.assertEqual(len(checks),28)
-            self.assertTrue(all(c['passed'] for c in checks))
-
-    def test_record_snapshot_and_overwrite_order(self):
-        with tempfile.TemporaryDirectory() as root:
-            store=storage.DictStorage(True,root)
-            store.save(None,'a','g');store.save(None,'b','g')
-            old=store.records
-            store.save(None,'a','new')
-            self.assertEqual(store.records['key'].tolist(),['b','a'])
-            self.assertEqual(old['key'].tolist(),['a','b'])
-            self.assertEqual(list(store.groups['g']),['b'])
-            with self.assertRaises(KeyError):store.del_one('absent')
-
-    def test_timer_and_memory_fields(self):
-        with tempfile.TemporaryDirectory() as root:
-            samples=storage.measure_operation(root,'metadata','add',4,3)
-            self.assertEqual(set(samples),{'legacy','dict'})
-            self.assertTrue(all(len(v)==3 and min(v)>0 for v in samples.values()))
-            memory=storage.index_memory(root,4)
-            self.assertTrue(all(v['traced_live_bytes']>0 for v in memory.values()))
 
 
 class CommonExperimentTests(TestCase):

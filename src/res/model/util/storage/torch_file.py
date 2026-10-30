@@ -24,7 +24,27 @@ class TorchFileStorage:
     def __init__(self , mem_storage : bool = False):
         self.is_mem = mem_storage
         self.memdisk : dict[str,Any] = {}
-        self.records = pd.DataFrame(columns = pd.Index(['key' , 'path' , 'group']) , dtype = str)
+        self._records : dict[str, dict[str, str]] = {}
+        self._groups : dict[str, dict[str, None]] = {}
+
+    @property
+    def records(self) -> pd.DataFrame:
+        """Query/export snapshot; mutate storage through save/delete methods.
+
+        Materialize only on access. Keep legacy columns, zero row labels, and
+        overwrite order (an overwritten record moves to the end).
+        """
+        if not self._records:
+            return pd.DataFrame(columns = pd.Index(['key', 'path', 'group']), dtype = str)
+        return pd.DataFrame(list(self._records.values()), columns = ['key', 'path', 'group'],
+                            index = [0] * len(self._records))
+
+    def _remove_record(self, key : str) -> None:
+        record = self._records.pop(key)
+        group = record['group']
+        self._groups[group].pop(key)
+        if not self._groups[group]:
+            self._groups.pop(group)
 
     @property
     def keys(self): 
@@ -52,8 +72,10 @@ class TorchFileStorage:
             torch.save(obj , path)
             self.memdisk[key] = 1
             
-        df = pd.DataFrame({'path' : [str(path)] , 'key' : [key] , 'group' : [group]})
-        self.records = pd.concat([self.records.query('key != @key') , df] , axis=0)
+        if key in self._records:
+            self._remove_record(key)
+        self._records[key] = {'key': key, 'path': str(path), 'group': group}
+        self._groups.setdefault(group, {})[key] = None
 
     def load(self , key : str) -> Any:
         if self.is_mem:
@@ -66,14 +88,14 @@ class TorchFileStorage:
         if not self.is_mem:
             self.real_path(key).unlink(missing_ok=True)
         self.memdisk.pop(key)
-        self.records = self.records.query('key != @key')
+        self._remove_record(key)
         
     def del_group(self , group : str):
-        for key in self.records.query('group == @group')['key']:
+        for key in list(self._groups.get(group, {})):
             self.del_one(key)
 
     def del_all(self):
-        for key in self.records['key']:
+        for key in list(self._records):
             self.del_one(key)
 
 class StoredTorchFileLoader(Sequence):
