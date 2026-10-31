@@ -39,7 +39,7 @@ def main(
 ):
     from src.res.rl_experimental.bundle import bundle_attachments
     from src.res.rl_experimental.experiment import run_experiment
-    from src.api.task_monitor.scheduling.rl_experiment import parse_config
+    from src.automation.scheduling.rl_experiment import parse_config
 
     task = script_tool.autorun_task
     if no_email:

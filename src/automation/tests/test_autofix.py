@@ -11,9 +11,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.api.task_monitor.scheduling import autofix, autofix_sandbox, maintenance_gate
-from src.api.task_monitor.scheduling.autofix_spec import ManifestError, manifest, validate
-from src.api.task_monitor.scheduling.autofix_store import Store, initialize
+from src.automation.scheduling import autofix, autofix_sandbox, maintenance_gate
+from src.automation.scheduling.autofix_spec import ManifestError, manifest, validate
+from src.automation.scheduling.autofix_store import Store, initialize
 
 SCRIPT = '''# description: disposable repair
 # autofix: true
@@ -100,11 +100,11 @@ class SpecTests(Fixture):
         self.assertEqual(manifest(path), [])
 
     def test_offline_preview_does_not_import_project_or_initialize_state(self):
-        path = self.root / 'runs/autofix'
+        path = self.root / 'configs/automation'
         path.mkdir(parents=True)
-        (path / 'tasks.yaml').write_text('schema_version: 1\nfixes: []\n')
+        (path / 'autofix.yaml').write_text('schema_version: 1\nfixes: []\n')
         env = dict(os.environ, HOME=str(self.base / 'empty-home'), PYTHONDONTWRITEBYTECODE='1')
-        code = "import runpy,sys;sys.argv=['autofix','plan','--root',sys.argv[1]];runpy.run_module('src.api.task_monitor.scheduling.autofix',run_name='__main__')"
+        code = "import runpy,sys;sys.argv=['autofix','plan','--root',sys.argv[1]];runpy.run_module('src.automation.scheduling.autofix',run_name='__main__')"
         result = subprocess.run([sys.executable, '-c', code, str(self.root)], env=env, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.base / 'empty-home').exists())
@@ -112,7 +112,7 @@ class SpecTests(Fixture):
 
 class LedgerTests(Fixture):
     def test_legacy_email_policy_change_never_resets_attempt(self):
-        from src.api.task_monitor.scheduling.autofix_spec import digest
+        from src.automation.scheduling.autofix_spec import digest
         legacy = self.item | {'params': {'start': 20200101, 'email': False}}
         self.register([legacy])
         # Reproduce the raw declaration hash saved by the previous implementation.
@@ -389,7 +389,7 @@ class AdmissionTests(Fixture):
     def test_activation_is_protected_from_project_config_changes(self):
         self.store.set_enabled(True)
         with patch.object(maintenance_gate, 'state_dir', return_value=self.control), \
-             patch('src.api.task_monitor.scheduling.config.installed_config', return_value=None):
+             patch('src.automation.scheduling.config.installed_config', return_value=None):
             self.assertTrue(maintenance_gate.configured())
             self.store.path.unlink()
             with self.assertRaises(RuntimeError):
@@ -414,7 +414,7 @@ class AdmissionTests(Fixture):
         self.register()
         self.store.claim('fix-001', supervisor_created=0, scope={'cgroup': '/test'})
         with patch.object(autofix.psutil, 'Process', side_effect=autofix.psutil.NoSuchProcess(999)), \
-             patch('src.api.task_monitor.scheduling.runtime.members', return_value=[object()]):
+             patch('src.automation.scheduling.runtime.members', return_value=[object()]):
             self.assertTrue(autofix.reconcile(self.store))
         self.assertEqual(self.store.get('fix-001')['phase'], 'starting')
         self.assertIsNone(self.store.claim('fix-001'))
@@ -434,7 +434,7 @@ class AdmissionTests(Fixture):
         self.store.claim('fix-001', supervisor_created=0)
         self.store.update('fix-001', pid=999999, process_created=0, cgroup='/test', uid=os.getuid())
         with patch.object(autofix.psutil, 'Process', side_effect=psutil.NoSuchProcess(999999)), \
-             patch('src.api.task_monitor.scheduling.runtime.members', return_value=[object()]):
+             patch('src.automation.scheduling.runtime.members', return_value=[object()]):
             self.assertTrue(autofix.reconcile(self.store))
         self.assertEqual(self.store.get('fix-001')['phase'], 'starting')
 
@@ -442,8 +442,8 @@ class AdmissionTests(Fixture):
         self.register()
         self.store.claim('fix-001', supervisor_created=0)
         self.store.update('fix-001', pid=999999, process_created=0, effective={'timeout_seconds': 10}, started_at=0)
-        with patch('src.api.task_monitor.scheduling.runtime.members', return_value=[]), \
-             patch('src.api.task_monitor.scheduling.runtime.signal_members') as send:
+        with patch('src.automation.scheduling.runtime.members', return_value=[]), \
+             patch('src.automation.scheduling.runtime.signal_members') as send:
             autofix.supervise(self.store, now=20)
             self.assertEqual(self.store.get('fix-001')['term_at'], 20)
             self.assertEqual(send.call_args.args[2], autofix.signal.SIGTERM)
@@ -453,7 +453,7 @@ class AdmissionTests(Fixture):
     def test_other_process_cannot_enter_while_exclusive(self):
         code = '''import sys
 from pathlib import Path
-from src.api.task_monitor.scheduling.maintenance_gate import permit,MaintenanceBusy
+from src.automation.scheduling.maintenance_gate import permit,MaintenanceBusy
 try:
     with permit(directory=Path(sys.argv[1]),blocking=False): pass
 except MaintenanceBusy: sys.exit(75)
@@ -463,10 +463,10 @@ except MaintenanceBusy: sys.exit(75)
         self.assertEqual(result.returncode, 75, result.stderr)
 
     def test_runner_persists_busy_trigger_once(self):
-        from src.api.task_monitor.scheduling import runner
+        from src.automation.scheduling import runner
         with patch.object(maintenance_gate, 'permit', side_effect=maintenance_gate.MaintenanceBusy()), \
              patch.object(maintenance_gate, 'configured', return_value=True), \
-             patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.control), \
+             patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
              patch.object(runner.time, 'time', return_value=120), patch.object(runner, '_run') as launch:
             self.assertEqual(runner.run('daily_update'), 0)
             self.assertEqual(runner.run('daily_update'), 0)
@@ -524,9 +524,9 @@ class ScriptContractTests(unittest.TestCase):
                                time_str='now', source='autofix', task_full_name='fix',
                                init_time=datetime.now(), end_time=datetime.now(), status='Error',
                                error_message='business error', exit_message='', exit_files=[], _autofix_primary=True)
-        with patch('src.api.task_monitor.scheduling.runtime.termination_requested', return_value=False), \
-             patch('src.api.task_monitor.scheduling.recovery.script_result'), \
-             patch('src.api.task_monitor.scheduling.runtime.record_script_email'), \
+        with patch('src.automation.scheduling.runtime.termination_requested', return_value=False), \
+             patch('src.automation.scheduling.recovery.script_result'), \
+             patch('src.automation.scheduling.runtime.record_script_email'), \
              patch.object(autofix_sandbox, 'script_event') as receipt, \
              patch.object(Email, 'send', return_value=True) as sender:
             AutoRunTask.send_email(task)
@@ -563,7 +563,7 @@ class TypedParameterTests(unittest.TestCase):
 class WorkerDiagnosticsTests(Fixture):
     def test_waiting_reason_is_durable_without_consuming_id(self):
         from contextlib import nullcontext
-        from src.api.task_monitor.scheduling import runtime, git_update
+        from src.automation.scheduling import runtime, git_update
         from src.proj.util.script import code_update_lock
         self.register()
         with patch.object(maintenance_gate, 'configured', return_value=True), \
@@ -587,7 +587,7 @@ class WorkerDiagnosticsTests(Fixture):
 
 class MailboxSafetyTests(Fixture):
     def test_parent_symlink_cannot_redirect_supervisor_write(self):
-        from src.api.task_monitor.scheduling import autofix_mailbox as mailbox
+        from src.automation.scheduling import autofix_mailbox as mailbox
         outside = self.base / 'outside'
         outside.mkdir()
         (self.root / '.local_resources').symlink_to(outside, target_is_directory=True)
@@ -596,7 +596,7 @@ class MailboxSafetyTests(Fixture):
         self.assertEqual(list(outside.iterdir()), [])
 
     def test_event_symlink_is_replaced_not_followed(self):
-        from src.api.task_monitor.scheduling import autofix_mailbox as mailbox
+        from src.automation.scheduling import autofix_mailbox as mailbox
         channel = self.root / 'channel'
         mailbox.create(channel)
         outside = self.base / 'outside'
@@ -613,8 +613,8 @@ class MailboxSafetyTests(Fixture):
         self.store.claim('fix-001', supervisor_created=0)
         self.store.update('fix-001', pid=999999, effective={'timeout_seconds': 1}, started_at=0,
                           channel=str(self.root / 'missing'), nonce='test')
-        with patch('src.api.task_monitor.scheduling.runtime.members', return_value=[]), \
-             patch('src.api.task_monitor.scheduling.runtime.signal_members') as send:
+        with patch('src.automation.scheduling.runtime.members', return_value=[]), \
+             patch('src.automation.scheduling.runtime.signal_members') as send:
             autofix.supervise(self.store, now=2)
             send.assert_called_once()
 

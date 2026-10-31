@@ -1,5 +1,6 @@
 """Git-triggered RL attempts, using temporary repositories and no SMTP/GPU."""
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,8 +12,8 @@ from unittest.mock import Mock, patch
 import portalocker
 import yaml
 
-from src.api.task_monitor.scheduling import rl_experiment as rl, idle_worklist as idle, runtime
-from src.api.task_monitor.scheduling.recovery import recovery_plan, evidence
+from src.automation.scheduling import rl_experiment as rl, idle_worklist as idle, runtime
+from src.automation.scheduling.recovery import recovery_plan, evidence
 from src.proj import PATH
 from src.proj.util.script import FitLock, FitLockNN
 
@@ -21,6 +22,9 @@ class RLSchedulingTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
+        # Real script wrappers change cwd to the mocked PATH.main. Restore it
+        # before deleting that directory so later subprocess tests can start.
+        self.addCleanup(os.chdir, Path.cwd())
         self.root = Path(temp.name)
         self.store = runtime.RunStore(self.root / 'state/runs.sqlite')
         self.enterContext(patch.object(rl, 'settings', return_value={'enabled': True, 'interval_seconds': 0}))
@@ -53,7 +57,7 @@ class RLSchedulingTest(unittest.TestCase):
 
     def resume_request(self, name='resume-one'):
         import hashlib
-        from src.api.task_monitor.scheduling.rl_resume import submit
+        from src.automation.scheduling.rl_resume import submit
         run = self.root/'results/rl_experimental/old-run'
         run.mkdir(parents=True, exist_ok=True)
         for file in ('config.json', 'identity.json'):
@@ -65,7 +69,7 @@ class RLSchedulingTest(unittest.TestCase):
         return submit(self.root, name, plan), plan
 
     def test_resume_shared_queue_survives_poll_and_is_consumed_once(self):
-        from src.api.task_monitor.scheduling.rl_resume import submit
+        from src.automation.scheduling.rl_resume import submit
         path, plan = self.resume_request()
         self.assertEqual(submit(self.root, 'resume-one', plan), path)
         with self.assertRaisesRegex(ValueError, 'immutable'):
@@ -85,7 +89,7 @@ class RLSchedulingTest(unittest.TestCase):
         self.assertEqual(rl.observe(self.store)['resume_request_id'], 'resume-two')
 
     def test_resume_execution_keeps_original_output_and_uses_fit_guard(self):
-        from src.api.task_monitor.scheduling.rl_resume import recheck
+        from src.automation.scheduling.rl_resume import recheck
         path, plan = self.resume_request()
         request = rl.observe(self.store) | dict(id='resume-job', owner=idle.OWNER, phase='running')
         self.store.put(request)
@@ -312,11 +316,11 @@ class RLSchedulingTest(unittest.TestCase):
         sender.assert_not_called()
 
     def test_shared_worker_installed_when_only_rl_is_enabled(self):
-        from src.api.task_monitor.scheduling.config import load_config
-        from src.api.task_monitor.scheduling.installer import build_plan, validate_unit
+        from src.automation.scheduling.config import load_config
+        from src.automation.scheduling.installer import build_plan, validate_unit
         # The committed installer documents, not the temporary Git fixture.
-        root = Path(__file__).resolve().parents[4]
-        config = load_config(root / 'runs/scheduling', 'mengkjin-server')
+        root = Path(__file__).resolve().parents[3]
+        config = load_config(root / 'configs/automation', 'mengkjin-server')
         config['watchdog']['jobs']['idle_worklist']['enabled'] = False
         plan = build_plan(config, root=self.root, python=Path(sys.executable), cron='', local_timezone='Asia/Shanghai')
         self.assertIn('learndl-idle-worklist.service', plan['units'])

@@ -1,1 +1,1 @@
-"""Declarative schedules, installation and supervised task execution."""
+"""Legacy scheduling import namespace; implementations live in src.automation."""

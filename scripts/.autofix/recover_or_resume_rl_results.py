@@ -27,8 +27,8 @@ def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_t
     from src.res.rl_experimental.resume import inspect_resume
     from src.proj.util.web.task_mail import TaskResultMail, save_json
     from src.res.rl_experimental.bundle import bundle_attachments
-    from src.api.task_monitor.scheduling.rl_resume import submit
-    from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
+    from src.automation.scheduling.rl_resume import submit
+    from src.automation.scheduling.maintenance_gate import sandbox_request
     root = Path(PATH.main).resolve()
     run = (root/run_directory).resolve()
     if not run.is_relative_to(root/'results/rl_experimental') or not run.is_dir():

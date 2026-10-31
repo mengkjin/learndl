@@ -181,7 +181,7 @@ def record_training(func):
     @wraps(func)
     def wrapped(self, *args, **kwargs):
         from src.proj.util.script.code_update_lock import training_code_guard
-        from src.api.task_monitor.scheduling.maintenance_gate import permit
+        from src.automation.scheduling.maintenance_gate import permit
         with permit(), training_code_guard():
             run = TrainingRun(self)
             self.training_run = run

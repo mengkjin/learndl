@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from src.api.task_monitor.watchdog import JobResult, WatchdogJob, run_watchdog
+from src.automation.watchdog import JobResult, WatchdogJob, run_watchdog
 from src.api.util.backend.task import TaskDatabase, TaskItem
 from src.proj import PATH
 
@@ -42,7 +42,7 @@ class TaskWatchdogTest(unittest.TestCase):
         self.addCleanup(retry.stop)
         self.temp_dir = tempfile.TemporaryDirectory()
         self.state_path = Path(self.temp_dir.name) / 'state.json'
-        for target in ('src.api.task_monitor.scheduling.runtime.runtime_dir', 'src.api.task_monitor.scheduling.config.runtime_dir'):
+        for target in ('src.automation.scheduling.runtime.runtime_dir', 'src.automation.scheduling.config.runtime_dir'):
             patcher = patch(target, return_value=Path(self.temp_dir.name) / 'scheduling')
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -70,7 +70,7 @@ class TaskWatchdogTest(unittest.TestCase):
         self.assertEqual(json.loads(self.state_path.read_text())['jobs']['email_outbox']['stats'], {'status': 'complete'})
 
     def test_email_outbox_old_config_and_explicit_disable(self):
-        from src.api.task_monitor.watchdog import default_jobs
+        from src.automation.watchdog import default_jobs
         old = {'jobs': {'task_lifecycle': {'enabled': True, 'interval_seconds': 60}}}
         self.assertIn('email_outbox', [j.name for j in default_jobs(old)])
         old['jobs']['email_outbox'] = {'enabled': False, 'interval_seconds': 60}
@@ -220,7 +220,7 @@ class TaskWatchdogTest(unittest.TestCase):
     def test_disabled_installed_jobs_do_not_fall_back(self) -> None:
         db = _FakeTaskDatabase({'train.py@1': {'status': 'killed'}}, {'train.py@1': self.task})
         config = {'watchdog': {'jobs': {}, 'units': [], 'tick_seconds': 60}}
-        with patch('src.api.task_monitor.scheduling.config.installed_config', return_value=config):
+        with patch('src.automation.scheduling.config.installed_config', return_value=config):
             self.assertTrue(self._run(db, MagicMock(return_value=True), now=1_000))
         self.assertEqual(db.changed, {'train.py@1': {'status': 'killed'}})
         state = json.loads(self.state_path.read_text())

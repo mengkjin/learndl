@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import portalocker
 
-from src.api.task_monitor.scheduling import priority, maintenance_gate, runner, auxiliary, git_update
-from src.api.task_monitor.scheduling.autofix_store import Store, initialize
+from src.automation.scheduling import priority, maintenance_gate, runner, auxiliary, git_update
+from src.automation.scheduling.autofix_store import Store, initialize
 
 
 class PriorityTests(unittest.TestCase):
@@ -23,8 +23,8 @@ class PriorityTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.base = Path(self.tmp.name).resolve()
         self.root = self.base / 'project'
-        (self.root / 'runs/autofix').mkdir(parents=True)
-        (self.root / 'runs/autofix/tasks.yaml').write_text('schema_version: 1\nfixes: []\n')
+        (self.root / 'configs/automation').mkdir(parents=True)
+        (self.root / 'configs/automation/autofix.yaml').write_text('schema_version: 1\nfixes: []\n')
         self.directory = self.base / 'control'
         initialize(self.directory, self.root)
         self.store = Store(self.directory)
@@ -34,14 +34,14 @@ class PriorityTests(unittest.TestCase):
         self.config = {'scheduler_version': 2, 'watchdog': {'jobs': {
             'git_auto_update': {'enabled': True, 'interval_seconds': 60, 'max_seconds': 45}}}}
         self.enterContext(patch.object(priority, 'installed_config', return_value=self.config))
-        self.enterContext(patch('src.api.task_monitor.scheduling.install_request.reconcile', return_value={}))
-        self.enterContext(patch('src.api.task_monitor.scheduling.autofix.commit', return_value='fixture'))
+        self.enterContext(patch('src.automation.scheduling.install_request.reconcile', return_value={}))
+        self.enterContext(patch('src.automation.scheduling.autofix.commit', return_value='fixture'))
 
     def permit(self, task_class, exclusive=False):
         return maintenance_gate.permit(directory=self.directory, blocking=False, task_class=task_class, exclusive=exclusive)
 
     def test_discovery_blocks_training_without_pending_marker_or_prior_tick(self):
-        (self.root / 'runs/autofix/tasks.yaml').write_text('schema_version: 1\nfixes:\n- id: repair\n  script: scripts/repair.py\n  params: {}\n')
+        (self.root / 'configs/automation/autofix.yaml').write_text('schema_version: 1\nfixes:\n- id: repair\n  script: scripts/repair.py\n  params: {}\n')
         self.assertFalse((self.directory / 'pending').exists())
         with self.assertRaisesRegex(maintenance_gate.MaintenanceBusy, 'repair'):
             with self.permit('training'):
@@ -93,7 +93,7 @@ class PriorityTests(unittest.TestCase):
                 pass
 
     def test_calendar_duplicate_trigger_and_busy_queue(self):
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
              patch.object(maintenance_gate, 'state_dir', return_value=self.directory), \
              patch.object(runner, '_run', return_value=0) as execute, \
              patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '123'}):
@@ -108,19 +108,19 @@ class PriorityTests(unittest.TestCase):
             self.assertEqual(self.store.scheduled(), [])
 
     def test_network_failure_releases_priority_but_checkout_requires_verification(self):
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
              patch.object(git_update, '_update', return_value={'status': 'error', 'reason': 'network'}):
             priority.write(self.store, {'phase': 'draining', 'last_completed': 0})
             result = git_update._admitted_update(self.root, {})
             self.assertEqual(result['status'], 'error')
             self.assertFalse(priority.git_due(self.store))
         priority.write(self.store, {'phase': 'checkout', 'target': 'new', 'last_completed': 0})
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
              patch.object(git_update, 'repository_blocker', return_value=None), \
              patch.object(git_update, '_git', return_value='old'):
             self.assertEqual(git_update._admitted_update(self.root, {})['status'], 'blocked')
             self.assertTrue(priority.git_due(self.store))
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
              patch.object(git_update, 'repository_blocker', return_value=None), \
              patch.object(git_update, '_git', return_value='new'):
             self.assertEqual(git_update._admitted_update(self.root, {})['status'], 'verified')
@@ -130,7 +130,7 @@ class PriorityTests(unittest.TestCase):
         def broken_notice(*args):
             priority.write(self.store, {'phase': 'checkout', 'target': 'new', 'last_completed': 0})
             raise RuntimeError('notice database unavailable after merge')
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
              patch.object(git_update, '_update', side_effect=broken_notice):
             result = git_update._admitted_update(self.root, {})
         self.assertTrue(result['checkout_attempted'])
@@ -138,7 +138,7 @@ class PriorityTests(unittest.TestCase):
         self.assertTrue(priority.git_due(self.store))
 
     def test_missing_control_state_allows_only_mail_failure_reporting(self):
-        from src.api.task_monitor.scheduling.worker_bootstrap import wait_for_code
+        from src.automation.scheduling.worker_bootstrap import wait_for_code
         with self.store.connect() as db:
             db.execute('DELETE FROM metadata WHERE key=?', (priority.KEY,))
         self.assertFalse(wait_for_code(self.directory, 'email_outbox'))
@@ -147,14 +147,14 @@ class PriorityTests(unittest.TestCase):
                 wait_for_code(self.directory, kind)
 
     def test_bootstrap_does_not_import_business_code_while_git_owns_code_lock(self):
-        from src.api.task_monitor.scheduling import worker_bootstrap
+        from src.automation.scheduling import worker_bootstrap
         runtime = self.base / 'runtime'
         runtime.mkdir()
         (runtime / 'installed.json').write_text(json.dumps(self.config))
         bootstrap = self.directory / 'worker_bootstrap.py'
         bootstrap.write_bytes(Path(worker_bootstrap.__file__).read_bytes())
         (self.directory / 'worker-settings.json').write_text(json.dumps({'root': str(self.root), 'runtime': str(runtime)}))
-        package = self.root / 'src/api/task_monitor/scheduling'
+        package = self.root / 'src/automation/scheduling'
         package.mkdir(parents=True)
         (self.root / 'src/__init__.py').touch()
         marker = self.root / 'imported'
@@ -177,12 +177,12 @@ class PriorityTests(unittest.TestCase):
         self.assertEqual([task for _, task in self.store.scheduled()], ['daily_update'])
 
     def test_watchdog_git_first_and_no_synchronous_helpers_or_email(self):
-        from src.api.task_monitor import watchdog
+        from src.automation import watchdog
         names = ['git_auto_update', 'task_lifecycle', 'autofix', 'idle_worklist', *auxiliary.NAMES]
         self.config['watchdog']['units'] = []
         self.config['watchdog']['jobs'] = {name: {'enabled': True, 'interval_seconds': 60} for name in names}
-        self.enterContext(patch('src.api.task_monitor.scheduling.config.installed_config', return_value=self.config))
-        self.enterContext(patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.directory))
+        self.enterContext(patch('src.automation.scheduling.config.installed_config', return_value=self.config))
+        self.enterContext(patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory))
         self.enterContext(patch.object(priority, 'git_due', return_value=True))
         publish = self.enterContext(patch.object(auxiliary, 'publish'))
         sender = self.enterContext(patch('src.proj.util.web.emailer.Email.send'))
@@ -205,10 +205,10 @@ class PriorityTests(unittest.TestCase):
         sender.assert_not_called()
 
     def test_installer_provisions_independent_bounded_helpers(self):
-        from src.api.task_monitor.scheduling.config import load_config
-        from src.api.task_monitor.scheduling.installer import build_plan, validate_unit
+        from src.automation.scheduling.config import load_config
+        from src.automation.scheduling.installer import build_plan, validate_unit
         from src.proj import PATH
-        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        config = load_config(PATH.main / 'configs/automation', 'mengkjin-server')
         plan = build_plan(config, '', PATH.main, Path(sys.executable), config['timezone'])
         self.assertEqual(plan['config']['scheduler_version'], 3)
         for name in auxiliary.NAMES:
@@ -223,13 +223,13 @@ class PriorityTests(unittest.TestCase):
 class HelperQueueTests(unittest.TestCase):
     def test_failed_delivery_survives_snapshot_cleanup_without_duplicate_receipt(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(auxiliary, 'runtime_dir', return_value=Path(temp)):
-            for target in ('src.api.task_monitor.scheduling.runtime.deliver_timeout_events',
-                           'src.api.task_monitor.scheduling.install_request.deliver',
-                           'src.api.task_monitor.scheduling.git_update.deliver_update_emails',
+            for target in ('src.automation.scheduling.runtime.deliver_timeout_events',
+                           'src.automation.scheduling.install_request.deliver',
+                           'src.automation.scheduling.git_update.deliver_update_emails',
                            'src.api.task_monitor.interactive.maintain',
-                           'src.api.task_monitor.cli_recovery.deliver'):
+                           'src.automation.cli_recovery.deliver'):
                 self.enterContext(patch(target, return_value=True))
-            self.enterContext(patch('src.api.task_monitor.scheduling.runtime.timeout_task_ids', return_value=set()))
+            self.enterContext(patch('src.automation.scheduling.runtime.timeout_task_ids', return_value=set()))
             self.enterContext(patch.object(maintenance_gate, 'configured', return_value=False))
             context = MagicMock()
             context.task_db.get_task.return_value = None

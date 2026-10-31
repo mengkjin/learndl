@@ -13,9 +13,9 @@ from unittest.mock import Mock, patch
 import yaml
 
 from src.api.calls.worklist_state import WorklistState
-from src.api.task_monitor.scheduling import idle_worklist as idle, recovery, runtime
-from src.api.task_monitor.scheduling.config import load_config
-from src.api.task_monitor.scheduling.installer import build_plan, validate_unit
+from src.automation.scheduling import idle_worklist as idle, recovery, runtime
+from src.automation.scheduling.config import load_config
+from src.automation.scheduling.installer import build_plan, validate_unit
 from src.proj import PATH
 from src.res.model.util import training_history
 from src.res.model.util.config.config import ScheduleConfig
@@ -130,8 +130,8 @@ class RecoveryTest(unittest.TestCase):
         command.assert_called_once_with(['bash', str(PATH.runs / 'install_schedules.sh'), 'apply'],
                                         cwd=PATH.main, check=False)
         script = (PATH.runs / 'install_schedules.sh').read_text()
-        self.assertIn('-m src.api.task_monitor.scheduling.installer', script)
-        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        self.assertIn('-m src.automation.scheduling.installer', script)
+        config = load_config(PATH.main / 'configs/automation', 'mengkjin-server')
         plan = build_plan(config, '', PATH.main, Path(sys.executable), config['timezone'])
         self.assertTrue(plan['config']['watchdog']['jobs']['idle_worklist']['recovery_enabled'])
         self.assertIn('ExecStopPost=', plan['units']['learndl-idle-worklist.service'])
@@ -213,7 +213,7 @@ class RecoveryTest(unittest.TestCase):
 
     def test_recovery_options_reject_invalid_types_and_bounds(self):
         directory = self.root / 'config'
-        shutil.copytree(PATH.main / 'runs/scheduling', directory)
+        shutil.copytree(PATH.main / 'configs/automation', directory)
         path = directory / 'maintenance.yaml'
         original = yaml.safe_load(path.read_text())
         for key, value in [('recovery_enabled', 'yes'), ('recovery_max_retries', -1),
@@ -252,7 +252,7 @@ class RecoveryTest(unittest.TestCase):
         self.assertIn('"retry_index": 1', sender.call_args.args[1])
 
     def test_installer_stop_observer_is_fixed_and_old_units_remain_valid(self):
-        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        config = load_config(PATH.main / 'configs/automation', 'mengkjin-server')
         plan = build_plan(config, '', PATH.main, Path(sys.executable), local_timezone=config['timezone'])
         name = 'learndl-idle-worklist.service'
         unit = plan['units'][name]
@@ -260,6 +260,6 @@ class RecoveryTest(unittest.TestCase):
         validate_unit(name, unit)
         validate_unit(name, '\n'.join(line for line in unit.splitlines() if not line.startswith('ExecStopPost=')))
         with self.assertRaises(ValueError):
-            validate_unit(name, unit.replace('src.api.task_monitor.scheduling.recovery', 'evil.module'))
+            validate_unit(name, unit.replace('src.automation.scheduling.recovery', 'evil.module'))
         with self.assertRaises(ValueError):
             validate_unit(name, unit + 'ExecStopPost=/bin/true\n')

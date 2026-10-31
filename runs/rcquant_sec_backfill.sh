@@ -19,4 +19,4 @@ else
 fi
 
 cd "$BASE_PATH"
-$PYTHON_CMD -m src.api.task_monitor.scheduling.runner legacy rcquant_sec_backfill "$@"
+$PYTHON_CMD -m src.automation.scheduling.runner legacy rcquant_sec_backfill "$@"

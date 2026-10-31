@@ -153,7 +153,7 @@ class WorklistTest(unittest.TestCase):
 
     def test_automatic_runs_one_schedule_and_force_only_once(self):
         from src.api.calls.worklist_state import AutomaticDeferred
-        from src.api.task_monitor.scheduling.idle_worklist import version
+        from src.automation.scheduling.idle_worklist import version
         self.worklist.write_text('fit: [example, second]\nresume: false\nforce: true\n')
         expected = version(self.state.revisions('example'))
         automatic = CarryOutScheduleWorkList(automatic=True, only_schedule='example', expected_version=expected)
@@ -179,8 +179,8 @@ class WorklistTest(unittest.TestCase):
 
     def test_recovery_overrides_resume_false_with_exact_parent_directory(self):
         import os
-        from src.api.task_monitor.scheduling import runtime, recovery
-        from src.api.task_monitor.scheduling.idle_worklist import version
+        from src.automation.scheduling import runtime, recovery
+        from src.automation.scheduling.idle_worklist import version
         self.worklist.write_text('fit: [example]\nresume: false\nforce: true\n')
         expected = version(self.state.revisions('example'))
         with patch.object(runtime, 'runtime_dir', return_value=self.root / 'runtime'):

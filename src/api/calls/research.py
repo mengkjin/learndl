@@ -122,7 +122,7 @@ class CarryOutScheduleWorkList(DirectCall):
                     revisions['worklist'] = worklist_revision
                     automatic = bool(self.kwargs.get('automatic', False))
                     if automatic and self.kwargs.get('expected_version'):
-                        from src.api.task_monitor.scheduling.idle_worklist import version
+                        from src.automation.scheduling.idle_worklist import version
                         if version(revisions) != self.kwargs['expected_version']:
                             raise AutomaticDeferred('Configuration changed before training')
                     effective_force = force and not (automatic and previous and previous.get('status') == 'success' and previous.get('revisions') == revisions)
@@ -134,8 +134,8 @@ class CarryOutScheduleWorkList(DirectCall):
                         continue
                     model_path = previous.get('model_path') if previous else None
                     if automatic and (recovery_run_id := self.kwargs.get('recovery_run_id')):
-                        from src.api.task_monitor.scheduling.recovery import resume_path
-                        from src.api.task_monitor.scheduling.runtime import RunStore
+                        from src.automation.scheduling.recovery import resume_path
+                        from src.automation.scheduling.runtime import RunStore
                         store = RunStore()
                         model_path = resume_path(store, store.get(recovery_run_id), schedule_name,
                                                  self.kwargs['expected_version'])
@@ -147,7 +147,7 @@ class CarryOutScheduleWorkList(DirectCall):
                     def record_progress(run):
                         import os
                         if automatic and (managed_id := os.environ.get('LEARNDL_MANAGED_RUN')):
-                            from src.api.task_monitor.scheduling.recovery import child_progress
+                            from src.automation.scheduling.recovery import child_progress
                             child_progress(managed_id, run)
                         # Persist the chosen directory before training, including hard-kill recovery.
                         if run['run_id'] not in details['training_run_ids']:

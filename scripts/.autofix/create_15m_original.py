@@ -220,7 +220,7 @@ def prepare(snapshot_manifest: str = '', *, require_continuous_dates: bool = Fal
 
 def request_training():
     from src.api.calls.worklist_state import WorklistState
-    from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
+    from src.automation.scheduling.maintenance_gate import sandbox_request
     context = sandbox_request()
     return WorklistState(SCHEDULE).request_training(context['id'] if context is not None else REQUEST_ID, allow_unlisted=True)
 

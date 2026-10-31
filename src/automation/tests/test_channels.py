@@ -11,9 +11,9 @@ from zoneinfo import ZoneInfo
 
 import portalocker
 
-from src.api.task_monitor.scheduling import channels, calendar_lanes, priority, maintenance_gate, runner
-from src.api.task_monitor.scheduling.autofix_store import initialize, Store
-from src.api.task_monitor.scheduling.runtime import RunStore
+from src.automation.scheduling import channels, calendar_lanes, priority, maintenance_gate, runner
+from src.automation.scheduling.autofix_store import initialize, Store
+from src.automation.scheduling.runtime import RunStore
 
 
 class ChannelsTest(unittest.TestCase):
@@ -36,8 +36,8 @@ class ChannelsTest(unittest.TestCase):
             'watchdog': {'jobs': {'git_auto_update': {'enabled': True, 'interval_seconds': 60}}}}
         for module in (channels, priority, calendar_lanes):
             self.enterContext(patch.object(module, 'installed_config', return_value=self.config))
-        self.enterContext(patch('src.api.task_monitor.scheduling.install_request.reconcile', return_value={}))
-        self.enterContext(patch('src.api.task_monitor.scheduling.auxiliary.control_error'))
+        self.enterContext(patch('src.automation.scheduling.install_request.reconcile', return_value={}))
+        self.enterContext(patch('src.automation.scheduling.auxiliary.control_error'))
         self.enterContext(patch.object(calendar_lanes, 'state_dir', return_value=self.control))
         self.runs = RunStore(self.base/'runs.sqlite')
         self.enterContext(patch.object(calendar_lanes, 'RunStore', return_value=self.runs))
@@ -96,7 +96,7 @@ class ChannelsTest(unittest.TestCase):
         self.assertEqual(state['preempted_owner'], 'autofix:fix')
 
     def test_watchdog_can_reconcile_while_git_drains_but_not_during_checkout(self):
-        from src.api.task_monitor.scheduling import worker_bootstrap
+        from src.automation.scheduling import worker_bootstrap
         (self.control/'worker-settings.json').write_text(json.dumps({'runtime': str(self.base)}))
         (self.base/'installed.json').write_text(json.dumps(self.config))
         channels.reserve(self.store, 'git', channels.GROUPS)
@@ -154,11 +154,11 @@ class ChannelsTest(unittest.TestCase):
                 pass
 
     def test_fetch_up_to_date_does_not_reserve_or_acquire_exclusive(self):
-        from src.api.task_monitor.scheduling import git_update
+        from src.automation.scheduling import git_update
         def git(root, args, deadline, **kwargs):
             return 'same' if args[0] == 'rev-parse' else ''
         with patch.object(git_update, 'runtime_dir', return_value=self.base), \
-             patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.control), \
+             patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
              patch.object(git_update, 'repository_blocker', return_value=None), \
              patch.object(git_update, '_git', side_effect=git), \
              patch.object(maintenance_gate, 'permit', side_effect=AssertionError('must not reserve')):
@@ -167,13 +167,13 @@ class ChannelsTest(unittest.TestCase):
         self.assertEqual(channels.read(self.store)['phase'], 'idle')
 
     def test_available_git_target_waits_for_real_code_reader(self):
-        from src.api.task_monitor.scheduling import git_update
+        from src.automation.scheduling import git_update
         def git(root, args, deadline, **kwargs):
             if args[:2] == ['rev-parse', 'HEAD'] or args[0] == 'merge-base':
                 return 'old'
             return 'new'
         with patch.object(git_update, 'runtime_dir', return_value=self.base), \
-             patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.control), \
+             patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
              patch.object(maintenance_gate, 'state_dir', return_value=self.control), \
              patch.object(git_update, 'repository_blocker', return_value=None), \
              patch.object(git_update, '_git', side_effect=git), \

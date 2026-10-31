@@ -11,11 +11,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from src.api.task_monitor.scheduling import install_flow as flow
-from src.api.task_monitor.scheduling import install_request as requests
-from src.api.task_monitor.scheduling import install_privileged as privileged
-from src.api.task_monitor.scheduling import maintenance_gate as gate
-from src.api.task_monitor.scheduling.autofix_store import initialize, Store
+from src.automation.scheduling import install_flow as flow
+from src.automation.scheduling import install_request as requests
+from src.automation.scheduling import install_privileged as privileged
+from src.automation.scheduling import maintenance_gate as gate
+from src.automation.scheduling.autofix_store import initialize, Store
 
 
 class InstallationTest(unittest.TestCase):
@@ -220,9 +220,9 @@ class InstallationTest(unittest.TestCase):
         transaction.assert_not_called()
 
     def test_real_generated_plan_passes_privileged_registration(self):
-        from src.api.task_monitor.scheduling.config import load_config
+        from src.automation.scheduling.config import load_config
         from src.proj import PATH
-        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        config = load_config(PATH.main / 'configs/automation', 'mengkjin-server')
         plan = flow.install.build_plan(config, '', PATH.main, Path(sys.executable), config['timezone'])
         identifier = 'b' * 32
         approval = dict(id=identifier, uid=1000, unit=f'learndl-install-{identifier}.service',
@@ -284,8 +284,8 @@ class InstallationTest(unittest.TestCase):
         from src.proj import PATH
         proc = Mock(pid=123, info={'cmdline': [str(PATH.main / flow.ENTRYPOINTS['daily_update'])]})
         proc.create_time.return_value = 10
-        with patch('src.api.task_monitor.scheduling.autofix.recorded_task_blocker', return_value=None), \
-             patch('src.api.task_monitor.scheduling.git_update.training_blocker', return_value=None), \
+        with patch('src.automation.scheduling.autofix.recorded_task_blocker', return_value=None), \
+             patch('src.automation.scheduling.git_update.training_blocker', return_value=None), \
              patch.object(flow.psutil, 'process_iter', return_value=[proc]):
             with self.assertRaises(gate.MaintenanceBusy):
                 flow.check_business_tasks({})
@@ -297,9 +297,9 @@ class InstallationTest(unittest.TestCase):
                 flow.check_business_tasks({})
 
     def test_calendar_backlog_drains_after_cancel_with_autofix_disabled(self):
-        from src.api.task_monitor.scheduling import runner
+        from src.automation.scheduling import runner
         requests.save(self.row)
-        with patch('src.api.task_monitor.scheduling.autofix_store.state_dir', return_value=self.control), \
+        with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
              patch.object(gate, 'state_dir', return_value=self.control), \
              patch.object(runner, '_run', return_value=0) as execute:
             runner.run('daily_update')

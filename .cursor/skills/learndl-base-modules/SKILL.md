@@ -23,7 +23,8 @@ Use this file as a route map only; behavior and APIs live in source and module d
 | Default configs (factor, model, trading, …) | `src/proj/env/constant/conf/` |
 | HTTP, device, email, SQLite, misc | matching modules under `src/proj/util/` |
 | Process pools, proxy/cache callers | `src/proj/util/proxy/` |
-| Script locks, scheduling, CLI helpers | `src/proj/util/script/` |
+| Script locks, script lifecycle, CLI helpers | `src/proj/util/script/` |
+| Watchdog, scheduling, autofix, installation | `src/automation/`; use `learndl-automation` skill |
 | Factor tensors, rolling, neutralize, rank | `src/func/tensor.py` |
 | Index align, fillna, `index_merge` | `src/func/basic.py` |
 | NumPy/pandas transforms, OLS, cov | `src/func/transform.py` |

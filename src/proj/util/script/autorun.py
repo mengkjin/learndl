@@ -167,8 +167,8 @@ class AutoRunTask(BoundLogger):
         self.logger.divider()
         self._autofix_primary = False
         if os.environ.get('LEARNDL_AUTOFIX_ID'):
-            from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
-            from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+            from src.automation.scheduling.maintenance_gate import sandbox_request
+            from src.automation.scheduling.autofix_sandbox import script_event
             request = sandbox_request()
             marker = Path(request['channel']) / 'started.json'
             if not marker.exists():
@@ -219,7 +219,7 @@ class AutoRunTask(BoundLogger):
                 # Email sending failures should not break the rest of cleanup.
                 self.logger.error(f'AutoRunTask send_email failed: {e}')
                 if getattr(self, '_autofix_primary', False):
-                    from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+                    from src.automation.scheduling.autofix_sandbox import script_event
                     script_event('mail', enabled=self.email, delivered=False, error=type(e).__name__)
 
         try:
@@ -234,7 +234,7 @@ class AutoRunTask(BoundLogger):
         except Exception as e:
             self.logger.error(f'AutoRunTask task_record update failed: {e}')
         if getattr(self, '_autofix_primary', False):
-            from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+            from src.automation.scheduling.autofix_sandbox import script_event
             script_event('finished', success=self.status == 'Success' and not self.error_messages,
                          status=self.execution_status, email=self.email)
 
@@ -372,10 +372,10 @@ class AutoRunTask(BoundLogger):
 
     def send_email(self):
         """send email with attachment if in server and email is True"""
-        from src.api.task_monitor.scheduling.runtime import termination_requested
+        from src.automation.scheduling.runtime import termination_requested
         if termination_requested():
             return
-        from src.api.task_monitor.scheduling.recovery import script_result
+        from src.automation.scheduling.recovery import script_result
         script_result(self.execution_status)
         if self.email: 
             title = f'{self.execution_status} - {self.task_name.replace("_", " ").title()} - {self.time_str}'
@@ -401,10 +401,10 @@ class AutoRunTask(BoundLogger):
             sent = sender(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
                               confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
             if getattr(self, '_autofix_primary', False):
-                from src.api.task_monitor.scheduling.autofix_sandbox import script_event
+                from src.automation.scheduling.autofix_sandbox import script_event
                 script_event('mail', enabled=True, delivered=bool(sent))
             if sent:
-                from src.api.task_monitor.scheduling.runtime import record_script_email
+                from src.automation.scheduling.runtime import record_script_email
                 record_script_email(success=self.execution_status == 'Success')
 
     @classmethod

@@ -18,7 +18,7 @@ from src.proj.util.script import ScriptTool, AutoRunTask
 
 @ScriptTool('resume_rl_experiment')
 def main(request_path: str, **kwargs):
-    from src.api.task_monitor.scheduling.rl_resume import validate_request, request_dir
+    from src.automation.scheduling.rl_resume import validate_request, request_dir
     from src.res.rl_experimental.recover_results import audit_suite, recover_suite, read_json
     from src.res.rl_experimental.resume import resume_suite
     from src.res.rl_experimental.bundle import bundle_attachments

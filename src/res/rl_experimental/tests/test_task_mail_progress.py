@@ -90,9 +90,9 @@ class TaskMailTest(unittest.TestCase):
             time_str='now', source='script', task_full_name='rl_experiment', init_time=datetime.now(),
             end_time=datetime.now(), status='Success', error_message='', exit_message='',
             exit_files=['closed-task.html'], kwargs={'email_recipient': 'test@example.com'})
-        with patch('src.api.task_monitor.scheduling.runtime.termination_requested', return_value=False), \
-             patch('src.api.task_monitor.scheduling.recovery.script_result'), \
-             patch('src.api.task_monitor.scheduling.runtime.record_script_email') as receipt, \
+        with patch('src.automation.scheduling.runtime.termination_requested', return_value=False), \
+             patch('src.automation.scheduling.recovery.script_result'), \
+             patch('src.automation.scheduling.runtime.record_script_email') as receipt, \
              patch.object(Email, 'send', return_value=True) as default:
             AutoRunTask.send_email(task)
             default.assert_called_once()

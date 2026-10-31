@@ -114,7 +114,7 @@ class BackendTaskRecorder:
     def parse_kwargs(kwargs : dict[str , Any]) -> dict[str , Any]:
         """Coerce CLI-style string values ('True', 'None', '42') to their Python equivalents."""
         if os.environ.get('LEARNDL_AUTOFIX_ID'):
-            from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
+            from src.automation.scheduling.maintenance_gate import sandbox_request
             request = sandbox_request()
             # Preserve YAML types exactly (e.g. the string 'True' stays text).
             return dict(kwargs) | request['params'] | {'source': 'autofix', 'email': True}
@@ -150,14 +150,14 @@ class BackendTaskRecorder:
         start_time = datetime.now().timestamp()
         pid = os.getpid()
         if os.environ.get('LEARNDL_AUTOFIX_ID'):
-            from src.api.task_monitor.scheduling.maintenance_gate import sandbox_request
+            from src.automation.scheduling.maintenance_gate import sandbox_request
             sandbox_request()
             pid = int(os.environ['LEARNDL_AUTOFIX_HOST_PID'])
         self.task_db.update_task(
             self.task_id, backend_updated = True, 
             pid = pid, status = 'running', start_time = start_time)
         if os.getenv('LEARNDL_MANAGED_RUN'):
-            from src.api.task_monitor.scheduling.runtime import register_task
+            from src.automation.scheduling.runtime import register_task
             register_task(self.task_id)
         return self
 

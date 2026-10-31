@@ -14,18 +14,18 @@ from unittest.mock import MagicMock, patch
 
 import psutil
 
-from src.api.task_monitor.scheduling.config import duration, load_config, schedule_slots
-from src.api.task_monitor.scheduling.installer import apply_plan, build_plan, command, cron_coverage, external_cron, service, validate_unit
-from src.api.task_monitor.scheduling.runtime import RunStore, inspect_timeouts, members
-from src.api.task_monitor.watchdog import default_jobs
+from src.automation.scheduling.config import duration, load_config, schedule_slots
+from src.automation.scheduling.installer import apply_plan, build_plan, command, cron_coverage, external_cron, service, validate_unit
+from src.automation.scheduling.runtime import RunStore, inspect_timeouts, members
+from src.automation.watchdog import default_jobs
 
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class ScheduleConfigTest(unittest.TestCase):
     def setUp(self):
-        self.config = load_config(ROOT / 'runs/scheduling', 'mengkjin-server')
+        self.config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
 
     def test_timeouts_and_registry(self):
         self.assertEqual(self.config['tasks']['daily_update']['timeout_seconds'], 43200)
@@ -90,7 +90,7 @@ class ScheduleConfigTest(unittest.TestCase):
                 schedule_slots(schedule)
 
     def test_manifest_cannot_install_privileged_or_injected_service(self):
-        valid = service(ROOT, Path(sys.executable), 'src.api.task_monitor.scheduling.runner', ['run', 'daily_update'])
+        valid = service(ROOT, Path(sys.executable), 'src.automation.scheduling.runner', ['run', 'daily_update'])
         validate_unit('learndl-schedule-daily_update.service', valid)
         for changed in (valid + 'ExecStartPre=/bin/evil\n',
                         valid.replace('After=network-online.target', 'After=poweroff.target'),
@@ -100,13 +100,13 @@ class ScheduleConfigTest(unittest.TestCase):
                 validate_unit('learndl-schedule-daily_update.service', changed)
 
     def test_working_directory_is_not_shell_quoted(self):
-        contents = service(Path('/home/user/project with spaces'), Path(sys.executable), 'src.api.task_monitor.watchdog', [])
+        contents = service(Path('/home/user/project with spaces'), Path(sys.executable), 'src.automation.watchdog', [])
         self.assertIn('\nWorkingDirectory=/home/user/project with spaces\n', contents)
         self.assertNotIn('WorkingDirectory="', contents)
 
     def test_verification_error_preserves_stderr(self):
         result = subprocess.CompletedProcess(['systemd-analyze'], 1, '', 'WorkingDirectory= path is not absolute')
-        with patch('src.api.task_monitor.scheduling.installer.subprocess.run', return_value=result):
+        with patch('src.automation.scheduling.installer.subprocess.run', return_value=result):
             with self.assertRaisesRegex(RuntimeError, 'WorkingDirectory= path is not absolute'):
                 command(['systemd-analyze', 'verify', 'test.service'])
 
@@ -121,7 +121,7 @@ class TimeoutTest(unittest.TestCase):
         self.store.put(self.run_record)
 
     def test_term_grace_then_kill_without_sleeping(self):
-        target = 'src.api.task_monitor.scheduling.runtime.'
+        target = 'src.automation.scheduling.runtime.'
         with patch(target + 'members', return_value=[MagicMock()]), patch(target + 'signal_members') as send:
             inspect_timeouts(self.store, now=109)
             send.assert_not_called()
@@ -140,7 +140,7 @@ class TimeoutTest(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM events').fetchone()[0], 1)
 
     def test_permission_failure_is_not_marked_killed(self):
-        with patch('src.api.task_monitor.scheduling.runtime.members', side_effect=psutil.AccessDenied(100)):
+        with patch('src.automation.scheduling.runtime.members', side_effect=psutil.AccessDenied(100)):
             inspect_timeouts(self.store, now=110)
             inspect_timeouts(self.store, now=170)
         self.assertEqual(self.store.get('run1')['phase'], 'running')
@@ -148,7 +148,7 @@ class TimeoutTest(unittest.TestCase):
             self.assertEqual(connection.execute('SELECT count(*) FROM events').fetchone()[0], 1)
 
     def test_pid_reuse_never_signalled(self):
-        with patch('src.api.task_monitor.scheduling.runtime.psutil.Process') as process:
+        with patch('src.automation.scheduling.runtime.psutil.Process') as process:
             process.return_value.create_time.return_value = 2.
             with self.assertRaisesRegex(RuntimeError, 'reused'):
                 members(self.run_record)
@@ -158,7 +158,7 @@ class TimeoutTest(unittest.TestCase):
         self.store.put(run)
         self.store.link('task1', run['id'])
         task = MagicMock(pid=run['pid'])
-        with patch('src.api.task_monitor.scheduling.runtime.members', return_value=[]), \
+        with patch('src.automation.scheduling.runtime.members', return_value=[]), \
              patch('src.api.util.backend.task.TaskDatabase') as database:
             database.return_value.get_task.return_value = task
             database.return_value.update_task.side_effect = RuntimeError('temporary DB failure')
@@ -170,7 +170,7 @@ class TimeoutTest(unittest.TestCase):
         self.assertEqual(self.store.get(run['id'])['finished_at'], 150)
 
     def test_normal_finish_and_no_timeout(self):
-        with patch('src.api.task_monitor.scheduling.runtime.members', return_value=[]):
+        with patch('src.automation.scheduling.runtime.members', return_value=[]):
             inspect_timeouts(self.store, now=105)
         self.assertEqual(self.store.get('run1')['phase'], 'error')
         with self.store.connect() as connection:
@@ -192,7 +192,7 @@ class TimeoutTest(unittest.TestCase):
             proc.wait(timeout=5)
             with patch('src.api.util.backend.task.TaskDatabase'):
                 inspect_timeouts(self.store, now=141)
-                from src.api.task_monitor.scheduling.runtime import deliver_timeout_events
+                from src.automation.scheduling.runtime import deliver_timeout_events
                 send = MagicMock(side_effect=[False, True])
                 self.assertFalse(deliver_timeout_events(send, self.store))
                 self.assertTrue(deliver_timeout_events(send, self.store))
@@ -219,18 +219,18 @@ class InstallerTransactionTest(unittest.TestCase):
         self.calls = []
         for name, value in [('UNIT_DIR', self.units), ('read_cron', lambda: self.cron), ('command', self.execute),
                             ('desktop_path', lambda: self.root / 'autostart/learndl.desktop')]:
-            patcher = patch('src.api.task_monitor.scheduling.installer.' + name, value)
+            patcher = patch('src.automation.scheduling.installer.' + name, value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        patcher = patch('src.api.task_monitor.scheduling.installer.psutil.process_iter', return_value=[])
+        patcher = patch('src.automation.scheduling.installer.psutil.process_iter', return_value=[])
         patcher.start()
         self.addCleanup(patcher.stop)
-        patcher = patch('src.api.task_monitor.scheduling.installer.timer_state', return_value={'ActiveState': 'active', 'UnitFileState': 'enabled'})
+        patcher = patch('src.automation.scheduling.installer.timer_state', return_value={'ActiveState': 'active', 'UnitFileState': 'enabled'})
         patcher.start()
         self.addCleanup(patcher.stop)
-        self.config = load_config(ROOT / 'runs/scheduling', 'mengkjin-server')
-        for target, value in [('src.api.task_monitor.scheduling.autofix_sandbox.preflight', lambda: '/usr/bin/bwrap'),
-                              ('src.api.task_monitor.scheduling.autofix_store.state_dir', lambda root=None: self.root / 'control')]:
+        self.config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
+        for target, value in [('src.automation.scheduling.autofix_sandbox.preflight', lambda: '/usr/bin/bwrap'),
+                              ('src.automation.scheduling.autofix_store.state_dir', lambda root=None: self.root / 'control')]:
             patcher = patch(target, value)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -251,7 +251,7 @@ class InstallerTransactionTest(unittest.TestCase):
 
     def test_installation_does_not_race_active_maintenance_worker(self):
         import portalocker
-        from src.api.task_monitor.scheduling.autofix_store import initialize
+        from src.automation.scheduling.autofix_store import initialize
         control = self.root / 'control'
         initialize(control, ROOT)
         with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0):
@@ -276,6 +276,30 @@ class InstallerTransactionTest(unittest.TestCase):
         self.assertFalse(list(self.units.glob('*.timer')))
         self.assertTrue(list(self.units.glob('*.learndl-disabled')))
 
+    def test_legacy_module_upgrade_and_rollback_preserve_ledger_and_locks(self):
+        from src.automation.scheduling.autofix_store import Store
+        legacy = self.plan()
+        legacy['units'] = {name: content.replace('src.automation.', 'src.api.task_monitor.')
+                           for name, content in legacy['units'].items()}
+        legacy['desktop_autostart'] = legacy['desktop_autostart'].replace(
+            'src/automation/cli_recovery.py', 'src/api/task_monitor/cli_recovery.py')
+        apply_plan(copy.deepcopy(legacy), self.cron, self.state)
+        store = Store(self.root/'control')
+        item = {'id': 'finished-before-move', 'script': 'scripts/repair.py', 'params': {}}
+        store.register([item], 'old')
+        store.update(item['id'], attempted=True, phase='success')
+        store.enqueue('daily_update', 100)
+        inode = (store.directory/'gate.lock').stat().st_ino
+        apply_plan(self.plan(), self.cron, self.state)
+        saved = json.loads((self.state/'rollback.json').read_text())
+        self.assertEqual(saved['manifest']['units'], legacy['units'])
+        apply_plan(copy.deepcopy(legacy), self.cron, self.state)
+        self.assertEqual(store.get(item['id'])['phase'], 'success')
+        self.assertEqual(store.scheduled(), [('daily_update:100', 'daily_update')])
+        self.assertEqual((store.directory/'gate.lock').stat().st_ino, inode)
+        for name, content in legacy['units'].items():
+            self.assertEqual((self.units/name).read_text(), content)
+
     def test_partial_install_resume_preserves_original_backup(self):
         original = self.cron
         execute = self.execute
@@ -288,7 +312,7 @@ class InstallerTransactionTest(unittest.TestCase):
                 raise RuntimeError('simulated installation interruption')
             return execute(argv, **kwargs)
 
-        with patch('src.api.task_monitor.scheduling.installer.command', side_effect=fail_once):
+        with patch('src.automation.scheduling.installer.command', side_effect=fail_once):
             with self.assertRaisesRegex(RuntimeError, 'interruption'):
                 apply_plan(self.plan(), self.cron, self.state)
         self.assertEqual(json.loads((self.state / 'transaction.json').read_text())['phase'], 'paused')
@@ -310,7 +334,7 @@ class InstallerTransactionTest(unittest.TestCase):
             if argv[:3] == ['sudo', 'systemctl', 'daemon-reload']:
                 raise RuntimeError('activation interrupted')
             return execute(argv, **kwargs)
-        with patch('src.api.task_monitor.scheduling.installer.command', side_effect=fail_activate):
+        with patch('src.automation.scheduling.installer.command', side_effect=fail_activate):
             with self.assertRaisesRegex(RuntimeError, 'activation interrupted'):
                 apply_plan(self.plan(), self.cron, self.state)
         self.assertTrue((self.root / 'autostart/learndl.desktop').exists())
@@ -324,16 +348,16 @@ class InstallerTransactionTest(unittest.TestCase):
 
 class RunnerTest(unittest.TestCase):
     def test_real_runner_registers_and_releases_lock(self):
-        from src.api.task_monitor.scheduling.runner import run
+        from src.automation.scheduling.runner import run
         from src.proj.util.script.script_lock import ScriptLockMultiple
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            config = load_config(ROOT / 'runs/scheduling', 'mengkjin-server')
-            fixture = str(ROOT / 'src/api/task_monitor/tests/fixtures/scheduler_probe.py')
-            with patch('src.api.task_monitor.scheduling.runner.installed_config', return_value=config), \
-                 patch('src.api.task_monitor.scheduling.runtime.runtime_dir', return_value=root), \
+            config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
+            fixture = str(ROOT / 'src/automation/tests/fixtures/scheduler_probe.py')
+            with patch('src.automation.scheduling.runner.installed_config', return_value=config), \
+                 patch('src.automation.scheduling.runtime.runtime_dir', return_value=root), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \
-                 patch.dict('src.api.task_monitor.scheduling.runner.ENTRYPOINTS', {'daily_update': fixture}):
+                 patch.dict('src.automation.scheduling.runner.ENTRYPOINTS', {'daily_update': fixture}):
                 self.assertEqual(run('daily_update'), 0)
                 store = RunStore(root / 'runs.sqlite')
                 records = store.active()
@@ -346,14 +370,14 @@ class RunnerTest(unittest.TestCase):
                     pass
 
     def test_locked_skip_does_not_start_or_register_process(self):
-        from src.api.task_monitor.scheduling.runner import run
+        from src.automation.scheduling.runner import run
         from src.proj.util.script.script_lock import ScriptLockMultiple
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            config = load_config(ROOT / 'runs/scheduling', 'mengkjin-server')
-            with patch('src.api.task_monitor.scheduling.runner.installed_config', return_value=config), \
+            config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
+            with patch('src.automation.scheduling.runner.installed_config', return_value=config), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \
-                 patch('src.api.task_monitor.scheduling.runner.subprocess.Popen') as start:
+                 patch('src.automation.scheduling.runner.subprocess.Popen') as start:
                 with ScriptLockMultiple('daily_update', 1, timeout=1):
                     self.assertEqual(run('daily_update'), 0)
                 start.assert_not_called()

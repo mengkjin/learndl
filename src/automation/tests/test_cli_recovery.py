@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.api.task_monitor import cli_recovery as recovery
+from src.automation import cli_recovery as recovery
 
 
 class RecoveryTest(unittest.TestCase):
@@ -20,7 +20,7 @@ class RecoveryTest(unittest.TestCase):
                       'root': '/project', 'python': '/venv/python', 'process': {}, 'failures': 0}
         recovery.save(self.path, self.state)
         for name, value in [('sys.platform', 'linux')]:
-            mock = patch('src.api.task_monitor.cli_recovery.' + name, value)
+            mock = patch('src.automation.cli_recovery.' + name, value)
             mock.start()
             self.addCleanup(mock.stop)
 

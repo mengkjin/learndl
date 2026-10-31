@@ -80,7 +80,7 @@ def run_suite(folder, root, request_id):
                PYTHONPATH=str(root), MPLCONFIGDIR=str(folder/'mplconfig'))
     # Prepare fonts before timing, as in the local test.
     subprocess.run([sys.executable, '-c', 'import matplotlib.font_manager'], env=env, cwd=root, check=True)
-    from src.api.task_monitor.scheduling.maintenance_gate import child_env, pass_fds
+    from src.automation.scheduling.maintenance_gate import child_env, pass_fds
     env.update(child_env())
     for label, fast in ORDER:
         run = folder/label; run.mkdir()

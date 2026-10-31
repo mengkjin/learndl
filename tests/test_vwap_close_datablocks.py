@@ -221,8 +221,8 @@ class VwapAutofixTest(TestCase):
                 self.procs['30m', 'fit'].load_with_extension.assert_not_called()
 
     def test_manifest_is_valid_and_task_id_is_unique(self):
-        from src.api.task_monitor.scheduling.autofix_spec import manifest, validate
-        entries = manifest(ROOT / 'runs/autofix/tasks.yaml')
+        from src.automation.scheduling.autofix_spec import manifest, validate
+        entries = manifest(ROOT / 'configs/automation/autofix.yaml')
         item = next(item for item in entries if item['id'] == '20261019_repair_vwap_close_datablocks_06')
         validate(ROOT, item)
         self.assertTrue(item['enabled'])

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 
-from src.api.task_monitor.scheduling import nn_metrics_ab as queue
+from src.automation.scheduling import nn_metrics_ab as queue
 from src.res.model.diagnostics import nn_metrics_ab as runner
 
 
@@ -56,7 +56,7 @@ class NNMetricsABTest(TestCase):
 
     def test_dispatch_honors_busy_and_one_shot_priority(self):
         from contextlib import nullcontext
-        from src.api.task_monitor.scheduling import idle_worklist as idle, rl_experiment as rl
+        from src.automation.scheduling import idle_worklist as idle, rl_experiment as rl
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as tmp, patch.object(queue,'requests_dir',return_value=Path(tmp)):
             queue.submit('test_dispatch')

@@ -292,13 +292,13 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s src/res/r
 ```bash
 python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
 python scripts/4_train/3_train_rl_experiment.py --config_path src/res/rl_experimental/example_server_experiment.json
-python -m src.api.task_monitor.scheduling.idle_worklist rl-status
+python -m src.automation.scheduling.idle_worklist rl-status
 ```
 
 自动模式仅响应已提交并同步到服务器的 YAML 修改。修改 `rerun_mark` 可重跑；失败
 不自动重试。等待期间多次修改只运行最新版。每次自动请求有独立输出目录和配置
 来源记录；邮件仍包含任务 HTML 与 ZIP/JSON，不额外发送 RL 结果邮件。
-部署及等待条件见 `runs/scheduling/README.md` 的 RL 实验章节。
+部署及等待条件见 `configs/automation/README.md` 的 RL 实验章节。
 
 ### 精简日志、任务邮件与结果补发（2026-10-28）
 
@@ -364,5 +364,5 @@ Python 源码到 `recovery/resume-*/source/`，在独立 worker 进程中使用�
 
 同一显式请求 ID 只尝试一次；成功或失败都不自动重跑，也不修改旧运行账本。
 新请求与原 YAML `rerun_mark` 独立，不触发另一次完整季度实验。失败后应先处理诊断，
-再发布新 autofix ID。查看状态仍使用 `python -m src.api.task_monitor.scheduling.idle_worklist rl-status`。
+再发布新 autofix ID。查看状态仍使用 `python -m src.automation.scheduling.idle_worklist rl-status`。
 仅邮件失败应使用 `task_mail` 补发，不需要请求训练恢复。

@@ -13,4 +13,4 @@ if [ -f "$SCRIPT_DIR/computer_config.sh" ]; then
     fi
 fi
 cd "$PROJECT_ROOT"
-exec "$PYTHON_PATH" -m src.api.task_monitor.scheduling.installer "$@"
+exec "$PYTHON_PATH" -m src.automation.scheduling.installer "$@"

@@ -488,7 +488,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from src.proj.util.web import emailer
-from src.api.task_monitor import watchdog
+from src.automation import watchdog
 with patch.object(emailer,'PATH',SimpleNamespace(email_outbox=Path(sys.argv[1]))),patch.object(emailer,'MACHINE',SimpleNamespace(emailable=True)),patch.object(emailer.Email,'logger',Mock()),patch.object(emailer.Email,'_deliver'):
     result=emailer.Email.retry_pending(max_seconds=60)
     peak=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss

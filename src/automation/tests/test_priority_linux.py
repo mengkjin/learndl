@@ -20,7 +20,7 @@ import uuid
                      'requires explicit Linux/systemd acceptance opt-in')
 class LinuxAcceptance(unittest.TestCase):
     def test_bubblewrap_descendant_and_external_ledger_protection(self):
-        from src.api.task_monitor.scheduling.autofix_sandbox import check_tree, command
+        from src.automation.scheduling.autofix_sandbox import check_tree, command
         with tempfile.TemporaryDirectory(prefix='.priority-acceptance-', dir=Path.cwd()) as temp:
             base = Path(temp).resolve()
             root = base / 'project'

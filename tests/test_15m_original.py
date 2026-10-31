@@ -534,8 +534,8 @@ class OriginalRealPipeline(TestCase):
                 self.assertGreater(sum(sum(row['inf']) for row in item['audit']['daily']), 0)
 
     def test_autofix_manifest(self):
-        from src.api.task_monitor.scheduling.autofix_spec import manifest, validate
-        entries = manifest(ROOT / 'runs/autofix/tasks.yaml')
+        from src.automation.scheduling.autofix_spec import manifest, validate
+        entries = manifest(ROOT / 'configs/automation/autofix.yaml')
         matching = [item for item in entries if item['id'] == task.REQUEST_ID]
         self.assertEqual(len(matching), 1)
         validate(ROOT, matching[0])

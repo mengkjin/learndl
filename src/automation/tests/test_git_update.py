@@ -12,8 +12,8 @@ from unittest.mock import Mock, patch
 
 import psutil
 
-from src.api.task_monitor.scheduling import git_update as updater
-from src.api.task_monitor.watchdog import JobResult, WatchdogJob, run_watchdog
+from src.automation.scheduling import git_update as updater
+from src.automation.watchdog import JobResult, WatchdogJob, run_watchdog
 from src.proj import PATH
 from src.proj.util.script import FitLock
 
@@ -55,7 +55,7 @@ class GitUpdateTest(unittest.TestCase):
         return updater.check_and_update({'max_seconds': 45}, root=self.checkout)
 
     def test_autofix_update_mail_does_not_claim_execution_status(self):
-        self.commit('runs/autofix/tasks.yaml', 'schema_version: 1\nfixes: []\n')
+        self.commit('configs/automation/autofix.yaml', 'schema_version: 1\nfixes: []\n')
         result = self.update()
         self.assertEqual(result['status'], 'updated')
         self.assertTrue(any('autofix definitions changed' in item for item in result['follow_up']))
@@ -160,7 +160,7 @@ class GitUpdateTest(unittest.TestCase):
         hook.write_text(f'#!/bin/sh\ntouch "{marker}"\n')
         hook.chmod(0o700)
         self.commit('uv.lock', '# lock change\n')
-        self.commit('runs/scheduling/maintenance.yaml', '# config change\n')
+        self.commit('configs/automation/maintenance.yaml', '# config change\n')
         result = self.update()
         self.assertEqual(result['status'], 'updated')
         self.assertEqual(len(result['follow_up']), 2)
@@ -226,10 +226,10 @@ class WatchdogUpdateOrderTest(unittest.TestCase):
             order = []
             jobs = [WatchdogJob('git_auto_update', 300, lambda _: (order.append('git') or JobResult(stats={'status': 'error', 'reason': 'offline'}))),
                     WatchdogJob('maintenance', 60, lambda _: (order.append('maintenance') or JobResult()))]
-            with patch('src.api.task_monitor.scheduling.config.installed_config', return_value=None), \
+            with patch('src.automation.scheduling.config.installed_config', return_value=None), \
                  patch.object(updater, 'runtime_dir', return_value=root), \
-                 patch('src.api.task_monitor.watchdog._deliver_alerts', side_effect=lambda **_: (order.append('alerts') or True)), \
-                 patch('src.api.task_monitor.scheduling.runtime.deliver_timeout_events', side_effect=lambda _: (order.append('mail') or True)):
+                 patch('src.automation.watchdog._deliver_alerts', side_effect=lambda **_: (order.append('alerts') or True)), \
+                 patch('src.automation.scheduling.runtime.deliver_timeout_events', side_effect=lambda _: (order.append('mail') or True)):
                 args = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=Mock(), jobs=jobs)
                 self.assertFalse(run_watchdog(**args, now=1000))
                 self.assertEqual(order, ['maintenance', 'alerts', 'mail', 'git'])
@@ -247,9 +247,9 @@ class WatchdogUpdateOrderTest(unittest.TestCase):
                 return JobResult(stats=result)
             job = WatchdogJob('git_auto_update', 300, update)
             with patch.object(updater, 'runtime_dir', return_value=root), \
-                 patch('src.api.task_monitor.scheduling.config.installed_config', return_value=None), \
-                 patch('src.api.task_monitor.watchdog._deliver_alerts', return_value=True), \
-                 patch('src.api.task_monitor.scheduling.runtime.deliver_timeout_events', return_value=True):
+                 patch('src.automation.scheduling.config.installed_config', return_value=None), \
+                 patch('src.automation.watchdog._deliver_alerts', return_value=True), \
+                 patch('src.automation.scheduling.runtime.deliver_timeout_events', return_value=True):
                 send = Mock(side_effect=[False, True])
                 args = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=send, jobs=[job])
                 self.assertFalse(run_watchdog(**args, now=1000))

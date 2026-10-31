@@ -14,10 +14,10 @@ from unittest.mock import Mock, patch
 import portalocker
 
 from src.api.calls.worklist_state import WorklistState
-from src.api.task_monitor.scheduling import idle_worklist as idle
-from src.api.task_monitor.scheduling import runtime
-from src.api.task_monitor.scheduling.config import load_config
-from src.api.task_monitor.scheduling.installer import build_plan, validate_unit
+from src.automation.scheduling import idle_worklist as idle
+from src.automation.scheduling import runtime
+from src.automation.scheduling.config import load_config
+from src.automation.scheduling.installer import build_plan, validate_unit
 from src.proj import PATH
 from src.proj.util.script import FitLock, FitLockNN
 from src.res.model.util import training_history
@@ -343,10 +343,10 @@ class IdleTest(unittest.TestCase):
             self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
 
     def test_worker_priority_refusal_does_not_claim_starting(self):
-        from src.api.task_monitor.scheduling.maintenance_gate import MaintenanceBusy
+        from src.automation.scheduling.maintenance_gate import MaintenanceBusy
         idle.dispatch(self.options, self.store)
         with patch.object(idle, 'settings', return_value=self.options), patch.object(idle, '_launch') as launch, \
-             patch('src.api.task_monitor.scheduling.maintenance_gate.permit', side_effect=MaintenanceBusy('autofix waiting: repair')):
+             patch('src.automation.scheduling.maintenance_gate.permit', side_effect=MaintenanceBusy('autofix waiting: repair')):
             self.assertEqual(idle.worker(), 0)
             launch.assert_not_called()
         request = self.store.owned(idle.OWNER)[0]
@@ -583,7 +583,7 @@ class FitOccupancyTest(unittest.TestCase):
                 idle.gpu_memory_percent()
 
     def test_installer_creates_independent_unbounded_worker_unit(self):
-        config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
+        config = load_config(PATH.main / 'configs/automation', 'mengkjin-server')
         plan = build_plan(config, '', PATH.main, Path(sys.executable), 'Asia/Shanghai')
         worker = plan['units']['learndl-idle-worklist.service']
         validate_unit('learndl-idle-worklist.service', worker)

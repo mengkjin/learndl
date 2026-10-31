@@ -163,7 +163,7 @@ class Repair15mrawTest(TestCase):
             return {'id': request_id}
         with patch.object(WorklistState, 'request_training', request):
             for context in (None, {'id': 'new-autofix-id'}):
-                with patch('src.api.task_monitor.scheduling.maintenance_gate.sandbox_request', return_value=context):
+                with patch('src.automation.scheduling.maintenance_gate.sandbox_request', return_value=context):
                     self.training_original()
         self.assertEqual(calls, [('gru_15mraw', task.TRAINING_REQUEST_ID), ('gru_15mraw', 'new-autofix-id')])
 
