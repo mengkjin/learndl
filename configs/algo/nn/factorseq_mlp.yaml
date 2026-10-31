@@ -1,0 +1,7 @@
+hidden_dim: [32]
+dropout: [0.1]
+rnn_layers: [2]
+context_layers: [1]
+modulation: [true]
+use_performance: [true]
+use_market: [true]

@@ -25,6 +25,9 @@ class StorageNode:
     children: list[StorageNode] = field(default_factory=list)
     node_id: int = 0
     has_children: bool = False
+    file_count: int | None = None
+    date_start: str | None = None
+    date_end: str | None = None
 
 
 @dataclass
@@ -82,7 +85,7 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
 
     def walk(path: Path, parts: tuple[str, ...], visible: bool, parent_id: int | None = None) -> StorageNode:
         nonlocal entries, last_progress
-        node = StorageNode('/'.join(parts) or '.')
+        node = StorageNode('/'.join(parts) or '.', file_count=0)
         entries += 1
         node.node_id = entries
         if progress and time.monotonic() - last_progress >= 2:
@@ -92,6 +95,17 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
             info = path.lstat()
             is_dir = stat.S_ISDIR(info.st_mode)
             node.is_dir = is_dir
+            if stat.S_ISREG(info.st_mode):
+                # Count paths even when hard links share their allocated blocks.
+                node.file_count = 1
+                date_code = path.stem[-8:]
+                if len(date_code) == 8 and date_code.isascii() and date_code.isdigit():
+                    try:
+                        date = datetime.strptime(date_code, '%Y%m%d').date().isoformat()
+                    except ValueError:
+                        pass
+                    else:
+                        node.date_start = node.date_end = date
             key = (info.st_dev, info.st_ino)
             if stat.S_ISLNK(info.st_mode):
                 node.target = os.readlink(path)
@@ -112,6 +126,10 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                     retain = visible and len(child_parts) <= display_depth(child_parts)
                     child = walk(path / name, child_parts, retain, node.node_id)
                     node.size += child.size
+                    node.file_count += child.file_count or 0
+                    if child.date_start is not None and child.date_end is not None:
+                        node.date_start = min(node.date_start or child.date_start, child.date_start)
+                        node.date_end = max(node.date_end or child.date_end, child.date_end)
                     node.complete = node.complete and child.complete
                     node.has_children = True
                     if retain:
@@ -149,9 +167,15 @@ def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
                 f'data-id="{node.node_id}" data-size="{node.size}">'
                 f'<div class="entry-row"><span><small class="kind">{kind}</small> {label}{link}{warning}</span>'
                 f'<b>{format_size(node.size)}</b><small>{percentage}</small></div></div>')
+    description = ''
+    if node.file_count is not None:
+        description = f'{node.file_count:,} files'
+        if node.date_start is not None:
+            description += f' · Dates: {escape(node.date_start)} → {escape(node.date_end or node.date_start)}'
+        description = f'<span class="description">{description}</span>'
     return (f'<details class="node" data-path="{escape(node.path, quote=True)}" '
             f'data-id="{node.node_id}" data-size="{node.size}" {"open" if depth == 0 else ""}>'
-            f'<summary><span>{label}{link}{warning}{button}</span><b>{format_size(node.size)}</b>'
+            f'<summary><span>{label}{link}{warning}{button}{description}</span><b>{format_size(node.size)}</b>'
             f'<small>{percentage}</small></summary><div class="children">{children}</div></details>')
 
 
@@ -169,6 +193,7 @@ summary{cursor:pointer}summary:before{content:'▸'}details[open]>summary:before
 summary span,.entry-row span{flex:1;overflow-wrap:anywhere}.entry-row:before{content:'·'}
 summary b,.entry-row b{white-space:nowrap}summary small,.entry-row>small{width:64px;text-align:right}
 .kind{color:#667085;font-size:11px}.children{margin-left:22px}
+.description{display:block;color:#667085;font-size:12px;margin-top:4px}
 .load-next{font:inherit;font-size:12px;padding:3px 7px;margin:0 0 0 10px}strong{color:#b54708}input,select,button{padding:9px;margin:5px}
 input[type="search"]{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:none!important}
 </style><header><h1>Project Storage Report</h1>''' + f'''
@@ -178,7 +203,9 @@ input[type="search"]{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:
 <p>Root filesystem: total {format_size(scan.disk_total)} · Free {format_size(scan.disk_free)}</p>
 <p>Started: {escape(scan.started)} · Finished: {escape(scan.finished)}</p>
 <p>Sizes use allocated disk blocks, including directories themselves. Do not add parent and child totals together. Symbolic links are not followed; hard links are counted only at the first path in stable traversal order.
-Totals include all deeper contents. Files may change during the scan. Mounted directories on other filesystems are included; free space refers only to the root filesystem.</p>
+Totals include all deeper contents. File counts include regular file paths (including each hard link), excluding directories and symbolic links.
+Date ranges use valid YYYYMMDD dates at the end of file stems, including deeper contents; undated files are ignored. Incomplete rows may have partial counts and date ranges.
+Files may change during the scan. Mounted directories on other filesystems are included; free space refers only to the root filesystem.</p>
 <p id="browse-status">Static report: choose local browsing when starting Project Storage Report to explore deeper files and folders. Attachments do not connect to a local service.</p>
 <label>Search loaded paths <input id="search" type="search" placeholder="e.g. DataBase or gru"></label>
 <label>Sort siblings <select id="sort"><option value="size">Size (largest first)</option><option value="name">Path name</option></select></label>

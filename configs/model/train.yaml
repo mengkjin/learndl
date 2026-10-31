@@ -77,3 +77,8 @@ torch_compile.stage: fit          # fit | test | both
 
 # Opt-in first-batch metric/diagnostic optimizations; false preserves legacy paths.
 experimental_metrics_fastpath: false
+
+# Factor-sequence experiments supply explicit, purged trading-date sets.
+dataloader.purge_horizon: 0
+factor_sequence.train_dates: []
+factor_sequence.valid_dates: []

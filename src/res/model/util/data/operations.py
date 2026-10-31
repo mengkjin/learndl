@@ -251,7 +251,7 @@ class DataOperator:
                         k , v , index1 ,
                         finite_mask = None if x_finite is None else x_finite.get(k) ,
                     )
-                    for k , v in x.items()
+                    for k , v in x.items() if k not in ('factorperf','factormarket')
                 ]
                 eff = torch.stack(finites , dim = -1).all(dim=-1)
                 effs.append(eff)
@@ -274,6 +274,10 @@ class DataOperator:
                 if keys:
                     eff = torch.stack([self.active_position(k , x[k] , index1) for k in keys] , dim = -1).any(dim=-1)
                     effs.append(eff)
+        if 'factorseq' in x:
+            stock = x['factorseq']
+            k = stock.shape[-1] // 10
+            effs.append((stock[:,index1,...,k:2*k] > 0).flatten(2).any(-1))
         final_keys = getattr(self.config, 'input_final_types', [])
         if final_keys:
             effs.append(torch.stack([
@@ -446,19 +450,29 @@ class DataOperator:
         """
         sample_method = self.config.sample_method
         train_ratio = self.config.train_ratio
+        purge = int(getattr(self.config, 'Param', {}).get('train.dataloader.purge_horizon', 0))
+        if purge < 0:
+            raise ValueError('Negative purge horizon')
         batch_size = self.config.batch_size
         l0 , l1 = effective.shape[:2]
         pos = torch.stack([index0.repeat_interleave(l1) , index1.repeat(l0)] , -1).reshape(l0,l1,2)
         
         def _shuffle(i , bs = batch_size):
             return [i[p] for p in BatchSampler(permutation(np.arange(len(i))) , bs , drop_last=False)]
-        def _sequential(beg , end , posit = pos , effective = effective):
-            return [posit[:,j][effective[:,j]] for j in range(beg , end)]
+        def _sequential(beg , end):
+            return [pos[:,j][effective[:,j]] for j in range(beg , end)]
 
         sample_index = {}
         if self.stage == 'fit':
             sep = int(l1 * train_ratio)
             assert sep > 0 and sep < l1 , (sep , l1 , train_ratio)
+            if purge:
+                effective = effective.clone()
+                # index1 is the true trading-date position, not the sampled row number.
+                # Strict inequality: endpoint on the first validation date is excluded.
+                effective[:, :sep] &= (index1[:sep] + purge < index1[sep])[None, :]
+                if not effective[:, :sep].any():
+                    raise ValueError('Purge removed every training sample')
             if sample_method == 'both_shuffle':
                 sample_index['train'] = _shuffle(pos[:,:sep][effective[:,:sep]])
                 sample_index['valid'] = _shuffle(pos[:,sep:][effective[:,sep:]])

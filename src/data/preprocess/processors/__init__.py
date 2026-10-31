@@ -40,3 +40,7 @@ from .minchars import PrePro_minc as PrePro_minc, PrePro_mincr as PrePro_mincr
 from .market import PrePro_market as PrePro_market
 
 from .original_15m import PrePro_15m_original as PrePro_15m_original
+
+from ..factor_sequence.processors import (
+    PrePro_factorseq, PrePro_factorperf, PrePro_factormarket,
+)

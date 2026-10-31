@@ -45,3 +45,6 @@ final.types: []
 final.precursor: normal
 final.weights: equal
 final.refresh: false
+
+# Explicit immutable dataset for opt-in factor-sequence experiments.
+factor_sequence.dataset: null

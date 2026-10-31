@@ -46,6 +46,7 @@ class ModuleDataConfig:
     filter_secid: str | None
     filter_date: str | None
     dtype: torch.dtype
+    factor_sequence_dataset: str | None = None
 
     def __post_init__(self):
         if self.y_labels is not None:
@@ -53,7 +54,7 @@ class ModuleDataConfig:
 
     @property
     def fit_for_cache(self):
-        return (bool(self.data_type_list) and
+        return (self.factor_sequence_dataset is None and bool(self.data_type_list) and
             self.filter_secid is None and
             self.filter_date is None and
             self.use_data in ['fit' , 'both']
@@ -69,7 +70,8 @@ class ModuleDataConfig:
             self.factor_end_dt == other.factor_end_dt and
             self.filter_secid == other.filter_secid and
             self.filter_date == other.filter_date and
-            self.dtype == other.dtype
+            self.dtype == other.dtype and
+            self.factor_sequence_dataset == getattr(other, "factor_sequence_dataset", None)
         )
 
     @staticmethod
@@ -126,7 +128,8 @@ class ModuleData(Base.BoundLogger):
         factor_end_dt: int | None = None,
         filter_secid: str | None = None,
         filter_date: str | None = None,
-        indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2, dtype=torch.float
+        indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2, dtype=torch.float,
+        factor_sequence_dataset: str | None = None
     ) -> ModuleData:
         config = ModuleDataConfig(
             data_type_list=tuple(sorted([cls.abbr(data_type) for data_type in data_type_list])),
@@ -137,8 +140,14 @@ class ModuleData(Base.BoundLogger):
             factor_end_dt=factor_end_dt,
             filter_secid=filter_secid,
             filter_date=filter_date,
-            dtype=ModuleDataConfig.get_torch_dtype(dtype)
+            dtype=ModuleDataConfig.get_torch_dtype(dtype),
+            factor_sequence_dataset=factor_sequence_dataset,
         )
+        if factor_sequence_dataset:
+            from src.data.preprocess.factor_sequence.schema import KEYS
+            if set(config.data_type_list) != set(KEYS):
+                raise ValueError('Factor-sequence experiments require exactly the three versioned streams')
+            config.data_type_list = KEYS
         return cls(config = config, indent = indent, vb_level = vb_level)
 
     @property
@@ -249,6 +258,9 @@ class ModuleData(Base.BoundLogger):
         - ``'predict'`` mode: loads the last 366 calendar days up to updated.
         - ``'fit'`` mode: loads from 20070101 up to the latest selected label dump date.
         """
+        if self.config.factor_sequence_dataset:
+            from src.data.preprocess.factor_sequence.bundle import load
+            return tuple(load(self.config.factor_sequence_dataset)['dates'])
         start = (
             CALENDAR.td(CALENDAR.updated(), -366).td
             if self.use_data == "predict"
@@ -278,7 +290,7 @@ class ModuleData(Base.BoundLogger):
         self._load_factor()
         from src.data.preprocess import DIRECT_FFILL_DATABLOCK_KEYS
         DataBlock.blocks_ffill(
-            self.blocks , exclude = ["y"] , direct_ffill_keys = DIRECT_FFILL_DATABLOCK_KEYS ,
+            self.blocks , exclude = ["y", "factorseq", "factorperf", "factormarket"] , direct_ffill_keys = DIRECT_FFILL_DATABLOCK_KEYS ,
         )
         self.loaded = True
         return self
@@ -339,6 +351,10 @@ class ModuleData(Base.BoundLogger):
         date = self.date_filter(CALENDAR.range(*self.target_start_end()))
         secid = self.secid
         for key , block in self.blocks.items():
+            if key in ('factorseq', 'factorperf', 'factormarket'):
+                from src.data.preprocess.factor_sequence.processors import load_block
+                self.blocks[key] = load_block(self.config.factor_sequence_dataset, key, date, secid)
+                continue
             if (
                 key == 'market' and block.initiated and len(block.secid) == 1
                 and secid is not None and len(secid) > 1
@@ -346,7 +362,8 @@ class ModuleData(Base.BoundLogger):
                 values = block.values.expand(len(secid) , -1 , -1 , -1).clone()
                 block = block.update(values = values , secid = secid , inplace = True)
             self.blocks[key] = block.align_secid_date(secid , date , inplace = True)
-        index_lens = [block.shape[:2] for block in self.blocks.values()]
+        index_lens = [block.shape[:2] for key, block in self.blocks.items()
+                      if key not in ('factorperf', 'factormarket')]
         if index_lens:
             assert all([lens == (len(secid), len(date)) for lens in index_lens]), (
                 f"{[(name, block.shape) for name, block in self.blocks.items()]}"
@@ -385,7 +402,9 @@ class ModuleData(Base.BoundLogger):
         """Load a block via the registered ``PreProcessor`` for ``key``."""
         from src.data.preprocess import PrePros
         type = "predict" if self.use_data == "predict" else "fit"
-        block = PrePros.get_processor(key, type, self.indent + 1, self.vb_level + 2).load(dates, secid=secid)
+        if key in ('factorseq','factorperf','factormarket'):
+            kwargs = {**kwargs, 'dataset': self.config.factor_sequence_dataset}
+        block = PrePros.get_processor(key, type, self.indent + 1, self.vb_level + 2).load(dates, secid=secid, **kwargs)
         return block
 
     def load_special_block(
@@ -401,7 +420,8 @@ class ModuleData(Base.BoundLogger):
         """Load ``PreProHistNorm`` objects for all X block types from disk (no-op if already loaded)."""
         if self.norms:
             return
-        norms = PreProHistNorm.load_keys(self.data_type_list, dtype = self.config.dtype)
+        keys = [key for key in self.data_type_list if key not in ('factorseq','factorperf','factormarket')]
+        norms = PreProHistNorm.load_keys(keys, dtype = self.config.dtype) if keys else {}
         self.norms.update(norms)
 
     def _load_factor(self) -> ModuleData:

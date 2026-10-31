@@ -11,3 +11,7 @@
 
 - to predict rtn_lag1_10 is better than predicting std_lag1_10 in overall return and stability, slightly lower IC
 - enc_dim 16 is better than enc_dim 64
+
+## Model design candidates
+
+- [因子时序建模：五种可渐进尝试的结构](factor_sequence_models.md) — design only; input semantics, missing/low-frequency handling, architecture candidates and ablation roadmap. Not implemented or backtested.

@@ -49,6 +49,10 @@ AVAILABLE_NNS = {
     'resnet_mlp'        : Model.resnet_mlp.resnet_mlp,
 }
 
+# Factor-sequence models share the standard prediction/hidden contract.
+from .model.factor_sequence import MODELS as FACTOR_SEQUENCE_MODELS
+AVAILABLE_NNS.update(FACTOR_SEQUENCE_MODELS)
+
 def get_nn_module(module_name : str) -> nn.Module:
     """Return the model constructor for a given registry key.
 

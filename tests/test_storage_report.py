@@ -74,9 +74,32 @@ class StorageReportTest(unittest.TestCase):
         self.assertFalse(nodes['link'].children)
         self.assertLess(scan.node.size, 64 * 1024 * 1024)
         self.assertTrue(scan.node.complete)
+        self.assertEqual(scan.node.file_count, 3)
+        self.assertEqual(nodes['b'].file_count, 1)
         if sys.platform.startswith('linux'):
             du = subprocess.check_output(['du', '-s', '-B1', str(self.root)], text=True)
             self.assertEqual(scan.node.size, int(du.split()[0]))
+
+    def test_recursive_file_counts_and_date_ranges_in_snapshot(self):
+        folder = 'data/DataBase/trade_ts/day'
+        for name in ('2024/day.20240229.feather', '2025/day.20250102.feather',
+                     '2025/day.20250230.feather', 'notes.txt'):
+            self.file(f'{folder}/{name}')
+        (self.root / folder / '20991231').mkdir()
+        (self.root / 'empty').mkdir()
+        scan, report = generate_report(self.root, self.root / 'report.html')
+        node = self.nodes(scan.node)[folder]
+        self.assertEqual(node.file_count, 4)
+        self.assertEqual((node.date_start, node.date_end), ('2024-02-29', '2025-01-02'))
+        self.assertEqual(scan.node.file_count, 4)
+        self.assertEqual(self.nodes(scan.node)['empty'].file_count, 0)
+        self.assertIsNone(self.nodes(scan.node)['empty'].date_start)
+        self.assertIn('4 files · Dates: 2024-02-29 → 2025-01-02', report.read_text())
+        with StorageReportServer(report) as server:
+            rendered = server.children(node.node_id)['html']
+            self.assertIn('2 files · Dates: 2025-01-02 → 2025-01-02', rendered)
+            self.assertIn('0 files', rendered)
+            self.assertNotIn('Dates: 2099', rendered)
 
     def test_errors_propagate_without_aborting(self):
         self.file('blocked/a')

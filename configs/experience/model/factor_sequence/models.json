@@ -1,0 +1,152 @@
+{
+  "factorseq_mlp": {
+    "status": "implemented",
+    "version": 1,
+    "mode": "mlp",
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      120,
+      120
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "defaults": {
+      "hidden_dim": 32,
+      "rnn_layers": 2,
+      "context_layers": 1,
+      "dropout": 0.1
+    },
+    "config": "configs/algo/nn/factorseq_mlp.yaml",
+    "experiment": "configs/experience/model/factor_sequence/README.md"
+  },
+  "factorseq_gru": {
+    "status": "implemented",
+    "version": 1,
+    "mode": "gru",
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      120,
+      120
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "defaults": {
+      "hidden_dim": 32,
+      "rnn_layers": 2,
+      "context_layers": 1,
+      "dropout": 0.1
+    },
+    "config": "configs/algo/nn/factorseq_gru.yaml",
+    "experiment": "configs/experience/model/factor_sequence/README.md"
+  },
+  "factorseq_m1": {
+    "status": "implemented",
+    "version": 1,
+    "mode": "m1",
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      120,
+      120
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "defaults": {
+      "hidden_dim": 32,
+      "rnn_layers": 2,
+      "context_layers": 1,
+      "dropout": 0.1
+    },
+    "config": "configs/algo/nn/factorseq_m1.yaml",
+    "experiment": "configs/experience/model/factor_sequence/README.md"
+  },
+  "factorseq_m2": {
+    "status": "implemented",
+    "version": 1,
+    "mode": "m2",
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      120,
+      120
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "defaults": {
+      "hidden_dim": 32,
+      "rnn_layers": 2,
+      "context_layers": 1,
+      "dropout": 0.1
+    },
+    "config": "configs/algo/nn/factorseq_m2.yaml",
+    "experiment": "configs/experience/model/factor_sequence/README.md"
+  },
+  "factorseq_mask": {
+    "status": "implemented",
+    "version": 1,
+    "mode": "mask",
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      120,
+      120
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "defaults": {
+      "hidden_dim": 32,
+      "rnn_layers": 2,
+      "context_layers": 1,
+      "dropout": 0.1
+    },
+    "config": "configs/algo/nn/factorseq_mask.yaml",
+    "experiment": "configs/experience/model/factor_sequence/README.md"
+  },
+  "M3": {
+    "status": "not_implemented",
+    "version": null,
+    "dependency": "Dated event/factor memory and causal attention"
+  },
+  "M4": {
+    "status": "not_implemented",
+    "version": null,
+    "dependency": "Reliable update timestamps or explicit weekly sampling"
+  },
+  "M5": {
+    "status": "not_implemented",
+    "version": null,
+    "dependency": "Point-in-time sparse graph and single-date stock batches"
+  }
+}

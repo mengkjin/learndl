@@ -32,7 +32,8 @@ class SnapshotIndex:
             CREATE TABLE nodes (
                 node_id INTEGER PRIMARY KEY, parent_id INTEGER, path TEXT NOT NULL,
                 size INTEGER NOT NULL, own INTEGER NOT NULL, complete INTEGER NOT NULL,
-                target TEXT, is_dir INTEGER NOT NULL, has_children INTEGER NOT NULL
+                target TEXT, is_dir INTEGER NOT NULL, has_children INTEGER NOT NULL,
+                file_count INTEGER NOT NULL, date_start TEXT, date_end TEXT
             );
             CREATE INDEX nodes_parent ON nodes(parent_id);
         ''')
@@ -44,14 +45,15 @@ class SnapshotIndex:
         self.connection.close()
 
     def add(self, node: StorageNode, parent_id: int | None) -> None:
-        self.connection.execute('INSERT INTO nodes VALUES (?,?,?,?,?,?,?,?,?)', (
+        self.connection.execute('INSERT INTO nodes VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', (
             node.node_id, parent_id, node.path, node.size, node.own, node.complete,
             node.target, node.is_dir, node.has_children,
+            node.file_count, node.date_start, node.date_end,
         ))
 
     def finish(self, scan: StorageScan, content: str) -> None:
         metadata = {
-            'version': '2', 'report_id': scan.report_id, 'machine': machine_identity(),
+            'version': '3', 'report_id': scan.report_id, 'machine': machine_identity(),
             'root': str(scan.root), 'started': scan.started, 'finished': scan.finished,
             'html_sha256': hashlib.sha256(content.encode('utf-8')).hexdigest(), 'ready': '1',
         }
@@ -76,7 +78,7 @@ class StorageReportServer(ThreadingHTTPServer):
                 raise ValueError('Corrupt snapshot index')
             metadata = dict(self.connection.execute('SELECT key, value FROM metadata'))
             content = report.read_bytes()
-            if metadata.get('version') not in {'1', '2'} or metadata.get('ready') != '1':
+            if metadata.get('version') not in {'1', '2', '3'} or metadata.get('ready') != '1':
                 raise ValueError('Incomplete or unsupported snapshot index')
             if metadata.get('machine') != machine_identity():
                 raise ValueError('Dynamic browsing is only available on the computer that generated this report')

@@ -102,6 +102,15 @@ class DataModule(Base.BoundLogger):
 
     def load_data(self , use_data : Base.lit.DataBlockTimeFrames | None = None):
         """load prepared data at training begin , only load data once in a fitting"""
+        if self.config.Param.get('input.factor_sequence.dataset'):
+            keys = ('factorseq','factorperf','factormarket')
+            if tuple(self.input_keys) != keys or self.config.sample_method != 'sequential':
+                raise ValueError('Factor sequence requires ordered streams and single-date sequential batches')
+            if any(self.config.seq_steps.get(k,1) != 1 for k in keys):
+                raise ValueError('Factor sequence v1 requires daily aligned windows')
+            lens = self.config.seq_lens
+            if lens.get('factorperf') != lens.get('factormarket') or lens.get('factorperf',0) < lens.get('factorseq',0):
+                raise ValueError('Context windows must match and cover the stock window')
         if self.no_need_to_load_data(use_data):
             return self
         self._memory_mark('module_data_initialize_start')
@@ -113,7 +122,8 @@ class DataModule(Base.BoundLogger):
             factor_end_dt = self.factor_end_dt , 
             filter_secid = self.config.input_filter_secid , 
             filter_date = self.config.input_filter_date , 
-            dtype = self.config.precision)
+            dtype = self.config.precision,
+            factor_sequence_dataset=self.config.Param.get('input.factor_sequence.dataset'))
 
         self._memory_mark(
             'module_data_load_start', input_keys=self.input_keys,
@@ -411,7 +421,7 @@ class DataModule(Base.BoundLogger):
         if max_nan > 0:
             autofill_kw = self.config.input_verify_x_autofill
             for key in self.input_keys_data:
-                if key in x_full:
+                if key in x_full and key not in ("factorseq", "factorperf", "factormarket"):
                     # week-like packs: axis=1 only; 15m/30m: stretch date×inday
                     stretch = not PrePros.use_direct_ffill(key)
                     DataBlock.autofill_values(
@@ -420,19 +430,22 @@ class DataModule(Base.BoundLogger):
                     )
         self._memory_mark('loader_static_autofill_end')
 
-        self.y_std = self.data_operator.fill_y_zero_no_trade(
-            self.labels[:,self.d0:self.d1] ,
-            self.y_date ,
-            self.y_secid ,
-            self.config.labels ,
-            coverage = self.datas.label_coverage[:,self.d0:self.d1] ,
-        )
+        if 'factorseq' in x_full:
+            self.y_std = self.labels[:,self.d0:self.d1].clone()
+        else:
+            self.y_std = self.data_operator.fill_y_zero_no_trade(
+                self.labels[:,self.d0:self.d1] ,
+                self.y_date ,
+                self.y_secid ,
+                self.config.labels ,
+                coverage = self.datas.label_coverage[:,self.d0:self.d1] ,
+            )
 
-        x_shapes = [x.shape[:2] for x in x_full.values()]
+        x_shapes = [x.shape[:2] for key, x in x_full.items() if key not in ("factorperf", "factormarket")]
         assert all(x == self.y_std.shape[:2] for x in x_shapes) , (x_shapes , self.y_std.shape)
 
         x_input = self.data_operator.model_x_input(x_full)
-        y_to_check = self.y_std if self.is_fitting else None
+        y_to_check = self.y_std if self.is_fitting or ('factorseq' in x_full and self.stage == 'test') else None
 
         eff_mask = self.data_operator.effective_samples(
             x_input , y_to_check , self.step_idx , x_finite = x_finite ,
@@ -579,7 +592,26 @@ class DataModule(Base.BoundLogger):
         if effective is None: 
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(effective)) , self.step_idx
-        sample_index = self.data_operator.split_sample(effective , index0 , index1)
+        if 'factorseq' in x and self.stage == 'fit' and self.config.Param.get('train.factor_sequence.train_dates'):
+            tr = self.config.Param['train.factor_sequence.train_dates']
+            va = self.config.Param['train.factor_sequence.valid_dates']
+            horizon = self.config.Param.get('train.dataloader.purge_horizon', 0)
+            if not va or int(CALENDAR.td(max(tr), horizon)) >= min(va):
+                raise ValueError('Factor sequence train labels cross the validation boundary')
+            if int(CALENDAR.td(max(va), horizon)) > self.model_date:
+                raise ValueError('Factor sequence validation labels cross the test boundary')
+            sample_index = {}
+            for group in ('train', 'valid'):
+                wanted = set(self.config.Param[f'train.factor_sequence.{group}_dates'])
+                available = {int(self.y_date[int(t)]) for t in index1}
+                if not wanted <= available:
+                    raise ValueError(f'Explicit {group} dates are absent from the loaded window')
+                sample_index[group] = [torch.stack((index0[effective[:,j]], torch.full_like(index0[effective[:,j]], int(t))),dim=1)
+                                       for j,t in enumerate(index1) if int(self.y_date[int(t)]) in wanted]
+                if not sample_index[group]:
+                    raise ValueError(f'No {group} batches for the explicit purged split')
+        else:
+            sample_index = self.data_operator.split_sample(effective , index0 , index1)
         self._memory_mark(
             'static_dataloader_split_end',
             batches={key: len(value) for key, value in sample_index.items()},
@@ -594,6 +626,8 @@ class DataModule(Base.BoundLogger):
             shuf_opt = self.config.shuffle_option if set_key == 'train' else 'static'
             batch_keys : list[str] = []
             for bnum , b_i in enumerate(set_samples):
+                if 'factorseq' in x and b_i.numel() <= 100:
+                    raise ValueError(f'Factor sequence {set_key} batch {bnum} has at most 50 valid stocks')
                 if b_i.numel() == 0:
                     continue
                 if b_i.numel() <= 100:
@@ -631,6 +665,16 @@ class DataModule(Base.BoundLogger):
     ) -> list[torch.Tensor]:
         datas = []
         for model_data_type , data in x.items():
+            if model_data_type in ('factorperf', 'factormarket'):
+                if len(torch.unique(torch.as_tensor(index1))) != 1:
+                    raise ValueError('Shared context requires single-date batches')
+                shared_i0 = torch.zeros(1, dtype=torch.long)
+                shared_i1 = torch.as_tensor(index1[:1])
+                batch = self.data_operator.rolling_rotation(model_data_type, data, shared_i0, shared_i1)
+                if not torch.isfinite(batch).all():
+                    raise ValueError('Nonfinite shared context')
+                datas.append(batch)
+                continue
             if self.config.module_type == 'nn' and (~torch.isfinite(data[index0 , index1])).all():
                 self.logger.error(f'{model_data_type} meaningful_dates: {self.datas.x[model_data_type].meaningful_dates}')
                 self.logger.error(f'date: {self.y_date[index1[0]]} , keys: {x.keys()}')
@@ -638,7 +682,8 @@ class DataModule(Base.BoundLogger):
                 raise ValueError(f'Get all non-finite in {model_data_type} at index {index0} , {index1}')
             features = self.datas.x[model_data_type].feature if model_data_type in self.datas.x else None
             data = self.data_operator.rolling_rotation(model_data_type , data , index0 , index1)
-            data = self.prenorm_operator.prenorm(model_data_type , data , features)
+            if model_data_type != 'factorseq':
+                data = self.prenorm_operator.prenorm(model_data_type , data , features)
             if self.config.module_type == 'nn' and (~torch.isfinite(data)).any():
                 date = int(self.y_date[int(index1[0].item())])
                 raise ValueError(
@@ -781,12 +826,18 @@ class DataModule(Base.BoundLogger):
     def min_test_date(self):
         if hasattr(self , 'test_full_dates'):
             return self.test_full_dates.min() if len(self.test_full_dates) > 0 else 99991231
+        if self.config.Param.get('input.factor_sequence.dataset'):
+            from src.data.preprocess.factor_sequence.bundle import load
+            return load(self.config.Param['input.factor_sequence.dataset'])['dates'][0]
         return ModuleData.min_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names, y_labels = self.config.labels) or 99991231
 
     @property
     def max_test_date(self):
         if hasattr(self , 'test_full_dates'):
             return self.test_full_dates.max() if len(self.test_full_dates) > 0 else 19000101
+        if self.config.Param.get('input.factor_sequence.dataset'):
+            from src.data.preprocess.factor_sequence.bundle import load
+            return load(self.config.Param['input.factor_sequence.dataset'])['dates'][1]
         return ModuleData.max_data_date(self.input_keys_data + self.input_keys_factor , factor_names = self.config.input_factor_names) or 19000101
 
     @property

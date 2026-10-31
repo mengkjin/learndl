@@ -128,3 +128,9 @@ model.window.linear: 0
 
 # Opt-in first-batch metric/diagnostic optimizations; false preserves legacy paths.
 train.experimental_metrics_fastpath: false
+
+# Opt-in factor-sequence experiments. No effect on existing schedules.
+input.factor_sequence.dataset: null
+train.dataloader.purge_horizon: 0
+train.factor_sequence.train_dates: []
+train.factor_sequence.valid_dates: []
