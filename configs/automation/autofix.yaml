@@ -136,3 +136,12 @@ fixes:
       email: true
     timeout: 10m
     enabled: true
+  - id: 20261031_factor_sequence_progress_01
+    description: 非阻塞只读诊断 factor_sequence_verify_02 的阶段、调度记录、日志尾部与邮件状态，发送进度邮件，不重启训练。
+    script: scripts/.autofix/check_factor_sequence_progress.py
+    blocking: none
+    params:
+      run_id: 20261031_factor_sequence_verify_02
+      email: true
+    timeout: 10m
+    enabled: true

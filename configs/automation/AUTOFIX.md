@@ -312,3 +312,15 @@ watchdog 告警。执行前若同 ID 结果目录已存在则拒绝覆盖。无�
 默认 CyclicLR 的参数被合并进 StepLR；修复切换调度器类型时的参数替换，并增加真实
 Optimizer 的六模型更新测试。使用新 ID `20261031_factor_sequence_verify_02` 重试，
 同样 `blocking: none`，旧请求停用但账本和结果保留；已有相同内容的数据缓存正常校验复用。
+
+## 因子验证进度诊断
+
+`20261031_factor_sequence_progress_01` 是非阻塞一次性只读检查，目标为 `_verify_02`。
+直接在 autofix 中读取 suite/各段模型状态、只读调度账本与错误证据、最近四份阶段日志及
+对应 worker 日志的有界尾部、结果邮件状态。既有账本缺失时不创建，不重启或重复提交训练。
+PID 隔离中将宿主进程存活性标为未知，不能用不可见 PID 或日志陈旧直接认定任务死亡。
+结果及可靠邮件账本在 `results/factor_sequence_diagnostics/20261031_factor_sequence_progress_01/`，
+邮件附 `progress.json`。这是诊断成功通知，正文会单独说明被检查实验状态。
+三个离线测试和 autofix 清单校验通过；未在本机发信。
+服务器必须先同步此提交；若 Git 更新正在等现有代码读取锁释放，本检查也会延迟发布，
+非阻塞声明不会绕过 Git 互斥或直接强制更新运行中的代码。
