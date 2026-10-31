@@ -126,4 +126,13 @@ fixes:
       dry_run: false
       email: true
     timeout: 10m
+    enabled: false
+  - id: 20261031_factor_sequence_verify_02
+    description: 修复 StepLR 配置合并后非阻塞重试因子时序验证；共享 GPU worker 空闲后执行离线测试和四阶段，2017 年至最新成熟标签，六模型各 3 epoch，自动邮件报告。
+    script: scripts/.autofix/request_factor_sequence.py
+    blocking: none
+    params:
+      dry_run: false
+      email: true
+    timeout: 10m
     enabled: true

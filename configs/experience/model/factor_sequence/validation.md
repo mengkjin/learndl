@@ -110,3 +110,15 @@ factorseq / factorperf / factormarket 分别为 330 / 2454 / 26 个通道，公�
 使用修改前 HEAD 的 idle_worklist/runtime 代码对照，失败数量与测试名称完全一致，
 包括已过时的 installed_config mock 和监督状态断言；不将这些既有失败记为通过。
 本机未运行真实服务器任务，Git 发布后由服务器领取请求。
+
+## 首段训练初始化失败与修复（2026-10-31）
+
+服务器 `_01` 的离线、discover、build、audit、plan 已通过。数据版本
+`7f15876de75cdb51189de190`，历史 20110104–20261030；当前标签块成熟终点为 20260723，
+计划 37 段、222 次训练。smoke_000 首个 MLP 在 StepLR 初始化失败，尚未完成训练。
+
+根因是扁平配置只覆盖已知叶子：scheduler.name 改为 step 后，旧 base_lr/step_size_up
+仍存在，新 step_size/gamma 未进入配置。现仅在显式覆盖改变调度器类型时替换其完整子树，
+同类型覆盖行为保持不变。24 项离线测试通过；增强的配置测试以实际 ModelConfig/Optimizer
+对六个模型执行梯度、optimizer.step 和 scheduler.step，并核验旧 cycle 配置仍可初始化。
+此结果不冒充真实 GPU 训练通过。发布 `_02` 新请求继续验证。

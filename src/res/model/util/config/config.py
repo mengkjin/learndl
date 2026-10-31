@@ -229,7 +229,19 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             self.logger.alert1(f'Model module is transformer, will update conditional config' , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))
         
+        # A different scheduler has a different constructor schema. Flattened
+        # leaf merging otherwise retains CyclicLR kwargs and drops StepLR kwargs.
+        requested_scheduler = get_config_dict(self.override).get('train.trainer.scheduler', {})
+        previous_scheduler = self.Param.get('train.trainer.scheduler', {})
+        replace_scheduler = (requested_scheduler.get('name') is not None and
+                             requested_scheduler['name'] != previous_scheduler.get('name'))
         self.Param.update(self.override)
+        if replace_scheduler:
+            prefix = 'train.trainer.scheduler'
+            for key in list(self.Param.flattened):
+                if key == prefix or key.startswith(prefix + '.'):
+                    del self.Param.flattened[key]
+            self.Param.update({prefix: requested_scheduler}, relevant_only=False)
         return self
 
     def check_validity(self):

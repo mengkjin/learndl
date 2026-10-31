@@ -242,6 +242,25 @@ class ModelTests(unittest.TestCase):
                           'factorseq_m2',split,20250102),stage=0,resume=0,selection=0,vb_level=0)
         self.assertEqual(config.Param['train.factor_sequence.train_dates'],split['train'])
         self.assertEqual(config.Param['train.criterion.loss'],{'mse':{}})
+        from src.res.model.util.trainer.optimizer import Optimizer
+        self.assertEqual(config.trainer_scheduler,
+                         {'name':'step','param':{'step_size':1000,'gamma':1.}})
+        for cls in MODELS.values():
+            net=cls([20,10,9],hidden_dim=8,dropout=0)
+            trainer_optimizer=Optimizer(net,config)
+            trainer_optimizer.optimizer.zero_grad()
+            net(self.x)[0].square().mean().backward()
+            trainer_optimizer.optimizer.step()
+            trainer_optimizer.scheduler.step()
+            self.assertAlmostEqual(trainer_optimizer.last_lr,.001)
+        # Existing same-type cyclic schedules keep normal leaf overrides.
+        cyclic=ModelConfig(module='factorseq_mlp',override={
+            'train.trainer.scheduler':{'name':'cycle','param':{'step_size_up':12}}},
+            stage=0,resume=0,selection=0,vb_level=0)
+        self.assertEqual(cyclic.trainer_scheduler['param']['step_size_up'],12)
+        self.assertIn('base_lr',cyclic.trainer_scheduler['param'])
+        Optimizer(MODELS['factorseq_mlp']([20,10,9],hidden_dim=8),cyclic)
+
         self.assertTrue(config.Param['input.factor_sequence.dataset'].endswith('/fs_test'))
         self.assertRaises(ValueError,purged_split,np.arange(100),np.arange(100)+11)
         result=purged_split(np.arange(700),np.arange(700)+11)
