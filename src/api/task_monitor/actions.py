@@ -29,6 +29,8 @@ class KillResult:
 
 
 def kill_unavailable_reason(task: TaskSnapshot) -> str | None:
+    if task.managed_kind is not None:
+        return 'Managed process group: use its scheduler lifecycle controls; ordinary task kill is unavailable.'
     if not task.is_active:
         return 'This task has finished.'
     if not task.pid or task.pid <= 0:

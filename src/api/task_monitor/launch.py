@@ -421,6 +421,8 @@ def _render_running() -> None:
                 with st.container(border=True):
                     st.markdown(f'**{Path(task.script).name}**')
                     st.caption(f'{task.display_status.upper()} · PID {task.pid or "—"}')
+                    if task.managed_kind:
+                        st.caption(f'Watchdog group · {task.managed_phase}')
                     st.caption(f'Started {_time(task.effective_start)} · {_duration(task)}')
                     view, kill = st.columns(2)
                     view.button('Output', key=f'view-{task.task_id}', on_click=_pin_task,
@@ -444,6 +446,10 @@ def _render_running() -> None:
                 st.write(task.script)
                 st.caption(f'Task ID: {task.task_id} · Source: {task.source or "unknown"}')
                 st.code(task.cmd, language='shell')
+                if task.managed_kind:
+                    st.caption(f'Managed phase: {task.managed_phase} · Child PIDs: {task.child_pids or "none visible"}')
+                    if task.exit_message:
+                        st.info(task.exit_message)
                 if task.display_status == 'stale':
                     st.warning('The recorded PID has exited; waiting for watchdog reconciliation.')
         elif selected:

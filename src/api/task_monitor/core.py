@@ -21,7 +21,7 @@ PageCursor: TypeAlias = tuple[float, str]
 
 ACTIVE_STATUSES = frozenset(('starting', 'running'))
 FINISHED_STATUSES = frozenset(('complete', 'error', 'killed'))
-BACKGROUND_SOURCES = frozenset(('bash', 'cron', 'nohup', 'systemd', 'autofix'))
+BACKGROUND_SOURCES = frozenset(('bash', 'cron', 'nohup', 'systemd', 'autofix', 'watchdog'))
 TIME_WINDOW_SECONDS: dict[TimeWindow, float | None] = {
     'history': None,
     'last_day': 86400,
@@ -55,6 +55,10 @@ class TaskSnapshot:
     exit_files: tuple[Path, ...] = ()
     crash_log: Path | None = None
     pid_alive: bool | None = None
+    managed_kind: str | None = None
+    managed_phase: str | None = None
+    process_created: float | None = None
+    child_pids: tuple[int, ...] = ()
 
     @property
     def is_active(self) -> bool:
@@ -123,9 +127,14 @@ def read_live_log(path: Path | None, *, max_bytes: int = 512 * 1024, max_lines: 
 class TaskMonitorRepository:
     """Read task metadata without mutating lifecycle state."""
 
-    def __init__(self, db_path: Path | None = None, runtime_dir: Path | None = None) -> None:
+    def __init__(self, db_path: Path | None = None, runtime_dir: Path | None = None,
+                 autofix_path: Path | None = None) -> None:
         self.db_path = Path(db_path) if db_path is not None else TaskDatabase.get_db_path()
         self.runtime_dir = Path(runtime_dir) if runtime_dir is not None else PATH.runtime
+        if autofix_path is None and runtime_dir is None:
+            from src.automation.scheduling.autofix_store import state_dir
+            autofix_path = state_dir()/'ledger.sqlite'
+        self.autofix_path = Path(autofix_path) if autofix_path is not None else None
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(f'{self.db_path.as_uri()}?mode=ro', uri=True, timeout=2)
@@ -163,7 +172,27 @@ class TaskMonitorRepository:
             pid_alive=_pid_alive(pid) if status in ACTIVE_STATUSES else None,
         )
 
-    def list_tasks(
+    def _managed_tasks(self, *, detail=False, task_id=None):
+        from .managed import snapshots
+        return snapshots(self, detail=detail, task_id=task_id)
+
+    def list_tasks(self, *, statuses=None, window='last_day', cursor=None, limit=50, now=None):
+        """Merge script rows and managed groups with one stable pagination cursor."""
+        selected = {'running','complete','error','killed'} if statuses is None else statuses
+        cutoff = self._cutoff(window, now)
+        managed = [t for t in self._managed_tasks()
+                   if ('running' if t.is_active else t.status) in selected
+                   and (cutoff is None or t.is_active or t.effective_start >= cutoff)]
+        base = self._list_script_tasks(statuses=statuses, window=window, cursor=cursor,
+                                       limit=limit+1, now=now)
+        visible = [t for t in managed if cursor is None or (t.effective_start,t.task_id)<cursor]
+        combined = sorted([*base.tasks,*visible], key=lambda t:(t.effective_start,t.task_id), reverse=True)
+        more = len(combined)>limit or base.next_cursor is not None
+        tasks = tuple(combined[:limit])
+        next_cursor = (tasks[-1].effective_start,tasks[-1].task_id) if more and tasks else None
+        return TaskPage(tasks,base.total+len(managed),next_cursor,any(t.is_active for t in tasks))
+
+    def _list_script_tasks(
         self, *, statuses: set[TaskStatus] | None = None, window: TimeWindow = 'last_day',
         cursor: PageCursor | None = None, limit: int = 50, now: float | None = None,
     ) -> TaskPage:
@@ -181,7 +210,7 @@ class TaskMonitorRepository:
         where = [f"status IN ({','.join('?' for _ in database_statuses)})"]
         params: list[object] = list(database_statuses)
         if (cutoff := self._cutoff(window, now)) is not None:
-            where.append('COALESCE(start_time, create_time) >= ?')
+            where.append("(COALESCE(start_time, create_time) >= ? OR status IN ('starting','running'))")
             params.append(cutoff)
         count_where = list(where)
         count_params = list(params)
@@ -218,6 +247,8 @@ class TaskMonitorRepository:
 
     def get_task(self, task_id: str) -> TaskSnapshot | None:
         """Load exit files and crash metadata for one selected task only."""
+        if task_id.startswith('managed:'):
+            return next((t for t in self._managed_tasks(detail=True, task_id=task_id) if t.task_id==task_id), None)
         if not self.db_path.is_file():
             return None
         try:
@@ -246,12 +277,17 @@ class TaskMonitorRepository:
         )
         database_statuses = self._database_statuses(selected)
         counts = {status: 0 for status in ('running', 'complete', 'error', 'killed')}
+        cutoff = self._cutoff(window, now)
+        for task in self._managed_tasks():
+            logical = 'running' if task.is_active else task.status
+            if logical in selected and (cutoff is None or task.is_active or task.effective_start>=cutoff):
+                counts[logical] += 1
         if not self.db_path.is_file() or not database_statuses:
             return counts
         where = [f"status IN ({','.join('?' for _ in database_statuses)})"]
         params: list[object] = list(database_statuses)
         if (cutoff := self._cutoff(window, now)) is not None:
-            where.append('COALESCE(start_time, create_time) >= ?')
+            where.append("(COALESCE(start_time, create_time) >= ? OR status IN ('starting','running'))")
             params.append(cutoff)
         try:
             with self._connect() as connection:

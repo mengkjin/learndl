@@ -499,3 +499,20 @@ v3 Git 检查结果位于 `PATH.runtime/scheduling/git-channel.json`，失败由
 
 `installer status` 展示维护状态及最近 100 个日历请求的计划时间、启动延迟、等待原因和最终状态。
 日志与记录保留；升级前须解决旧日历服务冲突，避免新旧 worker 同时派发。实际 Linux systemd/Bubblewrap 行为需部署后验证。
+
+### Monitor 展示没有 ScriptTool 的受管任务
+
+Task Monitor 的查询现在合并脚本 `task_records`、调度 `scheduling/runs.sqlite` 与
+项目外 autofix 账本的执行记录。自动训练、定时任务和 autofix 的受管任务组即使没有
+ScriptTool，也显示为 `watchdog` 来源，提供原始阶段、主 PID、详情中的子进程 PID 和监督日志。
+这是按受管任务组展示，并不把操作系统的每个子进程都复制为独立任务；watchdog 心跳类
+短检查仍沿用健康状态展示。未接入这些受管记录的外部程序不属于自动发现范围。
+
+调度任务与脚本通过已有 task_links 且同 PID、同逻辑状态时去重；子脚本与父任务组的 PID
+不同则分别保留。活动任务不受“最近一天”等时间窗口截断。PID 存活校验同时比较进程创建时间，
+PID 已复用或退出显示 stale，Monitor 不负责修改调度状态。受管组不通过普通脚本 Kill 接口终止。
+账本缺失时不创建，所有查询只读；已有 `_02` 可直接显示，无需重新训练。
+代码同步后需让 Monitor 服务载入新代码；这不改变现有 Git/训练互斥规则，也不需重装调度单元。
+
+本次完整 Monitor 回归 55 项通过（包含需要宿主进程读取权限的内存采样测试）；
+新增覆盖无脚本数据库、旧长任务、分页计数、同进程去重、子进程保留、PID 复用、autofix 历史及只读查询。
