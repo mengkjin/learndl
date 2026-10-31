@@ -187,6 +187,8 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
                    else model_request)
         from .nn_metrics_ab import observe as observe_nn_ab
         request = (observe_nn_ab(store) if options.get('enabled') else None) or request
+        from .factor_sequence import observe as observe_factor_sequence
+        request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -276,6 +278,9 @@ def worker() -> int:
                 if request.get('task_kind') == 'nn_metrics_ab':
                     from .nn_metrics_ab import observe
                     next_candidate = observe(store) if options.get('enabled') else None
+                elif request.get('task_kind') == 'factor_sequence':
+                    from .factor_sequence import observe
+                    next_candidate = observe(store) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
                     from .rl_experiment import observe
                     next_candidate = observe(store)
@@ -309,8 +314,11 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
-    if request.get('task_kind') == 'nn_metrics_ab':
-        from .nn_metrics_ab import execute
+    if request.get('task_kind') in {'nn_metrics_ab', 'factor_sequence'}:
+        if request['task_kind'] == 'factor_sequence':
+            from .factor_sequence import execute
+        else:
+            from .nn_metrics_ab import execute
         from .recovery import record
         try:
             return execute(request, store)

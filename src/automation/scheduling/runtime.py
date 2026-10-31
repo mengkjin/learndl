@@ -85,7 +85,7 @@ def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
     """Keep legacy no-script-mail runs covered across a rolling code update."""
     if run['phase'] == 'deferred' or run.get('no_email'):
         return False
-    if run.get('task_kind') in {'rl_experiment', 'nn_metrics_ab'}:
+    if run.get('task_kind') in {'rl_experiment', 'nn_metrics_ab', 'factor_sequence'}:
         with store.connect() as connection:
             return connection.execute('SELECT 1 FROM script_mail WHERE run_id=?', (run['id'],)).fetchone() is None
     # Signals, reboot, launcher failure and watchdog termination are distinct
@@ -250,7 +250,7 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
         from src.api.calls.worklist_state import WorklistState
-        state = WorklistState(run['task']).read() if run.get('task_kind') not in {'rl_experiment', 'nn_metrics_ab'} else None
+        state = WorklistState(run['task']).read() if run.get('task_kind') not in {'rl_experiment', 'nn_metrics_ab', 'factor_sequence'} else None
         if state and state.get('revisions') == run.get('revisions'):
             run['completion'] = state
     except (OSError, ValueError):

@@ -298,6 +298,37 @@ class ModelTests(unittest.TestCase):
         self.assertRaises(ValueError,DataModule.batch_data_x,proxy,{'factorperf':p},torch.arange(2),torch.tensor([9,10]))
 
 class ServerSuiteTests(unittest.TestCase):
+    def test_cli_discovery_and_callable_entrypoint(self):
+        import sys
+        from src.api.util.backend.script import ScriptRunner, iter_runnable_scripts
+        from src.api.calls.script import RunPipelineScript
+        from src.proj.util.script.param_schema import ScriptParamSchema
+        key='4_train/6_factor_sequence_verify.py'
+        self.assertIn(key,[runner.script_key for runner in iter_runnable_scripts()])
+        runner=ScriptRunner.from_key(key)
+        self.assertFalse(runner.header.disabled)
+        self.assertFalse(runner.header.email)  # The suite owns mail, no second notification.
+        main=RunPipelineScript._load_main(runner)
+        schema=ScriptParamSchema.from_script(runner.script,main=main)
+        self.assertEqual(schema.sig_default('test_start'),20170101)
+        self.assertEqual({p.name for p in schema.params},set(schema.signature_defaults))
+        with TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            with patch('src.data.preprocess.factor_sequence.server_suite.run_suite',
+                       return_value=(folder,{'status':'passed'})) as run, \
+                 patch('src.data.preprocess.factor_sequence.server_suite.send_result',
+                       return_value={'status':'sent'}) as mail, \
+                 patch.object(sys,'argv',['host-cli','--unrelated-host-option']):
+                self.assertEqual(main(run_id='cli_mock',test_start=20170101,research=True),0)
+                self.assertEqual(run.call_args.args[2],'cli_mock')
+                self.assertTrue(run.call_args.args[6])
+                mail.assert_called_once_with(folder,None)
+                run.return_value=(folder,{'status':'failed'})
+                with self.assertRaisesRegex(RuntimeError,'verification failed'):
+                    main(run_id='cli_mock_failed')
+                self.assertEqual(mail.call_count,2)
+
+
     def test_gate_identity_bounds_and_causality(self):
         torch.manual_seed(13)
         base=MODELS['factorseq_gru']([20,10,9],hidden_dim=8,dropout=0)

@@ -209,7 +209,8 @@ def audit(path):
         frame = pd.DataFrame({'v':v,'r':r}).replace([np.inf,-np.inf],np.nan).dropna()
         if len(frame) < cfg.min_performance or frame.v.nunique() < 2:
             return None
-        group = np.floor((frame.v.rank(method='average')-.5)*10/len(frame)).clip(max=9)
+        # np.floor preserves the pandas Series: use upper, not ndarray max.
+        group = np.floor((frame.v.rank(method='average')-.5)*10/len(frame)).clip(upper=9)
         top, bottom = frame.r[group == 9], frame.r[group == 0]
         expected = {'ic':frame.v.rank().corr(frame.r.rank()) if frame.r.nunique()>1 else np.nan,
                     'top':top.mean()-frame.r.mean() if len(top) and len(bottom) else np.nan,

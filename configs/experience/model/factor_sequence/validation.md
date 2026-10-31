@@ -1,5 +1,20 @@
 # 首版验证记录（2026-10-30）
 
+## 服务器失败报告与 CLI 修复（2026-10-31）
+
+收到 run `fs_server_20261031T114646Z_49d0f6` 的 suite.json 和 result_report.zip。
+服务器在 offline 阶段终止：23 项测试中 3 项报错，均为 pandas Series.clip 不接受 max 参数。
+发生位置为 bundle 的审计分组和 pipeline 的评价分组；np.floor(Series) 仍返回 Series。
+恢复为 clip(upper=9)，其余数据逻辑不变。尚未运行 build、audit 或真实训练。
+
+脚本未出现在 Run Scripts 的原因为头部普通注释被当作 YAML 解析，header 被禁用。
+现已用空行结束 YAML 元数据，并登记运行参数。CLI 直接调用 main(**kwargs)，
+因此另将 argparse 移到独立入口，避免解析外层 CLI 的参数；运行失败会明确抛错。
+
+修复后 24 项离线测试全部通过，包括真实脚本发现、CLI 动态加载、参数传递及失败后通知。
+测试中的训练与邮件均为 mock，未启动真实服务器训练或发送邮件。
+更新服务器代码后重新进入 Run Scripts，使用新 run ID 重跑；旧失败记录保留。
+
 ## 门控模型与服务器入口
 
 新增 `factorseq_gate` 和 `scripts/4_train/6_factor_sequence_verify.py`。
@@ -87,3 +102,11 @@ factorseq / factorperf / factormarket 分别为 330 / 2454 / 26 个通道，公�
 - 分块构建采用历史前缀重放以保证正确性；股票块尚未做内存受限的流式实现。
 - 来源为每日快照；不能证明历史数据库无事后修订，也不能恢复底层披露/更新时间。
 - 成本后收益需要后续真实持仓/成交评价，当前不会从 10 日标签生成伪日净值。
+
+## 非阻塞 autofix 发布验证（2026-10-31）
+
+`20261031_factor_sequence_verify_01` 清单验证通过；24 项因子测试、3 项一次性请求测试通过。
+扩展运行 idle_worklist/channels/autofix 的 99 项原有测试，出现 5 个失败、16 个错误、1 个跳过；
+使用修改前 HEAD 的 idle_worklist/runtime 代码对照，失败数量与测试名称完全一致，
+包括已过时的 installed_config mock 和监督状态断言；不将这些既有失败记为通过。
+本机未运行真实服务器任务，Git 发布后由服务器领取请求。
