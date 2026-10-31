@@ -140,6 +140,9 @@ def check_and_update(options: dict, *, root: Path | None = None) -> dict:
     directory = runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
     from .maintenance_gate import MaintenanceBusy, permit
+    from . import channels
+    if channels.enabled():
+        return _channel_update(root, options)
     try:
         with permit(exclusive=True, blocking=False, task_class='git'):
             from . import priority
@@ -155,7 +158,7 @@ def check_and_update(options: dict, *, root: Path | None = None) -> dict:
         return {'status': 'deferred', 'reason': 'execution/code lease occupied; Git retains priority'}
 
 
-def _admitted_update(root, options):
+def _admitted_update(root, options, *, target_snapshot=None):
     from . import priority
     if not priority.enabled():
         return _update(root, options)
@@ -180,7 +183,7 @@ def _admitted_update(root, options):
         priority.write(store, {'phase': 'idle', 'last_completed': time.time()})
         return {'status': 'disabled'}
     try:
-        result = _update(root, options)
+        result = _update(root, options) if target_snapshot is None else _update(root, options, target_snapshot=target_snapshot)
     except Exception as exc:
         # Even a notice/database error after merge must end this Python process.
         result = {'status': 'error', 'reason': f'{type(exc).__name__}: {exc}',
@@ -189,7 +192,7 @@ def _admitted_update(root, options):
         priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'result': result})
     return result
 
-def _update(root: Path, options: dict) -> dict:
+def _update(root: Path, options: dict, *, target_snapshot=None) -> dict:
     deadline = time.monotonic() + options.get('max_seconds', 45)
     result: dict = {}
     try:
@@ -199,9 +202,14 @@ def _update(root: Path, options: dict) -> dict:
         result['before'] = before
         # Fetch only master. Keep the target hash fixed for all subsequent checks
         # instead of reading FETCH_HEAD which another fetch could overwrite.
-        _git(root, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin',
-                    'refs/heads/master:refs/learndl/watchdog-master'], deadline)
-        target = _git(root, ['rev-parse', 'refs/learndl/watchdog-master^{commit}'], deadline)
+        if target_snapshot is None:
+            _git(root, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin',
+                        'refs/heads/master:refs/learndl/watchdog-master'], deadline)
+            target = _git(root, ['rev-parse', 'refs/learndl/watchdog-master^{commit}'], deadline)
+        else:
+            expected_before, target = target_snapshot
+            if before != expected_before:
+                return dict(result, status='deferred', reason='HEAD changed since remote check')
         result = {'before': before, 'remote_head': target}
         if before == target:
             return dict(result, status='up_to_date')
@@ -249,3 +257,77 @@ def _update(root: Path, options: dict) -> dict:
         # Returning an error result still advances the five-minute poll deadline;
         # authentication/network failures must not cause a one-minute retry storm.
         return dict(result, status='error', reason=str(exc))
+
+
+def _channel_update(root, options):
+    """Fetch before admission; only an applicable commit reserves business lanes."""
+    from . import channels, priority
+    from .autofix_store import Store, state_dir
+    from .maintenance_gate import permit, MaintenanceBusy
+    from src.proj.util.web.mail_package import atomic_json
+    store = Store(state_dir())
+    result = {}
+    with portalocker.Lock(str(runtime_dir() / 'git-worker.lock'), timeout=0):
+        state = priority.read(store)
+        if state['phase'] not in {'checkout', 'blocked'}:
+            deadline = time.monotonic() + options.get('max_seconds', 45)
+            try:
+                if not options.get('enabled'):
+                    channels.release(store, 'git')
+                    return {'status': 'disabled'}
+                if reason := repository_blocker(root, deadline):
+                    channels.release(store, 'git')
+                    return {'status': 'deferred', 'reason': reason}
+                before = _git(root, ['rev-parse', 'HEAD'], deadline)
+                _git(root, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin',
+                            'refs/heads/master:refs/learndl/watchdog-master'], deadline)
+                target = _git(root, ['rev-parse', 'refs/learndl/watchdog-master^{commit}'], deadline)
+                if target == before:
+                    channels.release(store, 'git')
+                    return {'status': 'up_to_date'}
+                if _git(root, ['merge-base', before, target], deadline, allow_failure=True) != before:
+                    channels.release(store, 'git')
+                    return {'status': 'deferred', 'reason': 'local commits or divergent master'}
+                if not channels.reserve(store, 'git', channels.GROUPS):
+                    return {'status': 'deferred', 'reason': 'maintenance occupied or cooling down'}
+            except (OSError, GitUpdateError) as exc:
+                channels.release(store, 'git')
+                return {'status': 'error', 'reason': str(exc)}
+        try:
+            with permit(exclusive=True, blocking=False, task_class='git'):
+                with portalocker.Lock(str(runtime_dir() / 'git_update.lock'), mode='a', timeout=0):
+                    if state['phase'] not in {'checkout', 'blocked'}:
+                        # Manual/non-managed trainer coverage retained as a final check.
+                        if reason := training_blocker():
+                            return {'status': 'deferred', 'reason': reason}
+                        channels.running(store, 'git')
+                    result = _admitted_update(root, options, target_snapshot=(before, target) if state['phase'] not in {'checkout', 'blocked'} else None)
+                    if not result.get('checkout_attempted') and result.get('status') != 'blocked':
+                        channels.release(store, 'git')
+                    return result
+        except (portalocker.LockException, MaintenanceBusy) as exc:
+            return {'status': 'deferred', 'reason': str(exc) or 'code users still active'}
+        finally:
+            atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
+
+
+def main():
+    from .config import installed_config
+    from . import channels
+    from src.proj.util.web.mail_package import atomic_json
+    config = installed_config() or {}
+    if not channels.enabled():
+        return 0
+    options = config['watchdog']['jobs'].get('git_auto_update', {})
+    try:
+        result = check_and_update(options)
+    except Exception as exc:
+        result = {'status': 'error', 'reason': f'{type(exc).__name__}: {exc}'}
+    # On checkout, do not import project modules after the tree changed.
+    atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
+    print(json.dumps(result, ensure_ascii=False), flush=True)
+    return int(result.get('status') in {'error', 'blocked'})
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -13,7 +13,7 @@ import sys
 import time
 
 
-def code_pending(directory):
+def code_pending(directory, *, ignore_reservation=False):
     with sqlite3.connect((directory / 'ledger.sqlite').as_uri() + '?mode=ro', uri=True) as db:
         row = db.execute("SELECT value FROM metadata WHERE key='scheduling_git'").fetchone()
     if row is None:
@@ -21,12 +21,26 @@ def code_pending(directory):
     state = json.loads(row[0])
     if state.get('phase') not in {'idle', 'draining', 'checkout', 'blocked'}:
         raise RuntimeError('Invalid scheduling priority state')
+    settings_path = directory / 'worker-settings.json'
+    settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+    installed_path = Path(settings['runtime']) / 'installed.json' if settings.get('runtime') else None
+    version = json.loads(installed_path.read_text()).get('scheduler_version', 1) if installed_path else 1
+    if version >= 3:
+        with sqlite3.connect((directory / 'ledger.sqlite').as_uri() + '?mode=ro', uri=True) as db:
+            row = db.execute("SELECT value FROM metadata WHERE key='channel_maintenance'").fetchone()
+        if row is None:
+            raise RuntimeError('Missing channel maintenance state')
+        reservation = json.loads(row[0])
+        if not ignore_reservation and reservation.get('owner') == 'git' and (reservation['phase'] == 'running' or
+                reservation['phase'] == 'waiting' and time.time() < reservation['deadline']):
+            return True
+        return state['phase'] in {'checkout', 'blocked'}
     return state['phase'] != 'idle'
 
 
 def wait_for_code(directory, kind):
     try:
-        return code_pending(directory)
+        return code_pending(directory, ignore_reservation=kind == 'watchdog')
     except (OSError, ValueError, sqlite3.Error, RuntimeError):
         # The independent control-failure outbox must survive ledger loss.
         # This exception applies only to mail, still under the physical code
@@ -43,9 +57,11 @@ def main():
     if kind == 'calendar':
         os.environ['LEARNDL_SCHEDULE_SLOT'] = str(int(time.time() // 60))
     targets = {
+        'watchdog': ('src.api.task_monitor.watchdog', []),
         'autofix': ('src.api.task_monitor.scheduling.autofix', ['worker']),
         'deferred': ('src.api.task_monitor.scheduling.runner', ['deferred']),
         'calendar': ('src.api.task_monitor.scheduling.runner', ['run', *args]),
+        'lane': ('src.api.task_monitor.scheduling.runner', ['lane', *args]),
         'training': ('src.api.task_monitor.scheduling.idle_worklist', ['worker']),
         'email_outbox': ('src.api.task_monitor.scheduling.auxiliary', ['email_outbox']),
         'cli_recovery': ('src.api.task_monitor.scheduling.auxiliary', ['cli_recovery']),
@@ -58,6 +74,11 @@ def main():
     if kind == 'calendar' and modern:
         if len(args) != 1 or args[0] not in config['tasks']:
             raise ValueError('Unknown installed calendar task')
+        if config.get('scheduler_version', 1) >= 3 and config['tasks'][args[0]].get('window') == 'rcquant_evening':
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            planned = datetime.now(ZoneInfo(config['timezone'])).replace(hour=21, minute=1, second=0, microsecond=0)
+            os.environ['LEARNDL_SCHEDULE_SLOT'] = str(int(planned.timestamp() // 60))
         # Persist before even waiting for a code lease: a timer firing during
         # checkout must survive launcher death or a partially updated tree.
         with (directory / 'admission.lock').open('r+') as admission:

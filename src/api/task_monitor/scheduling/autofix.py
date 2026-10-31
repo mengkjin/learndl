@@ -275,7 +275,16 @@ def execute(store, root, row):
             code = process.wait()
             # Retain the exclusive lease until the whole supervised scope exits.
             from .runtime import members
-            while members(store.get(key)):
+            from .runtime import signal_members
+            termination_at = time.monotonic() if timed_out else None
+            while live := members(store.get(key)):
+                if time.monotonic() >= deadline:
+                    timed_out = True
+                    if termination_at is None:
+                        termination_at = time.monotonic()
+                        store.update(key, term_at=time.time())
+                    signal_members(store.get(key), live,
+                                   signal.SIGKILL if time.monotonic() - termination_at >= 30 else signal.SIGTERM)
                 time.sleep(.2)
         handoff = handoff or bool(_read_event(channel, 'started', nonce))
         result = _read_event(channel, 'finished', nonce)
@@ -284,7 +293,7 @@ def execute(store, root, row):
         success = handoff and result is not None and result.get('success') is True and code == 0 and not abnormal
         error = 'Execution timed out' if timed_out else f'Process exit={code}; script result={result.get("status") if result else "unavailable"}'
         kind = 'interrupted' if abnormal else 'startup_failed' if not handoff else None
-        store.update(key, event_kind=kind, error_tail=_error_tail(log, spec['params']) if kind else '', phase='success' if success else 'unknown' if abnormal else 'failed',
+        store.update(key, event_kind=kind, error_tail=_error_tail(log, spec['params']) if kind else '', phase='success' if success else 'timed_out' if timed_out else 'unknown' if abnormal else 'failed',
                               finished_at=time.time(), returncode=code, handoff=handoff,
                               error='' if success else error, script_result=result,
                               script_mail=_read_event(channel, 'mail', nonce) or {'enabled': spec['params']['email'], 'delivered': None})
@@ -355,6 +364,9 @@ def worker():
         with portalocker.Lock(str(store.directory / 'worker.lock'), mode='r+', timeout=0):
             if reconcile(store):
                 return worker_observation(store, 'waiting', 'An earlier autofix still has an active or uncertain process scope')
+            from . import channels
+            if channels.enabled():
+                return _channel_worker(store)
             # Deferred calendar tasks are dispatched before maintenance work.
             if store.scheduled():
                 return worker_observation(store, 'waiting', 'Deferred calendar tasks take priority; inspect learndl-deferred.service', queued=len(store.scheduled()))
@@ -383,6 +395,43 @@ def worker():
     except (portalocker.LockException, MaintenanceBusy) as exc:
         return worker_observation(store, 'waiting', f'Worker/maintenance permit occupied: {type(exc).__name__}: {exc}')
     return 0
+
+
+def _channel_worker(store):
+    from . import channels
+    from .maintenance_gate import permit, MaintenanceBusy
+    state = channels.read(store)
+    # Reconcile the previous supervisor before releasing a persisted reservation.
+    if state.get('owner', '').startswith('autofix:'):
+        prior = store.get(state['owner'].split(':', 1)[1])
+        if prior and prior['phase'] not in {'queued', 'starting', 'running'}:
+            channels.release(store, state['owner'])
+    if not discover(store, ROOT):
+        return worker_observation(store, 'configuration_error', 'Invalid autofix manifest', code=1)
+    rows = sorted((r for r in store.rows() if r['phase'] == 'queued'), key=lambda r: r['order'])
+    if not rows:
+        return worker_observation(store, 'idle', 'No queued fixes')
+    row = rows[0]
+    owner = 'autofix:' + row['id']
+    kind = row['item'].get('blocking', 'none')
+    if kind not in channels.BLOCKING:
+        # execute() records validation failures using the existing request ID.
+        kind = 'none'
+    groups = channels.BLOCKING[kind]
+    if groups and not channels.reserve(store, owner, groups):
+        return worker_observation(store, 'waiting', 'Maintenance admission occupied or cooling down')
+    try:
+        with permit(blocking=False, task_class=owner):
+            if groups:
+                channels.running(store, owner)
+            execute(store, ROOT, row)
+            outcome = store.get(row['id'])
+            if outcome['phase'] not in {'starting', 'running'}:
+                channels.release(store, owner)
+            return worker_observation(store, outcome['phase'], outcome.get('error', ''),
+                                      code=int(outcome['phase'] != 'success'), task_id=row['id'])
+    except (MaintenanceBusy, portalocker.LockException) as exc:
+        return worker_observation(store, 'waiting', str(exc))
 
 
 def _child():

@@ -10,7 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-READONLY = ('.venv', '.git', '.secret')
+READONLY = ('.venv', '.git', '.secret', 'src', 'scripts', 'configs', 'runs', 'pyproject.toml', 'uv.lock', '.python-version')
+WRITABLE = ('data', 'results', 'models', '.local_resources', '.logs', '.cache')
 
 
 def check_mounts(root: Path, mountinfo: str):
@@ -59,7 +60,7 @@ def check_tree(root: Path):
     for base, dirs, files in os.walk(root, followlinks=False, onerror=fail):
         base = Path(base)
         if base == root:
-            dirs[:] = [name for name in dirs if name not in READONLY]
+            dirs[:] = [name for name in dirs if name not in ('.venv', '.git', '.secret')]
         for name in list(dirs) + files:
             path = base / name
             meta = path.lstat()
@@ -68,6 +69,8 @@ def check_tree(root: Path):
             if os.path.ismount(path):
                 raise ValueError(f'Nested mount in writable project: {path}')
             if stat.S_ISREG(meta.st_mode) and meta.st_nlink > 1:
+                if path.relative_to(root).parts[0] in WRITABLE:
+                    raise ValueError(f'Writable data contains a hard link: {path}')
                 key = (meta.st_dev, meta.st_ino)
                 count, expected = links.get(key, (0, meta.st_nlink))
                 links[key] = (count + 1, expected)
@@ -85,7 +88,16 @@ def command(root: Path, request: Path, argv: list[str], *, executable=None) -> l
             '--disable-userns', '--new-session', '--die-with-parent', '--cap-drop', 'ALL',
             '--ro-bind', '/', '/',
             '--tmpfs', '/tmp', '--tmpfs', '/var/tmp', '--tmpfs', '/run', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/dev/shm',
-            '--bind', str(root), str(root)]
+            '--ro-bind', str(root), str(root)]
+    for name in WRITABLE:
+        path = root / name
+        if path.exists():
+            if path.is_symlink() or not path.is_dir():
+                raise ValueError(f'Writable data directory must be a real directory: {path}')
+            args += ['--bind', str(path), str(path)]
+    # Runtime scheduling locks/state must not be writable by a repair script.
+    for path in (root / '.local_resources').glob('*/runtime/scheduling'):
+        args += ['--ro-bind', str(path.resolve()), str(path)]
     for name in READONLY:
         path = root / name
         if path.exists():

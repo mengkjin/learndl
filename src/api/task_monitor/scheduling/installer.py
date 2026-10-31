@@ -209,7 +209,7 @@ def next_times(slots: set, timezone: str) -> list[str]:
 
 
 def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone: str) -> dict:
-    config = dict(config, scheduler_version=2)
+    config = dict(config, scheduler_version=3)
     coverage, conflicts, global_conflicts = cron_coverage(cron, config, root, local_timezone)
     desired: dict[str, set] = {key: set() for key in config['tasks']}
     for schedule in config['schedules'].values():
@@ -230,6 +230,11 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
             report[key]['conflicts'] = ['Cron backend requires server timezone to match configuration']
             conflicts[key] = report[key]['conflicts']
             continue
+        if wanted:
+            lane = 'learndl-lane-' + key
+            units[lane + '.service'] = protected_service(root, python, 'lane', [key])
+            units[lane + '.timer'] = ('[Unit]\nDescription=Learndl independent data lane\n[Timer]\n'
+                'OnCalendar=*-*-* *:*:00\nAccuracySec=1s\nPersistent=false\n[Install]\nWantedBy=timers.target\n')
         name = PREFIX + key
         if missing and task['backend'] == 'systemd':
             units[name + '.service'] = protected_service(root, python, 'calendar', [key])
@@ -258,16 +263,20 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         units[name + '.service'] = protected_service(root, python, job).replace('TimeoutStartSec=infinity', f'TimeoutStartSec={limit}s')
         units[name + '.timer'] = ('[Unit]\nDescription=Learndl auxiliary worker\n[Timer]\n'
             'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
+    units['learndl-git-update.service'] = service(root, python, 'src.api.task_monitor.scheduling.git_update', []).replace('TimeoutStartSec=infinity', 'TimeoutStartSec=120s')
+    units['learndl-git-update.timer'] = ('[Unit]\nDescription=Learndl Git check and maintenance\n[Timer]\n'
+        'OnBootSec=60s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Watchdog always has one trigger, even when individual jobs are disabled.
     tick = config['watchdog']['tick_seconds']
     if config['default_backend'] == 'systemd':
         watchdog_limit = max(180, tick + 15 * len(config['watchdog']['units']) + config['watchdog']['jobs'].get('task_monitor_cache', {}).get('max_seconds', 20))
-        units['learndl-watchdog.service'] = service(root, python, 'src.api.task_monitor.watchdog', []).replace('TimeoutStartSec=infinity', f'TimeoutStartSec={watchdog_limit}s') + 'Nice=10\nOOMScoreAdjust=-900\nMemoryMax=1G\n'
+        units['learndl-watchdog.service'] = protected_service(root, python, 'watchdog').replace('TimeoutStartSec=infinity', f'TimeoutStartSec={watchdog_limit}s') + 'Nice=10\nOOMScoreAdjust=-900\nMemoryMax=1G\n'
         units['learndl-watchdog.timer'] = ('[Unit]\nDescription=Learndl maintenance\n[Timer]\n'
                                           f'OnBootSec=90s\nOnUnitInactiveSec={tick}s\nAccuracySec=1s\n'
                                           '[Install]\nWantedBy=timers.target\n')
     else:
-        invocation = shlex.join([str(python), '-m', 'src.api.task_monitor.watchdog'])
+        from .autofix_store import state_dir
+        invocation = shlex.join([str(python), str(state_dir() / 'worker_bootstrap.py'), 'watchdog'])
         cron_lines.append(f'*/{tick // 60} * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
     if any(config['watchdog']['jobs'].get(job, {}).get('enabled') for job in ('idle_worklist', 'rl_experiment')):
         if config['default_backend'] == 'systemd':
@@ -355,7 +364,7 @@ def validate_unit(name: str, contents: str) -> None:
         if name == 'learndl-idle-worklist.service':
             expected = ['-m', 'src.api.task_monitor.scheduling.idle_worklist', 'worker']
         from .autofix_store import state_dir
-        kind = {'learndl-autofix.service': 'autofix', 'learndl-deferred.service': 'deferred',
+        kind = {'learndl-watchdog.service': 'watchdog', 'learndl-autofix.service': 'autofix', 'learndl-deferred.service': 'deferred',
                 'learndl-idle-worklist.service': 'training'}.get(name)
         arguments = []
         if name.startswith(PREFIX):
@@ -365,6 +374,11 @@ def validate_unit(name: str, contents: str) -> None:
             if kind not in {'email_outbox', 'cli_recovery', 'task_monitor_cache'}:
                 raise ValueError('Unexpected auxiliary worker')
             expected = None
+        if name.startswith('learndl-lane-'):
+            kind, arguments = 'lane', [name.removeprefix('learndl-lane-').removesuffix('.service')]
+            expected = None
+        if name == 'learndl-git-update.service':
+            expected = ['-m', 'src.api.task_monitor.scheduling.git_update']
         protected = [str(state_dir() / 'worker_bootstrap.py'), kind, *arguments] if kind else None
         if argv[1:] != expected and argv[1:] != protected:
             raise ValueError('Unexpected service command')
@@ -418,7 +432,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if actual_desktop is not None and actual_desktop not in (previous.get('desktop_autostart'), desired_desktop, interrupted_desktop):
         raise RuntimeError(f'Desktop autostart was externally changed: {desktop}')
     for name in previous['units']:
-        if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
+        if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
@@ -441,7 +455,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
-            if not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
+            if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
                 raise ValueError('Invalid transaction unit name')
             path = UNIT_DIR / name
             if path.exists():
@@ -449,6 +463,8 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     # Preserve previously installed configuration for tasks blocked by ambiguity.
     old_config_path = directory / 'installed.json'
     old_config = json.loads(old_config_path.read_text()) if old_config_path.exists() else None
+    if old_config and old_config.get('scheduler_version', 1) < 3 and plan['config'] and plan['config'].get('scheduler_version', 1) >= 3 and plan['conflicts']:
+        raise RuntimeError('Resolve legacy schedule conflicts before upgrading channel workers')
     if old_config and old_config.get('autofix_initialized') and plan['config']:
         plan['config']['autofix_initialized'] = True
     if old_config and old_config.get('autofix_initialized'):
@@ -466,10 +482,10 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             kept = [line for line in block.splitlines() if f'run {key} ' not in line and f'calendar {key} ' not in line]
             plan['cron'] = before + BEGIN + '\n' + '\n'.join(line for line in kept if line) + '\n' + END + after
         for name in list(plan['units']):
-            if name.startswith(PREFIX + key + '.'):
+            if name.startswith((PREFIX + key + '.', 'learndl-lane-' + key + '.')):
                 del plan['units'][name]
         for name, contents in previous['units'].items():
-            if name.startswith(PREFIX + key + '.'):
+            if name.startswith((PREFIX + key + '.', 'learndl-lane-' + key + '.')):
                 plan['units'][name] = contents
         if old_config and key in old_config['tasks']:
             plan['config']['tasks'][key] = old_config['tasks'][key]
@@ -505,12 +521,15 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             from .priority import read
             from .autofix_store import Store
             read(Store(state_dir()))  # Missing authority is never silently reset.
+            if old_config.get('scheduler_version', 1) >= 3:
+                from .channels import read as read_channels
+                read_channels(Store(state_dir()))
     if not recovering and policy_matches and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
         print('Already up to date')
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
-    if any(not re.fullmatch(r'(learndl-schedule-[a-z][a-z0-9_]*|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name) for name in names):
+    if any(not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name) for name in names):
         raise ValueError('Invalid managed unit name')
     with tempfile.TemporaryDirectory(prefix='learndl-install-') as temp:
         stage = Path(temp)
@@ -534,6 +553,8 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
                 from .priority import initialize as initialize_priority
                 from .autofix_store import Store
                 initialize_priority(Store(control))
+                from .channels import initialize as initialize_channels
+                initialize_channels(Store(control))
                 bootstrap = Path(__file__).with_name('worker_bootstrap.py')
                 temporary_bootstrap = control / 'worker_bootstrap.tmp'
                 temporary_bootstrap.write_bytes(bootstrap.read_bytes())

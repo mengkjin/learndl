@@ -25,6 +25,9 @@ class LinuxAcceptance(unittest.TestCase):
             base = Path(temp).resolve()
             root = base / 'project'
             root.mkdir()
+            (root / 'data').mkdir()
+            (root / 'src').mkdir()
+            (root / 'src' / 'protected.py').write_text('original')
             outside = base / 'outside'
             ledger = base / 'ledger.sqlite'
             outside.write_text('original')
@@ -44,12 +47,13 @@ for path in sys.argv[1:]:
 '''
             parent = '''import subprocess,sys
 from pathlib import Path
-Path('allowed').write_text('ok')
+Path('data/allowed').write_text('ok')
 subprocess.run([sys.executable, '-c', sys.argv[1], *sys.argv[2:]], check=True)
 '''
             subprocess.run(command(root, request, [sys.executable, '-c', parent, child,
-                           str(outside), str(ledger), str(root / 'alias')]), check=True, timeout=30)
-            self.assertEqual((root / 'allowed').read_text(), 'ok')
+                           str(outside), str(ledger), str(root / 'alias'), str(root / 'src' / 'protected.py')]), check=True, timeout=30)
+            self.assertEqual((root / 'data' / 'allowed').read_text(), 'ok')
+            self.assertEqual((root / 'src' / 'protected.py').read_text(), 'original')
             self.assertEqual(outside.read_text(), 'original')
             self.assertEqual(ledger.read_text(), 'authority')
 

@@ -389,7 +389,7 @@ SMTP 接受与本地回执落盘之间仍有极小的崩溃重复窗口，不能
 
 ## 启动优先级与独立辅助服务（调度版本 2）
 
-执行一次 `runs/install_schedules.sh plan` / `runs/install_schedules.sh apply` 后启用。
+本节描述已有 v2 安装的行为；当前安装器启用下文的 v3 通道规则。
 无需卸载旧 watchdog；仅拉取 Git 或重启 watchdog 不会启用新版服务结构。
 `apply` 保留 autofix ID 账本、训练记录和定时任务队列；`rollback` 恢复此前安装快照，
 不清空执行历史。未 apply 的旧快照继续使用旧调度方式。
@@ -435,7 +435,7 @@ Git 因任务仍运行而等待时保留优先权，辅助工作仍可运行；�
 ### Linux 上线验收
 
 在测试实例、空 autofix 清单下执行安装器 plan/apply；不要为了测试改写生产修复 ID。
-检查 status 出现 `scheduler_version: 2`，三个辅助 timer 都启用，并检查各自 journal。
+检查 status 出现 `scheduler_version: 3`，数据 lane、Git 与辅助 timer 都启用，并检查各自 journal。
 运行下面的临时夹具验收（不会启动真实训练、修复或部署生产服务）：
 
 ```bash
@@ -444,5 +444,37 @@ LEARNDL_SYSTEMD_ACCEPTANCE=1 .venv/bin/python -m unittest src.api.task_monitor.t
 
 该测试要求 Linux、可用的 `systemd-run --user` 和 Bubblewrap；创建的临时测试单元自动回收。
 另运行 `python -m unittest src.api.task_monitor.tests.test_priority -v` 验证优先级、Git 核验和后台通知边界。
-生产启用后观察一次自然发生的“当前训练结束 → 日常补跑 → autofix → 下一次训练”，
+生产启用后观察训练与独立数据任务并行、阻塞型 autofix 等待和超时释放，以及 Git 等待代码使用者结束的行为，
 不要手工重置账本来制造验收场景。本机 macOS 测试不代表 Linux/systemd 隔离验收已经通过。
+
+## 调度 v3：通道与维护
+
+完整执行 scheduling installer `plan --diff` / `apply` 才会启用 v3。仅拉取代码不会改变旧安装的任务编排。
+日更新、周更新各有 `learndl-lane-<task>.service`，原日历服务只登记请求；各 lane 每分钟读取自己的队列。
+日更普通与强制入口共享自身互斥锁。同类任务运行期间的新请求标记 `skipped_overlap`，不补跑；维护期间同类未执行请求保留最新一个。
+自动研究仍使用单一 worker，完整生命周期占用研究通道；手动训练不受该队列限制，但保留资源锁和代码保护。
+数据 worker 在可用内存低于 10% 时暂缓启动并记录原因；一个任务的暂缓不阻塞其他 lane。
+
+任务配置支持 `channel: data | independent`（默认 data）以及 `window: rcquant_evening`。
+RCQuant 配置为 independent，保持北京时间 21:01；当天日更成功前等待，每分钟重试，23:59 到达已有下载截止点后不再启动，跨日请求过期。
+不同时间的同日 RCQuant 触发归一到同一个请求。日更内嵌补全与独立补全使用同一份每类型、每交易日的跨进程下载锁。
+取得锁后重新检查原始缓存；转换失败只重做转换。样本下载 `first_n > 0` 使用隔离缓存，不写全量数据库。
+原始数据及 RCQuant 派生数据均通过临时文件原子发布；远端响应后、本地保存前崩溃仍可能导致重试请求。
+
+Autofix 顶层可设置 `blocking: none | research | research_and_data`，默认 none；autofix 本身始终串行。
+阻塞只覆盖指定业务通道，不影响独立 RCQuant。申请等待最多 3600 秒，超时开放通道、告警并冷却 900 秒；
+冷却期间其他维护请求不能接力封锁。阻塞型 autofix 实际执行最多 3600 秒（更短 timeout 有效），超时先 TERM、30 秒后 KILL，
+确认子进程全部退出才释放通道，记录 timed_out，不重跑已尝试 ID。非阻塞任务保留原 timeout。
+源码、配置、依赖和调度控制文件只读，仅 data/results/models/.local_resources/.logs/.cache 业务目录可写；
+不自动推断业务数据冲突，需由作者选择 blocking 类型。更改已有任务声明仍要求新 ID；未声明 blocking 的历史记录不会因此重跑。
+
+Git 由独立 `learndl-git-update.service` 检查，fetch 无需等待业务任务。
+确认有可应用的新版本才预约全局维护；可优先于尚在等待的 autofix，但不抢占已经运行的任务。
+等待上限和冷却同上；代码切换必须取得独占代码锁，独立任务也参与保护。
+新进程核验切换结果后开放任务；失败核验不会因等待超时而自动放行。
+watchdog 在 Git 等待期间继续检查任务生命周期，避免已结束的进程记录阻塞维护；实际代码切换时同样遵守代码读锁。
+v3 Git 检查结果位于 `PATH.runtime/scheduling/git-channel.json`，失败由独立 Git 服务返回非零退出码。
+普通终端 `git pull` 不遵守项目代码锁，应在安全空档操作。
+
+`installer status` 展示维护状态及最近 100 个日历请求的计划时间、启动延迟、等待原因和最终状态。
+日志与记录保留；升级前须解决旧日历服务冲突，避免新旧 worker 同时派发。实际 Linux systemd/Bubblewrap 行为需部署后验证。

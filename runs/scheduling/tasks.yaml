@@ -9,7 +9,7 @@ tasks:
     entrypoint: daily_update
     args: [--forfeit_if_done, 'False']
     lock_group: daily_update
-    overlap: wait
+    overlap: skip
     wait_timeout_seconds: 1800
     timeout: 12h
   weekly_update:
@@ -22,5 +22,7 @@ tasks:
     entrypoint: rcquant_sec_backfill
     args: [--max_days, 'none']
     lock_group: rcquant_sec_backfill
+    channel: independent
+    window: rcquant_evening
     overlap: skip
     timeout: null

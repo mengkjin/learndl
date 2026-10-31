@@ -33,6 +33,8 @@ from src.data.util import secid_adjust , trade_min_reform
 
 from .initializer import RQInitializer , MinDataType , RQ_PATH , QuotaExceeded , is_quota_exceeded
 
+from .storage import locked_day, atomic_frame, sample_size
+
 __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
@@ -71,19 +73,34 @@ def write_list(df : pd.DataFrame , date : int , data_type : MinDataType) -> None
     Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} list {date}')
 
 def load_min(date : int , data_type : MinDataType) -> pd.DataFrame | None:
-    path = RQ_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+    root = RQ_PATH if sample_size.get() <= 0 else RQ_PATH / '.samples' / str(sample_size.get())
+    path = root.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     if path.exists(): 
         return Load.df(path)
     return None
 
 def write_min(df : pd.DataFrame , date : int , data_type : MinDataType) -> None:
-    path = RQ_PATH.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+    root = RQ_PATH if sample_size.get() <= 0 else RQ_PATH / '.samples' / str(sample_size.get())
+    path = root.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
     path.parent.mkdir(exist_ok=True , parents=True)
-    Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} min {date}')
+    atomic_frame(df, path, vb_level='max', prefix=f'RcQuant {data_type} min {date}')
+
+def _save_bar(df, db_src, db_key, date=None, **kwargs):
+    from src.proj.db.interface.db_path import DBPath
+    from src.proj.db.basic import dfHandler
+    descriptor = DBPath(db_src, db_key)
+    path = descriptor.path_exact(date)
+    if sample_size.get() > 0:
+        path = RQ_PATH / '.samples' / str(sample_size.get()) / db_key / f'{date}{path.suffix}'
+    result = atomic_frame(dfHandler.reset_index_pandas(df, reset=True), path, **kwargs)
+    if sample_size.get() <= 0:
+        descriptor.clear_date_cache()
+    return result
+
 
 def rcquant_past_dates(data_type : MinDataType , file_type : RcquantFileType) -> Dates:
     path = RQ_PATH.joinpath(f'{data_type}min') if file_type == 'min' else RQ_PATH.joinpath(f'{data_type}df')
-    past_files = [p for p in path.iterdir()]
+    past_files = [p for p in path.iterdir() if not p.name.startswith('.') and p.suffix == '.feather']
     past_dates = sorted([int(p.name.split('.')[-2][-8:]) for p in past_files])
     return Dates(past_dates)
     
@@ -300,7 +317,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         self , start : int , end : int , data_type : MinDataType | None = None ,
         first_n : int = -1 , * , overwrite : bool = False ,
     ) -> Base.UpdateFlag:
-        assert data_type is not None , f'data_type is required'
+        assert data_type is not None , 'data_type is required'
         flags = Base.UpdateFlagList()
         dates = target_dates(data_type , start , end , overwrite = overwrite)
         latest_day = int(CALENDAR.td(end))
@@ -313,7 +330,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 mark = self.rcquant_bar_min(dt , data_type , first_n)
                 if not mark: 
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
-                elif data_type == MinDataType.SEC and dt == latest_day:
+                elif first_n <= 0 and data_type == MinDataType.SEC and dt == latest_day:
                     self._sec_latest_day_downloaded = True
                 marks.append(mark)
             if all(marks):
@@ -322,6 +339,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             else:
                 flags += Base.UpdateFlag.FAILED
 
+        if first_n > 0:
+            return flags.summarize()
         dates = x_mins_target_dates(data_type , start , end , overwrite = overwrite)
         if dates.empty: 
             flags += Base.UpdateFlag.SKIPPED
@@ -331,11 +350,12 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                     min_df = DB.load('trade_ts' , src_key(data_type) , dt)
                     assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
                     x_min_df = trade_min_reform(min_df , x_min , 1)
-                    DB.save(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+                    _save_bar(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
 
+    @locked_day
     def rcquant_bar_min(
         self , date : int , data_type : MinDataType , first_n : int = -1 ,
         * , raise_on_quota : bool = False ,
@@ -354,7 +374,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
 
         if (sec_min := load_min(date , data_type)) is not None: 
             df = self.rcquant_min_to_normal_min(sec_min , data_type)
-            DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
+            _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
             return True
 
         if not RQInitializer.init(raise_on_quota = raise_on_quota): 
@@ -375,7 +395,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             write_min(data , date , data_type)
 
             df = self.rcquant_min_to_normal_min(data , data_type)
-            DB.save(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             return True
         else:
             return False
@@ -485,10 +505,13 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 self.logger.alert1(f'Backfill RcQuant sec bar min {dt} failed')
                 n_fail += 1
                 continue
+            if first_n > 0:
+                filled.append(dt)
+                continue
             for x_min in x_mins_to_update(dt , data_type = data_type):
                 min_df = DB.load('trade_ts' , src_key(data_type) , dt)
                 x_min_df = trade_min_reform(min_df , x_min , 1)
-                DB.save(
+                _save_bar(
                     x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt ,
                     indent = self.indent + 1 , vb_level = self.vb_level + 1 ,
                 )

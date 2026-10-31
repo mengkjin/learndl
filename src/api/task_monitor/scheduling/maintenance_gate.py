@@ -5,7 +5,7 @@ import contextvars
 import json
 import os
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from pathlib import Path
 
 import portalocker
@@ -15,6 +15,7 @@ from .autofix_store import ROOT, Store, state_dir
 
 _depth = contextvars.ContextVar('maintenance_depth', default=0)
 _fd: contextvars.ContextVar[int | None] = contextvars.ContextVar('maintenance_fd', default=None)
+_lane_fds = contextvars.ContextVar('lane_fds', default=())
 _kind = contextvars.ContextVar('maintenance_kind', default='shared')
 
 
@@ -60,7 +61,7 @@ def inherited_fd(directory):
 
 def pass_fds() -> tuple[int, ...]:
     fd = _fd.get()
-    return () if fd is None else (fd,)
+    return (() if fd is None else (fd,)) + _lane_fds.get()
 
 
 def child_env():
@@ -93,7 +94,11 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
             _fd.reset(fd_token)
             _depth.reset(token)
         return
-    task_class = task_class or ('installation' if exclusive else 'calendar' if priority else 'training')
+    from . import channels
+    modern_channels = channels.enabled()
+    task_class = task_class or ('installation' if exclusive else 'calendar' if priority else 'manual' if modern_channels else 'training')
+    lane_leases = ExitStack()
+    lane_token = None
     stream = (directory / 'gate.lock').open('r+')
     waiter = directory / f'waiting-{os.getpid()}.json'
     previous = os.environ.get('LEARNDL_MAINTENANCE_FD')
@@ -106,7 +111,7 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                     installation = reconcile()
                     if installation.get('phase') in ACTIVE - {'registering'} and installation.get('id') != installation_id:
                         raise MaintenanceBusy('An authorized installation is waiting for maintenance access')
-                    if any(r['phase'] in {'starting', 'running'} for r in Store(directory).rows()):
+                    if (not modern_channels or exclusive) and any(r['phase'] in {'starting', 'running'} for r in Store(directory).rows()):
                         raise MaintenanceBusy('Autofix execution or crash reconciliation is outstanding')
                     from .priority import enabled, blocker
                     modern = enabled()
@@ -117,7 +122,11 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         reason = blocker(Store(directory), task_class) if modern else None
                         if reason:
                             raise MaintenanceBusy(reason)
+                        if modern_channels:
+                            descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class))
+                            lane_token = _lane_fds.set(descriptors)
                     except BaseException:
+                        lane_leases.close()
                         portalocker.unlock(stream)
                         raise
                 break
@@ -151,4 +160,7 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
             # Closing only this copy retains protection until the last child exits.
     finally:
         waiter.unlink(missing_ok=True)
+        if lane_token is not None:
+            _lane_fds.reset(lane_token)
+        lane_leases.close()
         stream.close()

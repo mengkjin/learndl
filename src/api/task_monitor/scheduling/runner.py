@@ -19,6 +19,10 @@ def run(task_id: str, *, deferred: bool = False) -> int:
     from .maintenance_gate import MaintenanceBusy, permit
     from .autofix_store import Store, state_dir
     from .priority import enabled
+    from .channels import enabled as channels_enabled
+    if channels_enabled() and not deferred:
+        from .calendar_lanes import register
+        return register(task_id)
     if enabled() and not deferred:
         import portalocker
         controls = Store(state_dir())
@@ -88,6 +92,9 @@ def _run_priority_queue(store):
 
 
 def deferred_worker() -> int:
+    from .channels import enabled as channels_enabled
+    if channels_enabled():
+        return 0  # Version 3 per-task services own deferred requests.
     import portalocker
     from .autofix_store import Store, state_dir
     from .runtime import process_cgroup
@@ -106,7 +113,7 @@ def deferred_worker() -> int:
     return 0
 
 
-def _run(task_id: str, *, retry_busy: bool = False) -> int:
+def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = None) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
     config = installed_config()
@@ -122,7 +129,7 @@ def _run(task_id: str, *, retry_busy: bool = False) -> int:
         lock.__enter__()
     except (BlockingIOError, TimeoutError):
         print(f'SCHEDULER SKIPPED: {task_id}: execution lock unavailable', flush=True)
-        return 75 if retry_busy else 0
+        return 76 if request_id else 75 if retry_busy else 0
     try:
         store = RunStore()
         # A previous runner can die before its descendants release inherited
@@ -135,11 +142,12 @@ def _run(task_id: str, *, retry_busy: bool = False) -> int:
             while members(older):
                 if task['overlap'] == 'skip' or time.monotonic() - wait_started >= task['wait_timeout_seconds']:
                     print(f'SCHEDULER SKIPPED: {task_id}: previous supervised session remains active', flush=True)
-                    return 75 if retry_busy else 0
+                    return 76 if request_id else 75 if retry_busy else 0
                 time.sleep(1)
         run_id = uuid.uuid4().hex
         run_record = {'id': run_id, 'task': task_id, 'phase': 'starting', 'started_at': time.time(),
-                      'timeout_seconds': task['timeout_seconds'], 'uid': os.getuid(), 'lock_group': task['lock_group']}
+                      'timeout_seconds': task['timeout_seconds'], 'uid': os.getuid(), 'lock_group': task['lock_group'],
+                      'request_id': request_id, 'channel': task.get('channel', 'data')}
         store.put(run_record)
         read_fd, write_fd = os.pipe()
         lock_fd = lock.acquired_locks[0].fileno()
@@ -156,7 +164,7 @@ def _run(task_id: str, *, retry_busy: bool = False) -> int:
             from .runtime import process_cgroup
             run_record.update(pid=child.pid, runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), process_created=psutil.Process(child.pid).create_time(), phase='running', started_at=time.time())
             cgroup = process_cgroup(child.pid)
-            if cgroup and cgroup.endswith((f'/learndl-schedule-{task_id}.service', '/learndl-deferred.service')):
+            if cgroup and cgroup.endswith((f'/learndl-schedule-{task_id}.service', f'/learndl-lane-{task_id}.service', '/learndl-deferred.service')):
                 run_record['cgroup'] = cgroup
             store.put(run_record)
             os.write(write_fd, b'1')  # Child may only execute after durable registration.
@@ -214,6 +222,9 @@ def legacy(task_id: str, arguments: list[str]) -> int:
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == 'lane':
+        from .calendar_lanes import worker
+        return worker(sys.argv[2])
     if sys.argv[1:] == ['deferred']:
         return deferred_worker()
     if len(sys.argv) > 2 and sys.argv[1] == 'legacy':

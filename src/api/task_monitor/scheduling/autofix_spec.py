@@ -130,11 +130,14 @@ def _typed(name, value, spec):
 
 
 def validate(root: Path, item: dict) -> dict:
-    extra = set(item) - {'id', 'script', 'params', 'description', 'enabled', 'timeout'}
+    extra = set(item) - {'id', 'script', 'params', 'description', 'enabled', 'timeout', 'blocking'}
     if extra:
         raise ValueError(f'Unknown task fields: {sorted(extra)}; use a new ID for every retry')
     if type(item.get('enabled', True)) is not bool or not isinstance(item.get('description', ''), str):
         raise ValueError('enabled must be boolean; description must be text')
+    blocking = item.get('blocking', 'none')
+    if blocking not in {'none', 'research', 'research_and_data'}:
+        raise ValueError('Invalid autofix blocking type')
     path = script_path(root, item.get('script'))
     text = path.read_text()
     metadata = header(text)
@@ -199,7 +202,8 @@ def validate(root: Path, item: dict) -> dict:
     effective['email'] = True  # Autofix always enables the script's result mail.
     args = [f'--{k}={v!r}' for k, v in effective.items()]
     return {'script': str(path.relative_to(root)), 'params': effective, 'args': args,
-            'timeout_seconds': timeout_seconds(item.get('timeout', '12h')),
+            'blocking': blocking,
+            'timeout_seconds': min(timeout_seconds(item.get('timeout', '12h')), 3600) if blocking != 'none' else timeout_seconds(item.get('timeout', '12h')),
             'script_sha256': hashlib.sha256(text.encode()).hexdigest()}
 
 

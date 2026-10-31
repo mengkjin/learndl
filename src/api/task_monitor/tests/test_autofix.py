@@ -50,6 +50,14 @@ class Fixture(unittest.TestCase):
 
 
 class SpecTests(Fixture):
+    def test_blocking_defaults_and_execution_cap(self):
+        self.assertEqual(validate(self.root, self.item)['blocking'], 'none')
+        for kind in ('research', 'research_and_data'):
+            self.assertEqual(validate(self.root, self.item | {'blocking': kind})['timeout_seconds'], 3600)
+            self.assertEqual(validate(self.root, self.item | {'blocking': kind, 'timeout': '5m'})['timeout_seconds'], 300)
+        with self.assertRaisesRegex(ValueError, 'blocking'):
+            validate(self.root, self.item | {'blocking': 'all'})
+
     def test_missing_or_non_executing_main_guard_is_rejected(self):
         guard = "if __name__ == '__main__':\n    main()"
         for replacement in ('', "if __name__ == '__main__':\n    pass",
@@ -269,7 +277,8 @@ class IsolationTests(Fixture):
         self.assertIn('--unshare-pid', args)
         self.assertNotIn('--not-a-security-boundary', args)
         writable = [args[i + 1] for i, word in enumerate(args) if word == '--bind']
-        self.assertEqual(writable, [str(self.root)])
+        self.assertEqual(writable, [])
+        self.assertIn('--ro-bind', args)
 
     def test_no_linux_fallback(self):
         with patch.object(autofix_sandbox.sys, 'platform', 'darwin'), self.assertRaises(RuntimeError):
@@ -371,7 +380,7 @@ sys.exit({exit_code})
 
     def test_timeout_is_one_interruption_event(self):
         row, events = self.simulate(wait=True)
-        self.assertEqual(row['phase'], 'unknown')
+        self.assertEqual(row['phase'], 'timed_out')
         self.assertEqual([e['kind'] for e in events], ['starting', 'interrupted'])
         self.assertIsNone(self.store.claim(row['id']))
 

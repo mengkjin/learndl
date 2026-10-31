@@ -210,7 +210,7 @@ class PriorityTests(unittest.TestCase):
         from src.proj import PATH
         config = load_config(PATH.main / 'runs/scheduling', 'mengkjin-server')
         plan = build_plan(config, '', PATH.main, Path(sys.executable), config['timezone'])
-        self.assertEqual(plan['config']['scheduler_version'], 2)
+        self.assertEqual(plan['config']['scheduler_version'], 3)
         for name in auxiliary.NAMES:
             unit = 'learndl-aux-' + name.replace('_', '-') + '.service'
             contents = plan['units'][unit]

@@ -128,7 +128,7 @@ def load_config(directory: Path, host: str) -> dict:
     for key, task in tasks.items():
         if not IDENTIFIER.fullmatch(key):
             raise ValueError(f'Invalid task ID: {key}')
-        _keys(task, {'entrypoint', 'args', 'lock_group', 'overlap', 'wait_timeout_seconds', 'timeout', 'backend', 'enabled'})
+        _keys(task, {'entrypoint', 'args', 'lock_group', 'overlap', 'wait_timeout_seconds', 'timeout', 'backend', 'enabled', 'channel', 'window'})
         if task['entrypoint'] not in ENTRYPOINTS or not IDENTIFIER.fullmatch(task['lock_group']):
             raise ValueError(f'Invalid entrypoint/lock for {key}')
         if task['overlap'] not in {'skip', 'wait'}:
@@ -146,6 +146,10 @@ def load_config(directory: Path, host: str) -> dict:
         task.setdefault('wait_timeout_seconds', 1800)
         if type(task['wait_timeout_seconds']) is not int or task['wait_timeout_seconds'] <= 0:
             raise ValueError('wait_timeout_seconds must be positive')
+        task.setdefault('channel', 'data')
+        task.setdefault('window', None)
+        if task['channel'] not in {'data', 'independent'} or task['window'] not in {None, 'rcquant_evening'}:
+            raise ValueError(f'Invalid channel/window for {key}')
         task.setdefault('backend', settings['default_backend'])
         task.setdefault('enabled', True)
         if task['backend'] not in {'cron', 'systemd'} or type(task['enabled']) is not bool:
@@ -162,7 +166,7 @@ def load_config(directory: Path, host: str) -> dict:
         raise ValueError('tick_seconds must be a whole-minute divisor of 3600')
     if not isinstance(watchdog['units'], list) or any(not re.fullmatch(r'[A-Za-z0-9_.@:-]+', unit) for unit in watchdog['units']):
         raise ValueError('Invalid systemd unit list')
-    if any(unit.startswith(('learndl-schedule-', 'learndl-aux-')) or unit in {'learndl-watchdog.service', 'learndl-idle-worklist.service', 'learndl-autofix.service', 'learndl-deferred.service'} for unit in watchdog['units']):
+    if any(unit.startswith(('learndl-schedule-', 'learndl-lane-', 'learndl-aux-')) or unit in {'learndl-git-update.service', 'learndl-watchdog.service', 'learndl-idle-worklist.service', 'learndl-autofix.service', 'learndl-deferred.service'} for unit in watchdog['units']):
         raise ValueError('Scheduled oneshot units cannot be probed as persistent services')
     for key, job in watchdog['jobs'].items():
         if key not in JOB_NAMES:

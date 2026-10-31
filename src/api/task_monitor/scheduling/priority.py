@@ -54,6 +54,9 @@ def git_due(store, now=None):
 
 def blocker(store, task_class):
     """Called only after acquiring the physical gate, under admission.lock."""
+    from . import channels
+    if channels.enabled():
+        return channels.blocker(store, task_class)
     if not enabled() or task_class in {'git', 'installation'}:
         return None
     if git_due(store):
@@ -88,7 +91,13 @@ def status():
     for name in NAMES:
         path = runtime_dir() / 'auxiliary' / f'{name}.json'
         helpers[name] = json.loads(path.read_text()) if path.exists() else {'status': 'not observed'}
-    return {'scheduler_version': 2, 'git': read(store), 'git_due': git_due(store),
+    from . import channels
+    extra = {}
+    if channels.enabled():
+        with store.connect(readonly=True) as db:
+            observations = [json.loads(row[0]) for row in db.execute("SELECT value FROM metadata WHERE key LIKE 'calendar:%' ORDER BY json_extract(value, '$.scheduled_at') DESC LIMIT 100")]
+        extra = {'maintenance': channels.read(store), 'calendar_observations': observations}
+    return {'scheduler_version': 3 if channels.enabled() else 2, **extra, 'git': read(store), 'git_due': git_due(store),
             'calendar_queue': store.scheduled(),
             'autofix_queue': [r['id'] for r in store.rows() if r['phase'] == 'queued'],
             'helpers': helpers}

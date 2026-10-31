@@ -55,7 +55,8 @@ def gpu_memory_percent() -> float:
 def idle_reason(options: dict) -> str | None:
     from .maintenance_gate import configured, pending
     from .autofix_store import state_dir
-    if configured() and pending(state_dir()):
+    from .channels import enabled as channels_enabled
+    if not channels_enabled() and configured() and pending(state_dir()):
         return 'autofix maintenance pending'
     from src.proj import MACHINE
     from src.proj.util.script import FitLock
@@ -197,7 +198,7 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
 def _launch(request: dict, store: RunStore) -> int:
     from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with permit(blocking=False):
+        with permit(blocking=False, task_class='research'):
             return _launch_admitted(request, store)
     except MaintenanceBusy as exc:
         request['blocked_by'] = str(exc)
@@ -287,7 +288,7 @@ def worker() -> int:
                 # Claim only after final priority admission; retain that lease
                 # through _launch, including descendants and final writes.
                 try:
-                    leases.enter_context(permit(blocking=False))
+                    leases.enter_context(permit(blocking=False, task_class='research'))
                 except MaintenanceBusy as exc:
                     request.update(phase='queued', blocked_by=str(exc))
                     store.put(request)
