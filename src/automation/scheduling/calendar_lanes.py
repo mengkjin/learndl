@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import portalocker
 
-from .config import installed_config
+from .config import require_installed_config
 from .autofix_store import Store, state_dir
 from .runtime import RunStore, members
 
@@ -30,7 +30,7 @@ def active(task):
 
 
 def register(task_id):
-    config = installed_config()
+    config = require_installed_config()
     task = config['tasks'][task_id]
     store = Store(state_dir())
     slot = int(os.environ.get('LEARNDL_SCHEDULE_SLOT', int(time.time() // 60)))
@@ -79,7 +79,7 @@ def eligibility(task_id, key, config, now=None):
 def worker(task_id):
     from .maintenance_gate import permit, MaintenanceBusy
     from .runner import _run
-    config = installed_config()
+    config = require_installed_config()
     task = config['tasks'][task_id]
     store = Store(state_dir())
     try:

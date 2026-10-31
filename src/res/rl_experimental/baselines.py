@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
@@ -24,7 +24,7 @@ def _json_default(value: object):
     raise TypeError(f"cannot serialize {type(value).__name__}")
 
 
-def write_history(path: Path, history: list[dict[str, object]]) -> None:
+def write_history(path: Path, history: list[dict[str, Any]]) -> None:
     if not history:
         return
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -47,7 +47,7 @@ def _as_float(value: object) -> float:
     raise TypeError(f"expected a number, got {type(value).__name__}")
 
 
-def history_metrics(history: list[dict[str, object]]) -> dict[str, float]:
+def history_metrics(history: list[dict[str, Any]]) -> dict[str, float]:
     if not history:
         return {"total_return": 0.0, "annualized_volatility": 0.0, "max_drawdown": 0.0, "mean_turnover": 0.0}
     nav = np.asarray([_as_float(row["nav"]) for row in history])
@@ -63,10 +63,10 @@ def history_metrics(history: list[dict[str, object]]) -> dict[str, float]:
         "total_fees": float(np.sum([_as_float(row.get("fee_estimate", 0.0)) for row in history])),
     }
     metrics.update({
-        'total_base_fees': float(sum(float(row.get('base_fee', 0)) for row in history)),
-        'total_extra_cost': float(sum(float(row.get('extra_cost', 0)) for row in history)),
-        'total_delisting_loss': float(sum(float(row.get('delisting_loss', 0)) for row in history)),
-        'delisting_events': float(sum(int(row.get('delisting_events', 0)) for row in history)),
+        'total_base_fees': float(sum(_as_float(row.get('base_fee', 0)) for row in history)),
+        'total_extra_cost': float(sum(_as_float(row.get('extra_cost', 0)) for row in history)),
+        'total_delisting_loss': float(sum(_as_float(row.get('delisting_loss', 0)) for row in history)),
+        'delisting_events': float(sum(_as_float(row.get('delisting_events', 0)) for row in history)),
         'assets_exhausted': float(nav[-1] == 0),
     })
     if "frozen_holdings" in history[0]:
@@ -170,13 +170,13 @@ def replay_baseline(
     constraints: PortfolioConstraints,
     kind: BaselineKind,
     *, account_state: dict | None = None,
-) -> list[dict[str, object]]:
+) -> list[dict[str, Any]]:
     """Replay a baseline through the same accounting kernel as the RL agent."""
     start, end = interval
     weights = np.zeros(panel.n_stocks, dtype=np.float32)
     cash = 1.0
     nav = 1.0
-    history: list[dict[str, object]] = []
+    history: list[dict[str, Any]] = []
     if account_state is not None:
         if not np.array_equal(account_state["stock_ids"], panel.stock_ids):
             raise ValueError("account security mapping mismatch")

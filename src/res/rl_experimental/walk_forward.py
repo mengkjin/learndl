@@ -12,6 +12,7 @@ import time
 import traceback
 from dataclasses import asdict, fields, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -133,8 +134,8 @@ def task_plan(c):
 
 
 def config_for(c, seed, penalty, bonus, steps):
-    base = dict(n_envs=4, rollout_steps=128, batch_size=128, update_epochs=4,
-                device='cuda', observation_version=2, lean_training=True)
+    base: dict[str, Any] = dict(n_envs=4, rollout_steps=128, batch_size=128, update_epochs=4,
+                                device='cuda', observation_version=2, lean_training=True)
     base.update(c['training'])
     base.update(seed=seed, total_timesteps=steps, holding_bonus=bonus,
                 extra_cost_bp=c['primary_cost_bp'], observation_version=2, lean_training=True,
@@ -232,7 +233,10 @@ def retention_replay(panel, interval, constraints, state):
     env = PortfolioEnv(panel, EpisodeRange(*interval), constraints, observation_version=2)
     env.reset(options={'account_state': state})
     while env._time < interval[1] and env._nav > 0:
-        _, _, done, _, _ = env.step(np.zeros(env.action_space.shape, np.float32))
+        action_shape = env.action_space.shape
+        if action_shape is None:
+            raise ValueError('continuous action shape is required')
+        _, _, done, _, _ = env.step(np.zeros(action_shape, np.float32))
         if done:
             break
     state.update(env.export_account())
@@ -274,7 +278,7 @@ def bootstrap_relative(a, b, block, seed=20261019, repetitions=2000):
 
 
 def summarize(histories, c):
-    metrics = {k: history_metrics(h) for k, h in histories.items()}
+    metrics: dict[str, dict[str, Any]] = {k: history_metrics(h) for k, h in histories.items()}
     for key, h in histories.items():
         m = metrics[key]
         m['annualized_return'] = float(m['final_nav'] ** (252 / len(h)) - 1)

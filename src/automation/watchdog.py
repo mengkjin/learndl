@@ -406,7 +406,7 @@ def run_watchdog(
                        WatchdogJob('git_auto_update', 60, _run_git_auto_update))
         checkout_attempted = False
         try:
-            if config.get('scheduler_version', 1) < 3 and git_due(Store(state_dir())):
+            if config and config.get('scheduler_version', 1) < 3 and git_due(Store(state_dir())):
                 result = git_job.runner(context)
                 checkout_attempted = bool(result.stats.get('checkout_attempted'))
                 _record_job(state, git_job, started_at=check_time, finished_at=time.time(), result=result)

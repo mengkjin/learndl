@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest.mock import patch
 
 from src.automation.scheduling import autofix, autofix_sandbox, maintenance_gate
@@ -47,6 +48,12 @@ class Fixture(unittest.TestCase):
 
     def register(self, items=None):
         self.store.register(items if items is not None else [self.item], 'commit-a')
+
+    def saved(self, key: object = 'fix-001'):
+        record = self.store.get(key)
+        if not isinstance(record, dict):
+            raise AssertionError(f'missing autofix record {key}')
+        return record
 
 
 class SpecTests(Fixture):
@@ -121,17 +128,17 @@ class LedgerTests(Fixture):
                        (digest({k: v for k, v in legacy.items() if k != 'id'}), legacy['id']))
         updated = self.item | {'params': {'start': 20200101, 'email': True}}
         self.register([updated])
-        record = self.store.get('fix-001')
+        record = self.saved()
         self.assertFalse(record['conflict'])
         self.assertEqual(record['phase'], 'queued')
         self.assertTrue(validate(self.root, record['item'])['params']['email'])
         self.assertIsNotNone(self.store.claim('fix-001'))
         self.store.update('fix-001', phase='failed')
         self.register([self.item])  # Omitted email is also mandatory true.
-        self.assertFalse(self.store.get('fix-001')['conflict'])
+        self.assertFalse(self.saved()['conflict'])
         self.assertIsNone(self.store.claim('fix-001'))
         self.register([updated | {'params': {'start': 20210101, 'email': True}}])
-        self.assertTrue(self.store.get('fix-001')['conflict'])
+        self.assertTrue(self.saved()['conflict'])
 
     def test_at_most_once_concurrent_claims(self):
         self.register()
@@ -147,15 +154,15 @@ class LedgerTests(Fixture):
     def test_frozen_declaration_conflict_and_description_only(self):
         self.register()
         self.register([self.item | {'description': 'new words'}])
-        self.assertFalse(self.store.get('fix-001')['conflict'])
+        self.assertFalse(self.saved()['conflict'])
         self.register([self.item | {'params': {'start': 20210101}}])
-        self.assertTrue(self.store.get('fix-001')['conflict'])
+        self.assertTrue(self.saved()['conflict'])
         self.assertIsNone(self.store.claim('fix-001'))
 
     def test_withdraw_readd_success_and_distinct_retry(self):
         self.register()
         self.register([])
-        self.assertEqual(self.store.get('fix-001')['phase'], 'withdrawn')
+        self.assertEqual(self.saved()['phase'], 'withdrawn')
         self.register()
         self.assertIsNotNone(self.store.claim('fix-001'))
         self.store.update('fix-001', phase='success')
@@ -176,7 +183,7 @@ class LedgerTests(Fixture):
         bad = self.item | {'script': 'scripts/missing.py'}
         self.register([bad, self.item | {'id': 'next'}])
         autofix.execute(self.store, self.root, self.store.get('fix-001'))
-        record = self.store.get('fix-001')
+        record = self.saved()
         self.assertEqual(record['phase'], 'failed')
         self.assertTrue(record['attempted'])
         self.assertIn('FileNotFoundError', record['error'])
@@ -206,12 +213,15 @@ class LedgerTests(Fixture):
         self.store.claim('fix-001', supervisor_created=0)
         with patch.object(autofix.psutil, 'Process', side_effect=autofix.psutil.NoSuchProcess(999)):
             self.assertFalse(autofix.reconcile(self.store))
-        self.assertEqual(self.store.get('fix-001')['phase'], 'unknown')
+        self.assertEqual(self.saved()['phase'], 'unknown')
         self.assertIsNone(self.store.claim('fix-001'))
 
     def test_mail_retry_does_not_retry_script_and_deduplicates(self):
         self.register()
-        self.store.event('fix-001:startup_failed', dict(self.store.get('fix-001'), kind='startup_failed', error='Missing script'))
+        record = self.saved()
+        if not isinstance(record, dict):
+            raise AssertionError('missing autofix record')
+        self.store.event('fix-001:startup_failed', dict(record, kind='startup_failed', error='Missing script'))
         self.store.event('fix-001:startup_failed', {'kind': 'startup_failed'})
         with patch.object(autofix, 'state_dir', return_value=self.control):
             calls = []
@@ -220,7 +230,7 @@ class LedgerTests(Fixture):
             self.assertTrue(autofix.deliver(lambda *a, **k: self.fail('duplicate mail')))
         self.assertEqual(len(calls), 2)
         self.assertIn('Missing script', calls[0][1])
-        self.assertFalse(self.store.get('fix-001')['attempted'])
+        self.assertFalse(self.saved()['attempted'])
 
     def test_schedule_queue_dedup(self):
         self.store.enqueue('daily', 1)
@@ -351,7 +361,8 @@ sys.exit({exit_code})
         autofix.execute(self.store, self.root, self.store.get(item['id']))
         with self.store.connect() as db:
             events = [json.loads(row[0]) for row in db.execute('SELECT data FROM events')]
-        return self.store.get(item['id']), events
+        record = self.saved(item['id'])
+        return record, events
 
     def test_success_does_not_send_framework_result_mail(self):
         row, events = self.simulate()
@@ -416,7 +427,7 @@ class AdmissionTests(Fixture):
         with patch.object(autofix.psutil, 'Process', side_effect=autofix.psutil.NoSuchProcess(999)), \
              patch('src.automation.scheduling.runtime.members', return_value=[object()]):
             self.assertTrue(autofix.reconcile(self.store))
-        self.assertEqual(self.store.get('fix-001')['phase'], 'starting')
+        self.assertEqual(self.saved()['phase'], 'starting')
         self.assertIsNone(self.store.claim('fix-001'))
 
     def test_deferred_calendar_queue_precedes_idle_admission(self):
@@ -436,7 +447,7 @@ class AdmissionTests(Fixture):
         with patch.object(autofix.psutil, 'Process', side_effect=psutil.NoSuchProcess(999999)), \
              patch('src.automation.scheduling.runtime.members', return_value=[object()]):
             self.assertTrue(autofix.reconcile(self.store))
-        self.assertEqual(self.store.get('fix-001')['phase'], 'starting')
+        self.assertEqual(self.saved()['phase'], 'starting')
 
     def test_watchdog_timeout_is_persisted_before_signalling(self):
         self.register()
@@ -445,7 +456,7 @@ class AdmissionTests(Fixture):
         with patch('src.automation.scheduling.runtime.members', return_value=[]), \
              patch('src.automation.scheduling.runtime.signal_members') as send:
             autofix.supervise(self.store, now=20)
-            self.assertEqual(self.store.get('fix-001')['term_at'], 20)
+            self.assertEqual(self.saved()['term_at'], 20)
             self.assertEqual(send.call_args.args[2], autofix.signal.SIGTERM)
             autofix.supervise(self.store, now=60)
             self.assertEqual(send.call_args.args[2], autofix.signal.SIGKILL)
@@ -506,7 +517,7 @@ class ScriptContractTests(unittest.TestCase):
         task = Context()
         def fail(**kwargs):
             raise ValueError('business error')
-        wrapped = AutoRunTask.__call__(task, fail)
+        wrapped = AutoRunTask.__call__(cast(AutoRunTask, task), fail)
         with patch.dict(os.environ, LEARNDL_AUTOFIX_ID='fixture'):
             with self.assertRaisesRegex(RuntimeError, 'did not complete'):
                 wrapped()
@@ -529,12 +540,12 @@ class ScriptContractTests(unittest.TestCase):
              patch('src.automation.scheduling.runtime.record_script_email'), \
              patch.object(autofix_sandbox, 'script_event') as receipt, \
              patch.object(Email, 'send', return_value=True) as sender:
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             sender.assert_called_once()
             receipt.assert_called_once_with('mail', enabled=True, delivered=True)
             sender.reset_mock()
             task.email = False
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             sender.assert_not_called()
 
 
@@ -549,7 +560,10 @@ class TypedParameterTests(unittest.TestCase):
                 recorder = BackendTaskRecorder(email=not enabled)
                 self.assertIs(recorder.params['email'], True)
                 task = SimpleNamespace(kwargs={'email': not enabled} | recorder.params)
-                self.assertIs(AutoRunTask.email.fget(task), True)
+                getter = AutoRunTask.email.fget
+                if getter is None:
+                    raise AssertionError('email property is missing')
+                self.assertIs(getter(cast(AutoRunTask, task)), True)
 
     def test_autofix_preserves_literal_looking_strings(self):
         from src.api.util.backend.recorder import BackendTaskRecorder
@@ -582,7 +596,7 @@ class WorkerDiagnosticsTests(Fixture):
         self.assertEqual(report['status'], 'waiting')
         self.assertEqual(report['reason'], 'managed task is active')
         self.assertIn('checked_at', report)
-        self.assertFalse(self.store.get('fix-001')['attempted'])
+        self.assertFalse(self.saved()['attempted'])
 
 
 class MailboxSafetyTests(Fixture):

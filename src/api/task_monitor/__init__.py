@@ -1,4 +1,9 @@
 """Task monitor exports, loaded lazily so offline configuration tools stay read-only."""
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .core import TaskMonitorRepository, TaskPage, TaskSnapshot
+    from .output import OutputCache
 
 __all__ = ['OutputCache', 'TaskMonitorRepository', 'TaskPage', 'TaskSnapshot']
 

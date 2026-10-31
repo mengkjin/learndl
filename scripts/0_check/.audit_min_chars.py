@@ -14,6 +14,7 @@ import re
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import polars as pl
 
@@ -133,15 +134,16 @@ def main(argv=None):
             if not paths:
                 table['note'] = 'no_files_for_selected_dates'  # Missing observations are normal.
             for path in paths:
-                row = {'table': key, 'file': str(path)}
+                row: dict[str, Any] = {'table': key, 'file': str(path)}
                 try:
                     match = re.search(r'\.(\d{8})\.(?:feather|parquet)$', path.name)
                     if not match:
                         raise ValueError('unrecognized daily filename')
                     date = int(match[1])
-                    reader = pl.read_ipc if path.suffix == '.feather' else pl.read_parquet
-                    kwargs = {'memory_map': False} if path.suffix == '.feather' else {}
-                    df = reader(path, columns=['secid', 'date'], **kwargs)
+                    if path.suffix == '.feather':
+                        df = pl.read_ipc(path, columns=['secid', 'date'], memory_map=False)
+                    else:
+                        df = pl.read_parquet(path, columns=['secid', 'date'])
                     result, raw, mapped, changes = inspect_keys(df, date, known, dfHandler.default_mapper, args.max_rows)
                     del df
                     row.update(result)

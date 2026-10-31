@@ -124,7 +124,10 @@ class Store:
                     record['phase'] = 'withdrawn'
                     db.execute('UPDATE fixes SET data=? WHERE id=?', (canonical(record), key))
         for key in conflicts:
-            self.event(f'{key}:conflict', dict(self.get(key), kind='configuration_error', error='ID declaration changed. Add a new ID; this ID will not be retried.'))
+            current = self.get(key)
+            if not isinstance(current, dict):
+                raise KeyError(key)
+            self.event(f'{key}:conflict', dict(current, kind='configuration_error', error='ID declaration changed. Add a new ID; this ID will not be retried.'))
 
     def update(self, key, *, event_kind=None, **fields):
         with self.connect() as db:

@@ -3,6 +3,8 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import patch
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -23,7 +25,7 @@ class DataQualityTest(unittest.TestCase):
         self.assertEqual(overnight[2], 0.)
         self.assertTrue(np.isnan(intraday[2]))
         # Selling all at a known open needs no subsequent close valuation.
-        args = dict(old_weights=np.array([.5]), old_cash=.5,
+        args: dict[str, Any] = dict(old_weights=np.array([.5]), old_cash=.5,
                     target_weights=np.array([0.]), overnight_returns=overnight[:1],
                     intraday_returns=intraday[:1], can_buy=np.array([True]), can_sell=np.array([True]),
                     fee_rate=0., max_holdings=1, max_weight=1., stock_ids=np.array([600001]),

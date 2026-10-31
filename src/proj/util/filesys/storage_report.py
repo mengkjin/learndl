@@ -126,7 +126,7 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                     retain = visible and len(child_parts) <= display_depth(child_parts)
                     child = walk(path / name, child_parts, retain, node.node_id)
                     node.size += child.size
-                    node.file_count += child.file_count or 0
+                    node.file_count = (node.file_count or 0) + (child.file_count or 0)
                     if child.date_start is not None and child.date_end is not None:
                         node.date_start = min(node.date_start or child.date_start, child.date_start)
                         node.date_end = max(node.date_end or child.date_end, child.date_end)

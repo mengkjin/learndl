@@ -116,6 +116,8 @@ class BackendTaskRecorder:
         if os.environ.get('LEARNDL_AUTOFIX_ID'):
             from src.automation.scheduling.maintenance_gate import sandbox_request
             request = sandbox_request()
+            if not isinstance(request, dict):
+                raise RuntimeError('Invalid autofix execution context')
             # Preserve YAML types exactly (e.g. the string 'True' stays text).
             return dict(kwargs) | request['params'] | {'source': 'autofix', 'email': True}
         kwargs = argparse_dict(**kwargs)

@@ -67,8 +67,11 @@ class MigrationTest(unittest.TestCase):
         initialize(directory, root)
         new = Store(directory)
         new.register([item], 'after')
-        self.assertEqual(new.get(item['id'])['phase'], 'success')
-        self.assertFalse(new.get(item['id'])['conflict'])
+        saved = new.get(item['id'])
+        if not isinstance(saved, dict):
+            raise AssertionError('missing migrated fix')
+        self.assertEqual(saved['phase'], 'success')
+        self.assertFalse(saved['conflict'])
         self.assertEqual(new.scheduled(), [('daily_update:100', 'daily_update')])
         self.assertEqual((directory/'gate.lock').stat().st_ino, inode)
         with new.connect() as db:

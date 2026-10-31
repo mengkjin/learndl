@@ -3,8 +3,8 @@
 python -m src.data.preprocess.factor_sequence.pipeline --help
 """
 import argparse
-from dataclasses import asdict
 import json
+from typing import Any
 from pathlib import Path
 import re
 import time
@@ -25,12 +25,69 @@ def purged_split(dates, ends, train=252, valid=63, test=63, warmup=239):
         raise ValueError('Insufficient history; refusing to shorten the experiment')
     block=dates[-(train+valid+test):]
     endpoint=dict(zip(dates,ends))
-    tr=block[:train];va=block[train:train+valid];te=block[train+valid:]
+    tr=block[:train]
+    va=block[train:train+valid]
+    te=block[train+valid:]
     tr=np.array([d for d in tr if endpoint[d] < va[0]])
     va=np.array([d for d in va if endpoint[d] < te[0]])
     if not len(tr) or not len(va):
         raise ValueError('Empty split after purging')
     return {k:v.astype(int).tolist() for k,v in [('train',tr),('valid',va),('test',te)]}
+
+
+def walk_forward_splits(dates, ends, start, end=None, train=252, valid=63, test=63, warmup=239):
+    """Non-overlapping OOS dates, strictly earlier training/validation per fold."""
+    dates,ends=np.asarray(dates),np.asarray(ends)
+    if len(dates)!=len(ends) or not len(dates) or np.any(np.diff(dates)<=0) or np.any(ends<dates):
+        raise ValueError('Invalid dates/label endpoints')
+    if min(train,valid,test)<1 or warmup<0 or (end is not None and end<start):
+        raise ValueError('Invalid walk-forward range or window lengths')
+    first=int(np.searchsorted(dates,start))
+    stop=len(dates) if end is None else int(np.searchsorted(dates,end,side='right'))
+    if first>=stop:
+        raise ValueError('Requested OOS period has no mature dates')
+    if first < train+valid+warmup:
+        raise ValueError('Insufficient history before requested OOS start; refusing to move start date')
+    folds=[]
+    for a in range(first,stop,test):
+        b=min(a+test,stop)
+        vi=np.arange(a-valid,a)
+        tr=np.arange(a-valid-train,a-valid)
+        tr=tr[ends[tr]<dates[vi[0]]]
+        vi=vi[ends[vi]<dates[a]]
+        if not len(tr) or not len(vi):
+            raise ValueError('Empty purged walk-forward fold')
+        folds.append({'train':dates[tr].astype(int).tolist(),'valid':dates[vi].astype(int).tolist(),
+                      'test':dates[a:b].astype(int).tolist()})
+    return folds
+
+
+def available_splits(dataset, start, end=None):
+    """Resolve latest mature label on this host; never manufacture missing label dates."""
+    from src.proj import CALENDAR
+    from src.data.util import DataBlock
+    load(dataset)
+    with np.load(Path(dataset)/'factorseq.npz',allow_pickle=False) as block:
+        dates,secids=block['dates'],block['secids']
+    y=DataBlock.load_preprocess('y',frame='fit')
+    if not y.initiated or 'std_lag1_10' not in y.feature:
+        raise ValueError('Real label block std_lag1_10 unavailable')
+    y=y.align_feature(['std_lag1_10']).align_secid(secids).align_date(dates)
+    ends=np.asarray([int(CALENDAR.td(int(d),11)) for d in dates])
+    ready=(ends<=dates[-1]) & np.isfinite(y.values[:,:,0,0].cpu().numpy()).any(axis=0)
+    mature=np.flatnonzero(ready)
+    if not len(mature):
+        raise ValueError('No mature labels')
+    last=int(mature[-1])
+    if end is not None and end>int(dates[last]):
+        raise ValueError('Requested test end exceeds the latest mature label date')
+    folds=walk_forward_splits(dates[:last+1],ends[:last+1],start,end)
+    for fold in folds:
+        for group in fold.values():
+            if not ready[np.searchsorted(dates,group)].all():
+                raise ValueError('Missing label dates inside requested walk-forward folds')
+    return {'requested_start':start,'requested_end':end,'data_end':int(dates[-1]),
+            'latest_mature_label':int(dates[last]),'folds':folds}
 
 
 def train_overrides(dataset, name, model, split, model_date, research=False, seed=17):
@@ -55,7 +112,7 @@ def train_overrides(dataset, name, model, split, model_date, research=False, see
         'model.special.global2top':False, 'train.trainer.optimizer':{'name':'Adam','param':{}},
         'train.trainer.learn_rate':{'base':.001,'transfer_multiplier':{}},
         'train.trainer.scheduler':{'name':'step','param':{'step_size':1000,'gamma':1.}},
-        'env.random_seed':seed, 'env.short_test':False,
+        'env.random_seed':seed, 'env.short_test':False, 'env.mem_storage':False,
         'train.callbacks':['StatusDisplay','SummaryWriter','BasicTestResult','EarlyStoppage','CallbackTimer'],
         'callbacks.EarlyStoppage':{'peak_patience':5 if research else 100,'converge_patience':100},
     }
@@ -76,7 +133,7 @@ def read_predictions(model_path):
     return df
 
 
-def smoke(dataset, folder, research=False, ablations=False):
+def smoke(dataset, folder, research=False, ablations=False, test_start=None, test_end=None):
     from src.proj import CALENDAR, Save
     from src.data.util import DataBlock
     from src.data import DATAVENDOR
@@ -92,7 +149,7 @@ def smoke(dataset, folder, research=False, ablations=False):
     y=DataBlock.load_preprocess('y',frame='fit')
     if not y.initiated or 'std_lag1_10' not in y.feature:
         raise ValueError('Real label block std_lag1_10 unavailable')
-    y=y.align_secid(stock['secids']).align_date(dates).align_feature(['std_lag1_10'])
+    y=y.align_feature(['std_lag1_10']).align_secid(stock['secids']).align_date(dates)
     ends=np.asarray([int(CALENDAR.td(int(d),11)) for d in dates])
     # Raw return coverage, not just a finite imputed label, bounds the endpoint.
     latest_return=int(dates[-1])
@@ -101,13 +158,22 @@ def smoke(dataset, folder, research=False, ablations=False):
     if not len(last):
         raise ValueError('No mature labels')
     last=int(last[-1])
-    split=purged_split(dates[:last+1],ends[:last+1])
+    if test_start is None:
+        split=purged_split(dates[:last+1],ends[:last+1])
+    else:
+        if test_end is None or test_end>int(dates[last]):
+            raise ValueError('An explicit fold requires a mature test end')
+        folds=walk_forward_splits(dates[:last+1],ends[:last+1],test_start,test_end)
+        if len(folds)!=1:
+            raise ValueError('Run each OOS fold separately (at most 63 trading dates)')
+        split=folds[0]
     for group,group_dates in split.items():
         indices=np.searchsorted(dates,group_dates)
         if not ready[indices].all():
             raise ValueError(f'{group} contains missing label dates; refusing silent omission')
     model_date=int(CALENDAR.td(split['test'][0],-1))
-    folder=Path(folder);folder.mkdir(parents=True,exist_ok=False)
+    folder=Path(folder)
+    folder.mkdir(parents=True,exist_ok=False)
     write_json(folder/'split.json',split)
     write_json(folder/'catalog.json',CATALOG)
     np.savez_compressed(folder/'labels.npz',values=y.values.cpu().numpy(),dates=dates,secids=stock['secids'])
@@ -125,7 +191,7 @@ def smoke(dataset, folder, research=False, ablations=False):
              for model,extra in variants for seed in ((17,29,43) if research else (17,))]
     write_json(folder/'model_cards.json',pending)
     from src.res.algo.nn.model import factor_sequence as model_code
-    provenance = {'model_sha256':file_digest(model_code.__file__),
+    provenance: dict[str, Any] = {'model_sha256':file_digest(model_code.__file__),
                   'runner_sha256':file_digest(__file__),
                   'manifest_sha256':file_digest(Path(dataset)/'manifest.json')}
     from src.proj import PATH
@@ -138,12 +204,13 @@ def smoke(dataset, folder, research=False, ablations=False):
             override=train_overrides(dataset,name,model,split,model_date,research,seed)
             for k,v in extra.items():
                 override[k]=[v]
-            result={'model':model,'name':name,'seed':seed,'status':'running','overrides':override,
+            result: dict[str, Any] = {'model':model,'name':name,'seed':seed,'variant':extra,'status':'running','overrides':override,
                     'data_version':manifest['version'],'cost_adjusted_return':None,
                     'provenance':provenance,'model_version':CATALOG[model]['version']}
             card=pending[len(runs)]
             card.update(status='running',run_id=folder.parent.name,name=name,results='runs.json')
-            runs.append(result);write_json(folder/'runs.json',runs)
+            runs.append(result)
+            write_json(folder/'runs.json',runs)
             started=time.perf_counter()
             try:
                 trainer=ModelTrainer.GO(title=name,module=model,override=override,short_test=False,
@@ -180,8 +247,13 @@ def compare(folder):
         raise ValueError('Every requested run must pass before comparison')
     realized=np.load(folder/'realized_returns.npz',allow_pickle=False)
     values=realized['values'].reshape(len(realized['secids']),len(realized['dates']),-1)[...,0]
-    raw=pd.DataFrame(values,index=realized['secids'],columns=realized['dates']).rename_axis(index='secid',columns='date').stack().rename('return').reset_index()
-    reports=[]; reference=None
+    stacked=pd.DataFrame(values,index=realized['secids'],columns=realized['dates']).rename_axis(index='secid',columns='date').stack()
+    if not isinstance(stacked, pd.Series):
+        raise TypeError('return panel did not stack into a Series')
+    stacked.name='return'
+    raw=stacked.reset_index()
+    reports=[]
+    reference=None
     for run in runs:
         pred=pd.read_csv(folder/f"{run['name']}.csv")
         sample=set(zip(pred.date,pred.secid))
@@ -195,11 +267,12 @@ def compare(folder):
             good=day.loc[np.isfinite(day.pred)&np.isfinite(day.label)]
             ic=good.pred.corr(good.label,method='spearman') if good.pred.nunique()>1 and good.label.nunique()>1 else np.nan
             available=good.loc[np.isfinite(good['return'])]
-            group=np.floor((available.pred.rank(method='average')-.5)*10/max(len(available),1)).clip(upper=9)
+            group=np.floor((available.pred.rank(method='average')-.5)*10/max(len(available),1)).clip(max=9)
             top=available.loc[group == 9]
             excess=float(top['return'].mean()-available['return'].mean()) if len(top) else np.nan
-            daily.append({'date':int(date),'rank_ic':ic,'top_decile_10d_excess':excess,'n':len(good)})
-        df=pd.DataFrame(daily);df.to_csv(folder/f"{run['name']}_daily.csv",index=False)
+            daily.append({'date':int(np.asarray(date).item()),'rank_ic':ic,'top_decile_10d_excess':excess,'n':len(good)})
+        df=pd.DataFrame(daily)
+        df.to_csv(folder/f"{run['name']}_daily.csv",index=False)
         std=df.rank_ic.std(ddof=0)
         reports.append({'model':run['model'],'name':run['name'],'seed':run['seed'],
                         'rank_ic':float(df.rank_ic.mean()) if df.rank_ic.notna().any() else None,
@@ -224,6 +297,8 @@ def main():
     parser.add_argument('--parent',type=Path)
     parser.add_argument('--allow-revision',action='store_true')
     parser.add_argument('--data-config',type=Path,help='JSON BuildConfig; defaults to the frozen v1 schema')
+    parser.add_argument('--test-start',type=int)
+    parser.add_argument('--test-end',type=int)
     args=parser.parse_args()
     config = json.loads(args.data_config.read_text()) if args.data_config else {}
     if 'factors' in config:
@@ -246,9 +321,11 @@ def main():
         invocation={k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()}
         write_json(evidence,{'status':'running','stage':stage,'invocation':invocation})
         try:
+            result: dict[str, Any]
             if stage=='build':
                 from .sources import preflight, read_project
-                pre=preflight(cfg);write_json(folder/'preflight.json',pre)
+                pre=preflight(cfg)
+                write_json(folder/'preflight.json',pre)
                 if pre['status']!='passed':
                     raise ValueError('Required sources missing: '+', '.join(pre['missing']))
                 end=args.end or min(f['end'] for f in pre['factors'].values())
@@ -266,12 +343,14 @@ def main():
                     report=audit(dataset)
                     result={'status':report['status'],'report':str(dataset/'audit.json')}
                 elif stage=='smoke':
-                    result=smoke(dataset,folder/'training',args.research,args.ablations)
+                    result=smoke(dataset,folder/'training',args.research,args.ablations,args.test_start,args.test_end)
                 else:
                     result=compare(folder/'training')
             result.update(stage=stage,seconds=time.perf_counter()-started,invocation=invocation)
             write_json(evidence,result)
             print(json.dumps(result,ensure_ascii=False))
+            if result['status'] != 'passed':
+                raise RuntimeError(f'Stage {stage} did not pass; inspect {evidence}')
         except BaseException:
             write_json(evidence,{'status':'failed','stage':stage,'seconds':time.perf_counter()-started,'invocation':invocation,'error':traceback.format_exc()})
             raise

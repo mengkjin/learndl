@@ -1,7 +1,7 @@
 """Causal NumPy/pandas transforms. Missing values stay missing until packing."""
 import numpy as np
 import pandas as pd
-from .schema import BuildConfig, EVENTS, STOCK_CHANNELS
+from .schema import EVENTS, STOCK_CHANNELS
 
 
 def clean(x):

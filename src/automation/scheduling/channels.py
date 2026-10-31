@@ -101,7 +101,8 @@ def blocker(store, task_class):
     if owner == state['owner'] or task_class == 'installation':
         return None
     group = group_for(task_class)
-    if group in state['groups']:
+    groups = state['groups']
+    if isinstance(group, str) and isinstance(groups, list) and group in groups:
         return f"{state['owner']} reserves {group} until {state['deadline']}"
     return None
 

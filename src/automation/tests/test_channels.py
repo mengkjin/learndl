@@ -138,7 +138,8 @@ class ChannelsTest(unittest.TestCase):
         run.assert_called_once_with('weekly_update', request_id='weekly_update:101')
 
     def test_rcquant_window_dependency_and_expiry(self):
-        stamp = lambda date: datetime.fromisoformat(date).replace(tzinfo=ZoneInfo('Asia/Shanghai')).timestamp()
+        def stamp(date: str) -> float:
+            return datetime.fromisoformat(date).replace(tzinfo=ZoneInfo('Asia/Shanghai')).timestamp()
         key = f"rcquant_sec_backfill:{int(stamp('2026-10-30T21:01')//60)}"
         with patch('src.data.download.other_source.rcquant.bar_min.daily_update_succeeded_today', return_value=False) as daily:
             self.assertEqual(calendar_lanes.eligibility('rcquant_sec_backfill', key, self.config, stamp('2026-10-30T21:01'))[0], 'waiting')
@@ -198,7 +199,10 @@ class ChannelsTest(unittest.TestCase):
             child = subprocess.Popen([sys.executable, '-c', 'import sys; print("ready",flush=True); sys.stdin.readline()'],
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      pass_fds=maintenance_gate.pass_fds(), text=True)
-            self.assertEqual(child.stdout.readline().strip(), 'ready')
+            stdout = child.stdout
+            if stdout is None:
+                raise AssertionError('child stdout was not captured')
+            self.assertEqual(stdout.readline().strip(), 'ready')
         try:
             channels.reserve(self.store, 'autofix:repair', ['research'])
             with self.assertRaises(maintenance_gate.MaintenanceBusy):

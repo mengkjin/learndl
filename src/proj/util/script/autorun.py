@@ -109,6 +109,8 @@ class AutoRunTask(BoundLogger):
         with AutoRunTask('daily_update' , '@source'):
             'This is the task...'
     """
+    # Tasks may replace SMTP delivery without changing the default outbox path.
+    email_sender: Callable[..., bool] | None = None
     task_name = TaskName()
     task_key = TaskKey()
     _instances : list[AutoRunTask] = []
@@ -170,6 +172,8 @@ class AutoRunTask(BoundLogger):
             from src.automation.scheduling.maintenance_gate import sandbox_request
             from src.automation.scheduling.autofix_sandbox import script_event
             request = sandbox_request()
+            if not isinstance(request, dict):
+                raise RuntimeError('Invalid autofix execution context')
             marker = Path(request['channel']) / 'started.json'
             if not marker.exists():
                 script_event('started', email=self.email)

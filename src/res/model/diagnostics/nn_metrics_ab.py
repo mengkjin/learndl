@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
+from typing import Any
 import os
 import platform
 import shutil
@@ -31,13 +33,14 @@ def probe(args, root):
 
 def single(folder, name, fast):
     started = time.perf_counter()
-    result = {'name': name, 'fastpath': fast, 'seed': SEED, 'status': 'failed'}
+    result: dict[str, Any] = {'name': name, 'fastpath': fast, 'seed': SEED, 'status': 'failed'}
     try:
         import torch
         from src.proj import Save
         from src.res.model.model_module.application.trainer import ModelTrainer
+        torch_build = importlib.import_module('torch.version')
         result.update(import_seconds=time.perf_counter()-started, torch=torch.__version__,
-                      cuda=torch.version.cuda, cudnn=torch.backends.cudnn.version(),
+                      cuda=getattr(torch_build, 'cuda', None), cudnn=torch.backends.cudnn.version(),
                       gpu=torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
                       threads=torch.get_num_threads())
         t = time.perf_counter()
@@ -71,7 +74,9 @@ def run_suite(folder, root, request_id):
     for src, target in [('configs/model', 'source/configs/model'),
                         ('src/res/model/util/metric', 'source/metric'),
                         ('src/res/model/callback/monitor/summary.py', 'source/summary.py')]:
-        source = root/src; dest = folder/target; dest.parent.mkdir(parents=True, exist_ok=True)
+        source = root/src
+        dest = folder/target
+        dest.parent.mkdir(parents=True, exist_ok=True)
         if source.is_dir():
             shutil.copytree(source, dest, ignore=shutil.ignore_patterns('__pycache__'))
         else:
@@ -83,7 +88,8 @@ def run_suite(folder, root, request_id):
     from src.automation.scheduling.maintenance_gate import child_env, pass_fds
     env.update(child_env())
     for label, fast in ORDER:
-        run = folder/label; run.mkdir()
+        run = folder/label
+        run.mkdir()
         name = f'ab_{request_id}_{label}'
         save(run/'gpu_before.json', probe(['nvidia-smi'], root))
         t = time.perf_counter()

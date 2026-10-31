@@ -45,6 +45,8 @@ def main(request_path: str, **kwargs):
         audit, metadata = recover_suite(run, attempt/'verified_results', project_root=PATH.main)
         if not audit['complete']:
             raise ValueError('Resumed results failed final audit: ' + '; '.join(audit['errors'][:5]))
+        if metadata is None:
+            raise ValueError('Recovered suite did not produce bundle metadata')
         for attachment in bundle_attachments(metadata):
             Proj.email_attachments.append(attachment)
         return {'status': 'success', 'original_run': str(run), 'bundle': str(metadata)}

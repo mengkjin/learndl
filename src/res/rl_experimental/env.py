@@ -15,6 +15,16 @@ from .valuation import holding_valuation_metrics, valuation_context
 from .reward import RewardConfig, RewardContext, RewardEvaluator
 
 
+def zero_action(space: gym.Space, dtype: Any = None) -> np.ndarray:
+    """Zero action for a shaped Box. The portfolio env does not use discrete actions."""
+    shape = space.shape
+    if shape is None:
+        raise ValueError('continuous action shape is required')
+    if dtype is None:
+        return np.zeros(shape)
+    return np.zeros(shape, dtype=dtype)
+
+
 @dataclass(frozen=True)
 class EpisodeRange:
     start: int

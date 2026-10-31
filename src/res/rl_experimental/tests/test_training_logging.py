@@ -99,8 +99,12 @@ class TrainingLoggingTest(unittest.TestCase):
         base = dict(total_return=0.1, final_nav=1.1, max_drawdown=-0.2,
                     annualized_volatility=0.2, mean_turnover=0.1, total_fees=0.001)
         result = compare_metrics(base | {"total_return": 0.2, "final_nav": 1.2}, base)
-        self.assertAlmostEqual(result["return_difference_pp"], 10.0)
-        self.assertAlmostEqual(result["relative_nav_return"], 1.2 / 1.1 - 1)
+        difference = result["return_difference_pp"]
+        relative = result["relative_nav_return"]
+        if difference is None or relative is None:
+            raise AssertionError('comparison metrics missing')
+        self.assertAlmostEqual(difference, 10.0)
+        self.assertAlmostEqual(relative, 1.2 / 1.1 - 1)
         first = [{"decision_date": 1, "return_end_date": 2}]
         second = [{"decision_date": 1, "return_end_date": 3}]
         with self.assertRaisesRegex(ValueError, "dates do not match"):

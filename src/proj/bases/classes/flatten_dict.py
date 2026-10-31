@@ -81,7 +81,7 @@ class FlattenDict:
         self.update(d , relevant_only = False)
         return self
 
-    def get(self, key: str, default: Any = None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Get leaf or subtree like ``__getitem__``, else ``default``."""
         if key in self.flattened:
             return self.flattened[key]

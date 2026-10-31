@@ -255,9 +255,12 @@ def prepare_real_data(config: RealDataConfig, *, dry_run: bool = False) -> dict[
     alive = np.zeros((len(history_dates), len(stock_ids)), dtype=bool)
     positions = {int(secid): col for col, secid in enumerate(stock_ids)}
     for row in relevant_description.itertuples():
-        col = positions.get(int(row.secid))
+        secid = int(np.asarray(row.secid).item())
+        col = positions.get(secid)
         if col is not None:
-            alive[:, col] |= (history_dates >= int(row.list_dt)) & (history_dates < int(row.delist_dt))
+            listed = int(np.asarray(row.list_dt).item())
+            delisted = int(np.asarray(row.delist_dt).item())
+            alive[:, col] |= (history_dates >= listed) & (history_dates < delisted)
     raw_closes = _pivot(day, 'close', history_dates, stock_ids).to_numpy(dtype=float)
     factors = _pivot(day, 'adjfactor', history_dates, stock_ids).to_numpy(dtype=float)
     statuses = _pivot(day, 'status', history_dates, stock_ids).to_numpy(dtype=float)

@@ -118,9 +118,16 @@ class PanelData:
                 if value.shape != (t, n) or not np.issubdtype(value.dtype, np.integer) or np.any(value < 0):
                     raise ValueError(f'invalid {name}')
                 object.__setattr__(self, name, value)
-            if np.any(self.valuation_reason > 5):
+            reason = self.valuation_reason
+            last_valid = self.valuation_last_valid_date
+            if reason is None or last_valid is None:
+                raise ValueError('valuation metadata missing after validation')
+            if np.any(reason > 5):
                 raise ValueError('unknown valuation reason')
-            if np.any(self.valuation_last_valid_date > self.execution_dates[:, None]):
+            execution_dates = self.execution_dates
+            if execution_dates is None:
+                raise ValueError('valuation metadata requires an execution panel')
+            if np.any(last_valid > execution_dates[:, None]):
                 raise ValueError('valuation date cannot reference a future observation')
 
         risk_fields = ('risk_excluded', 'risk_reason', 'delisting_event')

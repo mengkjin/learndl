@@ -189,14 +189,14 @@ class ValidationCallback(BaseCallback):
         self._sums: dict[str, float] = {}
         self._counts: dict[str, int] = {}
 
-    def _validate(self, *, eligible_for_selection: bool) -> dict[str, float]:
+    def _validate(self, *, eligible_for_selection: bool) -> dict[str, float | None]:
         progress('validation', f'Evaluating update {self.update_index}, steps={self.num_timesteps}')
         started = time.perf_counter()
         metrics, history = evaluate_model(self.model, self.eval_env)
         metrics["discounted_reward"] = history_metrics(history, self.gamma)["discounted_reward"]
         seconds = time.perf_counter() - started
         self.validation_seconds += seconds
-        values = {f"validation/ppo/{key}": value for key, value in metrics.items()}
+        values: dict[str, float | None] = {f"validation/ppo/{key}": value for key, value in metrics.items()}
         values.update({f"validation/equal_weight/{key}": value for key, value in self.equal_metrics.items()})
         values.update({
             f"validation/comparison/{key}": value
@@ -234,7 +234,7 @@ class ValidationCallback(BaseCallback):
         self.update_seconds += seconds
         self._rollout_ended = None
         self.update_index += 1
-        values = {
+        values: dict[str, float | None] = {
             key: float(value) for key, value in self.logger.name_to_value.items()
             if key.startswith("train/") and isinstance(value, (int, float, np.number))
         }
@@ -254,8 +254,9 @@ class ValidationCallback(BaseCallback):
         model = self.model
         if not isinstance(model, OnPolicyAlgorithm):
             raise TypeError("validation callback requires an on-policy algorithm")
+        validation_seconds = values["time/validation_seconds"] or 0.0
         values["time/fps"] = model.n_steps * model.n_envs / max(
-            self._last_rollout_seconds + seconds + values["time/validation_seconds"], 1e-9,
+            self._last_rollout_seconds + seconds + validation_seconds, 1e-9,
         )
         for key, value in values.items():
             self.logger.record(key, value)

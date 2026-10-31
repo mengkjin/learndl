@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from typing import Any
 from unittest.mock import patch
 from dataclasses import replace
 from pathlib import Path
@@ -10,8 +11,8 @@ import pandas as pd
 
 from src.res.rl_experimental.data import PanelData
 from src.res.rl_experimental.portfolio import execute_open_close, PortfolioConstraints
-from src.res.rl_experimental.risk import delisting_events, warning_ids, prepare_risk
-from src.res.rl_experimental.env import PortfolioEnv, EpisodeRange
+from src.res.rl_experimental.risk import delisting_events, prepare_risk, warning_ids
+from src.res.rl_experimental.env import EpisodeRange, PortfolioEnv, zero_action
 from src.res.rl_experimental.baselines import replay_baseline, history_metrics
 
 
@@ -64,14 +65,14 @@ class DelistingRiskTest(unittest.TestCase):
             self.assertEqual(history_metrics(history)['total_delisting_loss'], 1)
         env = PortfolioEnv(panel, EpisodeRange(0, 3), constraints, random_start=False)
         env.reset()
-        env.step(np.zeros(env.action_space.shape))
-        _, reward, done, _, info = env.step(np.zeros(env.action_space.shape))
+        env.step(zero_action(env.action_space))
+        _, reward, done, _, info = env.step(zero_action(env.action_space))
         self.assertTrue(done)
         self.assertTrue(np.isfinite(reward))
         self.assertEqual(info['nav'], 0)
         self.assertEqual(info['period_return'], -1)
         with self.assertRaisesRegex(RuntimeError, 'exhausted'):
-            env.step(np.zeros(env.action_space.shape))
+            env.step(zero_action(env.action_space))
         with tempfile.TemporaryDirectory() as d:
             path = Path(d)/'panel.npz'
             panel.save_npz(path)
@@ -108,7 +109,7 @@ class DelistingRiskTest(unittest.TestCase):
         np.testing.assert_array_equal(warning_ids(frame, 20230630), [1, 3])
 
     def test_risk_sale_and_recovery(self):
-        args = dict(old_weights=np.array([1.]), old_cash=0., target_weights=np.array([1.]),
+        args: dict[str, Any] = dict(old_weights=np.array([1.]), old_cash=0., target_weights=np.array([1.]),
                     overnight_returns=np.array([0.]), intraday_returns=np.array([0.]),
                     can_buy=np.array([True]), can_sell=np.array([True]),
                     fee_rate=.001, max_holdings=50, max_weight=1.)

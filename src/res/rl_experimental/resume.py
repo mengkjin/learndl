@@ -124,6 +124,8 @@ def historical_package(folder):
         del sys.modules[key]
     try:
         spec = importlib.util.spec_from_file_location(PREFIX, folder/'__init__.py', submodule_search_locations=[str(folder)])
+        if spec is None or spec.loader is None:
+            raise ImportError(f'Cannot load historical package from {folder}')
         module = importlib.util.module_from_spec(spec)
         sys.modules[PREFIX] = module
         setattr(parent, 'rl_experimental', module)
@@ -161,7 +163,7 @@ def resume_suite(run, root, attempt):
             if engine.code_fingerprint() != plan['code_fingerprint']:
                 raise ValueError('Exported source fingerprint mismatch')
             experiment = importlib.import_module(PREFIX+'.experiment')
-            experiment._system_info = lambda: baseline_system
+            setattr(experiment, '_system_info', lambda: baseline_system)
             phase = {'quarter': None, 'replay': None}
             original_progress = engine.progress
 
@@ -180,7 +182,7 @@ def resume_suite(run, root, attempt):
                         phase['quarter'] = None
                     phase[stage] = quarter
 
-            engine.progress = visible_progress
+            setattr(engine, 'progress', visible_progress)
             progress('resume', f'Reuse {len(plan["completed"])} tasks; finish {len(plan["pending"])}; source={plan["source_commit"]}', milestone=True)
             engine.run_walk_forward(run/'config.json', stage=plan['stage'])
             if phase['replay']:

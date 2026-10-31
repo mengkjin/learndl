@@ -17,6 +17,13 @@ from src.api.task_monitor import interactive
 from src.api.util.backend.task import TaskDatabase
 
 
+def require_task(task_id):
+    task = TaskDatabase().get_task(task_id)
+    if task is None:
+        raise AssertionError(f'missing task {task_id}')
+    return task
+
+
 class InteractiveTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -33,13 +40,13 @@ class InteractiveTest(unittest.TestCase):
     def test_success_records_files_before_compute_and_no_email(self):
         with patch.object(interactive, 'start_sampler', return_value={'mode': 'test'}):
             with interactive.reconstruction(self.processor) as task_id:
-                task = TaskDatabase().get_task(task_id)
+                task = require_task(task_id)
                 self.assertEqual(task.status, 'running')
                 self.assertTrue(task.exit_files)
                 print('persisted before completion')
                 log = next((self.root / 'runs').glob('*/output.log'))
                 self.assertIn('persisted before completion', log.read_text())
-        self.assertEqual(TaskDatabase().get_task(task_id).status, 'complete')
+        self.assertEqual(require_task(task_id).status, 'complete')
         sender = MagicMock()
         self.assertTrue(interactive.maintain(TaskDatabase(), sender))
         sender.assert_not_called()
@@ -49,11 +56,16 @@ class InteractiveTest(unittest.TestCase):
             with interactive.reconstruction(self.processor) as task_id:
                 db = TaskDatabase()
                 task = db.get_task(task_id)
+                if task is None:
+                    raise AssertionError(f'missing task {task_id}')
                 # A subsequent reconstruction starts long after the CLI was born.
                 with patch('src.api.util.backend.task.process.check_status', return_value='running'), patch('src.api.util.backend.task.psutil.Process') as process_class:
-                    process_class.return_value.create_time.return_value = task.start_time - 3600
+                    started = task.start_time
+                    if started is None:
+                        raise AssertionError('task start time missing')
+                    process_class.return_value.create_time.return_value = started - 3600
                     self.assertEqual(db.reconcile_stopped_tasks(), {})
-                self.assertEqual(db.get_task(task_id).status, 'running')
+                self.assertEqual(require_task(task_id).status, 'running')
                 db.update_task(task_id, status='killed', end_time=time.time())
                 sender = MagicMock()
                 with patch.object(interactive, 'alive', return_value=True), patch.object(interactive, 'evidence') as probe:
@@ -61,7 +73,7 @@ class InteractiveTest(unittest.TestCase):
                     sender.assert_not_called()
                     probe.assert_not_called()
                 self.assertFalse(list((self.root / 'runs').glob('*/notified.json')))
-        self.assertEqual(TaskDatabase().get_task(task_id).status, 'complete')
+        self.assertEqual(require_task(task_id).status, 'complete')
 
     def test_memory_trace_is_opt_in_and_environment_is_preserved(self):
         from src.data.util import DataBlock
@@ -76,8 +88,9 @@ class InteractiveTest(unittest.TestCase):
                 with interactive.reconstruction(self.processor) as task_id:
                     self.assertEqual(os.environ.get('LEARNDL_MEMORY_TRACE'), value)
                     DataBlock.from_polars(frame)
-                    task = TaskDatabase().get_task(task_id)
-                    log = Path(next(p for p in task.exit_files if p.endswith('output.log')))
+                    task = require_task(task_id)
+                    files = task.exit_files or []
+                    log = Path(next(p for p in files if str(p).endswith('output.log')))
                 self.assertEqual(os.environ.get('LEARNDL_MEMORY_TRACE'), value)
                 self.assertEqual('mem from-polars' in log.read_text(), value == '1')
 
@@ -86,7 +99,7 @@ class InteractiveTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'test failure'):
                 with interactive.reconstruction(self.processor) as task_id:
                     raise ValueError('test failure')
-        self.assertEqual(TaskDatabase().get_task(task_id).status, 'error')
+        self.assertEqual(require_task(task_id).status, 'error')
         sender = MagicMock(side_effect=[False, True])
         self.assertFalse(interactive.maintain(TaskDatabase(), sender))
         self.assertTrue(list((self.root / 'runs').glob('*/pending.json')))
@@ -173,6 +186,7 @@ with interactive.reconstruction(processor):
                     break
                 time.sleep(.05)
             self.assertIsNotNone(log)
+            assert log is not None
             self.assertIn('before kill', log.read_text())
             child.kill()
             child.wait(timeout=5)

@@ -67,6 +67,8 @@ def read_project(start, end, cfg=None):
             else:
                 df = calc.Loads(dates, normalize=False)
                 from .bundle import file_digest
+                if not issubclass(calc, AffiliateFactorCalculator):
+                    raise AttributeError(f'{name} has no full_dbs')
                 for db in calc.full_dbs():
                     for date in dates:
                         path = DB.path(db['src'],db['key'],int(date))

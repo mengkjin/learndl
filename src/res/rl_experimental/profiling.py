@@ -63,7 +63,10 @@ def profile_env(panel: PanelData, output: Path, steps=512, train_steps=512):
         tracemalloc.start()
         profiler.enable()
         for _ in range(count):
-            _, _, done, _, _ = env.step(np.zeros(env.action_space.shape, np.float32))
+            action_shape = env.action_space.shape
+            if action_shape is None:
+                raise ValueError('continuous action shape is required')
+            _, _, done, _, _ = env.step(np.zeros(action_shape, np.float32))
             if done:
                 break
         profiler.disable()
@@ -73,7 +76,7 @@ def profile_env(panel: PanelData, output: Path, steps=512, train_steps=512):
         profiler.dump_stats(str(output/f'{name}.prof'))
         stats = pstats.Stats(profiler)
         functions = {f'{Path(file).name}:{line}:{fun}': {'calls': data[1], 'self_seconds': data[2], 'cumulative_seconds': data[3]}
-                     for (file, line, fun), data in stats.stats.items()
+                     for (file, line, fun), data in getattr(stats, 'stats').items()
                      if fun in ('_observation', 'select_slots', 'execute_open_close', 'project_action', '__call__', '_base_info')}
         result['environment'][name] = {'median_seconds': float(np.median(samples)), 'seconds': samples,
                                        'steps_per_second': len(reference)/float(np.median(samples)),

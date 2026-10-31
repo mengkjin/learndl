@@ -46,7 +46,10 @@ class PriorityTests(unittest.TestCase):
         with self.assertRaisesRegex(maintenance_gate.MaintenanceBusy, 'repair'):
             with self.permit('training'):
                 self.fail('training overtook repair')
-        self.assertFalse(self.store.get('repair')['attempted'])
+        repair = self.store.get('repair')
+        if not isinstance(repair, dict):
+            raise AssertionError('missing repair record')
+        self.assertFalse(repair['attempted'])
         with self.permit('calendar'):
             pass
 
@@ -196,7 +199,7 @@ class PriorityTests(unittest.TestCase):
                         {'status': 'updated', 'checkout_attempted': True}):
             calls.clear()
             with patch.object(watchdog, '_run_git_auto_update',
-                              side_effect=lambda _: (calls.append('git'), watchdog.JobResult(stats=outcome))[1]):
+                              side_effect=lambda _: (calls.append('git'), watchdog.JobResult(stats=dict(outcome)))[1]):
                 watchdog.run_watchdog(task_db=MagicMock(), cache=MagicMock(),
                                       state_path=self.base / (outcome['status'] + '.json'), units=[])
             self.assertEqual(calls[0], 'git')

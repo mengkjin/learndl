@@ -93,12 +93,14 @@ def _retry_delivery(directory, *, transport=None):
     if transport is None:
         from src.proj.util.web.emailer import Email
 
-        def transport(message, recipient):
+        def default_transport(message, recipient):
             # Existing ledgers can still contain oversized legacy MIME messages.
             # The external receipt records any sub-parts without a second queue owner.
             from src.proj.util.web.mail_package import fingerprint
             return Email.send_with_smtplib(message, recipient,
                 delivery_id=f'task-result:{directory}:{fingerprint(message)}')
+
+        transport = default_transport
     for item in state['messages']:
         if item['sent']:
             continue

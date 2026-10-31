@@ -7,6 +7,7 @@ from collections import defaultdict
 from contextlib import ExitStack
 from functools import wraps
 from time import perf_counter
+from typing import Any
 from unittest.mock import patch
 import inspect
 
@@ -28,7 +29,9 @@ class CallbackProfile:
         label = label or f'{owner.__name__}.{name}'
         @wraps(original)
         def measured(*args, **kwargs):
-            start = perf_counter(); frame = [0.]; self.stack.append(frame)
+            start = perf_counter()
+            frame = [0.]
+            self.stack.append(frame)
             try:
                 result = original(*args, **kwargs)
             finally:
@@ -44,13 +47,14 @@ class CallbackProfile:
                 capture(args, kwargs, result)
             return result
         descriptor = inspect.getattr_static(owner, name)
+        patched: Any = measured
         if isinstance(descriptor, staticmethod):
-            measured = staticmethod(measured)
+            patched = staticmethod(measured)
         elif isinstance(descriptor, classmethod):
             # original is already bound to the class.
             wrapped = measured
-            measured = classmethod(lambda cls, *a, **k: wrapped(*a, **k))
-        self.patches.enter_context(patch.object(owner, name, measured))
+            patched = classmethod(lambda cls, *a, **k: wrapped(*a, **k))
+        self.patches.enter_context(patch.object(owner, name, patched))
 
     def __enter__(self):
         try:
@@ -86,10 +90,12 @@ class CallbackProfile:
         seen = set()
         for module in (monitor,fit,test):
             for _, cls in inspect.getmembers(module, inspect.isclass):
-                if cls in seen: continue
+                if cls in seen:
+                    continue
                 seen.add(cls)
                 for name, value in vars(cls).items():
-                    if name.startswith('on_') and callable(value): self.wrap(cls,name)
+                    if name.startswith('on_') and callable(value):
+                        self.wrap(cls,name)
         for name in ('append_batch_hidden_summary','add_hidden_summaries','add_total_metric','sync_latest_tensorboard'):
             self.wrap(SummaryWriter,name)
         self.wrap(RankICFunction,'hidden_rankic')
@@ -109,10 +115,11 @@ class CallbackProfile:
             self.wrap(DetailedAlphaAnalysis,name)
         from src.res.factor.analytic import test_basics
         for _, cls in inspect.getmembers(test_basics,inspect.isclass):
-            if 'plot' in vars(cls): self.wrap(cls,'plot')
+            if 'plot' in vars(cls):
+                self.wrap(cls,'plot')
         def exported(args, kwargs, result):
             path = kwargs.get('path', args[1] if len(args)>1 else '')
-            row = dict(path=str(path), asynchronous=hasattr(result, 'add_done_callback'))
+            row: dict[str, Any] = dict(path=str(path), asynchronous=hasattr(result, 'add_done_callback'))
             self.exports.append(row)
             submitted = perf_counter()
             if row['asynchronous']:

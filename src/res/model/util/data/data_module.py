@@ -34,6 +34,7 @@ class DataModule(Base.BoundLogger):
    
     # Populated by PredRecorder when preparing linear-model inference.
     linear_completed_dates: np.ndarray
+    linear_known_empty_dates: np.ndarray
 
     def __init__(
         self , config : ModelConfig | None = None , 

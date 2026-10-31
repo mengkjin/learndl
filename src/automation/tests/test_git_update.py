@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import psutil
@@ -208,15 +209,21 @@ class TrainingActivityTest(unittest.TestCase):
             history.parent.mkdir(parents=True)
             data = dict(status='running', pid=os.getpid(), process_created=psutil.Process().create_time())
             history.write_text(json.dumps(data))
-            self.assertIn('pipeline', updater.training_blocker())
+            blocker = updater.training_blocker()
+            assert blocker is not None
+            self.assertIn('pipeline', blocker)
             data['status'] = 'success'
             history.write_text(json.dumps(data))
             self.assertIsNone(updater.training_blocker())
             held.return_value = True
-            self.assertIn('fit lock', updater.training_blocker())
+            blocker = updater.training_blocker()
+            assert blocker is not None
+            self.assertIn('fit lock', blocker)
             held.return_value = False
             history.write_text('invalid json')
-            self.assertIn('cannot be verified', updater.training_blocker())
+            blocker = updater.training_blocker()
+            assert blocker is not None
+            self.assertIn('cannot be verified', blocker)
 
 
 class WatchdogUpdateOrderTest(unittest.TestCase):
@@ -230,7 +237,7 @@ class WatchdogUpdateOrderTest(unittest.TestCase):
                  patch.object(updater, 'runtime_dir', return_value=root), \
                  patch('src.automation.watchdog._deliver_alerts', side_effect=lambda **_: (order.append('alerts') or True)), \
                  patch('src.automation.scheduling.runtime.deliver_timeout_events', side_effect=lambda _: (order.append('mail') or True)):
-                args = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=Mock(), jobs=jobs)
+                args: dict[str, Any] = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=Mock(), jobs=jobs)
                 self.assertFalse(run_watchdog(**args, now=1000))
                 self.assertEqual(order, ['maintenance', 'alerts', 'mail', 'git'])
                 order.clear()
@@ -241,17 +248,17 @@ class WatchdogUpdateOrderTest(unittest.TestCase):
     def test_update_mail_attempted_after_pull_and_retried_on_non_update_tick(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            result = dict(status='updated', before='a' * 40, after='b' * 40, changed_files=['code.py'])
+            result: dict[str, Any] = dict(status='updated', before='a' * 40, after='b' * 40, changed_files=['code.py'])
             def update(_):
                 result['notification_id'] = updater.queue_update_email(result, root)
-                return JobResult(stats=result)
+                return JobResult(stats=cast(dict[str, object], result))
             job = WatchdogJob('git_auto_update', 300, update)
             with patch.object(updater, 'runtime_dir', return_value=root), \
                  patch('src.automation.scheduling.config.installed_config', return_value=None), \
                  patch('src.automation.watchdog._deliver_alerts', return_value=True), \
                  patch('src.automation.scheduling.runtime.deliver_timeout_events', return_value=True):
                 send = Mock(side_effect=[False, True])
-                args = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=send, jobs=[job])
+                args: dict[str, Any] = dict(task_db=Mock(), cache=Mock(), units=[], state_path=root / 'state.json', email_sender=send, jobs=[job])
                 self.assertFalse(run_watchdog(**args, now=1000))
                 self.assertEqual(send.call_count, 1)  # Same tick as the successful pull.
                 self.assertTrue(run_watchdog(**args, now=1060))

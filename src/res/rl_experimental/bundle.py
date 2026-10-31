@@ -179,12 +179,14 @@ def send_bundle(
     previous = json.loads(delivery_path.read_text(encoding="utf-8")) if delivery_path.is_file() else {"parts": {}}
 
     if transport is None:
-        def transport(title: str, body: str, address: str | None, attachments: list[Path]) -> bool:
+        def default_transport(title: str, body: str, address: str | None, attachments: list[Path]) -> bool:
             from src.proj.util.web.emailer import Email
 
             message = Email.message(title, body, address, attachments=attachments)
             return Email.send_with_smtplib(message, address, confirmation_message="RL experiment bundle",
                                            delivery_id=f"rl-bundle:{metadata}:{attachments[0].name}")
+
+        transport = default_transport
 
     states = dict(previous.get("parts", {}))
     total = len(parts)

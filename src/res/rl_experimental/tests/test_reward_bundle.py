@@ -13,7 +13,7 @@ import numpy as np
 
 from src.res.rl_experimental.bundle import analyze_bundle, create_bundle, send_bundle
 from src.res.rl_experimental.data import make_synthetic_panel
-from src.res.rl_experimental.env import EpisodeRange, PortfolioEnv
+from src.res.rl_experimental.env import EpisodeRange, PortfolioEnv, zero_action
 from src.res.rl_experimental.experiment import run_experiment
 from src.res.rl_experimental.portfolio import PortfolioConstraints
 from src.res.rl_experimental.reward import RewardConfig, RewardContext, RewardEvaluator
@@ -54,7 +54,7 @@ class RewardTest(unittest.TestCase):
             reward_config=RewardConfig(turnover_penalty=0.01),
         )
         env.reset(seed=1)
-        _, reward, _, _, info = env.step(np.zeros(env.action_space.shape, dtype=np.float32))
+        _, reward, _, _, info = env.step(zero_action(env.action_space, np.float32))
         expected = 100 * (np.log(info["period_return"] + 1.0) - 0.01 * info["turnover"])
         self.assertAlmostEqual(reward, expected)
         self.assertIn("reward_component/log_growth", info)
@@ -107,8 +107,10 @@ class BundleTest(unittest.TestCase):
             metadata = create_bundle(run, root / 'bundles', max_part_bytes=120)
             definition = json.loads(metadata.read_text())
             first = metadata.parent / definition['parts'][0]['name']
-            subprocess.run([shutil.which('7zz') or shutil.which('7z'), 'x', str(first),
-                            f'-o{root}/unpacked'], check=True, capture_output=True)
+            executable = shutil.which('7zz') or shutil.which('7z')
+            if executable is None:
+                raise AssertionError('7-Zip missing')
+            subprocess.run([executable, 'x', str(first), f'-o{root}/unpacked'], check=True, capture_output=True)
             for name in ('report.html', 'best_model.zip', 'status.json'):
                 self.assertEqual((root/'unpacked'/name).read_bytes(), (run/name).read_bytes())
 

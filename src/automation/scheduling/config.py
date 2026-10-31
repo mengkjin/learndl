@@ -216,3 +216,11 @@ def installed_config() -> dict | None:
     if not path.exists():
         return None
     return json.loads(path.read_text())
+
+
+def require_installed_config() -> dict:
+    """Installed scheduler document. Missing installation is a hard failure."""
+    config = installed_config()
+    if config is None:
+        raise RuntimeError('scheduler is not installed')
+    return config

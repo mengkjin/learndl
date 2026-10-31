@@ -41,6 +41,8 @@ def clean_file(path, known, mapper, *, apply=False, backup=None):
     # Arrow preserves schema metadata, including pandas index metadata.
     table = reader(path)
     keys = pl.from_arrow(table.select(['secid']))
+    if not isinstance(keys, pl.DataFrame):
+        raise TypeError(f'{path}: expected a secid table')
     if not keys.schema['secid'].is_integer():
         raise ValueError(f'{path}: secid must be integer')
     mapped = mapper(keys)
@@ -72,7 +74,11 @@ def clean_file(path, known, mapper, *, apply=False, backup=None):
     try:
         writer(cleaned, temp)
         verified = reader(temp)
-        if not verified.schema.equals(table.schema, check_metadata=True) or not pl.from_arrow(verified).equals(pl.from_arrow(cleaned)):
+        verified_frame = pl.from_arrow(verified)
+        cleaned_frame = pl.from_arrow(cleaned)
+        if not isinstance(verified_frame, pl.DataFrame) or not isinstance(cleaned_frame, pl.DataFrame):
+            raise TypeError(f'{path}: expected tabular verification frames')
+        if not verified.schema.equals(table.schema, check_metadata=True) or not verified_frame.equals(cleaned_frame):
             raise RuntimeError('Replacement validation failed')
         with temp.open('rb') as stream:
             os.fsync(stream.fileno())

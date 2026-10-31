@@ -107,7 +107,7 @@ class FastEpochMetrics(EpochMetrics):
         for name in self._rows:
             self.tables[name] = []
 
-    def append(self, batch):
+    def append(self, batch: FastBatchMetrics):
         AggregatedMetrics.append(self, batch)
         self.indices['batch'].append(batch.batch_key)
         self._rows['accuracies'].append(dict(batch.accuracies))

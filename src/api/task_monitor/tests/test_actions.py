@@ -130,4 +130,7 @@ class MonitorActionDatabaseTest(unittest.TestCase):
                 self.assertEqual(repository.list_tasks(statuses={'running'}, window='history').total, 0)
                 finished = repository.list_tasks(statuses={'killed'}, window='history')
                 self.assertEqual(finished.total, 1)
-                self.assertIn('Learndl Monitor', finished.tasks[0].exit_error)
+                exit_error = finished.tasks[0].exit_error
+                if exit_error is None:
+                    raise AssertionError('killed task has no exit error')
+                self.assertIn('Learndl Monitor', exit_error)

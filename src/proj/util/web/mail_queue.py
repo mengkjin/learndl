@@ -12,6 +12,7 @@ import time
 import uuid
 from email import message_from_bytes, policy
 from pathlib import Path
+from typing import Any
 
 from .mail_package import atomic_bytes, atomic_json, digest, fingerprint, fsync_dir, prepare, serialization_differences
 
@@ -76,7 +77,7 @@ class MailQueue:
         notices_path = self.root / '.notices.json'
         notices = read_json(notices_path)
         receipt_path = self.root / '.notice_delivery.json'
-        receipt = read_json(receipt_path)
+        receipt: dict[str, Any] = read_json(receipt_path)
         if receipt.get('next_retry_at', 0) > time.time():
             return
         if receipt.get('complete', True):
@@ -247,7 +248,7 @@ class MailQueue:
             budget.stats['sent'] += 1
         return all(item['sent'] for item in manifest['messages'])
 
-    def flush(self, *, timeout=20, max_messages=20, deadline=None, stats=None):
+    def flush(self, *, timeout=20, max_messages: int | None = 20, deadline=None, stats=None):
         budget = Budget(timeout, max_messages, deadline, stats)
         self.deliver_notices(budget)
         folders = self.api._pending_outbox()

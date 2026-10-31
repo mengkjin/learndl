@@ -15,22 +15,22 @@ class MonitorResourcesTest(unittest.TestCase):
         self.stack.enter_context(patch('src.api.task_monitor.resources.psutil.cpu_percent', return_value=0))
         self.stack.enter_context(patch('src.api.task_monitor.resources.psutil.disk_usage',
                                       return_value=MagicMock(used=250, total=1000, percent=25)))
-        self.run = self.stack.enter_context(patch('src.api.task_monitor.resources.subprocess.run'))
+        self.completed = self.stack.enter_context(patch('src.api.task_monitor.resources.subprocess.run'))
 
     def test_multiple_gpus_and_real_zero(self):
-        self.run.return_value.stdout = '0, NVIDIA A, 1024, 4096, 0\n1, NVIDIA B, 4096, 8192, 90\n'
+        self.completed.return_value.stdout = '0, NVIDIA A, 1024, 4096, 0\n1, NVIDIA B, 4096, 8192, 90\n'
         result = sample_resources(Path('/tmp'))
         self.assertEqual(result.memory, (600, 1000, 60))
         self.assertEqual(result.cpu_percent, 0)
         self.assertEqual([gpu.memory_percent for gpu in result.gpus], [25, 50])
         self.assertEqual([gpu.utilization for gpu in result.gpus], [0, 90])
         self.assertEqual(result.errors, ())
-        self.run.assert_called_once()
-        self.assertEqual(self.run.call_args.kwargs['timeout'], 2)
-        self.assertIn('utilization.gpu', self.run.call_args.args[0][1])
+        self.completed.assert_called_once()
+        self.assertEqual(self.completed.call_args.kwargs['timeout'], 2)
+        self.assertIn('utilization.gpu', self.completed.call_args.args[0][1])
 
     def test_partial_unknown_fields_and_malformed_rows(self):
-        self.run.return_value.stdout = '0, A, N/A, 8192, 32\n1, B, 0, 0, [Not Supported]\nbad row\n'
+        self.completed.return_value.stdout = '0, A, N/A, 8192, 32\n1, B, 0, 0, [Not Supported]\nbad row\n'
         result = sample_resources(Path('/tmp'))
         self.assertIsNone(result.gpus[0].used_mib)
         self.assertEqual(result.gpus[0].total_mib, 8192)
@@ -43,7 +43,7 @@ class MonitorResourcesTest(unittest.TestCase):
         for exc in (FileNotFoundError(), subprocess.TimeoutExpired('nvidia-smi', 2),
                     subprocess.CalledProcessError(1, 'nvidia-smi'), OSError('unsupported')):
             with self.subTest(exc=exc):
-                self.run.side_effect = exc
+                self.completed.side_effect = exc
                 result = sample_resources(Path('/tmp'))
                 self.assertEqual(result.gpus, ())
                 self.assertTrue(result.errors)
@@ -51,9 +51,9 @@ class MonitorResourcesTest(unittest.TestCase):
                 self.assertIsNotNone(result.disk)
 
     def test_no_devices_and_invalid_numbers(self):
-        self.run.return_value.stdout = ''
+        self.completed.return_value.stdout = ''
         self.assertTrue(sample_resources(Path('/tmp')).errors)
-        self.run.return_value.stdout = '0, A, nan, -1, 101\n'
+        self.completed.return_value.stdout = '0, A, nan, -1, 101\n'
         gpu = sample_resources(Path('/tmp')).gpus[0]
         self.assertIsNone(gpu.used_mib)
         self.assertIsNone(gpu.total_mib)

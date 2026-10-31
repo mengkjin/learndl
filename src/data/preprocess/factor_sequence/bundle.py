@@ -5,14 +5,16 @@ import hashlib
 import json
 import numpy as np
 import pandas as pd
-from .schema import BuildConfig, KEYS, EVENTS, STOCK_CHANNELS
+from .schema import BuildConfig, KEYS, EVENTS
 from .numeric import clean, stock_block, performance_block, market_block
 
 
 def digest(array):
     array = np.ascontiguousarray(array)
     h = hashlib.sha256()
-    h.update(str(array.dtype).encode()); h.update(str(array.shape).encode()); h.update(array.tobytes())
+    h.update(str(array.dtype).encode())
+    h.update(str(array.shape).encode())
+    h.update(array.tobytes())
     return h.hexdigest()
 
 
@@ -101,11 +103,17 @@ def build(root, raw, returns, dates, secids, market, events, eligible=None,
             part_events = events.loc[events.event_date <= dates[end-1]]
             pp, pnames = performance_block(signed[:, :end], returns[:, :end], dates[:end], part_events, cfg)
             mm, mnames = market_block(market.iloc[:end], cfg)
-            ps.append(pp[:, start:end]); ms.append(mm[:, start:end])
+            ps.append(pp[:, start:end])
+            ms.append(mm[:, start:end])
         p, m = np.concatenate(ps, axis=1), np.concatenate(ms, axis=1)
     destination.mkdir(parents=True, exist_ok=False)
     try:
-        np.savez_compressed(destination/'inputs.npz', **snapshots)
+        np.savez_compressed(
+            destination/'inputs.npz',
+            raw=snapshots['raw'], returns=snapshots['returns'], dates=snapshots['dates'],
+            secids=snapshots['secids'], eligible=snapshots['eligible'],
+            market=snapshots['market'], market_names=snapshots['market_names'],
+        )
         events.to_json(destination/'events.json', orient='records', indent=2)
         blocks = {}
         for key, values, names, ids in (
@@ -147,7 +155,10 @@ def load(path, expected_config=None, verify=True):
 
 def audit(path):
     manifest = load(path)
-    raw = np.load(Path(path)/'inputs.npz', allow_pickle=False)
+    # NpzFile does not cache decoded members. Materialize once before the
+    # factor/date loops; otherwise every slice decompresses the entire panel.
+    with np.load(Path(path)/'inputs.npz', allow_pickle=False) as archive:
+        raw = {key:archive[key] for key in ('raw','returns','dates','eligible')}
     cfg = BuildConfig(**(manifest['config'] | {'factors':tuple(manifest['config']['factors'])}))
     x = np.load(Path(path)/'factorseq.npz', allow_pickle=False)['values'][:, :, 0]
     k = len(cfg.factors)
@@ -177,26 +188,28 @@ def audit(path):
                           normalized_quantiles=np.quantile(z,[0,.01,.5,.99,1]).tolist() if len(z) else [])
     blocks = {}
     for key in KEYS:
-        b = np.load(Path(path)/f'{key}.npz', allow_pickle=False)
-        if not np.isfinite(b['values']).all():
+        with np.load(Path(path)/f'{key}.npz', allow_pickle=False) as archive:
+            values = x[:,:,None,:] if key == 'factorseq' else archive['values']
+            names = list(archive['features'])
+        if not np.isfinite(values).all():
             raise ValueError(f'Nonfinite packed block: {key}')
-        names = list(b['features'])
         mask = [i for i,n in enumerate(names) if str(n).endswith('__valid')]
-        if key != 'factorseq' and not b['values'][...,mask].any():
+        if key != 'factorseq' and not values[...,mask].any():
             raise ValueError(f'Entire public block unavailable: {key}')
-        blocks[key] = dict(shape=list(b['values'].shape), bytes=int(b['values'].nbytes),
-                           maturity={str(names[i]):float(b['values'][...,i].mean()) for i in mask})
+        blocks[key] = dict(shape=list(values.shape), bytes=int(values.nbytes),
+                           maturity={str(names[i]):float(values[...,i].mean()) for i in mask})
+        if key == 'factorperf':
+            p = values
+            pnames = names
     if not valid.any():
         raise ValueError('No usable normalized factor observations')
     # Independently check fixed dates with pandas quantiles/ranks, not the production helper.
     checks, event_checks = [], []
-    p = np.load(Path(path)/'factorperf.npz', allow_pickle=False)
-    pnames = list(p['features'])
     def verify_metrics(factor, v, r, t, prefix=''):
         frame = pd.DataFrame({'v':v,'r':r}).replace([np.inf,-np.inf],np.nan).dropna()
         if len(frame) < cfg.min_performance or frame.v.nunique() < 2:
             return None
-        group = np.floor((frame.v.rank(method='average')-.5)*10/len(frame)).clip(upper=9)
+        group = np.floor((frame.v.rank(method='average')-.5)*10/len(frame)).clip(max=9)
         top, bottom = frame.r[group == 9], frame.r[group == 0]
         expected = {'ic':frame.v.rank().corr(frame.r.rank()) if frame.r.nunique()>1 else np.nan,
                     'top':top.mean()-frame.r.mean() if len(top) and len(bottom) else np.nan,
@@ -204,9 +217,9 @@ def audit(path):
                     'spread':top.mean()-bottom.mean() if len(top) and len(bottom) else np.nan}
         for metric,value in expected.items():
             name=f'{prefix}{factor}__{metric}'
-            if bool(p['values'][0,t,0,pnames.index(name+'__valid')]) != bool(np.isfinite(value)):
+            if bool(p[0,t,0,pnames.index(name+'__valid')]) != bool(np.isfinite(value)):
                 raise ValueError(f'Independent audit validity mismatch: {name}')
-            if np.isfinite(value) and not np.isclose(p['values'][0,t,0,pnames.index(name)],
+            if np.isfinite(value) and not np.isclose(p[0,t,0,pnames.index(name)],
                                                     value*(1 if metric=='ic' else 100),atol=1e-6):
                 raise ValueError(f'Independent audit metric mismatch: {name}')
         return {'date':int(raw['dates'][t]),'factor':factor,'metrics_checked':list(expected)}
@@ -220,9 +233,11 @@ def audit(path):
             checks.append(verify_metrics(factor,v[ok].to_numpy(),r[ok].to_numpy(),t))
     events = pd.read_json(Path(path)/'events.json').reindex(columns=['event','event_date','start','end'])
     indices = {int(d):i for i,d in enumerate(raw['dates'])}
-    for row in events.groupby('event').head(3).itertuples():
-        if any(d not in indices for d in (row.start,row.end,row.event_date)) or indices[row.start]==0:
-            continue
+    # Select the sample AFTER restricting to evaluable intervals. Full source
+    # history may precede this bundle by years; sampling first can check nothing.
+    evaluable = events.loc[events.start.isin(indices) & events.end.isin(indices) &
+                           events.event_date.isin(indices) & (events.start > raw['dates'][0])]
+    for row in evaluable.groupby('event').head(3).itertuples():
         a,b,t = indices[row.start],indices[row.end],indices[row.event_date]
         r = pd.DataFrame(raw['returns'][:,a:b+1]).add(1).prod(axis=1,skipna=False)-1
         for j,factor in enumerate(cfg.factors):

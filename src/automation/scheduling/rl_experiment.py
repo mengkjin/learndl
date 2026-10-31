@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 import subprocess
 import sys
 import time
@@ -98,7 +99,7 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
     """Persist the latest pending version without creating a training attempt."""
     from src.proj import PATH
     root = root or PATH.main
-    state = dict(status='disabled', updated_at=time.time())
+    state: dict[str, Any] = dict(status='disabled', updated_at=time.time())
     old = status(store)
     request = None
     try:
@@ -106,8 +107,11 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
         if options.get('enabled'):
             from .rl_resume import candidate as resume_candidate
             if resume := resume_candidate(store, root):
+                request_doc = resume['resume_request']
+                if not isinstance(request_doc, dict):
+                    raise TypeError('resume request document is not an object')
                 save_state(store, dict(status='pending', mode='walk_forward', version=resume['version'],
-                    resume_request_id=resume['resume_request_id'], output_directory=resume['resume_request']['run_directory'],
+                    resume_request_id=resume['resume_request_id'], output_directory=request_doc['run_directory'],
                     updated_at=time.time(), wait_reason=old.get('wait_reason') if old.get('version') == resume['version'] else None))
                 return resume
             # The two watchdog jobs share an arbiter, but RL's configured

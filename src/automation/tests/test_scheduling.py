@@ -294,7 +294,10 @@ class InstallerTransactionTest(unittest.TestCase):
         saved = json.loads((self.state/'rollback.json').read_text())
         self.assertEqual(saved['manifest']['units'], legacy['units'])
         apply_plan(copy.deepcopy(legacy), self.cron, self.state)
-        self.assertEqual(store.get(item['id'])['phase'], 'success')
+        finished = store.get(item['id'])
+        if not isinstance(finished, dict):
+            raise AssertionError('missing finished fix')
+        self.assertEqual(finished['phase'], 'success')
         self.assertEqual(store.scheduled(), [('daily_update:100', 'daily_update')])
         self.assertEqual((store.directory/'gate.lock').stat().st_ino, inode)
         for name, content in legacy['units'].items():

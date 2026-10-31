@@ -112,12 +112,30 @@ class TransformTests(unittest.TestCase):
 
     def test_bundle_version_corruption_and_chunks(self):
         d=fixture(85)
+        old = pd.DataFrame([dict(event=EVENTS[0],event_date=d['dates'][0]-i,
+                                start=d['dates'][0]-i-2,end=d['dates'][0]-i)
+                            for i in (10,20,30)])
+        d['events']=pd.concat([old,d['events']],ignore_index=True)
         with TemporaryDirectory() as tmp:
             a=build(Path(tmp)/'a',**d,cfg=self.cfg)
             b=build(Path(tmp)/'b',**d,cfg=self.cfg,chunk_size=30)
             for key in KEYS:
                 np.testing.assert_array_equal(np.load(a/f'{key}.npz')['values'],np.load(b/f'{key}.npz')['values'])
-            self.assertEqual(audit(a)['status'],'passed')
+            # Accessing a compressed NPZ member repeatedly decodes the complete
+            # panel each time. Keep audit IO bounded as date/factor counts grow.
+            with np.load(a/'inputs.npz') as archive:
+                archive_type = type(archive)
+            original_getitem = archive_type.__getitem__
+            reads = {}
+            def count_reads(archive, key):
+                reads[key] = reads.get(key,0)+1
+                return original_getitem(archive,key)
+            with patch.object(archive_type,'__getitem__',count_reads):
+                report=audit(a)
+                self.assertEqual(report['status'],'passed')
+                self.assertEqual(len(report['event_checks']),2)
+            self.assertEqual(reads['raw'],1)
+            self.assertEqual(reads['values'],3)
             self.assertRaises(ValueError,load,a,BuildConfig(factors=('a','b')))
             shared=load_block(a,'factorperf',d['dates'],np.arange(5000))
             self.assertEqual(shared.shape[0],1)
@@ -142,7 +160,7 @@ class TransformTests(unittest.TestCase):
             path=build(tmp,**d,cfg=self.cfg)
             y=DataBlock(torch.randn(60,25,1,1),d['secids'],d['dates'],['std_lag1_10'])
             data=ModuleData.initialize(list(KEYS),['std_lag1_10'],factor_sequence_dataset=str(path),vb_level=0)
-            with patch.object(PrePro_y,'load',return_value=y), \
+            with patch.object(PrePro_y,'load',autospec=True,return_value=y), \
                  patch('src.res.model.util.data.module_data.CALENDAR.range',return_value=d['dates']), \
                  patch.object(PreProHistNorm,'load_keys') as norms:
                 data.load()
@@ -278,6 +296,127 @@ class ModelTests(unittest.TestCase):
         batch=DataModule.batch_data_x(proxy,{'factorperf':p},torch.arange(1000),torch.full((1000,),10))
         self.assertEqual(batch[0].shape,(1,3,5))
         self.assertRaises(ValueError,DataModule.batch_data_x,proxy,{'factorperf':p},torch.arange(2),torch.tensor([9,10]))
+
+class ServerSuiteTests(unittest.TestCase):
+    def test_gate_identity_bounds_and_causality(self):
+        torch.manual_seed(13)
+        base=MODELS['factorseq_gru']([20,10,9],hidden_dim=8,dropout=0)
+        gate=MODELS['factorseq_gate']([20,10,9],hidden_dim=8,dropout=0)
+        gate.load_state_dict(base.state_dict(),strict=False)
+        x=[torch.randn(7,6,20),torch.randn(1,12,10),torch.randn(1,12,9)]
+        torch.testing.assert_close(base(x)[0],gate(x)[0])
+        with torch.no_grad():
+            gate.factor_gate[-1].weight.normal_()
+        c=torch.cat((gate.performance(x[1])[0],gate.market(x[2])[0]),-1)
+        z,g=gate.gate_stock(x[0],c)
+        torch.testing.assert_close(z[...,2:],x[0][...,2:])
+        self.assertTrue(((g>=.5)&(g<=1.5)).all())
+        self.assertFalse(torch.allclose(g[0],g[1]))
+        changed=x[1].clone();changed[:,-1]+=30
+        c2=torch.cat((gate.performance(changed)[0],gate.market(x[2])[0]),-1)
+        z2,_=gate.gate_stock(x[0],c2)
+        torch.testing.assert_close(z[:,:-1],z2[:,:-1])
+        self.assertFalse(torch.allclose(z[:,-1],z2[:,-1]))
+
+    def test_discovery_uses_earliest_history_without_stale_factor_cutoff(self):
+        from src.data.preprocess.factor_sequence.server_suite import discover
+        report=dict(status='passed',missing=[],factors={
+            'a':dict(start=20050104,end=20200102),'b':dict(start=20150105,end=20261029)})
+        with patch('src.data.preprocess.factor_sequence.sources.preflight',return_value=report), \
+             patch('src.proj.DB') as db, patch('src.proj.CALENDAR') as calendar:
+            # Dates exposes max as a property, not numpy's max() method.
+            from unittest.mock import MagicMock
+            dates=MagicMock();dates.__len__.return_value=2;dates.max=20261029
+            db.dates.return_value=dates;calendar.updated.return_value=20261030
+            actual=discover(BuildConfig(factors=('a','b')))
+        self.assertEqual(actual['history_start'],20050104)
+        self.assertEqual(actual['data_end'],20261029)
+
+    def test_walk_forward_exact_coverage_and_purge(self):
+        from src.data.preprocess.factor_sequence.pipeline import walk_forward_splits
+        dates=np.arange(1000);ends=dates+11
+        folds=walk_forward_splits(dates,ends,600,750)
+        self.assertEqual([d for f in folds for d in f['test']],list(range(600,751)))
+        self.assertEqual([len(f['test']) for f in folds],[63,63,25])
+        for f in folds:
+            self.assertLess(max(f['train'])+11,min(f['valid']))
+            self.assertLess(max(f['valid'])+11,min(f['test']))
+        with self.assertRaisesRegex(ValueError,'Insufficient history'):
+            walk_forward_splits(dates,ends,300)
+
+    def test_aggregate_and_reject_missing_dates(self):
+        from src.data.preprocess.factor_sequence.server_suite import aggregate
+        from src.data.preprocess.factor_sequence.bundle import write_json
+        with TemporaryDirectory() as tmp:
+            root=Path(tmp);folders=[]
+            for idx,ics in enumerate(([.1,.2],[.5])):
+                folder=root/str(idx);training=folder/'training';training.mkdir(parents=True)
+                write_json(training/'runs.json',[dict(name='m',model='factorseq_gate',seed=17,status='passed')])
+                pd.DataFrame(dict(date=np.arange(len(ics))+idx*2,rank_ic=ics,
+                    top_decile_10d_excess=ics,n=[60]*len(ics))).to_csv(training/'m_daily.csv',index=False)
+                folders.append(folder)
+            result=aggregate(folders,root,[0,1,2])[0]
+            self.assertAlmostEqual(result['icir'],np.mean([.1,.2,.5])/np.std([.1,.2,.5]))
+            with self.assertRaisesRegex(ValueError,'gaps/overlap'):
+                aggregate(folders,root,[0,1,2,3])
+
+    def test_suite_failure_is_recorded_and_stops(self):
+        from src.data.preprocess.factor_sequence import server_suite as suite
+        with TemporaryDirectory() as tmp:
+            with patch.object(suite,'execute',side_effect=RuntimeError('offline failed')) as execute:
+                folder,report=suite.run_suite(Path(__file__).resolve().parents[1],tmp,'failed',
+                    Path(__file__).resolve().parents[1]/'configs/experience/model/factor_sequence/data.json')
+            self.assertEqual(execute.call_count,1)
+            self.assertEqual(report['status'],'failed')
+            self.assertEqual(report['stages'][0]['status'],'failed')
+            self.assertTrue((folder/'suite.json').exists())
+
+    def test_suite_success_orders_stages_and_freezes_range(self):
+        import json
+        from src.data.preprocess.factor_sequence import server_suite as suite
+        from src.data.preprocess.factor_sequence.bundle import write_json
+        with TemporaryDirectory() as tmp:
+            root=Path(__file__).resolve().parents[1];results=Path(tmp)
+            dataset=results/'data';dataset.mkdir()
+            def child(command,log,workdir):
+                Path(log).write_text('mocked child; no real training')
+                if 'build' in command:
+                    write_json(results/'success/dataset.json',{'path':str(dataset)})
+                    self.assertEqual(command[command.index('--start')+1],'20050104')
+                if 'compare' in command:
+                    run_id=command[command.index('--run-id')+1]
+                    training=results/run_id/'training';training.mkdir(parents=True)
+                    write_json(training/'runs.json',[dict(name='m',model='factorseq_gate',seed=17,status='passed')])
+                    pd.DataFrame(dict(date=[20170103],rank_ic=[.1],top_decile_10d_excess=[.02],n=[60])).to_csv(
+                        training/'m_daily.csv',index=False)
+            plan=dict(latest_mature_label=20170103,folds=[dict(train=[20150105],valid=[20161003],test=[20170103])])
+            with patch.object(suite,'execute',side_effect=child), \
+                 patch.object(suite,'discover',return_value=dict(status='passed',history_start=20050104,data_end=20170120)), \
+                 patch.object(suite,'load',return_value={'version':'test'}), \
+                 patch.object(suite,'available_splits',return_value=plan) as split:
+                folder,report=suite.run_suite(root,results,'success',root/'configs/experience/model/factor_sequence/data.json')
+            self.assertEqual(report['status'],'passed')
+            self.assertEqual([v['name'] for v in report['stages']],
+                ['offline','discover','build','audit','plan','smoke_000','compare_000','compare_all'])
+            split.assert_called_once_with(dataset,20170101,None)
+            self.assertEqual(json.loads((folder/'suite.json').read_text())['actual_test_start'],20170103)
+
+    def test_mail_packaging_without_sending(self):
+        from src.data.preprocess.factor_sequence import server_suite as suite
+        from src.data.preprocess.factor_sequence.bundle import write_json
+        with TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            write_json(folder/'suite.json',dict(status='failed',run_id='test',test_start=20170101,
+                stages=[dict(name='audit',status='failed')],fold_directories=[],interpretation='verification'))
+            with patch('src.proj.MACHINE') as machine, patch('src.proj.util.web.task_mail.TaskResultMail') as mail:
+                machine.emailable=False
+                self.assertEqual(suite.send_result(folder)['status'],'skipped')
+                mail.assert_not_called()
+                machine.emailable=True;mail.return_value.return_value=True
+                self.assertEqual(suite.send_result(folder,'test@example.invalid')['status'],'sent')
+                self.assertEqual(mail.return_value.call_args.kwargs['recipient'],'test@example.invalid')
+                self.assertTrue((folder/'result_report.zip').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

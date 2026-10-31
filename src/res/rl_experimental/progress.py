@@ -3,10 +3,11 @@ from datetime import datetime
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from contextvars import ContextVar
 from pathlib import Path
+from typing import Any
 import sys
 import time
 
-_console = ContextVar('rl_progress_console', default=None)
+_console: ContextVar[tuple[Any, Any, list[float]] | None] = ContextVar('rl_progress_console', default=None)
 
 
 @contextmanager

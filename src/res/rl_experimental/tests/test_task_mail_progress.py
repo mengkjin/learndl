@@ -11,6 +11,7 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock, patch
 
 from src.res.rl_experimental.progress import progress, quiet_output
@@ -94,17 +95,17 @@ class TaskMailTest(unittest.TestCase):
              patch('src.automation.scheduling.recovery.script_result'), \
              patch('src.automation.scheduling.runtime.record_script_email') as receipt, \
              patch.object(Email, 'send', return_value=True) as default:
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             default.assert_called_once()
             receipt.assert_called_once_with(success=True)
             receipt.reset_mock()
             task.email_sender = Mock(return_value=False)
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             receipt.assert_not_called()
             self.assertEqual(task.email_sender.call_args.kwargs['attachments'], ['closed-task.html'])
             self.assertTrue(task.email_sender.call_args.kwargs['project_attachments'])
             task.email_sender.return_value = True
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             receipt.assert_called_once_with(success=True)
             default.assert_called_once()  # unrelated task behavior unchanged
 

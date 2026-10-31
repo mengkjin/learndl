@@ -402,9 +402,10 @@ class ModuleData(Base.BoundLogger):
         """Load a block via the registered ``PreProcessor`` for ``key``."""
         from src.data.preprocess import PrePros
         type = "predict" if self.use_data == "predict" else "fit"
+        vb_level = kwargs.pop('vb_level', self.vb_level + 2)
         if key in ('factorseq','factorperf','factormarket'):
             kwargs = {**kwargs, 'dataset': self.config.factor_sequence_dataset}
-        block = PrePros.get_processor(key, type, self.indent + 1, self.vb_level + 2).load(dates, secid=secid, **kwargs)
+        block = PrePros.get_processor(key, type, self.indent + 1, vb_level).load(dates, secid=secid, **kwargs)
         return block
 
     def load_special_block(

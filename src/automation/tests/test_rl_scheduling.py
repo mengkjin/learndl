@@ -1,6 +1,7 @@
 """Git-triggered RL attempts, using temporary repositories and no SMTP/GPU."""
 import json
 import os
+from typing import Any, cast
 import subprocess
 import sys
 import tempfile
@@ -12,10 +13,18 @@ from unittest.mock import Mock, patch
 import portalocker
 import yaml
 
-from src.automation.scheduling import rl_experiment as rl, idle_worklist as idle, runtime
-from src.automation.scheduling.recovery import recovery_plan, evidence
+from src.automation.scheduling import idle_worklist as idle, rl_experiment as rl, runtime
+from src.automation.scheduling.recovery import evidence, recovery_plan
 from src.proj import PATH
 from src.proj.util.script import FitLock, FitLockNN
+
+
+def require_rl(store, **kwargs):
+    """Observation used by tests that have just published a valid config."""
+    observed = rl.observe(store, **kwargs)
+    if not isinstance(observed, dict):
+        raise AssertionError('expected an RL configuration')
+    return observed
 
 
 class RLSchedulingTest(unittest.TestCase):
@@ -37,7 +46,7 @@ class RLSchedulingTest(unittest.TestCase):
         self.git('config', 'user.name', 'Test')
         self.path = self.root / rl.CONFIG_PATH
         self.path.parent.mkdir(parents=True)
-        self.doc = dict(enabled=True, mode='single', rerun_mark='one', recipient=None, no_email=False,
+        self.doc: dict[str, Any] = dict(enabled=True, mode='single', rerun_mark='one', recipient=None, no_email=False,
                         single=dict(alpha='pred@test', start=20240101, end=20241231,
                                     snapshot_dir='snapshot', output_root=str(self.root / 'results'),
                                     training={'device': 'cpu', 'total_timesteps': 16}),
@@ -74,7 +83,7 @@ class RLSchedulingTest(unittest.TestCase):
         self.assertEqual(submit(self.root, 'resume-one', plan), path)
         with self.assertRaisesRegex(ValueError, 'immutable'):
             submit(self.root, 'resume-one', plan | {'recipient': 'other@example.com'})
-        request = rl.observe(self.store)
+        request = require_rl(self.store)
         self.assertEqual(request['resume_request_id'], 'resume-one')
         idle.dispatch(self.options, self.store)
         queued = [r for r in self.store.owned(idle.OWNER) if r['phase'] == 'queued']
@@ -83,15 +92,15 @@ class RLSchedulingTest(unittest.TestCase):
         self.assertEqual(self.store.get(queued[0]['id'])['phase'], 'queued')
         queued[0]['phase'] = 'error'
         self.store.put(queued[0])
-        next_request = rl.observe(runtime.RunStore(self.store.path))
+        next_request = require_rl(runtime.RunStore(self.store.path))
         self.assertNotIn('resume_request_id', next_request)
         self.resume_request('resume-two')
-        self.assertEqual(rl.observe(self.store)['resume_request_id'], 'resume-two')
+        self.assertEqual(require_rl(self.store)['resume_request_id'], 'resume-two')
 
     def test_resume_execution_keeps_original_output_and_uses_fit_guard(self):
         from src.automation.scheduling.rl_resume import recheck
         path, plan = self.resume_request()
-        request = rl.observe(self.store) | dict(id='resume-job', owner=idle.OWNER, phase='running')
+        request = require_rl(self.store) | dict(id='resume-job', owner=idle.OWNER, phase='running')
         self.store.put(request)
         with patch.object(rl, 'fit_guard', side_effect=portalocker.LockException('busy')):
             self.assertEqual(rl.execute(request, self.store), 75)
@@ -124,25 +133,25 @@ class RLSchedulingTest(unittest.TestCase):
             rl.parse_config('mode: single\nmode: single')
 
     def test_git_identity_rerun_revert_and_unrelated_commit(self):
-        first = rl.observe(self.store)
+        first = require_rl(self.store)
         (self.root / 'unrelated').write_text('new')
         self.git('add', 'unrelated')
         self.git('commit', '-qm', 'unrelated')
-        self.assertEqual(rl.observe(self.store)['version'], first['version'])
+        self.assertEqual(require_rl(self.store)['version'], first['version'])
         self.doc['rerun_mark'] = 'two'
         self.commit()
-        second = rl.observe(self.store)
+        second = require_rl(self.store)
         self.assertNotEqual(second['version'], first['version'])
         self.doc['rerun_mark'] = 'one'
         self.commit()
-        self.assertNotEqual(rl.observe(self.store)['version'], first['version'])
+        self.assertNotEqual(require_rl(self.store)['version'], first['version'])
         self.path.write_text(self.path.read_text() + '# local edit\n')
         self.assertIsNone(rl.observe(self.store))
         self.assertIn('local/uncommitted', rl.status(self.store)['error'])
 
     def test_failure_and_success_never_retry_after_restart(self):
         for phase in ('error', 'complete', 'killed'):
-            request = rl.observe(self.store)
+            request = require_rl(self.store)
             request.update(id=phase, phase=phase, owner=idle.OWNER)
             self.store.put(request)
             self.assertIsNone(rl.observe(runtime.RunStore(self.store.path)))
@@ -177,12 +186,12 @@ class RLSchedulingTest(unittest.TestCase):
         self.assertEqual(len(self.store.owned(idle.OWNER)), 1)
 
     def test_observation_interval_does_not_weaken_worker_recheck(self):
-        first = rl.observe(self.store)
+        first = require_rl(self.store)
         self.doc['rerun_mark'] = 'later'
         self.commit()
         with patch.object(rl, 'settings', return_value={'enabled': True, 'interval_seconds': 120}):
-            self.assertEqual(rl.observe(self.store, throttle=True)['version'], first['version'])
-            self.assertNotEqual(rl.observe(self.store)['version'], first['version'])
+            self.assertEqual(require_rl(self.store, throttle=True)['version'], first['version'])
+            self.assertNotEqual(require_rl(self.store)['version'], first['version'])
 
     def test_alternating_model_and_rl(self):
         self.store.put(dict(id='last', owner=idle.OWNER, task='model', phase='complete', started_at=1))
@@ -199,7 +208,7 @@ class RLSchedulingTest(unittest.TestCase):
             self.assertEqual(self.store.owned(idle.OWNER)[-1]['task'], 'model')
 
     def test_mail_single_result_suppression_and_no_email(self):
-        request = rl.observe(self.store) | dict(id='run', owner=idle.OWNER, phase='complete',
+        request = require_rl(self.store) | dict(id='run', owner=idle.OWNER, phase='complete',
                                                returncode=0, started_at=1, timeout_seconds=None)
         self.store.put(request)
         self.assertTrue(runtime.idle_exit_needs_email(self.store, request))
@@ -223,7 +232,7 @@ class RLSchedulingTest(unittest.TestCase):
             self.assertFalse(FitLock.is_held())
 
     def test_execute_snapshot_and_result_failure(self):
-        request = rl.observe(self.store) | dict(id='run', owner=idle.OWNER, phase='running')
+        request = require_rl(self.store) | dict(id='run', owner=idle.OWNER, phase='running')
         self.store.put(request)
         main = Mock(return_value=SimpleNamespace(success=True, execution_success=False))
         with patch.object(rl, 'fit_guard'), \
@@ -239,7 +248,7 @@ class RLSchedulingTest(unittest.TestCase):
         self.assertTrue((path.parent / 'rl_experiment.yaml').is_file())
 
     def test_changed_version_and_lock_contention_defer_before_training(self):
-        request = rl.observe(self.store) | dict(id='run', owner=idle.OWNER, phase='running')
+        request = require_rl(self.store) | dict(id='run', owner=idle.OWNER, phase='running')
         with patch.object(rl, 'fit_guard', side_effect=portalocker.LockException):
             self.assertEqual(rl.execute(request, self.store), 75)
         self.doc['rerun_mark'] = 'changed'
@@ -250,7 +259,7 @@ class RLSchedulingTest(unittest.TestCase):
 
     def test_worker_arguments_are_isolated_through_import_and_call(self):
         from src.api.util.backend.recorder import BackendTaskRecorder
-        request = rl.observe(self.store) | dict(id='argv-test', owner=idle.OWNER, phase='running')
+        request = require_rl(self.store) | dict(id='argv-test', owner=idle.OWNER, phase='running')
         self.store.put(request)
         worker_args = ['idle_worklist.py', '_child', request['id']]
         script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
@@ -280,7 +289,7 @@ class RLSchedulingTest(unittest.TestCase):
                     self.assertIs(sys.argv, worker_args)
 
     def test_running_version_finishes_before_latest_is_queued(self):
-        request = rl.observe(self.store) | dict(id='run', owner=idle.OWNER, phase='running', started_at=1)
+        request = require_rl(self.store) | dict(id='run', owner=idle.OWNER, phase='running', started_at=1)
         self.store.put(request)
         self.doc['rerun_mark'] = 'newer'
         self.commit()
@@ -354,7 +363,7 @@ class RLSchedulingTest(unittest.TestCase):
                                               n_envs=1, rollout_steps=8, batch_size=8,
                                               update_epochs=1, hidden_dim=16, total_timesteps=16)
         self.commit()
-        request = rl.observe(self.store) | dict(id='cpu-smoke', owner=idle.OWNER, phase='running')
+        request = require_rl(self.store) | dict(id='cpu-smoke', owner=idle.OWNER, phase='running')
         self.store.put(request)
         with as_script_main(script):
             module = next(iter(dynamic_modules(script)))
@@ -372,7 +381,7 @@ class RLSchedulingTest(unittest.TestCase):
              patch.object(Proj, 'email_attachments', []), \
              patch.object(experiment, '_snapshot', return_value=(make_synthetic_panel(70, 24, 4, seed=5), snapshot)):
             self.assertEqual(rl.execute(request, self.store), 0)
-            attachments = list(Proj.email_attachments)
+            attachments = list(cast(Any, Proj.email_attachments))
         self.assertTrue(any(str(p).endswith('.json') for p in attachments))
         self.assertTrue(any(str(p).endswith('.zip') for p in attachments))
         result_root = self.root / 'results/automatic/cpu-smoke'

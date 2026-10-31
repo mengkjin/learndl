@@ -16,6 +16,7 @@ from torch import nn
 
 from . import layer as Layer
 from . import model as Model
+from .model.factor_sequence import MODELS as FACTOR_SEQUENCE_MODELS
 
 __all__ = [
     'AVAILABLE_NNS' , 'get_nn_module' , 'get_nn_category' , 'get_nn_datatype' ,
@@ -50,7 +51,6 @@ AVAILABLE_NNS = {
 }
 
 # Factor-sequence models share the standard prediction/hidden contract.
-from .model.factor_sequence import MODELS as FACTOR_SEQUENCE_MODELS
 AVAILABLE_NNS.update(FACTOR_SEQUENCE_MODELS)
 
 def get_nn_module(module_name : str) -> nn.Module:

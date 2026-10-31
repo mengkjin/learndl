@@ -9,7 +9,7 @@ import time
 
 import portalocker
 
-from .config import installed_config, runtime_dir
+from .config import require_installed_config, runtime_dir
 
 NAMES = ('email_outbox', 'cli_recovery', 'task_monitor_cache')
 
@@ -116,7 +116,7 @@ def worker(name):
         with portalocker.Lock(str(directory / f'{name}.lock'), timeout=0):
             path = directory / f'{name}.json'
             state = _load_state(path)
-            config = installed_config()['watchdog']
+            config = require_installed_config()['watchdog']
             options = config['jobs'].get(name, {})
             now = time.time()
             due = options.get('enabled', False) and now >= state.get('last_job_attempt', 0) + options.get('interval_seconds', 60)

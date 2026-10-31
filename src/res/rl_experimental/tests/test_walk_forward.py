@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from src.res.rl_experimental.data import make_synthetic_panel, Standardizer
-from src.res.rl_experimental.env import PortfolioEnv, EpisodeRange
+from src.res.rl_experimental.env import EpisodeRange, PortfolioEnv, zero_action
 from src.res.rl_experimental.portfolio import PortfolioConstraints, project_action
 from src.res.rl_experimental.baselines import replay_baseline
 from src.res.rl_experimental.training import build_candidate_cache
@@ -66,7 +66,10 @@ class WalkForwardTest(unittest.TestCase):
             for key in a:
                 np.testing.assert_array_equal(a[key], b[key])
             self.assertEqual(a['account'][1], 0)
-            action = np.random.default_rng(i).normal(0, .1, slow.action_space.shape).astype(np.float32)
+            action_shape = slow.action_space.shape
+            if action_shape is None:
+                raise AssertionError('action shape is required')
+            action = np.random.default_rng(i).normal(0, .1, action_shape).astype(np.float32)
             a, r1, _, _, x = slow.step(action)
             b, r2, _, _, y = fast.step(action)
             self.assertEqual(r1, r2)
@@ -80,7 +83,7 @@ class WalkForwardTest(unittest.TestCase):
         part = PortfolioEnv(panel, EpisodeRange(0, 10), observation_version=2)
         a, _ = full.reset()
         b, _ = part.reset()
-        action = np.zeros(full.action_space.shape, np.float32)
+        action = zero_action(full.action_space, np.float32)
         for _ in range(10):
             full.step(action)
             part.step(action)
@@ -143,6 +146,8 @@ class WalkForwardTest(unittest.TestCase):
             self.assertTrue(audit['complete'], audit['errors'])
             self.assertEqual(audit['training_tasks_verified'], 8)
             self.assertEqual(audit['test_paths_verified'], 18)
+            if metadata is None:
+                raise AssertionError('bundle metadata missing')
             restored = analyze_bundle(metadata, path/'restored')
             self.assertEqual(json.loads((restored/'summary.json').read_text()), report)
             self.assertFalse(list(restored.rglob('panel.npz')))

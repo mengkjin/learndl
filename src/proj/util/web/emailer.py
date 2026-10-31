@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json , os , shutil , ssl , smtplib , time , uuid
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager , suppress
 from datetime import datetime , timezone
 from email import encoders, policy
@@ -100,7 +100,7 @@ class Email(BoundLogger, metaclass=NoInstance):
     
     @classmethod
     def message(cls , title : str  , body : str | None = None , recipient : str | None = None , * ,
-                attachments : AttachmentSpec | list[AttachmentSpec] | None = None ,
+                attachments : AttachmentSpec | Sequence[AttachmentSpec] | None = None ,
                 project_attachments : bool = False ,
                 title_prefix : str | None = f'Learndl [{MACHINE.nickname}]:') -> Message:
         message = MIMEMultipart()
@@ -110,10 +110,12 @@ class Email(BoundLogger, metaclass=NoInstance):
 
         if attachments is None:
             attachment_items : list[AttachmentSpec] = []
-        elif isinstance(attachments , list):
-            attachment_items = list(attachments)
-        else:
+        elif isinstance(attachments , (str , Path)):
             attachment_items = [attachments]
+        elif isinstance(attachments , EmailAttachment):
+            attachment_items = [attachments]
+        else:
+            attachment_items = list(attachments)
 
         if project_attachments:
             attachment_items.extend(Proj.email_attachments.pop_all())
@@ -149,7 +151,7 @@ class Email(BoundLogger, metaclass=NoInstance):
         raw = wire(message)
         if len(raw) > cls.max_message_bytes:
             error = ValueError(f'MIME size {len(raw)} exceeds {cls.max_message_bytes}; prepare a batch first')
-            error.mail_stage = 'prepare'
+            setattr(error, 'mail_stage', 'prepare')
             raise error
         smtp_port = cls._resolved_smtp_port()
         if smtp_port not in (465, 587, 25):
@@ -171,7 +173,7 @@ class Email(BoundLogger, metaclass=NoInstance):
             if refused:
                 raise smtplib.SMTPRecipientsRefused(refused)
         except Exception as error:
-            error.mail_stage = stage
+            setattr(error, 'mail_stage', stage)
             raise
         finally:
             if server is not None:
@@ -353,7 +355,7 @@ class Email(BoundLogger, metaclass=NoInstance):
 
     @classmethod
     def send(cls, title: str, body: str = 'This is test! Hello, World!', recipient: str | None = None, *,
-             attachments: AttachmentSpec | list[AttachmentSpec] | None = None,
+             attachments: AttachmentSpec | Sequence[AttachmentSpec] | None = None,
              project_attachments: bool = False, title_prefix: str | None = f'Learndl [{MACHINE.nickname}]:',
              confirmation_message: str = '', queue_on_failure: bool = True,
              delivery_id: str | None = None) -> bool:

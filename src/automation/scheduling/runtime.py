@@ -150,6 +150,8 @@ def termination_requested() -> bool:
     if os.environ.get('LEARNDL_AUTOFIX_ID'):
         from .maintenance_gate import sandbox_request
         request = sandbox_request()
+        if not isinstance(request, dict):
+            raise RuntimeError('Invalid autofix execution context')
         marker = Path(request['channel']) / 'terminate.json'
         if marker.exists():
             return json.loads(marker.read_text()).get('nonce') == request['nonce']

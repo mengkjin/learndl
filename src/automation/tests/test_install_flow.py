@@ -9,6 +9,7 @@ import unittest
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import Mock, patch
 
 from src.automation.scheduling import install_flow as flow
@@ -81,8 +82,8 @@ class InstallationTest(unittest.TestCase):
 
     def interactive(self, *, deferred=False, busy=False, accepted=True, failed=False):
         from src.proj import PATH
-        plan = dict(units={}, cron='', conflicts={}, global_conflicts=[], config={}, report={})
-        snapshot = dict(files={}, cron='', timezone='UTC')
+        plan: dict[str, Any] = dict(units={}, cron='', conflicts={}, global_conflicts=[], config={}, report={})
+        snapshot: dict[str, Any] = dict(files={}, cron='', timezone='UTC')
         helper = Path(flow.__file__).with_name('install_privileged.py').resolve()
         snapshot['files'][str(helper)] = flow.hashlib.sha256(helper.read_bytes()).hexdigest()
         patches = [patch.object(flow.sys, 'platform', 'linux'), patch.object(flow.os, 'getuid', return_value=1000),
@@ -210,7 +211,7 @@ class InstallationTest(unittest.TestCase):
         real_path = Path
         def bundle_path(value):
             return self.root if value == '/run/learndl-install' else real_path(value)
-        bundle = self.root / self.row['id']
+        bundle = self.root / str(self.row['id'])
         bundle.mkdir()
         (bundle / 'ready').write_text('123')
         with patch.object(flow, 'Path', side_effect=bundle_path), patch.object(flow.subprocess, 'run'), \
@@ -269,7 +270,7 @@ class InstallationTest(unittest.TestCase):
         self.assertEqual(requests.current()['phase'], 'failed')
 
     def test_expired_privileges_and_symlinks_are_rejected(self):
-        approval = dict(id='a' * 32, expires_at=0, allowed_units={})
+        approval: dict[str, Any] = dict(id='a' * 32, expires_at=0, allowed_units={})
         with self.assertRaisesRegex(ValueError, 'expired'):
             privileged.execute(dict(argv=['sudo', 'systemctl', 'daemon-reload']), approval)
         approval.update(expires_at=time.time() + 100, allowed_units={'learndl-watchdog.timer': ['approved']})

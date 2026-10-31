@@ -15,6 +15,7 @@ import zipfile
 from email import policy
 from email.message import EmailMessage, Message
 from pathlib import Path
+from typing import Any
 
 MAX_BYTES = 30_000_000
 MAX_ATTACHMENT_BYTES = 20_000_000
@@ -71,8 +72,15 @@ def decoded(part: Message) -> bytes | None:
     # outbox entries within the watchdog's 1 GiB memory limit.
     if str(part.get('Content-Transfer-Encoding', '')).lower() == 'base64' and not part.is_multipart():
         payload = part.get_payload()
-        return base64.b64decode(payload.encode('ascii') if isinstance(payload, str) else payload)
-    return part.get_payload(decode=True)
+        if isinstance(payload, str):
+            return base64.b64decode(payload.encode('ascii'))
+        if isinstance(payload, (bytes, bytearray)):
+            return base64.b64decode(payload)
+        raise TypeError('base64 MIME payload must be text or bytes')
+    decoded_payload = part.get_payload(decode=True)
+    if decoded_payload is None or isinstance(decoded_payload, bytes):
+        return decoded_payload
+    raise TypeError('decoded MIME payload must be bytes')
 
 
 def fingerprint(message: Message, *, normalize_body_newlines: bool = False,
@@ -114,7 +122,8 @@ def serialization_differences(left: Message, right: Message) -> list[str]:
         differences.append('mime.part_count')
     for index, (x, y) in enumerate(zip(a, b)):
         hx, hy = copy.copy(x), copy.copy(y)
-        hx.set_payload(''); hy.set_payload('')
+        hx.set_payload('')
+        hy.set_payload('')
         if fingerprint(hx, normalize_body_newlines=True, normalize_header_folding=True) != fingerprint(
                 hy, normalize_body_newlines=True, normalize_header_folding=True):
             differences.append(f'mime[{index}].headers')
@@ -149,11 +158,14 @@ def balanced_sizes(size: int, cap: int) -> list[int]:
 
 
 def needs_preparation(message: Message, limit: int = MAX_BYTES) -> bool:
+    def oversized(part: Message) -> bool:
+        payload = decoded(part) or b''
+        return ((bool(part.get_filename()) and len(payload) > MAX_ATTACHMENT_BYTES)
+                or (part.get_content_maintype() == 'text' and not part.get_filename()
+                    and len(part.as_bytes(policy=policy.SMTP)) > BODY_BYTES))
+
     return len(wire(message)) > limit or any(
-        (bool(p.get_filename()) and len(decoded(p)) > MAX_ATTACHMENT_BYTES)
-        or (p.get_content_maintype() == 'text' and not p.get_filename()
-            and len(p.as_bytes(policy=policy.SMTP)) > BODY_BYTES)
-        for p in message.walk() if not p.is_multipart())
+        oversized(part) for part in message.walk() if not part.is_multipart())
 
 
 def _safe_name(name: str, used: set[str]) -> str:
@@ -213,7 +225,7 @@ def prepare(message: Message, directory: Path, batch_id: str, limit: int = MAX_B
     directory.mkdir(parents=True, exist_ok=True)
     subject = str(message.get('Subject', ''))
     batch_key = digest(batch_id.encode())[:20]
-    manifest = dict(schema_version=2, batch_id=batch_id, fingerprint=fingerprint(message),
+    manifest: dict[str, Any] = dict(schema_version=2, batch_id=batch_id, fingerprint=fingerprint(message),
                     recipient=str(message.get('To', '')), subject=subject, max_mime_bytes=limit,
                     messages=[], attachments=[], transformed=False)
     if (source_size is None or source_size <= limit) and not needs_preparation(message, limit):

@@ -4,7 +4,7 @@ Callback to perform basic test of RankIC
 from __future__ import annotations
 import pandas as pd
 import numpy as np
-from typing import Any
+from typing import Any, cast
 
 from src.proj import Save , Load
 
@@ -99,7 +99,8 @@ class BasicTestResult(BaseCallBack):
             new_df = pd.DataFrame(columns=self.test_df_cols)
         else:
             grouped = preds.groupby(by=['model_num' , 'model_date' , 'submodel' , 'date'], as_index=True)
-            new_df = grouped.apply(basic_group_stats, include_groups=False).reset_index()
+            # pandas 2.2 drops grouping columns; stubs lag the include_groups argument.
+            new_df = cast(Any, grouped.apply)(basic_group_stats, include_groups=False).reset_index()
         if df.empty:
             df = new_df
         elif not new_df.empty:

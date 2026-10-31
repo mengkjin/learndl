@@ -11,7 +11,7 @@ from src.res.rl_experimental.real_data import _execution_returns
 from src.res.rl_experimental.data import PanelData
 from src.res.rl_experimental.portfolio import PortfolioConstraints, execute_open_close
 from src.res.rl_experimental.baselines import replay_baseline
-from src.res.rl_experimental.env import PortfolioEnv, EpisodeRange
+from src.res.rl_experimental.env import EpisodeRange, PortfolioEnv, zero_action
 from src.res.rl_experimental.experiment import _snapshot
 
 
@@ -98,18 +98,26 @@ class ValuationTest(unittest.TestCase):
         env = PortfolioEnv(panel, EpisodeRange(0, 6), constraints, random_start=False)
         env.reset()
         for _ in range(6):
-            env.step(np.zeros(env.action_space.shape))
+            env.step(zero_action(env.action_space))
         np.testing.assert_allclose([r['nav'] for r in baseline], [r['nav'] for r in env.history])
         self.assertEqual(baseline[2]['missing_data_carried_holdings'], 1)
         self.assertEqual(baseline[2]['max_held_stale_days'], 2)
         # Do not silently continue a held position after its known listing ends.
-        stopped = replace(panel, overnight_returns=overnight.copy(), intraday_returns=intraday.copy(),
-                          can_buy=valid.copy(), can_sell=valid.copy(), valuation_reason=panel.valuation_reason.copy())
-        stopped.overnight_returns[-1] = np.nan
-        stopped.intraday_returns[-1] = np.nan
-        stopped.can_buy[-1] = False
-        stopped.can_sell[-1] = False
-        stopped.valuation_reason[-1] = 5
+        reason = panel.valuation_reason
+        if reason is None:
+            raise AssertionError('valuation reason missing')
+        stopped_overnight = overnight.copy()
+        stopped_intraday = intraday.copy()
+        stopped_buy = valid.copy()
+        stopped_sell = valid.copy()
+        stopped_reason = reason.copy()
+        stopped = replace(panel, overnight_returns=stopped_overnight, intraday_returns=stopped_intraday,
+                          can_buy=stopped_buy, can_sell=stopped_sell, valuation_reason=stopped_reason)
+        stopped_overnight[-1] = np.nan
+        stopped_intraday[-1] = np.nan
+        stopped_buy[-1] = False
+        stopped_sell[-1] = False
+        stopped_reason[-1] = 5
         with self.assertRaisesRegex(ValueError, '600001.*not_listed'):
             replay_baseline(stopped, (0, 6), constraints, 'alpha_equal_weight')
         with tempfile.TemporaryDirectory() as directory:

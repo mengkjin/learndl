@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock, patch
 
 import portalocker
@@ -22,6 +23,13 @@ from src.proj import PATH
 from src.proj.util.script import FitLock, FitLockNN
 from src.res.model.util import training_history
 from src.res.model.util.config.config import ScheduleConfig
+
+
+def require_candidate(store):
+    request = idle.candidate(store)
+    if not isinstance(request, dict):
+        raise AssertionError('expected an idle candidate')
+    return request
 
 
 class IdleTest(unittest.TestCase):
@@ -98,7 +106,7 @@ class IdleTest(unittest.TestCase):
         lookup.assert_any_call(name='first')
         # With valid YAML, normal worklist revision rules still apply.
         self.worklist.write_text('fit: [first]\nforce: false\nrerun_mark: 2\n')
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
 
     def test_new_standalone_request_after_success_is_checked_and_eligible(self):
         state = WorklistState('old')
@@ -110,7 +118,7 @@ class IdleTest(unittest.TestCase):
             _, _, missing = idle.worklist_schedules(self.store)
         self.assertEqual(missing, ['old'])
         lookup.assert_called_once_with(name='old')
-        self.assertEqual(idle.candidate(self.store)['task'], 'old')
+        self.assertEqual(require_candidate(self.store)['task'], 'old')
 
     def test_unfinished_or_unmatched_standalone_request_still_checks_yaml(self):
         state = WorklistState('old')
@@ -220,16 +228,20 @@ class IdleTest(unittest.TestCase):
         self.assertIsNone(idle.candidate(self.store))
         generation = idle.reset_worklist(self.store)
         self.assertEqual(self.worklist.read_bytes(), original)
-        self.assertEqual(WorklistState('first').read()['status'], 'success')
-        self.assertEqual(self.store.get('failed')['phase'], 'error')
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        status = WorklistState('first').read()
+        failed = self.store.get('failed')
+        if not isinstance(status, dict) or not isinstance(failed, dict):
+            raise AssertionError('expected persisted worklist status and failed run')
+        self.assertEqual(status['status'], 'success')
+        self.assertEqual(failed['phase'], 'error')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
         self.assertEqual(WorklistState.revisions('first')['reset_generation']['generation'], generation)
         self.save_success('first')
-        self.assertEqual(idle.candidate(self.store)['task'], 'second')
+        self.assertEqual(require_candidate(self.store)['task'], 'second')
         self.save_success('second')
         self.assertIsNone(idle.candidate(self.store))
         self.assertNotEqual(idle.reset_worklist(self.store), generation)
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
 
     def test_reset_worklist_refuses_active_and_missing_schedules(self):
         idle.dispatch(self.options, self.store)
@@ -286,7 +298,7 @@ class IdleTest(unittest.TestCase):
         self.store.put(run)
         self.save_success('second')
         state.request_training('repair-001')
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
 
     def test_training_request_waits_for_idle_and_requires_worklist_membership(self):
         with self.assertRaisesRegex(ValueError, 'not in the training worklist'):
@@ -304,23 +316,23 @@ class IdleTest(unittest.TestCase):
             idle.reset('first', self.store)
         request['phase'] = 'error'
         self.store.put(request)
-        self.assertEqual(idle.candidate(self.store)['task'], 'second')
+        self.assertEqual(require_candidate(self.store)['task'], 'second')
         idle.reset('first', self.store)
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
         request['retry_allowed'] = False
         self.store.put(request)
         self.schedule.write_text('model.module: gru\n# changed\n')
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
 
     def test_missing_directory_retrains_completed_resume_true(self):
         self.save_success()
-        self.assertEqual(idle.candidate(self.store)['task'], 'second')
+        self.assertEqual(require_candidate(self.store)['task'], 'second')
         self.folder.rmdir()
-        self.assertEqual(idle.candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
 
     def test_manual_schedule_lock_defers_only_that_schedule(self):
         with WorklistState('first').lock():
-            self.assertEqual(idle.candidate(self.store)['task'], 'second')
+            self.assertEqual(require_candidate(self.store)['task'], 'second')
 
     def test_worker_rechecks_queue_version_and_disabled_setting(self):
         for disabled in (False, True):
@@ -398,7 +410,7 @@ class IdleTest(unittest.TestCase):
                                        error_message='', exit_message='', exit_files=[])
                 with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), \
                      patch.object(Email, 'send', return_value=delivered):
-                    AutoRunTask.send_email(task)
+                    AutoRunTask.send_email(cast(AutoRunTask, task))
                 self.assertEqual(runtime.idle_exit_needs_email(self.store, run), expected)
                 runtime.finish_idle_event(self.store, run, 'exit')
                 send = Mock(return_value=True)
@@ -422,14 +434,14 @@ class IdleTest(unittest.TestCase):
         with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), \
              patch.object(Email, 'send', side_effect=OSError('SMTP unavailable')):
             with self.assertRaises(OSError):
-                AutoRunTask.send_email(task)
+                AutoRunTask.send_email(cast(AutoRunTask, task))
             self.assertTrue(runtime.idle_exit_needs_email(self.store, run))
             runtime.record_script_email(success=False)
         run.update(phase='killed', term_at=20)
         self.assertTrue(runtime.idle_exit_needs_email(self.store, run))
         self.store.put(run)
         with patch.dict(os.environ, {'LEARNDL_MANAGED_RUN': run['id']}), patch.object(Email, 'send') as send:
-            AutoRunTask.send_email(task)
+            AutoRunTask.send_email(cast(AutoRunTask, task))
             send.assert_not_called()
 
     def test_pending_new_success_and_reported_error_mails_are_suppressed(self):
@@ -549,8 +561,11 @@ class FitOccupancyTest(unittest.TestCase):
         code = ('import portalocker,sys,time; f=open(sys.argv[1],"a"); '
                 'portalocker.lock(f,portalocker.LOCK_SH); print("ready",flush=True); time.sleep(60)')
         proc = subprocess.Popen([sys.executable, '-c', code, str(FitLock.lock_path())], stdout=subprocess.PIPE, text=True)
+        stdout = proc.stdout
+        if stdout is None:
+            raise AssertionError('child stdout was not captured')
         try:
-            self.assertEqual(proc.stdout.readline().strip(), 'ready')
+            self.assertEqual(stdout.readline().strip(), 'ready')
             with FitLock.guard():
                 self.assertTrue(FitLock.is_held())
             proc.kill()
@@ -560,7 +575,7 @@ class FitOccupancyTest(unittest.TestCase):
             if proc.poll() is None:
                 proc.kill()
                 proc.wait(timeout=5)
-            proc.stdout.close()
+            stdout.close()
 
     def test_gpu_gate_counts_memory_and_fit_locks_only(self):
         with patch('src.proj.MACHINE', SimpleNamespace(cuda_server=True)), \
@@ -568,11 +583,15 @@ class FitOccupancyTest(unittest.TestCase):
             gpu.return_value = 19.99
             self.assertIsNone(idle.idle_reason({}))
             gpu.return_value = 20
-            self.assertIn('busy', idle.idle_reason({}))
+            reason = idle.idle_reason({})
+            assert reason is not None
+            self.assertIn('busy', reason)
             with FitLock.guard():
                 self.assertEqual(idle.idle_reason({}), 'fit lock occupied')
             gpu.side_effect = ValueError('no GPU')
-            self.assertIn('unavailable', idle.idle_reason({}))
+            reason = idle.idle_reason({})
+            assert reason is not None
+            self.assertIn('unavailable', reason)
 
     def test_gpu_visible_uuid_and_unavailable_device(self):
         output = SimpleNamespace(stdout='0, GPU-a, 200, 1000\n1, GPU-b, 50, 1000\n')

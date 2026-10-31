@@ -8,7 +8,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Callable, Mapping, TypeAlias
+from typing import Any, Callable, Mapping, TypeAlias, cast
 
 import numpy as np
 
@@ -32,7 +32,9 @@ class RewardConfig:
             return cls()
         if isinstance(value, cls):
             return value
-        return cls(**dict(value))
+        if not isinstance(value, Mapping):
+            raise TypeError(f"reward config must be a mapping, got {type(value).__name__}")
+        return cls(**{str(key): item for key, item in value.items()})
 
     def validate(self) -> None:
         penalties = (self.turnover_penalty, self.downside_penalty, self.concentration_penalty)
@@ -88,8 +90,8 @@ def builtin_reward(context: RewardContext, params: Mapping[str, JsonValue]) -> R
 
 def example_drawdown_aware_reward(context: RewardContext, params: Mapping[str, JsonValue]) -> RewardResult:
     """Runnable custom example; still stateless and based on realized one-step feedback."""
-    downside = float(params.get("downside_penalty", 2.0))
-    turnover = float(params.get("turnover_penalty", 0.001))
+    downside = _json_number(params, "downside_penalty", 2.0)
+    turnover = _json_number(params, "turnover_penalty", 0.001)
     components = {
         "log_growth": float(np.log(max(context.nav_multiplier, 1e-12))),
         "custom_downside": -downside * min(context.net_return, 0.0) ** 2,
@@ -98,12 +100,19 @@ def example_drawdown_aware_reward(context: RewardContext, params: Mapping[str, J
     return RewardResult(float(sum(components.values())), MappingProxyType(components))
 
 
+def _json_number(params: Mapping[str, JsonValue], key: str, default: float) -> float:
+    raw = params.get(key, default)
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise TypeError(f"{key} must be a number")
+    return float(raw)
+
+
 def _load_function(entrypoint: str) -> RewardFunction:
     module_name, function_name = entrypoint.split(":", 1)
     function = getattr(importlib.import_module(module_name), function_name)
     if not callable(function):
         raise TypeError(f"custom reward {entrypoint} is not callable")
-    return function
+    return cast(RewardFunction, function)
 
 
 class RewardEvaluator:
