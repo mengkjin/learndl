@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sqlite3
 import time
 
@@ -36,6 +37,20 @@ def control_error(exc):
     with queue() as db:
         db.execute('INSERT OR IGNORE INTO errors(id,detail) VALUES (?,?)',
                    (hashlib.sha256(detail.encode()).hexdigest(), detail))
+
+
+def control_notice(detail):
+    """Render legacy queued admission timeouts separately from control corruption."""
+    if re.fullmatch(r'RuntimeError: .+: Maintenance admission timed out after one hour \(request [0-9.]+\)', detail):
+        return ('Maintenance admission delayed',
+                'A maintenance request waited one hour without obtaining admission.\n'
+                'The reservation entered a 15-minute cooldown; this notification is not evidence '
+                'of control-state corruption. Do not restore or recreate the ledger for this timeout.\n'
+                'Existing work is not terminated by this timeout. Check active managed tasks and '
+                'the Git worker log to identify the blocker. Subsequent attempts follow normal scheduling.\n'
+                + detail)
+    return ('Autofix control failure',
+            'Autofix is paused; restore the existing control state.\n' + detail)
 
 
 def deliver(context, sender):
@@ -74,7 +89,8 @@ def deliver(context, sender):
         errors = db.execute('SELECT id,detail FROM errors WHERE sent=0').fetchall()
     for key, detail in errors:
         try:
-            if sender('Autofix control failure', 'Autofix is paused; restore the existing control state.\n' + detail,
+            title, body = control_notice(detail)
+            if sender(title, body,
                       queue_on_failure=False, delivery_id='autofix-control:' + key):
                 with queue() as db:
                     db.execute('UPDATE errors SET sent=1 WHERE id=?', (key,))
