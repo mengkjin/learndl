@@ -96,6 +96,8 @@ def exit_reason(store: RunStore, run: dict) -> str:
 
 
 def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | None = None) -> dict:
+    if run.get('suppress_auto_recovery') or run.get('installation_stop'):
+        return dict(retry=False, recovery_status='Stopped for installation; manual recovery required')
     if run.get('task_kind') == 'rl_experiment':
         return dict(retry=False, recovery_status='RL attempts require a committed configuration/rerun_mark change or a new explicit resume request')
     now = time.time() if now is None else now
@@ -131,6 +133,7 @@ def resume_path(store: RunStore, request: dict, task: str, version: str) -> str:
     parent = store.get(request.get('parent_run_id', ''))
     path = request.get('resume_model_path')
     if (request.get('pid') != os.getpid() or request.get('task') != task or request.get('version') != version
+            or parent.get('suppress_auto_recovery') or parent.get('installation_stop')
             or parent.get('task') != task or parent.get('version') != version
             or exit_reason(store, parent) not in RECOVERABLE_EXITS
             or path != evidence(store, parent['id']).get('model_path')):

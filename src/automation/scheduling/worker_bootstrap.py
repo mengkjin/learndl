@@ -31,8 +31,7 @@ def code_pending(directory, *, ignore_reservation=False):
         if row is None:
             raise RuntimeError('Missing channel maintenance state')
         reservation = json.loads(row[0])
-        if not ignore_reservation and reservation.get('owner') == 'git' and (reservation['phase'] == 'running' or
-                reservation['phase'] == 'waiting' and time.time() < reservation['deadline']):
+        if not ignore_reservation and reservation.get('owner') == 'git' and reservation['phase'] == 'running':
             return True
         return state['phase'] in {'checkout', 'blocked'}
     return state['phase'] != 'idle'
@@ -40,6 +39,19 @@ def code_pending(directory, *, ignore_reservation=False):
 
 def wait_for_code(directory, kind):
     try:
+        installation_path = directory.parent / 'installation/current.json'
+        if installation_path.exists():
+            installation = json.loads(installation_path.read_text())
+            if installation.get('phase') in {'draining', 'installing', 'repair_required'} and installation.get('groups') is None:
+                # The notification worker also detects a dead installer and records repair_required.
+                if kind != 'email_outbox':
+                    return True
+        settings_path = directory / 'worker-settings.json'
+        settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+        transaction = Path(settings['runtime']) / 'transaction.json' if settings.get('runtime') else None
+        if transaction and transaction.exists() and kind != 'email_outbox':
+            if json.loads(transaction.read_text()).get('phase') != 'complete':
+                return True
         return code_pending(directory, ignore_reservation=kind == 'watchdog')
     except (OSError, ValueError, sqlite3.Error, RuntimeError):
         # The independent control-failure outbox must survive ledger loss.
@@ -83,9 +95,15 @@ def main():
         # checkout must survive launcher death or a partially updated tree.
         with (directory / 'admission.lock').open('r+') as admission:
             fcntl.flock(admission, fcntl.LOCK_EX)
+            config = json.loads((runtime / 'installed.json').read_text())
+            if not config['tasks'].get(args[0], {}).get('enabled'):
+                return 0
             with sqlite3.connect((directory / 'ledger.sqlite').as_uri() + '?mode=rw', uri=True) as db:
                 db.execute('INSERT OR IGNORE INTO scheduled VALUES (?,?,?,?)',
                            (args[0] + ':' + os.environ['LEARNDL_SCHEDULE_SLOT'], args[0], 'queued', time.time()))
+                db.execute('INSERT OR IGNORE INTO metadata VALUES (?,?)',
+                           ('schedule-config:' + args[0] + ':' + os.environ['LEARNDL_SCHEDULE_SLOT'],
+                            json.dumps({'task': args[0], 'config': config})))
     auxiliary = kind in {'email_outbox', 'cli_recovery', 'task_monitor_cache'}
     if auxiliary and not modern:
         return 0

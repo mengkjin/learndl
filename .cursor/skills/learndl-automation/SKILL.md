@@ -30,6 +30,9 @@ configuration files and retain their existing locations.
 
 - Daily/weekly/RCQuant lanes are independent; automatic research is single-lane
   across its full process lifecycle. Consult `channels.py` for maintenance scope.
+- Waiting Git, installation and blocking-autofix requests are passive; never
+  reserve business lanes before all execution leases are available. Cooldown
+  belongs to the request, not the scheduler.
 - Blocking autofix execution and maintenance admission are separately bounded;
   do not release a lease while surviving child processes still hold it.
 - Managed launchers acquire the code read lock before business imports. Git
@@ -40,6 +43,22 @@ configuration files and retain their existing locations.
 - Compatibility imports must resolve to the same module/state objects, especially
   maintenance context variables. Keep old installed startup commands working until
   explicit installer apply replaces them.
+
+## Installation and publication
+
+`install_impact.py` classifies configuration publication, explicitly reviewed
+compatible source transitions, and exclusive upgrades. Unknown source/protocol
+changes require an idle window; do not widen the compatibility allow-list merely
+to avoid waiting. Scoped upgrades must preserve old queued execution policies.
+`publication.py` freezes queued configuration and catches elapsed managed slots.
+Preserve the atomic `installed.json` pointer and immutable generations.
+
+`force` previews managed scopes and stops only approved identities, with bounded
+TERM/KILL escalation. Never kill unknown/manual tasks or remove lock files.
+Independent `installation_stops` records must survive stale worker writes and
+suppress recovery, including derived queued attempts. An interrupted transaction
+fails closed; passive waiting never does. Manual Git pulls remain operator-managed
+and do not authorize the automatic updater to bypass code leases.
 
 ## Validate and deploy
 

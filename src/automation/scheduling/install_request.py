@@ -11,7 +11,7 @@ import portalocker
 from .autofix_store import state_dir
 from .runtime import boot_id
 
-ACTIVE = {'registering', 'waiting', 'installing', 'repair_required'}
+ACTIVE = {'registering', 'waiting', 'draining', 'installing', 'repair_required'}
 
 
 def directory() -> Path:
@@ -38,6 +38,8 @@ def lock():
 
 def finish(row: dict, phase: str, reason: str) -> dict:
     row.update(phase=phase, reason=reason, updated_at=time.time(), notified=False)
+    if phase == 'repair_required':
+        row['groups'] = None
     save(row)
     return row
 
@@ -50,9 +52,18 @@ def reconcile() -> dict:
         if row.get('phase') not in ACTIVE or row['phase'] == 'repair_required':
             return row
         rebooted = row['boot_id'] != boot_id()
-        result = Path(row['bundle']) / 'result.json'
-        died = result.exists()
-        if not rebooted and not died and time.time() - row['created_at'] > 120:
+        result = Path(row['bundle']) / 'result.json' if row.get('bundle') else None
+        died = bool(result and result.exists())
+        if row.get('executor_pid'):
+            import psutil
+            try:
+                executor = psutil.Process(row['executor_pid'])
+                died = abs(executor.create_time() - row['executor_created']) >= .01 or executor.status() == psutil.STATUS_ZOMBIE
+            except psutil.NoSuchProcess:
+                died = True
+            except psutil.Error:
+                pass
+        if not row.get('executor_pid') and not rebooted and not died and time.time() - row['created_at'] > 120:
             try:
                 service = subprocess.run(['systemctl', 'show', row['unit'], '--property=ActiveState', '--value'],
                                          capture_output=True, text=True, timeout=5, check=False)
@@ -80,7 +91,7 @@ def pending() -> bool:
 def cancel() -> dict:
     with lock():
         row = current()
-        if row.get('phase') in {'installing', 'repair_required'}:
+        if row.get('phase') in {'draining', 'installing', 'repair_required'}:
             raise RuntimeError('Installation transaction must finish or be repaired before cancellation')
         if row.get('phase') in ACTIVE:
             finish(row, 'cancelled', 'Cancelled by user')
@@ -96,21 +107,29 @@ def deliver(sender) -> bool:
         if path.name == 'current.json':
             continue
         row = json.loads(path.read_text())
-        if row.get('phase') in ACTIVE - {'repair_required'} or row.get('notified'):
+        waiting_notice = (row.get('phase') == 'waiting' and time.time() - row['created_at'] >= 3600
+                          and time.time() - row.get('waiting_notified_at', 0) >= 86400)
+        if not waiting_notice and (row.get('phase') in ACTIVE - {'repair_required'} or row.get('notified')):
             continue
+        delivery = f'install:{row["id"]}:{row["phase"]}'
+        if waiting_notice:
+            delivery += ':' + str(int(time.time() // 86400))
         try:
             sent = sender(f'Watchdog installation - {row["phase"]}',
                           f'Request: {row["id"]}\nStatus: {row["phase"]}\n{row.get("reason", "")}\n'
                           f'Service: {row.get("unit", "")}\n',
                           confirmation_message='Learndl installation notification', queue_on_failure=False,
-                          delivery_id=f'install:{row["id"]}:{row["phase"]}')
+                          delivery_id=delivery)
         except Exception:
             sent = False
         if sent:
             with lock():
                 latest = json.loads(path.read_text())
                 if latest['phase'] == row['phase']:
-                    latest['notified'] = True
+                    if waiting_notice:
+                        latest['waiting_notified_at'] = time.time()
+                    else:
+                        latest['notified'] = True
                     from .installer import atomic_json
                     atomic_json(path, latest)
                     if current().get('id') == row['id']:

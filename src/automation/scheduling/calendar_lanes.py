@@ -39,7 +39,13 @@ def register(task_id):
         slot = int(planned.timestamp() // 60)
     key = f'{task_id}:{slot}'
     with portalocker.Lock(str(store.directory / 'admission.lock'), mode='r+', timeout=10):
+        config = require_installed_config()
+        task = config['tasks'][task_id]
+        if not task['enabled']:
+            return 0
         store.enqueue(task_id, slot)
+        from .publication import freeze
+        freeze(store, key, task_id, config)
         if (key, task_id) not in store.scheduled():
             return 0
         current = active(task)
@@ -76,6 +82,19 @@ def eligibility(task_id, key, config, now=None):
     return 'ready', ''
 
 
+def preferred_request(store, key, task_id, config):
+    """Priority only chooses between ready requests sharing the same script lock."""
+    own = config['tasks'][task_id]
+    ready = []
+    for other_key, other_id in store.scheduled():
+        other = config['tasks'].get(other_id, {})
+        if other.get('lock_group') != own['lock_group'] or not other.get('enabled'):
+            continue
+        if eligibility(other_id, other_key, config)[0] == 'ready':
+            ready.append((-other.get('priority', 0), int(other_key.rsplit(':', 1)[1]), other_key))
+    return min(ready)[2] if ready else key
+
+
 def worker(task_id):
     from .maintenance_gate import permit, MaintenanceBusy
     from .runner import _run
@@ -87,11 +106,23 @@ def worker(task_id):
             for key, name in store.scheduled():
                 if name != task_id:
                     continue
+                from .publication import queued_config
+                current_config = require_installed_config()
+                if not current_config['tasks'].get(task_id, {}).get('enabled'):
+                    store.schedule_state(key, 'cancelled')
+                    observation(store, key, status='cancelled', reason='task disabled')
+                    continue
+                config = queued_config(store, key, current_config)
+                task = config['tasks'][task_id]
                 status, reason = eligibility(task_id, key, config)
                 if status != 'ready':
                     if status == 'expired':
                         store.schedule_state(key, status)
                     observation(store, key, status=status, reason=reason)
+                    continue
+                preferred = preferred_request(store, key, task_id, current_config)
+                if preferred != key:
+                    observation(store, key, status='waiting', reason='higher priority ready request', blocked_by=preferred)
                     continue
                 import psutil
                 if psutil.virtual_memory().available / psutil.virtual_memory().total < .10:
@@ -105,11 +136,15 @@ def worker(task_id):
                 try:
                     with permit(blocking=False, task_class=task['channel']):
                         # Resolve overlap atomically at the underlying script lock too.
-                        store.schedule_state(key, 'starting')
+                        # Publication may cancel a queue while admission is being acquired.
+                        with portalocker.Lock(str(store.directory / 'admission.lock'), mode='r+', timeout=0):
+                            if (key, task_id) not in store.scheduled():
+                                continue
+                            store.schedule_state(key, 'starting')
                         observation(store, key, status='starting', started_at=time.time(),
                                     delay_seconds=time.time() - int(key.rsplit(':', 1)[1]) * 60)
                         try:
-                            code = _run(task_id, request_id=key)
+                            code = _run(task_id, request_id=key, config_snapshot=config)
                         except BaseException:
                             store.schedule_state(key, 'unknown')
                             observation(store, key, status='unknown', reason='launcher outcome requires reconciliation')

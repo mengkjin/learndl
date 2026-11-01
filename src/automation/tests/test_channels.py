@@ -34,8 +34,10 @@ class ChannelsTest(unittest.TestCase):
             for name, channel in [('daily_update', 'data'), ('weekly_update', 'data'),
                                   ('rcquant_sec_backfill', 'independent')]},
             'watchdog': {'jobs': {'git_auto_update': {'enabled': True, 'interval_seconds': 60}}}}
-        for module in (channels, priority, calendar_lanes):
+        for module in (channels, priority):
             self.enterContext(patch.object(module, 'installed_config', return_value=self.config))
+        self.enterContext(patch.object(calendar_lanes, 'require_installed_config', return_value=self.config))
+        self.enterContext(patch('src.automation.scheduling.install_request.current', return_value={}))
         self.enterContext(patch('src.automation.scheduling.install_request.reconcile', return_value={}))
         self.enterContext(patch('src.automation.scheduling.auxiliary.control_error'))
         self.enterContext(patch.object(calendar_lanes, 'state_dir', return_value=self.control))
@@ -55,9 +57,8 @@ class ChannelsTest(unittest.TestCase):
         with channels.leases(self.store, 'research'):
             self.assertTrue(channels.reserve(self.store, 'autofix:fix', ['research', 'data']))
             for kind in ('data', 'research'):
-                with self.assertRaises(maintenance_gate.MaintenanceBusy):
-                    with self.permit(kind):
-                        pass
+                with self.permit(kind):
+                    pass
             for kind in ('independent', 'manual', 'system'):
                 with self.permit(kind):
                     pass
@@ -70,16 +71,14 @@ class ChannelsTest(unittest.TestCase):
         with self.permit('data'):
             pass
 
-    def test_one_hour_timeout_and_shared_cooldown(self):
+    def test_wait_timeout_is_per_request_and_keeps_original_age(self):
         start = time.time()
         self.assertTrue(channels.reserve(self.store, 'autofix:first', ['research'], start))
-        self.assertTrue(channels.reserve(self.store, 'autofix:first', ['research'], start+3000))
-        self.assertEqual(channels.read(self.store)['requested_at'], start)
-        self.assertFalse(channels.reserve(self.store, 'git', channels.GROUPS, start+3600))
-        self.assertFalse(channels.reserve(self.store, 'autofix:second', ['data'], start+4499))
-        channels.release(self.store, 'autofix:first')
-        self.assertEqual(channels.read(self.store)['phase'], 'cooldown')
-        self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start+4500))
+        self.assertFalse(channels.reserve(self.store, 'autofix:first', ['research'], start + 3600))
+        self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
+        self.assertTrue(channels.reserve(self.store, 'autofix:second', ['data'], start + 3600))
+        self.assertTrue(channels.reserve(self.store, 'autofix:first', ['research'], start + 4500))
+        self.assertEqual(channels.request(self.store, 'autofix:first')['requested_at'], start)
 
     def test_running_maintenance_not_expired_by_wait_deadline(self):
         channels.reserve(self.store, 'autofix:fix', ['data'])
@@ -92,15 +91,15 @@ class ChannelsTest(unittest.TestCase):
         channels.reserve(self.store, 'autofix:fix', ['research'], start)
         self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 60))
         state = channels.read(self.store)
-        self.assertEqual(state['deadline'], start + 3600)
-        self.assertEqual(state['preempted_owner'], 'autofix:fix')
+        self.assertEqual(state['deadline'], start + 3660)
+        self.assertEqual(channels.request(self.store, 'autofix:fix')['deadline'], start + 3600)
 
     def test_watchdog_can_reconcile_while_git_drains_but_not_during_checkout(self):
         from src.automation.scheduling import worker_bootstrap
         (self.control/'worker-settings.json').write_text(json.dumps({'runtime': str(self.base)}))
         (self.base/'installed.json').write_text(json.dumps(self.config))
         channels.reserve(self.store, 'git', channels.GROUPS)
-        self.assertTrue(worker_bootstrap.wait_for_code(self.control, 'lane'))
+        self.assertFalse(worker_bootstrap.wait_for_code(self.control, 'lane'))
         self.assertFalse(worker_bootstrap.wait_for_code(self.control, 'watchdog'))
         priority.write(self.store, {'phase': 'checkout', 'target': 'new', 'last_completed': 0})
         self.assertTrue(worker_bootstrap.wait_for_code(self.control, 'watchdog'))
@@ -111,9 +110,8 @@ class ChannelsTest(unittest.TestCase):
                 with self.assertRaises(portalocker.LockException):
                     portalocker.lock(stream, portalocker.LOCK_EX | portalocker.LOCK_NB)
         channels.reserve(self.store, 'git', channels.GROUPS)
-        with self.assertRaises(maintenance_gate.MaintenanceBusy):
-            with self.permit('independent'):
-                pass
+        with self.permit('independent'):
+            pass
 
     def test_calendar_registration_dedup_and_overlap(self):
         self.runs.put({'id': 'live', 'phase': 'starting', 'lock_group': 'daily_update'})
@@ -135,7 +133,7 @@ class ChannelsTest(unittest.TestCase):
              patch.object(runner, '_run', return_value=0) as run:
             calendar_lanes.worker('weekly_update')
             calendar_lanes.worker('weekly_update')
-        run.assert_called_once_with('weekly_update', request_id='weekly_update:101')
+        run.assert_called_once_with('weekly_update', request_id='weekly_update:101', config_snapshot=self.config)
 
     def test_rcquant_window_dependency_and_expiry(self):
         def stamp(date: str) -> float:

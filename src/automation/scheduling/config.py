@@ -121,8 +121,8 @@ def load_config(directory: Path, host: str) -> dict:
     for key, override in settings.get('overrides', {}).items():
         if key not in tasks:
             raise ValueError(f'Unknown task override: {key}')
-        _keys(override, {'backend', 'enabled', 'times', 'days'})
-        tasks[key].update({k: v for k, v in override.items() if k in {'backend', 'enabled'}})
+        _keys(override, {'backend', 'enabled', 'times', 'days', 'priority'})
+        tasks[key].update({k: v for k, v in override.items() if k in {'backend', 'enabled', 'priority'}})
         time_override = {k: v for k, v in override.items() if k in {'times', 'days'}}
         for schedule in schedules.values():
             if schedule['task'] == key and time_override:
@@ -131,7 +131,7 @@ def load_config(directory: Path, host: str) -> dict:
     for key, task in tasks.items():
         if not IDENTIFIER.fullmatch(key):
             raise ValueError(f'Invalid task ID: {key}')
-        _keys(task, {'entrypoint', 'args', 'lock_group', 'overlap', 'wait_timeout_seconds', 'timeout', 'backend', 'enabled', 'channel', 'window'})
+        _keys(task, {'entrypoint', 'args', 'lock_group', 'overlap', 'wait_timeout_seconds', 'timeout', 'backend', 'enabled', 'channel', 'window', 'priority'})
         if task['entrypoint'] not in ENTRYPOINTS or not IDENTIFIER.fullmatch(task['lock_group']):
             raise ValueError(f'Invalid entrypoint/lock for {key}')
         if task['overlap'] not in {'skip', 'wait'}:
@@ -149,6 +149,9 @@ def load_config(directory: Path, host: str) -> dict:
         task.setdefault('wait_timeout_seconds', 1800)
         if type(task['wait_timeout_seconds']) is not int or task['wait_timeout_seconds'] <= 0:
             raise ValueError('wait_timeout_seconds must be positive')
+        task.setdefault('priority', 0)
+        if type(task['priority']) is not int:
+            raise ValueError('Task priority must be an integer')
         task.setdefault('channel', 'data')
         task.setdefault('window', None)
         if task['channel'] not in {'data', 'independent'} or task['window'] not in {None, 'rcquant_evening'}:

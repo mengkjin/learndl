@@ -74,7 +74,7 @@ def pending(directory):
 
 
 @contextmanager
-def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None, task_class=None):
+def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None, task_class=None, exclusive_groups=None):
     if _depth.get() or sandbox_request() is not None:
         if exclusive and _kind.get() != 'exclusive':
             raise MaintenanceBusy('Cannot upgrade an existing shared lease')
@@ -107,23 +107,29 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
         while True:
             try:
                 with portalocker.Lock(str(directory / 'admission.lock'), mode='r+', timeout=0):
-                    from .install_request import reconcile, ACTIVE
+                    from .install_request import reconcile
                     installation = reconcile()
-                    if installation.get('phase') in ACTIVE - {'registering'} and installation.get('id') != installation_id:
-                        raise MaintenanceBusy('An authorized installation is waiting for maintenance access')
+                    if installation.get('phase') in {'draining', 'installing', 'repair_required'} and installation.get('id') != installation_id and (
+                            installation.get('groups') is None or exclusive or task_class == 'git' or
+                            channels.group_for(task_class) in installation.get('groups', []) or
+                            task_class.startswith('autofix:')):
+                        raise MaintenanceBusy('Installation is applying changes or draining approved tasks')
                     if (not modern_channels or exclusive) and any(r['phase'] in {'starting', 'running'} for r in Store(directory).rows()):
                         raise MaintenanceBusy('Autofix execution or crash reconciliation is outstanding')
                     from .priority import enabled, blocker
                     modern = enabled()
                     if not modern and not exclusive and not priority and pending(directory):
                         raise MaintenanceBusy('Autofix is waiting for maintenance access')
+                    preferred = channels.preferred_maintenance(Store(directory), task_class) if modern_channels else None
+                    if preferred:
+                        raise MaintenanceBusy(preferred)
                     portalocker.lock(stream, (portalocker.LOCK_EX if exclusive else portalocker.LOCK_SH) | portalocker.LOCK_NB)
                     try:
                         reason = blocker(Store(directory), task_class) if modern else None
                         if reason:
                             raise MaintenanceBusy(reason)
                         if modern_channels:
-                            descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class))
+                            descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class, exclusive_groups))
                             lane_token = _lane_fds.set(descriptors)
                     except BaseException:
                         lane_leases.close()

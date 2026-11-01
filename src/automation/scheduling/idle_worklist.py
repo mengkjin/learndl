@@ -132,6 +132,8 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
         key = version(revisions)
         latest = next((run for run in reversed(attempts) if run['task'] == name and run['version'] == key
                        and run['phase'] != 'deferred'), None)
+        if latest and latest.get('suppress_auto_recovery') and not latest.get('retry_allowed'):
+            continue
         recovery = {}
         if latest and latest['phase'] != 'complete' and not latest.get('retry_allowed'):
             if latest['phase'] in ACTIVE:
@@ -203,6 +205,8 @@ def _launch(request: dict, store: RunStore) -> int:
         with permit(blocking=False, task_class='research'):
             return _launch_admitted(request, store)
     except MaintenanceBusy as exc:
+        if store.get(request['id']).get('suppress_auto_recovery'):
+            return DEFERRED
         request['blocked_by'] = str(exc)
         request['phase'] = 'queued'
         store.put(request)
@@ -210,6 +214,8 @@ def _launch(request: dict, store: RunStore) -> int:
 
 
 def _launch_admitted(request: dict, store: RunStore) -> int:
+    if store.get(request['id']).get('suppress_auto_recovery'):
+        return DEFERRED
     from src.proj import PATH
     log = runtime_dir() / 'idle_worklist' / f'{request["id"]}.log'
     log.parent.mkdir(parents=True, exist_ok=True)

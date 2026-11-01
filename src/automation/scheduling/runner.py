@@ -113,10 +113,10 @@ def deferred_worker() -> int:
     return 0
 
 
-def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = None) -> int:
+def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = None, config_snapshot: dict | None = None) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
-    config = installed_config()
+    config = config_snapshot or installed_config()
     if config is None:
         raise RuntimeError('No installed scheduling snapshot; run installer apply first')
     task = config['tasks'][task_id]
@@ -147,7 +147,7 @@ def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = Non
         run_id = uuid.uuid4().hex
         run_record = {'id': run_id, 'task': task_id, 'phase': 'starting', 'started_at': time.time(),
                       'timeout_seconds': task['timeout_seconds'], 'uid': os.getuid(), 'lock_group': task['lock_group'],
-                      'request_id': request_id, 'channel': task.get('channel', 'data')}
+                      'request_id': request_id, 'schedule_config': dict(task), 'channel': task.get('channel', 'data')}
         store.put(run_record)
         read_fd, write_fd = os.pipe()
         lock_fd = lock.acquired_locks[0].fileno()

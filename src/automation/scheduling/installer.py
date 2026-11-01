@@ -297,9 +297,12 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
     if cron_lines:
         new_cron += BEGIN + '\n' + '\n'.join(cron_lines) + '\n' + END + '\n'
     desktop = desktop_entry(root, python) if config['watchdog']['jobs'].get('cli_recovery', {}).get('enabled') else None
-    return {'config': config, 'units': units, 'cron': new_cron, 'report': report, 'desktop_autostart': desktop,
+    plan = {'config': config, 'units': units, 'cron': new_cron, 'report': report, 'desktop_autostart': desktop,
             'conflicts': conflicts, 'global_conflicts': global_conflicts,
             'input_hash': hashlib.sha256(cron.encode()).hexdigest()}
+    from .install_impact import classify
+    plan['impact'] = classify(plan, runtime_dir())
+    return plan
 
 
 def atomic_json(path: Path, value: dict) -> None:
@@ -409,20 +412,16 @@ def validate_unit(name: str, contents: str) -> None:
 
 
 def apply_plan(plan: dict, original_cron: str, directory: Path, *, installation_id=None) -> None:
-    # Serialize installation/rollback against dispatch and the full task lifetime,
-    # not merely a point-in-time "no active rows" check.
-    from .autofix_store import Store, state_dir
-    control = state_dir()
-    if control.exists():
-        from .maintenance_gate import permit
-        Store(control)
-        with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0), \
-             permit(directory=control, exclusive=True, blocking=False, installation_id=installation_id):
+    from .autofix_store import state_dir
+    if state_dir().exists():
+        from .install_flow import admission
+        with admission(installation_id, plan, directory, control_dir=state_dir()):
             return _apply_plan(plan, original_cron, directory)
     return _apply_plan(plan, original_cron, directory)
 
 
 def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
+    online = plan.get('impact', {}).get('mode') in {'config', 'compatible'}
     if plan['global_conflicts']:
         raise ValueError('\n'.join(plan['global_conflicts']))
     manifest_path = directory / 'manifest.json'
@@ -441,7 +440,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
-    if plan['config']:
+    if plan['config'] and not online:
         from .runtime import RunStore
         owned = {run.get('pid') for run in RunStore(directory / 'runs.sqlite').active()}
         for process in psutil.process_iter(['pid', 'cmdline']):
@@ -475,7 +474,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if old_config and old_config.get('autofix_initialized'):
         from .autofix_store import Store, state_dir
         controls = Store(state_dir())
-        if any(r['phase'] in {'starting', 'running'} for r in controls.rows()):
+        if not online and plan.get('impact', {}).get('groups') is None and any(r['phase'] in {'starting', 'running'} for r in controls.rows()):
             raise RuntimeError('Wait for the running autofix before changing installation')
         enabled = bool(plan['config'] and plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'))
         if not enabled and controls.scheduled() and 'learndl-deferred.service' not in plan['units']:
@@ -545,7 +544,12 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             command(['systemd-analyze', 'verify', *[str(stage / name) for name in plan['units']]])
         if read_cron() != original_cron:
             raise RuntimeError('Crontab changed during planning; rerun installer')
-        if plan['config'] and (plan['config'].get('scheduler_version', 1) >= 2 or plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled')):
+        if not recovering:
+            atomic_json(directory / 'rollback.json', snapshot)
+        import time
+        paused_at = time.time()
+        atomic_json(directory / 'transaction.json', {'phase': 'prepared', 'plan': plan, 'paused_at': paused_at})
+        if plan.get('impact', {}).get('mode') != 'config' and plan['config'] and (plan['config'].get('scheduler_version', 1) >= 2 or plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled')):
             from .autofix_sandbox import preflight
             from .autofix_store import initialize, state_dir
             if plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled'):
@@ -572,9 +576,6 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             temporary.write_bytes(source.read_bytes())
             temporary.replace(policy)
             plan['config']['autofix_initialized'] = True
-        if not recovering:
-            atomic_json(directory / 'rollback.json', snapshot)
-        atomic_json(directory / 'transaction.json', {'phase': 'prepared', 'plan': plan})
         changed = {name for name in names if previous['units'].get(name) != plan['units'].get(name)}
         changed.update(name for name, contents in plan['units'].items() if not (UNIT_DIR / name).exists() or (UNIT_DIR / name).read_text() != contents)
         for name in sorted(changed):
@@ -599,7 +600,12 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         if plan['config'] is None:
             old_config_path.unlink(missing_ok=True)
         else:
-            atomic_json(old_config_path, plan['config'])
+            from .install_impact import publish
+            from .publication import catch_up, cancel_disabled
+            cutover = time.time()
+            catch_up(directory, old_config, previous['units'], paused_at, cutover, original_cron)
+            publish(directory, plan['config'])
+            cancel_disabled(plan['config'])
         from .autofix_store import Store, state_dir
         if state_dir().exists():
             Store(state_dir()).set_enabled(bool(plan['config'] and plan['config'].get('autofix_initialized')
@@ -618,20 +624,24 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
                 else:
                     command(['sudo', 'systemctl', 'enable' if restore_state.get('UnitFileState') == 'enabled' else 'disable', name])
                     command(['sudo', 'systemctl', 'start' if restore_state.get('ActiveState') == 'active' else 'stop', name])
-        atomic_json(manifest_path, {'units': plan['units'], 'cron': plan['cron'], 'desktop_autostart': desired_desktop})
+        from .install_impact import PROTOCOL, sources
+        atomic_json(manifest_path, {'units': plan['units'], 'cron': plan['cron'], 'desktop_autostart': desired_desktop,
+                                   'install_protocol': PROTOCOL, 'sources': sources()})
+        if plan['config']:
+            catch_up(directory, plan['config'], plan['units'], cutover, time.time(), plan['cron'])
         atomic_json(directory / 'transaction.json', {'phase': 'complete'})
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['plan', 'apply', 'defer', 'pending', 'cancel', 'status', 'rollback'])
+    parser.add_argument('action', choices=['plan', 'apply', 'defer', 'force', 'pending', 'cancel', 'status', 'rollback'])
     parser.add_argument('--host', default=socket.gethostname().split('.')[0])
     parser.add_argument('--config-dir', type=Path)
     parser.add_argument('--crontab-file', type=Path, help='Read-only offline planning input')
     parser.add_argument('--server-timezone', help='Required for offline planning; apply detects actual timezone')
     parser.add_argument('--diff', action='store_true', help='Show exact cron/unit changes in plan output')
     args = parser.parse_args()
-    if args.action in {'apply', 'defer', 'pending', 'cancel'}:
+    if args.action in {'apply', 'defer', 'force', 'pending', 'cancel'}:
         from .install_flow import run_interactive
         from . import install_request
         if args.crontab_file or args.server_timezone:
@@ -639,7 +649,7 @@ def main() -> int:
         if args.action in {'pending', 'cancel'}:
             print(json.dumps(install_request.cancel() if args.action == 'cancel' else install_request.reconcile(), indent=2))
             return 0
-        return run_interactive(deferred=args.action == 'defer', host=args.host, config_dir=args.config_dir)
+        return run_interactive(deferred=args.action == 'defer', force=args.action == 'force', host=args.host, config_dir=args.config_dir)
     from src.proj import PATH
     root = Path(PATH.main)
     if args.crontab_file and args.action != 'plan':

@@ -251,7 +251,7 @@ class HelperQueueTests(unittest.TestCase):
     def test_script_outbox_error_does_not_skip_scheduler_notifications(self):
         with tempfile.TemporaryDirectory() as temp, patch.object(auxiliary, 'runtime_dir', return_value=Path(temp)), \
              patch.object(priority, 'enabled', return_value=True), \
-             patch.object(auxiliary, 'installed_config', return_value={'watchdog': {'jobs': {
+             patch.object(auxiliary, 'require_installed_config', return_value={'watchdog': {'jobs': {
                  'email_outbox': {'enabled': True, 'interval_seconds': 60}}}}), \
              patch('src.api.util.backend.task.TaskDatabase'), patch('src.api.task_monitor.output.OutputCache'), \
              patch('src.proj.util.web.emailer.Email.retry_pending', side_effect=OSError('script outbox unavailable')), \

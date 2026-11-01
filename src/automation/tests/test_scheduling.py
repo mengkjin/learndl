@@ -206,6 +206,9 @@ class TimeoutTest(unittest.TestCase):
                 proc.stdout.close()
 
 
+from src.automation.scheduling.maintenance_gate import MaintenanceBusy
+
+
 class InstallerTransactionTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -228,6 +231,8 @@ class InstallerTransactionTest(unittest.TestCase):
         patcher = patch('src.automation.scheduling.installer.timer_state', return_value={'ActiveState': 'active', 'UnitFileState': 'enabled'})
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.enterContext(patch('src.automation.scheduling.installer.runtime_dir', return_value=self.state))
+        self.enterContext(patch('src.automation.scheduling.publication.state_dir', return_value=self.root / 'control'))
         self.config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
         for target, value in [('src.automation.scheduling.autofix_sandbox.preflight', lambda: '/usr/bin/bwrap'),
                               ('src.automation.scheduling.autofix_store.state_dir', lambda root=None: self.root / 'control')]:
@@ -255,7 +260,7 @@ class InstallerTransactionTest(unittest.TestCase):
         control = self.root / 'control'
         initialize(control, ROOT)
         with portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0):
-            with self.assertRaises(portalocker.LockException):
+            with self.assertRaises((portalocker.LockException, MaintenanceBusy)):
                 apply_plan(self.plan(), self.cron, self.state)
         self.assertEqual(self.calls, [])
 
@@ -275,6 +280,21 @@ class InstallerTransactionTest(unittest.TestCase):
         self.assertFalse((self.root / 'autostart/learndl.desktop').exists())
         self.assertFalse(list(self.units.glob('*.timer')))
         self.assertTrue(list(self.units.glob('*.learndl-disabled')))
+
+    def test_online_schedule_change_keeps_live_task_and_installed_bootstrap(self):
+        import portalocker
+        apply_plan(self.plan(), self.cron, self.state)
+        bootstrap = self.root / 'control/worker_bootstrap.py'
+        original = (bootstrap.read_bytes(), bootstrap.stat().st_mtime_ns)
+        self.config['schedules']['daily_update']['times'] = ['22:17']
+        plan = self.plan()
+        self.assertEqual(plan['impact']['mode'], 'config')
+        with (self.root / 'control/gate.lock').open('r+') as running:
+            portalocker.lock(running, portalocker.LOCK_SH)
+            apply_plan(plan, self.cron, self.state)
+        self.assertEqual((bootstrap.read_bytes(), bootstrap.stat().st_mtime_ns), original)
+        self.assertEqual(json.loads((self.state/'installed.json').read_text())['schedules']['daily_update']['times'], ['22:17'])
+        self.assertTrue((self.state/'installed.json').is_symlink())
 
     def test_legacy_module_upgrade_and_rollback_preserve_ledger_and_locks(self):
         from src.automation.scheduling.autofix_store import Store

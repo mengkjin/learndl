@@ -21,6 +21,7 @@ class RunStore:
         with self.connect() as connection:
             connection.executescript('''
                 CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS installation_stops (id TEXT PRIMARY KEY, data TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS task_links (task_id TEXT PRIMARY KEY, run_id TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, body TEXT NOT NULL, sent INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS script_mail (
@@ -36,22 +37,30 @@ class RunStore:
 
     def put(self, run: dict) -> None:
         with self.connect() as connection:
+            stop = connection.execute('SELECT data FROM installation_stops WHERE id=?', (run['id'],)).fetchone()
+            if stop:
+                run = dict(run, **json.loads(stop[0]))
             connection.execute('INSERT INTO runs VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data', (run['id'], json.dumps(run)))
 
     def get(self, run_id: str) -> dict:
         with self.connect() as connection:
             row = connection.execute('SELECT data FROM runs WHERE id=?', (run_id,)).fetchone()
-        return json.loads(row[0]) if row else {}
+        return self._with_stop(json.loads(row[0])) if row else {}
 
     def active(self) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute("SELECT data FROM runs WHERE json_extract(data, '$.phase') IN ('starting','running','terminating','finalizing')").fetchall()
-        return [json.loads(row[0]) for row in rows]
+        return [self._with_stop(json.loads(row[0])) for row in rows]
 
     def owned(self, owner: str) -> list[dict]:
         with self.connect() as connection:
             rows = connection.execute("SELECT data FROM runs WHERE json_extract(data, '$.owner')=? ORDER BY rowid", (owner,)).fetchall()
-        return [json.loads(row[0]) for row in rows]
+        return [self._with_stop(json.loads(row[0])) for row in rows]
+
+    def _with_stop(self, run):
+        with self.connect() as db:
+            stop = db.execute('SELECT data FROM installation_stops WHERE id=?', (run['id'],)).fetchone()
+        return dict(run, **json.loads(stop[0])) if stop else run
 
     def link(self, task_id: str, run_id: str) -> None:
         with self.connect() as connection:
@@ -219,6 +228,8 @@ def signal_members(run: dict, processes: list[psutil.Process], sig: signal.Signa
 
 
 def timeout_message(run: dict) -> str:
+    if run.get('installation_stop'):
+        return f"Stopped for installation {run['installation_stop']}; automatic recovery disabled"
     limit = run.get('progress_timeout_seconds') or run.get('timeout_seconds')
     condition = 'without output' if run.get('progress_timeout_seconds') else 'elapsed'
     return f'TIMEOUT: exceeded {limit} seconds {condition}; run {run["id"]}'

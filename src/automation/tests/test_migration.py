@@ -25,7 +25,7 @@ class MigrationTest(unittest.TestCase):
 
     def test_aliases_share_module_and_lock_context_identity(self):
         names = ['watchdog', 'cli_recovery'] + [
-            'scheduling.' + p.stem for p in (ROOT/'src/automation/scheduling').glob('*.py')
+            'scheduling.' + p.stem for p in (ROOT/'src/api/task_monitor/scheduling').glob('*.py')
             if p.stem != '__init__']
         for name in names:
             with self.subTest(module=name):

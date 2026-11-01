@@ -19,6 +19,44 @@ import uuid
 @unittest.skipUnless(sys.platform == 'linux' and os.getenv('LEARNDL_SYSTEMD_ACCEPTANCE') == '1',
                      'requires explicit Linux/systemd acceptance opt-in')
 class LinuxAcceptance(unittest.TestCase):
+    def test_online_publication_keeps_systemd_worker_alive(self):
+        from unittest.mock import patch
+        from src.automation.scheduling import install_flow, install_impact, channels, priority
+        from src.automation.scheduling.autofix_store import initialize, Store
+        with tempfile.TemporaryDirectory(prefix='learndl-online-acceptance-') as temp:
+            base = Path(temp).resolve()
+            control, runtime = base/'control', base/'runtime'
+            runtime.mkdir()
+            initialize(control, base/'project')
+            store = Store(control)
+            channels.initialize(store)
+            priority.initialize(store)
+            ready = base/'ready'
+            unit = 'learndl-test-online-' + uuid.uuid4().hex + '.service'
+            code = ('import fcntl,time,pathlib; '
+                    f'f=open({str(control/"gate.lock")!r},"r+"); '
+                    'fcntl.flock(f,fcntl.LOCK_SH); '
+                    f'pathlib.Path({str(ready)!r}).write_text("ready"); time.sleep(30)')
+            try:
+                subprocess.run(['systemd-run', '--user', '--quiet', '--collect', '--unit=' + unit,
+                                sys.executable, '-c', code], check=True, timeout=10)
+                deadline = time.monotonic() + 10
+                while not ready.exists() and time.monotonic() < deadline:
+                    time.sleep(.05)
+                self.assertTrue(ready.exists())
+                with patch.object(channels, 'enabled', return_value=True), \
+                     patch.object(priority, 'enabled', return_value=True), \
+                     patch('src.automation.scheduling.install_request.reconcile', return_value={}):
+                    with install_flow.admission(plan={'impact': {'mode': 'config', 'groups': []}},
+                                                directory=runtime, control_dir=control):
+                        install_impact.publish(runtime, {'test_generation': 2})
+                        subprocess.run(['systemctl', '--user', 'daemon-reload'], check=True, timeout=10)
+                state = subprocess.run(['systemctl', '--user', 'is-active', unit], capture_output=True,
+                                       text=True, timeout=10)
+                self.assertEqual(state.stdout.strip(), 'active')
+            finally:
+                subprocess.run(['systemctl', '--user', 'stop', unit], check=False, capture_output=True, timeout=10)
+
     def test_bubblewrap_descendant_and_external_ledger_protection(self):
         from src.automation.scheduling.autofix_sandbox import check_tree, command
         with tempfile.TemporaryDirectory(prefix='.priority-acceptance-', dir=Path.cwd()) as temp:

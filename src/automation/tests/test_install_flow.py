@@ -60,7 +60,7 @@ class InstallationTest(unittest.TestCase):
         self.assertEqual(requests.reconcile()['phase'], 'failed')
 
     def test_installation_blocks_shared_priority_and_exclusive_but_not_owner(self):
-        requests.save(self.row)
+        requests.save(dict(self.row, phase='installing'))
         for kwargs in ({}, {'priority': True}, {'exclusive': True}):
             with self.assertRaises(gate.MaintenanceBusy):
                 with gate.permit(directory=self.control, blocking=False, **kwargs):
@@ -68,13 +68,13 @@ class InstallationTest(unittest.TestCase):
         with gate.permit(directory=self.control, exclusive=True, blocking=False, installation_id=self.row['id']):
             with gate.permit(directory=self.control):
                 pass  # Nested work under the already admitted installer is permitted.
-        requests.cancel()
+        requests.finish(requests.current(), 'success', 'finished')
         with gate.permit(directory=self.control, blocking=False):
             pass
 
     def test_disabled_autofix_still_uses_existing_admission(self):
         self.assertFalse(Store(self.control).enabled())
-        requests.save(self.row)
+        requests.save(dict(self.row, phase='installing'))
         with patch.object(gate, 'state_dir', return_value=self.control):
             with self.assertRaises(gate.MaintenanceBusy):
                 with gate.permit(blocking=False):
@@ -297,15 +297,15 @@ class InstallationTest(unittest.TestCase):
             with self.assertRaises(gate.MaintenanceBusy):
                 flow.check_business_tasks({})
 
-    def test_calendar_backlog_drains_after_cancel_with_autofix_disabled(self):
+    def test_calendar_keeps_running_while_installation_waits(self):
         from src.automation.scheduling import runner
         requests.save(self.row)
         with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
              patch.object(gate, 'state_dir', return_value=self.control), \
              patch.object(runner, '_run', return_value=0) as execute:
             runner.run('daily_update')
-            self.assertTrue(Store(self.control).scheduled())
-            execute.assert_not_called()
+            self.assertFalse(Store(self.control).scheduled())
+            execute.assert_called_once()
             requests.cancel()
             runner.run('weekly_update')
             self.assertFalse(Store(self.control).scheduled())

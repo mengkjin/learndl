@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from pathlib import Path
 
 import portalocker
@@ -46,6 +46,8 @@ def baseline(root: Path, config_dir: Path, plan: dict) -> dict:
     """Only installation inputs; runtime task history may continue to change."""
     files = set(config_dir.rglob('*.yaml')) | set(Path(__file__).parent.glob('*.py'))
     files.update(Path(__file__).parent.parent.glob('*.py'))
+    from .install_impact import COMPATIBILITY_FILE
+    files.add(COMPATIBILITY_FILE)
     files.update(root / path for path in ('src/api/calls/app.py', 'src/api/calls/launcher.py',
                                          'runs/install_schedules.sh'))
     files.update(runtime_dir() / name for name in ('manifest.json', 'installed.json'))
@@ -54,7 +56,8 @@ def baseline(root: Path, config_dir: Path, plan: dict) -> dict:
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
     names = set(plan['units']) | set(manifest['units']) | {'learndl-watchdog.service', 'learndl-watchdog.timer'}
     files.update(install.UNIT_DIR / name for name in names)
-    return {'files': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
+    head = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=10)
+    return {'head': head.stdout.strip() if head.returncode == 0 else None, 'files': {str(path.resolve()): hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else None
                       for path in sorted(files)}, 'cron': install.read_cron(),
             'timezone': install.command(['timedatectl', 'show', '--property=Timezone', '--value']).strip()}
 
@@ -83,13 +86,32 @@ def preview(plan: dict, cron: str) -> None:
 def check_business_tasks(plan: dict) -> None:
     from .autofix import recorded_task_blocker
     from .git_update import training_blocker
-    reason = training_blocker() or recorded_task_blocker()
+    impact = plan.get('impact', {})
+    if impact.get('mode') in {'config', 'compatible'}:
+        return
+    groups = impact.get('groups')
+    if groups is not None and plan.get('config'):
+        from .publication import queued_config
+        from .autofix_store import Store
+        controls = Store(state_dir())
+        for key, task in controls.scheduled():
+            old = queued_config(controls, key, {}).get('tasks', {}).get(task)
+            new = plan['config']['tasks'].get(task)
+            if old and new and new.get('enabled') and any(old.get(field) != new.get(field) for field in
+                    ('lock_group', 'channel', 'entrypoint', 'args', 'window', 'overlap')):
+                raise MaintenanceBusy(f'Queued request {key} must finish before changing its execution policy')
+    reason = (training_blocker() or recorded_task_blocker()) if groups is None else None
     if reason:
         raise MaintenanceBusy(reason)
     from src.proj import PATH
     entrypoints = {str(PATH.main / value) for value in ENTRYPOINTS.values()}
     wrappers = {str(PATH.runs / name) for name in ('daily_update.sh', 'weekly_update.sh', 'rcquant_sec_backfill.sh')}
+    from .runtime import RunStore
+    owned = {run.get('pid'): run for run in RunStore().active()} if groups is not None else {}
     for process in psutil.process_iter(['pid', 'cmdline']):
+        registered = owned.get(process.pid)
+        if registered and abs(registered.get('process_created', -1) - process.create_time()) < .01:
+            continue
         argv = process.info.get('cmdline') or []
         if process.pid != os.getpid() and (entrypoints | wrappers).intersection(argv):
             waiter = state_dir() / f'waiting-{process.pid}.json'
@@ -103,14 +125,25 @@ def check_business_tasks(plan: dict) -> None:
 
 
 @contextmanager
-def admission(request_id: str | None = None):
-    directory = runtime_dir()
+def admission(request_id: str | None = None, plan: dict | None = None, directory: Path | None = None, control_dir: Path | None = None):
+    directory = directory or runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
-    control = state_dir()
+    control = control_dir or state_dir()
+    impact = (plan or {}).get('impact', {})
+    groups = impact.get('groups')
+    global_exclusive = impact.get('mode', 'exclusive') == 'exclusive' and groups is None
     try:
-        with portalocker.Lock(str(directory / 'install.lock'), timeout=0), \
-             portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0), \
-             permit(directory=control, exclusive=True, blocking=False, installation_id=request_id):
+        with ExitStack() as stack:
+            stack.enter_context(portalocker.Lock(str(directory / 'install.lock'), timeout=0))
+            if global_exclusive:
+                stack.enter_context(portalocker.Lock(str(control / 'worker.lock'), mode='r+', timeout=0))
+            stack.enter_context(permit(directory=control, exclusive=global_exclusive, blocking=False,
+                installation_id=request_id, task_class='installation',
+                exclusive_groups=groups if impact.get('mode') == 'exclusive' and groups is not None else None))
+            # Git may never replace installation inputs halfway through publication.
+            stack.enter_context(portalocker.Lock(str(directory / 'git_update.lock'), mode='a', timeout=0,
+                                               flags=portalocker.LOCK_SH | portalocker.LOCK_NB))
+            stack.enter_context(portalocker.Lock(str(control / 'admission.lock'), mode='r+', timeout=0))
             yield
     except portalocker.LockException as exc:
         raise MaintenanceBusy('Installation or maintenance lock occupied') from exc
@@ -138,7 +171,9 @@ def transact(approval: dict) -> None:
         if after != before:
             backup = json.loads((directory / 'rollback.json').read_text())
             try:
-                install._apply_plan(rollback_plan(backup), install.read_cron(), directory)
+                rollback = rollback_plan(backup)
+                rollback['impact'] = approval['plan'].get('impact', {})
+                install._apply_plan(rollback, install.read_cron(), directory)
             except Exception as rollback_error:
                 raise RuntimeError(f'Installation rollback failed: {rollback_error}') from rollback_error
         raise
@@ -158,7 +193,8 @@ def register(approval: dict) -> str:
     identifier = approval['id']
     bundle = Path('/run/learndl-install') / identifier
     row = {key: approval[key] for key in ('id', 'unit', 'boot_id', 'created_at', 'expires_at')}
-    row.update(phase='registering', bundle=str(bundle))
+    row.update(phase='registering', bundle=str(bundle), groups=approval.get('plan', {}).get('impact', {}).get('groups'),
+               admission_plan=approval.get('plan', {}))
     with requests.lock():
         if requests.current().get('phase') in requests.ACTIVE:
             raise RuntimeError('Another installation request is already pending')
@@ -202,7 +238,7 @@ def register(approval: dict) -> str:
         raise
 
 
-def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None) -> int:
+def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None, force: bool = False) -> int:
     from src.proj import PATH
     if sys.platform != 'linux' or os.getuid() == 0:
         raise RuntimeError('Run installation as the ordinary service user on Linux')
@@ -222,13 +258,20 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
         raise ValueError('Privilege helper changed during planning; preview again')
     if snapshot['cron'] != cron or snapshot['timezone'] != timezone:
         raise ValueError('Server configuration changed during planning; preview again')
+    from .force_install import targets
+    force_targets = targets(plan) if force else []
     preview(plan, cron)
+    if force:
+        print('Approved scopes to stop (TERM, then KILL after 30 seconds):')
+        print(json.dumps(force_targets, indent=2))
     if plan['conflicts'] or plan['global_conflicts']:
         raise ValueError('Resolve preview conflicts before installation')
     for name, content in plan['units'].items():
         install.validate_unit(name, content)
-    notice = ('If busy, authorize background installation, pause new managed tasks, and wait up to 24 hours. '
+    notice = ('If busy, authorize background installation without pausing managed tasks; wait up to 24 hours. '
               'SSH disconnect is safe; reboot cancels waiting. ' if deferred else 'If busy, exit without installing. ')
+    if force:
+        notice = 'Authorize stopping the listed managed scopes (TERM then KILL), without automatic retry. '
     if input(notice + 'Apply these changes? [y/N] ').strip().lower() not in {'y', 'yes'}:
         print('Installation cancelled.')
         return 0
@@ -252,21 +295,32 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
     approval = dict(id=identifier, unit=f'learndl-install-{identifier}.service', uid=os.getuid(),
                     root=str(root), python=sys.executable, config_dir=str(config_dir), plan=plan,
                     baseline=snapshot, allowed_units=allowed, boot_id=boot_id(),
-                    helper_source=helper_source,
+                    helper_source=helper_source, force=force, force_targets=force_targets,
                     created_at=time.time(), expires_at=time.time() + 86400)
+    if force and plan.get('impact', {}).get('mode', 'exclusive') == 'exclusive':
+        register(approval)  # Draining survives terminal/SSH closure.
+        return 0
     # Only failure to acquire admission / running business tasks permits queuing.
     try:
-        with admission():
+        with admission(plan=plan):
             verify(approval)
             check_business_tasks(plan)
+            row = dict(id=identifier, boot_id=approval['boot_id'], created_at=approval['created_at'],
+                       expires_at=approval['expires_at'], phase='installing', groups=plan.get('impact', {}).get('groups'),
+                       executor_pid=os.getpid(), executor_created=psutil.Process().create_time())
+            with requests.lock():
+                requests.save(row)
             try:
                 transact(approval)
             except Exception as exc:
                 transaction = runtime_dir() / 'transaction.json'
-                if transaction.exists() and json.loads(transaction.read_text()).get('phase') != 'complete':
-                    with requests.lock():
-                        requests.finish(dict(id=identifier, boot_id=approval['boot_id']), 'repair_required', str(exc))
+                incomplete = transaction.exists() and json.loads(transaction.read_text()).get('phase') != 'complete'
+                with requests.lock():
+                    requests.finish(row, 'repair_required' if incomplete else 'failed', str(exc))
                 raise
+            else:
+                with requests.lock():
+                    requests.finish(row, 'success', 'Approved installation completed')
         print('Installation completed.')
         return 0
     except MaintenanceBusy as exc:
@@ -281,20 +335,26 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
 def worker(bundle: Path) -> int:
     approval = json.loads((bundle / 'approval.json').read_text())
     identifier = approval['id']
+    force_deadline = None
     while True:
         row = requests.reconcile()
-        if row.get('id') != identifier or row.get('phase') not in {'registering', 'waiting'}:
+        if row.get('id') != identifier or row.get('phase') not in {'registering', 'waiting', 'draining'}:
             break
         if row['phase'] == 'registering':
             time.sleep(.1)
             continue
         try:
-            with admission(identifier):
+            verify(approval)  # Changed inputs cancel even while a long task holds the gate.
+            if approval.get('force') and row['phase'] == 'waiting':
+                from .force_install import drain
+                force_deadline = force_deadline or time.monotonic() + 120
+                drain(approval)
+            with admission(identifier, approval['plan']):
                 verify(approval)
                 check_business_tasks(approval['plan'])
                 with requests.lock():
                     row = requests.current()
-                    if row.get('id') != identifier or row['phase'] != 'waiting':
+                    if row.get('id') != identifier or row['phase'] not in {'waiting', 'draining'}:
                         break
                     row['phase'] = 'installing'
                     requests.save(row)
@@ -309,12 +369,17 @@ def worker(bundle: Path) -> int:
                     with requests.lock():
                         requests.finish(row, 'success', 'Approved installation completed')
                 break
-        except MaintenanceBusy:
-            time.sleep(1)
+        except MaintenanceBusy as exc:
+            if approval.get('force') and (requests.current().get('phase') != 'draining' or
+                    force_deadline is None or time.monotonic() >= force_deadline):
+                with requests.lock():
+                    requests.finish(requests.current(), 'failed', str(exc))
+                break
+            time.sleep(1 if approval.get('force') else 10)
         except Exception as exc:
             with requests.lock():
                 row = requests.current()
-                if row.get('id') == identifier and row['phase'] == 'waiting':
+                if row.get('id') == identifier and row['phase'] in {'waiting', 'draining'}:
                     requests.finish(row, 'cancelled', str(exc))
             break
     from src.proj.util.web.emailer import Email
@@ -324,7 +389,7 @@ def worker(bundle: Path) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['apply', 'defer', 'pending', 'cancel', 'worker'])
+    parser.add_argument('action', choices=['apply', 'defer', 'force', 'pending', 'cancel', 'worker'])
     parser.add_argument('bundle', nargs='?', type=Path)
     parser.add_argument('--host', default=socket.gethostname().split('.')[0])
     parser.add_argument('--config-dir', type=Path)
@@ -336,7 +401,7 @@ def main() -> int:
         if args.bundle is None or not os.environ.get('LEARNDL_INSTALL_BROKER'):
             parser.error('Worker requires a registered privilege broker')
         return worker(args.bundle)
-    return run_interactive(deferred=args.action == 'defer', host=args.host, config_dir=args.config_dir)
+    return run_interactive(deferred=args.action == 'defer', force=args.action == 'force', host=args.host, config_dir=args.config_dir)
 
 
 if __name__ == '__main__':
