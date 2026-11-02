@@ -44,12 +44,12 @@ algo:
     hidden_dim:     [64] #  2**5
     seqlens:        [{'15m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
-    enc_in_dim:     [16]  # the resnet block input dimension
+    enc_in_dim:     [8]  # the resnet block input dimension
     enc_att:        [false] 
     rnn_type:       ['gru'] # 'gru' , 'lstm' , 'transformer' , 'tcn'
     rnn_att:        [false]
     rnn_layers:     [2]
     which_output:   [0]
     resnet_blocks:  [1]
-    dim_med:        [16] # null: max(1, enc_in_dim // 4); or a positive integer
+    dim_med:        [null] # null: max(1, enc_in_dim // 4); or a positive integer
     hidden_as_factors: [true]

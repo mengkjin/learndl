@@ -1,10 +1,8 @@
 fit:
-  - gru_day_new_3
-  - gru_day_new_4
-  - gru_day_new_5
+  - gru_day_new
   - gru_15m_0
   - gru_15m_1
 
 resume: False
 force: False
-rerun_mark: 1
+rerun_mark: 0
