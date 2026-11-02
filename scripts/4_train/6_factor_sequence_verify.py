@@ -31,6 +31,10 @@
 #     type: str
 #     default: null
 #     desc: Email recipient; empty uses project default
+#   resume_from:
+#     type: str
+#     default: null
+#     desc: Existing run ID; retain its dataset and dates, reuse verified completed folds
 #   no_email:
 #     type: bool
 #     default: false
@@ -55,13 +59,14 @@ def parse_args(argv=None):
     parser.add_argument('--research',action='store_true')
     parser.add_argument('--ablations',action='store_true')
     parser.add_argument('--recipient',help='Omit to use the configured project recipient')
+    parser.add_argument('--resume-from')
     parser.add_argument('--no-email',action='store_true')
     return parser.parse_args(argv)
 
 
 def main(run_id=None, test_start=20170101, test_end=None,
          data_config='configs/experience/model/factor_sequence/data.json',
-         research=False, ablations=False, recipient=None, no_email=False):
+         research=False, ablations=False, recipient=None, no_email=False, resume_from=None):
     from src.proj import PATH
     from src.data.preprocess.factor_sequence.server_suite import run_suite, send_result
     from src.data.preprocess.factor_sequence.bundle import write_json
@@ -70,14 +75,15 @@ def main(run_id=None, test_start=20170101, test_end=None,
     if not config.is_absolute():
         config=PATH.main/config
     folder,report=run_suite(PATH.main,PATH.result/'factor_sequence',run_id,config,
-        test_start,test_end,research,ablations)
+        test_start,test_end,research,ablations,resume_from=resume_from,
+        training_email=not no_email,recipient=recipient)
     if no_email:
         mail={'status':'skipped','reason':'--no-email'}
         write_json(folder/'mail_status.json',mail)
     else:
         mail=send_result(folder,recipient)
     print(f"Experiment: {report['status']}; mail: {mail['status']}; results: {folder}",flush=True)
-    if report['status']!='passed' or mail['status']=='failed':
+    if report['status']!='passed' or mail['status']=='failed' or report.get('training_mail_failed',0):
         raise RuntimeError(f'Factor sequence verification failed; inspect {folder}')
     return 0
 

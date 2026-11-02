@@ -145,3 +145,13 @@ fixes:
       email: true
     timeout: 10m
     enabled: true
+  - id: 20261101_factor_sequence_recover_03
+    description: 非阻塞检查 _02 进度；宿主确认原进程结束后补发已有结果，固定原数据和日期、复用校验通过的完整折，重跑未完成折，每次训练立即单独发日志邮件。
+    script: scripts/.autofix/recover_factor_sequence.py
+    blocking: none
+    params:
+      run_id: 20261031_factor_sequence_verify_02
+      dry_run: false
+      email: true
+    timeout: 10m
+    enabled: true

@@ -107,6 +107,6 @@ def collect(results_root, runtime, run_id, isolated=None):
     report['notes'] = [
         'A running suite is not proof of a live process. Old logs alone do not prove a hang.',
         'Task Monitor may omit build/audit and unregistered wrapper processes.',
-        'Suite result mail is sent after all folds or a caught failure, not after each model.',
+        'Legacy runs only sent suite mail; newer runs also store per-model training_mail receipts.',
         'No training restart, state reconciliation, label rebuild or result overwrite was performed.']
     return report

@@ -332,3 +332,30 @@ PID 隔离中将宿主进程存活性标为未知，不能用不可见 PID 或�
 restore the existing control state”模板；现对这类已排队和新产生的错误改用维护等待通知，
 保留事件 ID、邮件回执、锁及冷却行为。真正的控制状态错误仍保留原恢复提示。
 持续运行的研究任务组可能跨多个冷却周期阻挡 Git，须检查实际进程与日志；不删锁、不重建账本。
+
+## 因子验证恢复与逐训练邮件（2026-11-01）
+
+`20261101_factor_sequence_recover_03`（`blocking: none`，10 分钟）读取 `_verify_02`
+的调度、阶段及日志证据并邮件发送，只提交恢复请求。宿主 idle worker 在共享训练插槽内
+再次核对原 PID 身份及残留子进程；仍活跃则延后，账本或存活状态不明则拒绝训练。
+已完成整套验证时只补发结果。否则保留原数据版本与 walk-forward 日期，检查科学源码、
+历史标签、完整模型集合、预测与模型保存记录一致后复用完整折；未完成折全部重新训练，
+不是 epoch/checkpoint 续训。旧失败记录及结果文件不覆盖，恢复使用新 run ID。
+
+诊断位于 `results/factor_sequence_diagnostics/20261101_factor_sequence_recover_03/`，
+新实验位于 `results/factor_sequence/20261101_factor_sequence_recover_03/`。
+原记录缺失、产物损坏、科学代码或历史标签变更时，保留诊断并失败，不自动扩大日期或重建数据。
+恢复原范围后若要验证更新日期，应另建新实验。
+
+正常脚本执行默认每个模型/seed 训练结束或异常后立即发送 `<name>.log` 与结果 JSON，
+回执位于各折 `training/training_mail/<name>/delivery.json`；`--no-email` 同时关闭逐训练邮件。
+直接调用底层 pipeline 需显式 `--training-email`。邮件失败不掩盖训练异常、不阻止后续
+模型训练，但会记录并使最终脚本报告邮件失败。整套完成邮件仍保留。
+旧训练没有独立日志时，补发明确标记为共享折日志；被强制终止的进程不能自行发信，由恢复检查补发。
+补发沿用 TaskResultMail 回执，仅重试未送达部分；SMTP 结果不明时拒绝盲目重复发送。
+
+本次包含新的恢复协议与 worker 代码，服务器需拉取后按 installer `plan/apply/status`
+发布；不要只重启 Monitor，也不要为绕过等待清理锁或运行账本。
+
+子阶段真实 stdout/stderr 同时写入折日志与受监督 worker 主日志，避免折内持续训练
+但主日志长期不更新而触发 inactivity timeout；不添加虚假 heartbeat，也不取消超时。

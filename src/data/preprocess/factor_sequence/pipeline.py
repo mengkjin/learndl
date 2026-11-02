@@ -1,4 +1,4 @@
-"""Opt-in build/audit/smoke/compare stages; never schedules work or sends mail.
+"""Opt-in build/audit/smoke/compare stages with optional per-training result mail.
 
 python -m src.data.preprocess.factor_sequence.pipeline --help
 """
@@ -133,7 +133,8 @@ def read_predictions(model_path):
     return df
 
 
-def smoke(dataset, folder, research=False, ablations=False, test_start=None, test_end=None):
+def smoke(dataset, folder, research=False, ablations=False, test_start=None, test_end=None,
+          training_email=False, recipient=None, expected_split=None):
     from src.proj import CALENDAR, Save
     from src.data.util import DataBlock
     from src.data import DATAVENDOR
@@ -167,6 +168,8 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
         if len(folds)!=1:
             raise ValueError('Run each OOS fold separately (at most 63 trading dates)')
         split=folds[0]
+    if expected_split is not None and split != expected_split:
+        raise ValueError('Computed split differs from frozen suite plan')
     for group,group_dates in split.items():
         indices=np.searchsorted(dates,group_dates)
         if not ready[indices].all():
@@ -211,6 +214,11 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
             card.update(status='running',run_id=folder.parent.name,name=name,results='runs.json')
             runs.append(result)
             write_json(folder/'runs.json',runs)
+            from .training_mail import capture_log, send_training_result
+            log_path=folder/f'{name}.log'
+            result['log_path']=str(log_path)
+            capture=capture_log(log_path)
+            capture.__enter__()
             started=time.perf_counter()
             try:
                 trainer=ModelTrainer.GO(title=name,module=model,override=override,short_test=False,
@@ -230,13 +238,19 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
                               effective_config=json.loads(json.dumps(dict(trainer.config.Param),default=str)))
             except BaseException:
                 result.update(status='failed',seconds=time.perf_counter()-started,error=traceback.format_exc())
+                traceback.print_exc()
                 raise
             finally:
+                capture.__exit__(None,None,None)
                 result['process_peak_rss_bytes']=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*(1 if sys.platform=='darwin' else 1024))
                 card.update(status=result['status'],reason=result.get('error'),model_path=result.get('model_path'))
                 write_json(folder/'model_cards.json',pending)
                 # Config may contain pathlib objects; serialize a stable textual snapshot.
                 (folder/'runs.json').write_text(json.dumps(runs,ensure_ascii=False,indent=2,default=str))
+                (folder/f'{name}.json').write_text(json.dumps(result,ensure_ascii=False,indent=2,default=str))
+                if training_email:
+                    result['mail']=send_training_result(folder,result,recipient)
+                    (folder/'runs.json').write_text(json.dumps(runs,ensure_ascii=False,indent=2,default=str))
     return {'status':'passed','runs':len(runs),'interpretation':'Pipeline verification only' if not research else 'Research comparison'}
 
 
@@ -293,6 +307,9 @@ def main():
     parser.add_argument('--dataset',type=Path)
     parser.add_argument('--start',type=int)
     parser.add_argument('--end',type=int)
+    parser.add_argument('--expected-split',type=Path)
+    parser.add_argument('--training-email',action='store_true')
+    parser.add_argument('--recipient')
     parser.add_argument('--research',action='store_true')
     parser.add_argument('--ablations',action='store_true')
     parser.add_argument('--parent',type=Path)
@@ -344,7 +361,8 @@ def main():
                     report=audit(dataset)
                     result={'status':report['status'],'report':str(dataset/'audit.json')}
                 elif stage=='smoke':
-                    result=smoke(dataset,folder/'training',args.research,args.ablations,args.test_start,args.test_end)
+                    result=smoke(dataset,folder/'training',args.research,args.ablations,args.test_start,args.test_end,args.training_email,args.recipient,
+                                 json.loads(args.expected_split.read_text()) if args.expected_split else None)
                 else:
                     result=compare(folder/'training')
             result.update(stage=stage,seconds=time.perf_counter()-started,invocation=invocation)

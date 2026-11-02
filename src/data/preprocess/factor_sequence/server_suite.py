@@ -1,6 +1,6 @@
 """Server-owned source discovery and isolated walk-forward verification stages.
 
-The scripts entry point owns result mail; child stages never send mail.
+The entry point sends the suite summary; each training sends its own result mail.
 """
 from pathlib import Path
 from datetime import datetime, timezone
@@ -42,9 +42,16 @@ def execute(command, log, root):
     env['PYTHONPATH']=str(root)+os.pathsep+env.get('PYTHONPATH','')
     env['PYTHONUNBUFFERED']='1'
     with Path(log).open('x') as stream:
-        result=subprocess.run(command,cwd=root,env=env,stdout=stream,stderr=subprocess.STDOUT)
-    if result.returncode:
-        raise RuntimeError(f'Child exited with code {result.returncode}; inspect {log}')
+        with subprocess.Popen(command,cwd=root,env=env,stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT,text=True,errors='replace',bufsize=1) as process:
+            for line in process.stdout:
+                stream.write(line)
+                stream.flush()
+                # Real child output advances the supervised worker's progress log too.
+                print(line,end='',flush=True)
+            returncode=process.wait()
+    if returncode:
+        raise RuntimeError(f'Child exited with code {returncode}; inspect {log}')
 
 
 def aggregate(fold_directories, output, expected_dates):
@@ -92,7 +99,7 @@ def aggregate(fold_directories, output, expected_dates):
 
 
 def run_suite(root, results_root, run_id, data_config, test_start=20170101, test_end=None,
-              research=False, ablations=False):
+              research=False, ablations=False, resume_from=None, training_email=True, recipient=None):
     root,results_root=Path(root).resolve(),Path(results_root).resolve()
     if not re.fullmatch('[A-Za-z0-9_-]+',run_id):
         raise ValueError('Invalid run ID')
@@ -132,27 +139,42 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
                   *sorted((root/'configs/algo/nn').glob('factorseq_*.yaml'))]:
             report['code'][str(p.relative_to(root))]=file_digest(p)
         stage('offline',lambda:execute([sys.executable,'-m','unittest','discover','-s','tests',
-                  '-p','test_factor_sequence.py','-v'],folder/'offline.log',root))
+                  '-p','test_factor_sequence*.py','-v'],folder/'offline.log',root))
         def probe():
             found=discover(cfg)
             write_json(folder/'source_discovery.json',found)
             if found['status']!='passed':
                 raise ValueError('Required sources missing: '+', '.join(found['missing']))
             return found
-        sources=stage('discover',probe)
-        report.update(history_start=sources['history_start'],data_end=sources['data_end'])
-        stage('build',lambda:execute(pipeline+['build','--run-id',run_id,
-            '--start',str(sources['history_start']),'--end',str(sources['data_end']),
-            '--data-config',str((folder/'data_config.json').resolve())],folder/'build.log',root))
-        dataset=Path(json.loads((folder/'dataset.json').read_text())['path'])
-        report['dataset']=str(dataset)
-        report['data_version']=load(dataset)['version']
-        stage('audit',lambda:execute(pipeline+['audit','--run-id',run_id],folder/'audit.log',root))
-        def resolve_plan():
-            resolved=available_splits(dataset,int(test_start),test_end)
-            write_json(folder/'walk_forward.json',resolved)
-            return resolved
-        plan=stage('plan',resolve_plan)
+        if resume_from:
+            from .resume import inspect_resume, verify_current_labels
+            source, previous, plan, dataset = stage('inspect_resume', lambda: inspect_resume(root,results_root,resume_from))
+            if config != json.loads((source/'data_config.json').read_text()):
+                raise ValueError('Resume data configuration changed')
+            if (research,ablations) != (previous['research'],previous['ablations']):
+                raise ValueError('Resume training budget changed')
+            stage('verify_labels',lambda:verify_current_labels(source,dataset))
+            report.update(resume_from=resume_from,test_start=previous.get('test_start',test_start),
+                requested_test_end=previous.get('requested_test_end'),history_start=previous['history_start'],
+                data_end=previous['data_end'],dataset=str(dataset),data_version=previous['data_version'])
+            write_json(folder/'dataset.json',{'path':str(dataset),'version':previous['data_version']})
+            write_json(folder/'walk_forward.json',plan)
+            stage('audit',lambda:execute(pipeline+['audit','--run-id',run_id],folder/'audit.log',root))
+        else:
+            sources=stage('discover',probe)
+            report.update(history_start=sources['history_start'],data_end=sources['data_end'])
+            stage('build',lambda:execute(pipeline+['build','--run-id',run_id,
+                '--start',str(sources['history_start']),'--end',str(sources['data_end']),
+                '--data-config',str((folder/'data_config.json').resolve())],folder/'build.log',root))
+            dataset=Path(json.loads((folder/'dataset.json').read_text())['path'])
+            report['dataset']=str(dataset)
+            report['data_version']=load(dataset)['version']
+            stage('audit',lambda:execute(pipeline+['audit','--run-id',run_id],folder/'audit.log',root))
+            def resolve_plan():
+                resolved=available_splits(dataset,int(test_start),test_end)
+                write_json(folder/'walk_forward.json',resolved)
+                return resolved
+            plan=stage('plan',resolve_plan)
         report['latest_mature_label']=plan['latest_mature_label']
         report['fold_count']=len(plan['folds'])
         from src.res.algo.nn.model.factor_sequence import MODELS
@@ -161,14 +183,30 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             child_id=f'{run_id}_f{index:03d}_{fold["test"][0]}'
             child=results_root/child_id
             report['fold_directories'].append(str(child))
+            split_path=folder/f'split_{index:03d}.json'
+            write_json(split_path,fold)
             args=['smoke','--run-id',child_id,'--dataset',str(dataset),
-                  '--test-start',str(fold['test'][0]),'--test-end',str(fold['test'][-1])]
+                  '--test-start',str(fold['test'][0]),'--test-end',str(fold['test'][-1]),
+                  '--expected-split',str(split_path)]
+            if training_email:
+                args+=['--training-email']
+                if recipient:
+                    args+=['--recipient',recipient]
             if research:
                 args+=['--research']
             if ablations:
                 args+=['--ablations']
-            stage(f'smoke_{index:03d}',lambda args=args,index=index:execute(
-                pipeline+args,folder/f'smoke_{index:03d}.log',root))
+            reused=False
+            if resume_from:
+                from .resume import copy_completed_fold
+                old_child=results_root/f'{resume_from}_f{index:03d}_{fold["test"][0]}'
+                reused=stage(f'reuse_{index:03d}',lambda:copy_completed_fold(
+                    root,old_child,child,fold,report['data_version'],research,ablations))
+                if reused:
+                    write_json(child/'dataset.json',{'path':str(dataset),'version':report['data_version']})
+            if not reused:
+                stage(f'smoke_{index:03d}',lambda args=args,index=index:execute(
+                    pipeline+args,folder/f'smoke_{index:03d}.log',root))
             stage(f'compare_{index:03d}',lambda child_id=child_id,index=index:execute(
                 pipeline+['compare','--run-id',child_id],folder/f'compare_{index:03d}.log',root))
         dates=[date for fold in plan['folds'] for date in fold['test']]
@@ -178,6 +216,18 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
     except BaseException:
         report.update(status='failed',error=traceback.format_exc())
     finally:
+        mail_states=[]
+        for child in report['fold_directories']:
+            path=Path(child)/'training/runs.json'
+            if path.exists():
+                try:
+                    for run in json.loads(path.read_text()):
+                        if 'mail' in run:
+                            mail_states.append({'name':run['name'],**run['mail']})
+                except (OSError,ValueError):
+                    mail_states.append({'status':'failed','error':traceback.format_exc(),'path':str(path)})
+        report['training_mail']=mail_states
+        report['training_mail_failed']=sum(s['status']=='failed' for s in mail_states)
         report['finished_at']=datetime.now(timezone.utc).isoformat()
         write_json(folder/'suite.json',report)
         print(f'[factor-sequence] results: {folder}',flush=True)
@@ -211,7 +261,7 @@ def report_package(folder):
 
 def send_result(folder, recipient=None):
     from src.proj import MACHINE
-    from src.proj.util.web.task_mail import TaskResultMail
+    from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     folder=Path(folder)
     report=json.loads((folder/'suite.json').read_text())
     if not MACHINE.emailable:
@@ -220,7 +270,14 @@ def send_result(folder, recipient=None):
         print('[factor-sequence] mail skipped: machine email disabled',flush=True)
         return state
     try:
-        package=report_package(folder)
+        if (folder/'mail/delivery.json').exists():
+            ok=retry_delivery(folder/'mail')
+            state={'status':'sent' if ok else 'failed','receipt':str(folder/'mail/delivery.json')}
+            write_json(folder/'mail_status.json',state)
+            return state
+        package=folder/'result_report.zip'
+        if not package.exists():
+            package=report_package(folder)
         failed=next((item['name'] for item in report['stages'] if item['status']=='failed'),None)
         body=(f"Factor-sequence verification: {report['status']}\n"
               f"Run: {report['run_id']}\nRequested OOS start: {report['test_start']}\n"
