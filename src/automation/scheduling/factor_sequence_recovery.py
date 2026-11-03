@@ -17,7 +17,7 @@ def original_inactive(report):
         check = row.get('process_check','unknown')
         if check == 'alive_matching_identity':
             return False
-        if check.startswith('unknown') and row.get('phase') not in ('complete','error','failed','done','completed','success','terminated','timed_out'):
+        if check.startswith('unknown') and row.get('phase') not in ('killed','cancelled','complete','error','failed','done','completed','success','terminated','timed_out'):
             raise RuntimeError('Original task liveness is unresolved')
     # Parent exit does not prove its pipeline subprocesses have exited.
     for proc in psutil.process_iter(['pid','uids','cmdline']):

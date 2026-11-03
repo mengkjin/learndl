@@ -11,7 +11,7 @@ def requests_dir():
     return PATH.lc_machine / 'factor_sequence' / 'requests'
 
 
-def submit(request_id, resume_from=None):
+def submit(request_id, resume_from=None, cleanup_legacy=False):
     if not re.fullmatch(r'[A-Za-z0-9_-]+', request_id):
         raise ValueError('Invalid request ID')
     if resume_from is not None and (not re.fullmatch(r'[A-Za-z0-9_-]+',resume_from) or resume_from==request_id):
@@ -19,6 +19,10 @@ def submit(request_id, resume_from=None):
     path = requests_dir() / f'{request_id}.json'
     path.parent.mkdir(parents=True, exist_ok=True)
     document = {'id': request_id, 'schema_version': 1}
+    if cleanup_legacy:
+        if resume_from:
+            raise ValueError('Cleanup requires a new suite, not legacy resume')
+        document.update(schema_version=3,cleanup_legacy=True)
     if resume_from:
         document.update(schema_version=2,resume_from=resume_from)
     try:
@@ -38,7 +42,8 @@ def observe(store):
         valid_v2=(set(doc)=={'id','schema_version','resume_from'} and doc['id']==path.stem
                   and doc['schema_version']==2 and isinstance(doc['resume_from'],str)
                   and re.fullmatch(r'[A-Za-z0-9_-]+',doc['resume_from']) and doc['resume_from']!=path.stem)
-        if not (valid_v1 or valid_v2):
+        valid_v3=doc=={'id':path.stem,'schema_version':3,'cleanup_legacy':True}
+        if not (valid_v1 or valid_v2 or valid_v3):
             raise ValueError(f'Invalid factor-sequence request: {path}')
         key = version(doc)
         if any(r.get('task_kind') == 'factor_sequence' and r['version'] == key
@@ -69,7 +74,10 @@ def execute(request, store):
             module = next(iter(dynamic_modules(script)))
             try:
                 resume_from=request.get('revisions',{}).get('resume_from')
-                if resume_from:
+                if request.get('revisions',{}).get('cleanup_legacy'):
+                    from .factor_sequence_restart import execute as restart
+                    restart(request['request_id'],module)
+                elif resume_from:
                     from .factor_sequence_recovery import recover
                     if recover(request['request_id'],resume_from,module)==75:
                         return 75

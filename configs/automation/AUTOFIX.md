@@ -372,3 +372,22 @@ factor_sequence 验证。确认前后核对 scheduler ID、PID、创建时间及
 根目录，ScriptTool 按整个 schedule 发信。原来的逐折邮件及 recovery 逐折补发停止使用。
 既有已启动进程不会因代码提交而切换执行方式；需停止旧任务并启动新的验证 ID。
 本次没有提交新的自动重训请求，也没有删除旧模型目录。
+
+## 删除旧逐折模型并顺序重训（2026-11-03）
+
+用户已通过 Monitor 停止旧训练并明确要求不保留旧模型，新增
+`20261103_factor_sequence_schedules_04`，`blocking: none`。autofix 只提交请求；
+宿主 idle worker 在共享训练插槽中确认旧 `_verify_01`、`_verify_02`、`_recover_03`
+不再运行，持有正常 NN 训练锁完成删除，再释放排他锁并启动新版验证。
+
+删除仅限 `PATH.model_nn` 直接子目录中符合三次旧 run ID、折编号、因子模型名称、
+配置与种子命名，并能与旧 `training/runs.json` 交叉核对的目录（含正常 @2 等重名编号）。
+无法核对、符号链接/挂载、目录身份变化、旧进程仍存活会阻止删除和训练；不使用宽泛
+`fs_*` 删除。模型文件永久删除，不备份；结果报告、数据块、其他模型及调度账本不删除。
+精确目录清单、每项删除进度和检查失败原因写在
+`results/factor_sequence_diagnostics/20261103_factor_sequence_schedules_04/cleanup.json`，并邮件报告。
+
+清理完成后以新 ID 验证 2017 年至最新成熟标签，按 MLP → GRU → M1 → M2 → Mask → Gate
+顺序调用正常 schedule 训练接口，各 3 epoch/历史周期、单种子，不加消融，不修改日常
+worklist。每个模型覆盖全部历史周期、共用一个根目录，训练记录和邮件沿用项目接口。
+清理失败不会启动训练；同一请求不自动重试，部分删除进度保留供诊断。

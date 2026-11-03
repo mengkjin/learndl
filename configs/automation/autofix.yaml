@@ -155,3 +155,12 @@ fixes:
       email: true
     timeout: 10m
     enabled: true
+  - id: 20261103_factor_sequence_schedules_04
+    description: 用户已停止旧训练；宿主核验退出后永久删除 _01/_02/_03 有运行记录的旧逐折 NN 模型目录，不备份，然后通过普通 schedule 接口顺序训练六模型，2017 年至最新成熟标签。
+    script: scripts/.autofix/restart_factor_sequence_schedules.py
+    blocking: none
+    params:
+      dry_run: false
+      email: true
+    timeout: 10m
+    enabled: true
