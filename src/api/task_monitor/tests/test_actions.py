@@ -38,6 +38,20 @@ class MonitorActionsTest(unittest.TestCase):
         self.item.kill.assert_not_called()
         self.db.get_task.assert_not_called()
 
+    def test_managed_training_uses_scheduler_group_stop(self):
+        identity={'pid':424242,'process_created':99,'cgroup':'/test'}
+        task=snapshot(task_id='managed:scheduler:one',managed_kind='scheduler',process_created=99)
+        with patch('src.automation.scheduling.operator_stop.prepare',return_value=identity) as prepare, \
+             patch('src.automation.scheduling.operator_stop.stop',return_value='Stop requested') as stop:
+            self.assertIsNone(kill_unavailable_reason(task))
+            target=prepare_kill(task)
+            self.assertEqual(target.managed_identity,identity)
+            self.assertEqual(kill_task(target).status,'success')
+            prepare.assert_called_once_with(task.task_id,424242,99)
+            stop.assert_called_once_with(task.task_id,identity)
+        self.db.get_task.assert_not_called()
+        self.item.kill.assert_not_called()
+
     def test_success_persists_operator_origin_and_binds_database(self):
         result = kill_task(self.target)
         self.assertEqual(result.status, 'success')

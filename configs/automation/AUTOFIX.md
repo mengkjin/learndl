@@ -359,3 +359,16 @@ restore the existing control state”模板；现对这类已排队和新产生�
 
 子阶段真实 stdout/stderr 同时写入折日志与受监督 worker 主日志，避免折内持续训练
 但主日志长期不更新而触发 inactivity timeout；不添加虚假 heartbeat，也不取消超时。
+
+## Monitor 停止与普通 schedule 因子训练（2026-11-03）
+
+Monitor 现支持 scheduler 受管进程组的 Kill 确认操作，包含 idle_worklist 启动的
+factor_sequence 验证。确认前后核对 scheduler ID、PID、创建时间及受管范围；先持久化
+停止意图并禁止该次执行自动恢复，再向整个验证过的进程组发送 TERM。watchdog 沿用
+30 秒后的 KILL 升级和退出核验；记录未清理，不影响其他任务。autofix 沙箱本身仍使用
+其专用生命周期控制，不能伪装成普通 PID kill。
+
+因子验证新入口已改成每个候选模型一次正常 schedule 训练，所有历史周期共用一个模型
+根目录，ScriptTool 按整个 schedule 发信。原来的逐折邮件及 recovery 逐折补发停止使用。
+既有已启动进程不会因代码提交而切换执行方式；需停止旧任务并启动新的验证 ID。
+本次没有提交新的自动重训请求，也没有删除旧模型目录。

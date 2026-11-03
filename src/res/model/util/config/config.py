@@ -224,7 +224,15 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             self.logger.alert1(f'Short test is enabled, will update conditional config' , vb = 1)
             self.Param.update(self.Param.get("conditional.short_test", {}))
 
+        schedule_scheduler=self.schedule_config.get('train.trainer.scheduler',{})
+        old_scheduler=self.Param.get('train.trainer.scheduler',{})
         self.Param.update(self.schedule_config.Param)
+        if schedule_scheduler.get('name') and schedule_scheduler['name']!=old_scheduler.get('name'):
+            prefix='train.trainer.scheduler'
+            for key in list(self.Param.flattened):
+                if key==prefix or key.startswith(prefix+'.'):
+                    del self.Param.flattened[key]
+            self.Param.update({prefix:schedule_scheduler},relevant_only=False)
         if self.model_module == "transformer":
             self.logger.alert1(f'Model module is transformer, will update conditional config' , vb = 1)
             self.Param.update(self.Param.get("conditional.transformer", {}))

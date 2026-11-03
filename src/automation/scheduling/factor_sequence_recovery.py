@@ -40,7 +40,6 @@ def recover(run_id, resume_from, module):
     from .factor_sequence_progress import collect
     from src.data.preprocess.factor_sequence.bundle import write_json
     from src.data.preprocess.factor_sequence.server_suite import send_result
-    from src.data.preprocess.factor_sequence.training_mail import send_training_result
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     diagnostic = PATH.result/'factor_sequence_diagnostics'/run_id/'host'
     diagnostic.mkdir(parents=True,exist_ok=True)
@@ -51,18 +50,7 @@ def recover(run_id, resume_from, module):
     source = PATH.result/'factor_sequence'/resume_from
     # Send whatever the original attempt actually produced before trying recovery.
     # Old attempts do not contain isolated model logs; label the shared fold log honestly.
-    mails=[]
-    for fold in report['folds']:
-        training=Path(fold['directory'])/'training'
-        path=training/'runs.json'
-        if not path.exists():
-            continue
-        index=int(training.parent.name.split('_f')[-1].split('_')[0])
-        for result in json.loads(path.read_text()):
-            if result['status']=='running':
-                result={**result,'status':'interrupted','error':'Host checked original task and its children are no longer running.'}
-            mails.append(send_training_result(training,result,
-                fallback_log=source/f'smoke_{index:03d}.log'))
+    mails=[]  # Legacy per-fold messages are never backfilled.
     summary=send_result(source)
     write_json(diagnostic/'mail_recovery.json',{'original_summary':summary,'training':mails})
     # Send progress regardless of whether the original suite can be resumed.
@@ -72,7 +60,7 @@ def recover(run_id, resume_from, module):
             delivered=retry_delivery(mail)
         else:
             delivered=TaskResultMail(mail)(f'Factor recovery {run_id}',
-                f"Original: {resume_from}; {report['assessment']}. Completed folds will be verified; incomplete folds restart.\n"
+                f"Original: {resume_from}; {report['assessment']}. Schedule models resume through the normal training interface; legacy per-fold runs require explicit migration.\n"
                 'Attached: scheduler/log evidence and original-result delivery receipts.',
                 attachments=[diagnostic/'progress.json',diagnostic/'mail_recovery.json'])
         diagnostic_mail={'status':'sent' if delivered else 'failed'}

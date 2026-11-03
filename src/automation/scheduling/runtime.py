@@ -228,6 +228,8 @@ def signal_members(run: dict, processes: list[psutil.Process], sig: signal.Signa
 
 
 def timeout_message(run: dict) -> str:
+    if run.get('operator_stop'):
+        return f"Stopped by {run['operator_stop']}; automatic recovery disabled"
     if run.get('installation_stop'):
         return f"Stopped for installation {run['installation_stop']}; automatic recovery disabled"
     limit = run.get('progress_timeout_seconds') or run.get('timeout_seconds')
@@ -317,7 +319,7 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                         })
                     run['phase'] = 'killed'
                     if run.get('owner') != 'idle_worklist':
-                        store.event(run, 'terminated', 'Timed out; verified session processes have exited.')
+                        store.event(run, 'terminated', timeout_message(run)+'; verified session processes have exited.')
                     store.put(run)
                 finish_idle_event(store, run, f'Process finished: {run["phase"]}; returncode={run.get("returncode", "unavailable (abnormal exit)")}.')
                 continue

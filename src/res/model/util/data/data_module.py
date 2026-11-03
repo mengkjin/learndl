@@ -185,6 +185,11 @@ class DataModule(Base.BoundLogger):
             else:
                 self.model_date_list = dates[::self.config.interval]
 
+        folds=self.config.Param.get('train.factor_sequence.folds',[])
+        if folds and self.use_data != 'predict':
+            from .factor_sequence_plan import validate_folds
+            self.model_date_list,self.test_full_dates=validate_folds(folds,dates)
+
     def ensure_hidden_values(self):
         """
         ensure the hidden block dates of the current model date are loaded
@@ -593,9 +598,17 @@ class DataModule(Base.BoundLogger):
         if effective is None: 
             effective = torch.ones(y.shape[:2] , dtype=torch.bool , device=y.device)
         index0, index1 = torch.arange(len(effective)) , self.step_idx
-        if 'factorseq' in x and self.stage == 'fit' and self.config.Param.get('train.factor_sequence.train_dates'):
-            tr = self.config.Param['train.factor_sequence.train_dates']
-            va = self.config.Param['train.factor_sequence.valid_dates']
+        folds=self.config.Param.get('train.factor_sequence.folds',[])
+        explicit=None
+        if 'factorseq' in x and self.stage == 'fit':
+            if folds:
+                from .factor_sequence_plan import select_fold
+                explicit=select_fold(folds,self.model_date)
+            elif self.config.Param.get('train.factor_sequence.train_dates'):
+                explicit={key:self.config.Param[f'train.factor_sequence.{key}_dates'] for key in ('train','valid')}
+        if explicit is not None:
+            tr = explicit['train']
+            va = explicit['valid']
             horizon = self.config.Param.get('train.dataloader.purge_horizon', 0)
             if not va or int(CALENDAR.td(max(tr), horizon)) >= min(va):
                 raise ValueError('Factor sequence train labels cross the validation boundary')
@@ -603,7 +616,7 @@ class DataModule(Base.BoundLogger):
                 raise ValueError('Factor sequence validation labels cross the test boundary')
             sample_index = {}
             for group in ('train', 'valid'):
-                wanted = set(self.config.Param[f'train.factor_sequence.{group}_dates'])
+                wanted = set(explicit[group])
                 available = {int(self.y_date[int(t)]) for t in index1}
                 if not wanted <= available:
                     raise ValueError(f'Explicit {group} dates are absent from the loaded window')

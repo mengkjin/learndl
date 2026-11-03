@@ -20,6 +20,7 @@ class KillTarget:
     process_created: float
     script: str
     started: float
+    managed_identity: dict | None = None
 
 
 @dataclass(frozen=True)
@@ -29,8 +30,8 @@ class KillResult:
 
 
 def kill_unavailable_reason(task: TaskSnapshot) -> str | None:
-    if task.managed_kind is not None:
-        return 'Managed process group: use its scheduler lifecycle controls; ordinary task kill is unavailable.'
+    if task.managed_kind is not None and task.managed_kind != 'scheduler':
+        return 'This managed task type requires its scheduler stop control.'
     if not task.is_active:
         return 'This task has finished.'
     if not task.pid or task.pid <= 0:
@@ -52,6 +53,10 @@ def prepare_kill(task: TaskSnapshot) -> KillTarget:
     if reason := kill_unavailable_reason(task):
         raise ValueError(reason)
     assert task.pid is not None
+    if task.managed_kind == 'scheduler':
+        from src.automation.scheduling.operator_stop import prepare
+        identity=prepare(task.task_id,task.pid,task.process_created)
+        return KillTarget(task.task_id,task.pid,task.process_created,task.script,task.effective_start,identity)
     return KillTarget(task.task_id, task.pid, psutil.Process(task.pid).create_time(),
                       task.script, task.effective_start)
 
@@ -61,6 +66,11 @@ def kill_task(target: KillTarget) -> KillResult:
     if target.pid <= 0 or target.pid == os.getpid():
         return KillResult('invalid', 'Invalid target or Monitor process; kill skipped.')
     try:
+        if target.managed_identity is not None:
+            from src.automation.scheduling.operator_stop import stop
+            return KillResult('success',stop(target.task_id,target.managed_identity))
+        if target.task_id.startswith('managed:'):
+            return KillResult('invalid','Managed task requires a confirmed group identity.')
         db = TaskDatabase()
         current = db.get_task(target.task_id)
         if current is None or current.id != target.task_id or not current.is_running or current.pid != target.pid:

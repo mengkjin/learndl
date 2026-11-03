@@ -143,3 +143,21 @@ MPLCONFIGDIR=/tmp/learndl-factorseq-mpl .venv/bin/python -m unittest discover -s
 
 人工数据仅用于离线测试，不用于宣称真实 build/audit/smoke/compare 通过。
 首次执行的实测状态及环境限制记录于同目录 `validation.md`。
+
+### 普通 schedule 训练入口（2026-11-03）
+
+服务器验证按候选模型而非按折启动 `scripts/4_train/2_schedule_model.py`。
+每个模型配置（包含 seed/消融配置）仅创建一个普通模型根目录；历史周期由同一次
+`ModelTrainer.schedule` 调用滚动执行，权重保存在该目录原有日期/模型编号子目录中。
+六个默认候选对应六项正常训练任务、六份整段历史训练邮件，记录和通知由原有
+ScriptTool/AutoRunTask 管理。验证结束仍保留跨模型比较报告。
+
+生成的 schedule 放在 `.local_resources/shared/schedule_model/`（以项目 PATH.sched_shared
+配置为准），同时保存到实验 `models/<schedule_name>/schedule.yaml`；后续可从正常
+Schedule Model 界面训练或 resume。原模型日期和训练/验证清除后的日期列表通过
+`train.factor_sequence.folds` 交给普通训练器；空配置不改变原有模型行为。
+失败恢复使用原 schedule 与明确的模型根目录，不再按折创建新模型。
+
+旧版逐折实验不能自动改写成新目录结构。旧目录、结果、回执保留，禁止静默搬移或
+把旧折模型当成普通 schedule 的完整模型。停止旧任务后用新的 run ID 执行新版验证；
+不要继续使用旧 recovery 请求来启动旧的逐折循环。底层 smoke 的逐折邮件入口已关闭。

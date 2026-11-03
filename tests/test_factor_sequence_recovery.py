@@ -100,27 +100,16 @@ class RecoveryTests(unittest.TestCase):
                 with self.assertRaises(AssertionError):
                     resume.copy_completed_fold(ROOT,source,root/'bad',split,'v',False,False)
 
-    def test_resume_uses_frozen_dataset_and_plan_not_discovery(self):
+    def test_legacy_resume_refuses_silent_directory_migration(self):
         config=ROOT/'configs/experience/model/factor_sequence/data.json'
         with TemporaryDirectory() as tmp:
-            results=Path(tmp);source=results/'old';source.mkdir()
-            (source/'data_config.json').write_text(config.read_text())
-            previous={'research':False,'ablations':False,'history_start':20110104,'data_end':20261030,'data_version':'v'}
-            plan={'latest_mature_label':20260723,'folds':[{'train':[1],'valid':[2],'test':[3]}]}
-            with patch.object(server_suite,'execute') as execute, \
-                 patch.object(server_suite,'discover',side_effect=AssertionError('must not rediscover')), \
-                 patch('src.data.preprocess.factor_sequence.resume.inspect_resume',return_value=(source,previous,plan,results/'data')), \
-                 patch('src.data.preprocess.factor_sequence.resume.copy_completed_fold',return_value=True), \
-                 patch.object(server_suite,'aggregate',return_value=[{}]):
-                # Stand-in reuse must create the child directory as the real helper does.
-                def child(command,*args):
-                    if 'audit' in command:
-                        (results/'new_f000_3').mkdir()
-                execute.side_effect=child
-                folder,report=server_suite.run_suite(ROOT,results,'new',config,resume_from='old')
-                self.assertEqual(report['status'],'passed',report.get('error'))
-                self.assertEqual(json.loads((folder/'walk_forward.json').read_text()),plan)
-                self.assertFalse(any('smoke' in c.args[0] for c in execute.call_args_list))
+            source=Path(tmp)/'old';source.mkdir()
+            write_json(source/'suite.json',{'status':'failed'})
+            with patch.object(server_suite,'execute') as execute:
+                folder,report=server_suite.run_suite(ROOT,tmp,'new',config,resume_from='old')
+            self.assertEqual(report['status'],'failed')
+            self.assertIn('Legacy per-fold',report['error'])
+            self.assertEqual(execute.call_count,1) # Offline only, no model training.
 
     def test_host_checks_liveness_and_mail_failure_does_not_prevent_resume(self):
         from src.automation.scheduling import factor_sequence_recovery as recovery

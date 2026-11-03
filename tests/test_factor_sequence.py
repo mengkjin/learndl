@@ -428,28 +428,29 @@ class ServerSuiteTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root=Path(__file__).resolve().parents[1];results=Path(tmp)
             dataset=results/'data';dataset.mkdir()
+            calls=[]
             def child(command,log,workdir):
-                Path(log).write_text('mocked child; no real training')
+                calls.append(command)
+                Path(log).write_text('mocked child')
                 if 'build' in command:
                     write_json(results/'success/dataset.json',{'path':str(dataset)})
-                    self.assertEqual(command[command.index('--start')+1],'20050104')
-                if 'compare' in command:
-                    run_id=command[command.index('--run-id')+1]
-                    training=results/run_id/'training';training.mkdir(parents=True)
-                    write_json(training/'runs.json',[dict(name='m',model='factorseq_gate',seed=17,status='passed')])
-                    pd.DataFrame(dict(date=[20170103],rank_ic=[.1],top_decile_10d_excess=[.02],n=[60])).to_csv(
-                        training/'m_daily.csv',index=False)
+                if '--model' in command:
+                    model=command[command.index('--model')+1]
+                    output=results/'success/models'/model;output.mkdir(parents=True)
+                    write_json(output/'run.json',dict(model=model,seed=17,variant={},status='passed'))
             plan=dict(latest_mature_label=20170103,folds=[dict(train=[20150105],valid=[20161003],test=[20170103])])
             with patch.object(suite,'execute',side_effect=child), \
                  patch.object(suite,'discover',return_value=dict(status='passed',history_start=20050104,data_end=20170120)), \
                  patch.object(suite,'load',return_value={'version':'test'}), \
-                 patch.object(suite,'available_splits',return_value=plan) as split:
+                 patch.object(suite,'available_splits',return_value=plan) as split, \
+                 patch('src.data.preprocess.factor_sequence.schedule_training.export_folds',return_value=[]), \
+                 patch.object(suite,'aggregate',return_value=[{}]):
                 folder,report=suite.run_suite(root,results,'success',root/'configs/experience/model/factor_sequence/data.json')
-            self.assertEqual(report['status'],'passed')
-            self.assertEqual([v['name'] for v in report['stages']],
-                ['offline','discover','build','audit','plan','smoke_000','compare_000','compare_all'])
+            self.assertEqual(report['status'],'passed',report.get('error'))
+            self.assertEqual(report['schedule_tasks'],6)
+            self.assertEqual(sum('--model' in command for command in calls),6)
+            self.assertFalse(any('smoke' in command for command in calls))
             split.assert_called_once_with(dataset,20170101,None)
-            self.assertEqual(json.loads((folder/'suite.json').read_text())['actual_test_start'],20170103)
 
     def test_mail_packaging_without_sending(self):
         from src.data.preprocess.factor_sequence import server_suite as suite

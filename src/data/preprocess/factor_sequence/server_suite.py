@@ -107,7 +107,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
     folder.mkdir(parents=True,exist_ok=False)
     report={'status':'running','run_id':run_id,'started_at':datetime.now(timezone.utc).isoformat(),
             'test_start':int(test_start),'requested_test_end':test_end,'research':research,
-            'ablations':ablations,'stages':[],'fold_directories':[],
+            'ablations':ablations,'execution_mode':'schedule_model','stages':[],'fold_directories':[],
             'interpretation':'Research run' if research else 'Pipeline verification; not model-selection evidence'}
     write_json(folder/'suite.json',report)
     def stage(name, action):
@@ -147,6 +147,9 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
                 raise ValueError('Required sources missing: '+', '.join(found['missing']))
             return found
         if resume_from:
+            previous_mode=json.loads((results_root/resume_from/'suite.json').read_text()).get('execution_mode')
+            if previous_mode!='schedule_model':
+                raise ValueError('Legacy per-fold runs cannot resume as a single model directory. Preserve old artifacts and start a new schedule-model suite.')
             from .resume import inspect_resume, verify_current_labels
             source, previous, plan, dataset = stage('inspect_resume', lambda: inspect_resume(root,results_root,resume_from))
             if config != json.loads((source/'data_config.json').read_text()):
@@ -177,38 +180,34 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             plan=stage('plan',resolve_plan)
         report['latest_mature_label']=plan['latest_mature_label']
         report['fold_count']=len(plan['folds'])
-        from src.res.algo.nn.model.factor_sequence import MODELS
-        report['requested_training_runs']=len(plan['folds'])*(len(MODELS)+(3 if ablations else 0))*(3 if research else 1)
-        for index,fold in enumerate(plan['folds']):
-            child_id=f'{run_id}_f{index:03d}_{fold["test"][0]}'
-            child=results_root/child_id
-            report['fold_directories'].append(str(child))
-            split_path=folder/f'split_{index:03d}.json'
-            write_json(split_path,fold)
-            args=['smoke','--run-id',child_id,'--dataset',str(dataset),
-                  '--test-start',str(fold['test'][0]),'--test-end',str(fold['test'][-1]),
-                  '--expected-split',str(split_path)]
-            if training_email:
-                args+=['--training-email']
+        from .schedule_training import variants, export_folds
+        candidates=variants(ablations)
+        seeds=(17,29,43) if research else (17,)
+        report['requested_training_runs']=len(plan['folds'])*len(candidates)*len(seeds)
+        report['schedule_tasks']=len(candidates)*len(seeds)
+        results=[]
+        for model,variant in candidates:
+            for seed in seeds:
+                suffix='_'.join(variant) if variant else 'full'
+                key=f'{model}_{suffix}_{seed}'
+                command=[sys.executable,'-m','src.data.preprocess.factor_sequence.schedule_training',
+                    '--dataset',str(dataset),'--suite',str(folder),'--model',model,
+                    '--seed',str(seed),'--variant',json.dumps(variant)]
+                if research:
+                    command+=['--research']
+                if not training_email:
+                    command+=['--no-email']
                 if recipient:
-                    args+=['--recipient',recipient]
-            if research:
-                args+=['--research']
-            if ablations:
-                args+=['--ablations']
-            reused=False
-            if resume_from:
-                from .resume import copy_completed_fold
-                old_child=results_root/f'{resume_from}_f{index:03d}_{fold["test"][0]}'
-                reused=stage(f'reuse_{index:03d}',lambda:copy_completed_fold(
-                    root,old_child,child,fold,report['data_version'],research,ablations))
-                if reused:
-                    write_json(child/'dataset.json',{'path':str(dataset),'version':report['data_version']})
-            if not reused:
-                stage(f'smoke_{index:03d}',lambda args=args,index=index:execute(
-                    pipeline+args,folder/f'smoke_{index:03d}.log',root))
-            stage(f'compare_{index:03d}',lambda child_id=child_id,index=index:execute(
-                pipeline+['compare','--run-id',child_id],folder/f'compare_{index:03d}.log',root))
+                    command+=['--recipient',recipient]
+                if resume_from:
+                    command+=['--resume-suite',str(results_root/resume_from)]
+                stage(f'schedule_{key}',lambda command=command,key=key:execute(command,folder/f'{key}.log',root))
+                candidates_found=[json.loads(p.read_text()) for p in (folder/'models').glob('*/run.json')]
+                matches=[r for r in candidates_found if (r['model'],r['seed'],r['variant'])==(model,seed,variant)]
+                if len(matches)!=1 or matches[0]['status']!='passed':
+                    raise ValueError('Missing successful ordinary schedule result')
+                results.append(matches[0])
+        report['fold_directories']=stage('export_folds',lambda:export_folds(dataset,folder,plan,results))
         dates=[date for fold in plan['folds'] for date in fold['test']]
         summaries=stage('compare_all',lambda:aggregate(report['fold_directories'],folder,dates))
         report.update(status='passed',models=len(summaries),test_dates=len(dates),
@@ -250,6 +249,9 @@ def report_package(folder):
                 path=child/name
                 if path.exists():
                     archive.write(path,f'fold_{index:03d}/{name}')
+        for path in (folder/'models').glob('*/*'):
+            if path.name in {'run.json','schedule.yaml'}:
+                archive.write(path,str(path.relative_to(folder)))
         dataset=report.get('dataset')
         if dataset:
             for name in ('audit.json','coverage.csv','manifest.json'):

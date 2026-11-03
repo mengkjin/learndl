@@ -140,6 +140,8 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
     from src.data import DATAVENDOR
     from src.res.model.model_module.application.trainer import ModelTrainer
     from src.res.algo.nn.model.factor_sequence import CATALOG, MODELS
+    if training_email:
+        raise ValueError('Per-fold email is retired; use the ordinary schedule suite for model-level mail')
     manifest=load(dataset)
     if not (Path(dataset)/'audit.json').exists():
         raise ValueError('Run audit before smoke')
@@ -214,7 +216,7 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
             card.update(status='running',run_id=folder.parent.name,name=name,results='runs.json')
             runs.append(result)
             write_json(folder/'runs.json',runs)
-            from .training_mail import capture_log, send_training_result
+            from .training_mail import capture_log
             log_path=folder/f'{name}.log'
             result['log_path']=str(log_path)
             capture=capture_log(log_path)
@@ -248,9 +250,6 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
                 # Config may contain pathlib objects; serialize a stable textual snapshot.
                 (folder/'runs.json').write_text(json.dumps(runs,ensure_ascii=False,indent=2,default=str))
                 (folder/f'{name}.json').write_text(json.dumps(result,ensure_ascii=False,indent=2,default=str))
-                if training_email:
-                    result['mail']=send_training_result(folder,result,recipient)
-                    (folder/'runs.json').write_text(json.dumps(runs,ensure_ascii=False,indent=2,default=str))
     return {'status':'passed','runs':len(runs),'interpretation':'Pipeline verification only' if not research else 'Research comparison'}
 
 

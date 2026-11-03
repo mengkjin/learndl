@@ -350,7 +350,8 @@ def _queue_kill(checkbox_key: str) -> None:
 
 @st.dialog('Kill running script?', on_dismiss=_clear_kill)
 def _confirm_kill(target: KillTarget, token: str) -> None:
-    st.warning('This will terminate the selected script process.')
+    st.warning('This will stop the entire watchdog process group and disable its automatic recovery.'
+               if target.managed_identity is not None else 'This will terminate the selected script process.')
     st.write(target.script)
     st.caption(f'Task ID: {target.task_id} · PID: {target.pid} · Started: {_time(target.started)}')
     busy = st.session_state.get('monitor-kill-busy', False)
