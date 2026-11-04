@@ -432,6 +432,8 @@ def _channel_worker(store):
             return worker_observation(store, outcome['phase'], outcome.get('error', ''),
                                       code=int(outcome['phase'] != 'success'), task_id=row['id'])
     except (MaintenanceBusy, portalocker.LockException) as exc:
+        from .maintenance_notice import record_failure
+        record_failure(store, owner, exc)
         return worker_observation(store, 'waiting', str(exc))
 
 

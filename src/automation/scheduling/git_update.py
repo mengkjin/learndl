@@ -309,6 +309,8 @@ def _channel_update(root, options):
                         channels.release(store, 'git')
                     return result
         except (portalocker.LockException, MaintenanceBusy) as exc:
+            from .maintenance_notice import record_failure
+            record_failure(store, 'git', exc)
             return {'status': 'deferred', 'reason': str(exc) or 'code users still active'}
         finally:
             atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))

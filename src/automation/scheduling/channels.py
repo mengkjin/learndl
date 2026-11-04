@@ -67,7 +67,8 @@ def _expire(store, state, now):
                      reason='Maintenance admission timed out after one hour', expired_at=now)
         if now - state.get('notified_at', 0) >= 86400:
             from .auxiliary import control_error
-            control_error(RuntimeError(f"{state['owner']}: {state['reason']} (request {state['requested_at']})"))
+            from .maintenance_notice import PREFIX, capture
+            control_error(RuntimeError(PREFIX + json.dumps(capture(state))))
             state['notified_at'] = now
     if state.get('phase') == 'cooldown' and now >= state['cooldown_until']:
         state = dict(state, phase='waiting', deadline=now + WAIT_SECONDS)

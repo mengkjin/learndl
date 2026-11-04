@@ -114,12 +114,26 @@ def deliver(sender) -> bool:
         delivery = f'install:{row["id"]}:{row["phase"]}'
         if waiting_notice:
             delivery += ':' + str(int(time.time() // 86400))
+        extra = ''
+        files = []
+        if waiting_notice:
+            from .maintenance_notice import capture, render
+            if not row.get('waiting_snapshot') or row.get('waiting_notified_at', 0) >= row['waiting_snapshot']['captured_at']:
+                row['waiting_snapshot'] = capture(dict(row, owner='installation'))
+                with lock():
+                    latest = current()
+                    if latest.get('id') == row['id'] and latest.get('phase') == 'waiting':
+                        latest['waiting_snapshot'] = row['waiting_snapshot']
+                        save(latest)
+            extra = render(row['waiting_snapshot'])[1]
+            from .maintenance_notice import attachment
+            files = attachment(row['waiting_snapshot'])
         try:
             sent = sender(f'Watchdog installation - {row["phase"]}',
                           f'Request: {row["id"]}\nStatus: {row["phase"]}\n{row.get("reason", "")}\n'
-                          f'Service: {row.get("unit", "")}\n',
+                          f'Service: {row.get("unit", "")}\n' + extra,
                           confirmation_message='Learndl installation notification', queue_on_failure=False,
-                          delivery_id=delivery)
+                          delivery_id=delivery, attachments=files)
         except Exception:
             sent = False
         if sent:

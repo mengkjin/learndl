@@ -370,6 +370,11 @@ def worker(bundle: Path) -> int:
                         requests.finish(row, 'success', 'Approved installation completed')
                 break
         except MaintenanceBusy as exc:
+            with requests.lock():
+                current = requests.current()
+                if current.get('id') == identifier:
+                    current['last_failure'] = str(exc)
+                    requests.save(current)
             if approval.get('force') and (requests.current().get('phase') != 'draining' or
                     force_deadline is None or time.monotonic() >= force_deadline):
                 with requests.lock():

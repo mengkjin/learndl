@@ -41,6 +41,9 @@ def control_error(exc):
 
 def control_notice(detail):
     """Render legacy queued admission timeouts separately from control corruption."""
+    from .maintenance_notice import PREFIX, render
+    if detail.startswith('RuntimeError: ' + PREFIX):
+        return render(json.loads(detail[len('RuntimeError: ' + PREFIX):]))
     if re.fullmatch(r'RuntimeError: .+: Maintenance admission timed out after one hour \(request [0-9.]+\)', detail):
         return ('Maintenance admission delayed',
                 'A maintenance request waited one hour without obtaining admission.\n'
@@ -90,8 +93,10 @@ def deliver(context, sender):
     for key, detail in errors:
         try:
             title, body = control_notice(detail)
+            from .maintenance_notice import PREFIX, attachment
+            files = attachment(json.loads(detail[len('RuntimeError: ' + PREFIX):])) if detail.startswith('RuntimeError: ' + PREFIX) else []
             if sender(title, body,
-                      queue_on_failure=False, delivery_id='autofix-control:' + key):
+                      attachments=files, queue_on_failure=False, delivery_id='autofix-control:' + key):
                 with queue() as db:
                     db.execute('UPDATE errors SET sent=1 WHERE id=?', (key,))
         except Exception as exc:

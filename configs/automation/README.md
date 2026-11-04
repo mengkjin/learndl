@@ -559,3 +559,16 @@ bash runs/install_schedules.sh force --host mengkjin-server   # 预览、确认�
 
 本机验证：`python -m unittest discover -s src/automation/tests`。
 Linux 验收使用上文 `LEARNDL_SYSTEMD_ACCEPTANCE=1` 命令；本机测试通过不代表已经部署或完成 Linux 隔离验收。
+
+
+### Maintenance delay diagnostics
+
+New Git, blocking-autofix and installation delay notices use English evidence snapshots.
+They identify the waiting operation, UTC observation/wait/start times, elapsed durations,
+last admission failure, and matching managed task identities/log paths. Active tasks are
+explicitly labelled candidates, not proven lock owners. PID creation time is checked;
+a dead root does not imply all descendants have exited. Missing/unreadable ledgers are
+reported without creating or repairing them. Collection has a two-second query/iteration
+budget and a 100-record cap; the body shows ten candidates, with larger snapshots attached
+as JSON. SMTP retries retain the captured observation rather than attributing historical
+blocking to newly running tasks. Legacy queued notices retain their original limited detail.
