@@ -90,6 +90,45 @@ class RestartTests(unittest.TestCase):
             with patch('src.automation.scheduling.runtime.members',return_value=[]):
                 restart.check_managed_scopes('old',tmp)
 
+    def test_historical_shared_service_uses_original_session(self):
+        import sqlite3
+        import psutil
+        from src.automation.scheduling import runtime
+        with TemporaryDirectory() as tmp:
+            row=dict(request_id='old',task_kind='factor_sequence',pid=123,
+                     process_created=100,uid=1000,
+                     cgroup='/system.slice/learndl-idle-worklist.service')
+            with sqlite3.connect(Path(tmp)/'runs.sqlite') as conn:
+                conn.execute('CREATE TABLE runs(data TEXT)')
+                conn.execute('INSERT INTO runs VALUES (?)',(json.dumps(row),))
+            current=Mock(pid=456)
+            current.create_time.return_value=200
+            current.uids.return_value=Mock(real=1000)
+            current.status.return_value=psutil.STATUS_RUNNING
+            with patch.object(runtime,'previous_boot',return_value=False), \
+                 patch.object(runtime.psutil,'Process',side_effect=psutil.NoSuchProcess(123)), \
+                 patch.object(runtime.psutil,'process_iter',return_value=[current]), \
+                 patch.object(runtime,'process_cgroup',return_value=row['cgroup']), \
+                 patch.object(runtime.os,'getsid',return_value=456) as sid:
+                # Later worker shares the service, but not the old session.
+                restart.check_managed_scopes('old',tmp)
+                # A genuine surviving child still blocks after its root exits.
+                sid.return_value=123
+                with self.assertRaisesRegex(RuntimeError,'still has members'):
+                    restart.check_managed_scopes('old',tmp)
+
+    def test_dedicated_cgroup_is_preserved(self):
+        import sqlite3
+        with TemporaryDirectory() as tmp:
+            row=dict(request_id='old',task_kind='factor_sequence',pid=123,
+                     cgroup='/system.slice/task-specific.scope')
+            with sqlite3.connect(Path(tmp)/'runs.sqlite') as conn:
+                conn.execute('CREATE TABLE runs(data TEXT)')
+                conn.execute('INSERT INTO runs VALUES (?)',(json.dumps(row),))
+            with patch('src.automation.scheduling.runtime.members',return_value=[]) as members:
+                restart.check_managed_scopes('old',tmp)
+            members.assert_called_once_with(row)
+
     def test_cleanup_precedes_one_new_six_model_suite(self):
         from contextlib import nullcontext
         with TemporaryDirectory() as tmp:

@@ -92,7 +92,14 @@ def check_managed_scopes(run_id, runtime):
         raise RuntimeError(f'Missing managed scope identity for {run_id}')
     for raw, in rows:
         row=json.loads(raw)
-        if row.get('pid') and members(row):
+        # idle_worklist starts each task with start_new_session=True, but its
+        # service cgroup is reused by later invocations. Historical checks must
+        # not mistake this cleanup worker for a surviving original child.
+        scope=dict(row)
+        if (scope.get('cgroup') or '').endswith('/learndl-idle-worklist.service'):
+            scope.pop('cgroup')
+        remaining=members(scope) if scope.get('pid') else []
+        if remaining:
             raise RuntimeError(f'Original managed process group still has members: {run_id}')
 
 
