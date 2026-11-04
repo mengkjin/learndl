@@ -1,7 +1,5 @@
 fit:
-  - gru_day_new
-  - gru_15m_0
-  - gru_15m_1
+  - gru_gru_15m
 
 resume: False
 force: False

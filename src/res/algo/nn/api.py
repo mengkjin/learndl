@@ -45,6 +45,7 @@ AVAILABLE_NNS = {
     'astgnn'            : Model.gnn.Astgnn,
     'astgnn_legacy'     : Model.gnn.AstgnnLegacy,
     'resnet_gru'        : Model.resnet_gru.resnet_gru,
+    'gru_gru'           : Model.resnet_gru.gru_gru,
     'transformer_gru'   : Model.transformer_gru.transformer_gru,
     'resnet_transformer': Model.resnet_transformer.resnet_transformer,
     'resnet_mlp'        : Model.resnet_mlp.resnet_mlp,

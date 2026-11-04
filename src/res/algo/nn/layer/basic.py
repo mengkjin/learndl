@@ -110,3 +110,42 @@ class Parallel(nn.Module):
             else:
                 output = torch.cat(output , dim = -1)
         return output
+
+
+class OutputLayer(nn.Module):
+    """Output layer.
+
+    Args:
+        hidden_dim: Hidden dimension.
+        hidden_as_factors: Whether to use batch norm after the hidden layer.
+        hidden_mean_pool: Whether to use mean pooling after the hidden layer.
+        output_as_factors: Whether to use batch norm after the output layer.
+
+    Returns:
+        Tuple of hidden state and output.
+            x: Hidden state.
+            o: Output.
+    """
+    def __init__(
+        self, 
+        hidden_dim : int, 
+        hidden_as_factors : bool = True, 
+        hidden_mean_pool : bool = False, 
+        output_as_factors : bool = True,
+        **kwargs
+    ):
+        super().__init__()
+        self.fc_hid_out = nn.Sequential(nn.Linear(hidden_dim , hidden_dim))
+        if hidden_as_factors:
+            self.fc_hid_out.append(nn.BatchNorm1d(hidden_dim)) 
+        if hidden_mean_pool:
+            self.fc_map_out = nn.Sequential(MeanPool())
+        else:
+            self.fc_map_out = nn.Sequential(nn.Linear(hidden_dim , 1))
+        if output_as_factors:
+            self.fc_map_out.append(nn.BatchNorm1d(1))
+
+    def forward(self, x : Tensor) -> tuple[Tensor,Tensor]:
+        x = self.fc_hid_out(x)
+        o = self.fc_map_out(x)
+        return x, o

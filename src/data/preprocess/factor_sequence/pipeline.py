@@ -281,7 +281,8 @@ def compare(folder):
             ic=good.pred.corr(good.label,method='spearman') if good.pred.nunique()>1 and good.label.nunique()>1 else np.nan
             available=good.loc[np.isfinite(good['return'])]
             # np.floor preserves the pandas Series: use upper, not ndarray max.
-            group=np.floor((available.pred.rank(method='average')-.5)*10/max(len(available),1)).clip(upper=9)
+            group = (available.pred.rank(method='average')-.5)*10/max(len(available),1)
+            group = np.floor(group.clip(upper=9))
             top=available.loc[group == 9]
             excess=float(top['return'].mean()-available['return'].mean()) if len(top) else np.nan
             daily.append({'date':int(np.asarray(date).item()),'rank_ic':ic,'top_decile_10d_excess':excess,'n':len(good)})
