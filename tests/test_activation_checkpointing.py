@@ -33,6 +33,8 @@ from src.res.model.util.trainer.base_trainer import BaseTrainer
 from src.res.model.util.trainer.future_utils import FutureUtils
 from src.res.model.util.trainer.status import TrainerStatus
 from src.res.model.util.config import ModelConfig
+from src.res.model.util.config.config import BaseModelConfig, ScheduleConfig
+from src.res.model.util.core import ModelPath
 from src.res.model.util.trainer.base_callback import BaseCallBack
 from src.res.model.util.trainer.predictor_model import PredictorModel
 from src.res.model.util.storage.checkpoint import Checkpoint
@@ -249,6 +251,57 @@ class RegionTests(unittest.TestCase):
 
 
 class CallbackTests(unittest.TestCase):
+    def test_resume_loads_current_activation_setting_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            saved_schedule = root / 'schedule.yaml'
+            saved_schedule.write_text('model.module: gru_gru\nmodel.window: 2400\n')
+            current = root / 'current.yaml'
+            saved = BaseModelConfig.REQUIRED_CONFIG_PARAM.combine_with(BaseModelConfig.OPTIONAL_CONFIG_PARAM)
+            del saved.flattened['callbacks.ActivationCheckpointing']
+            saved['train.callbacks'] = []
+            saved['model.module'] = 'nn@gru_gru'
+            saved['model.name'] = 'gru_gru_15m'
+            saved['env.short_test'] = False
+            saved.dump_yaml(root / 'model.yaml')
+
+            def find_schedule(base_path=None, name=None):
+                return saved_schedule if base_path else current
+
+            with patch.object(ModelPath, 'conf_file', side_effect=lambda key: root / f'{key}.yaml'), \
+                    patch.object(ScheduleConfig, 'find_path', side_effect=find_schedule):
+                for enabled, override in ((True, {}), (False, {}),
+                                          (True, {'callbacks.ActivationCheckpointing': {'enabled': False}})):
+                    with self.subTest(enabled=enabled, override=override):
+                        current.write_text(yaml.safe_dump({
+                            'model.module': 'gru_gru', 'model.window': 100,
+                            'callbacks': {'ActivationCheckpointing': {'enabled': enabled}},
+                            'algo': {'gru_gru': {'hidden_dim': [8]}},
+                        }))
+                        config = ModelConfig('nn@gru_gru@gru_gru_15m', schedule_name='gru_gru_15m',
+                                             resume=1, override={'env.short_test': False} | override,
+                                             vb_level='never')
+                        expected = enabled and not override
+                        self.assertEqual(config.callback_kwargs['ActivationCheckpointing']['enabled'], expected)
+                        self.assertEqual(config.model_config['model.window'], 2400)
+                        self.assertNotIn('algo.gru_gru.hidden_dim', config.schedule_config.Param)
+                        manager = ConsolidateCallBack(config)
+                        self.assertEqual([type(cb).__name__ for cb in manager.callbacks],
+                                         ['ActivationCheckpointing'] if expected else [])
+                config = ModelConfig('nn@gru_gru@gru_gru_15m', resume=1,
+                                     override={'env.short_test': False}, vb_level='never')
+                self.assertNotIn('ActivationCheckpointing', config.callback_kwargs)
+                # With no current opt-in, old configs remain disabled.
+                current.write_text('model.module: gru_gru\n')
+                config = ModelConfig('nn@gru_gru@gru_gru_15m', schedule_name='gru_gru_15m', resume=1,
+                                     override={'env.short_test': False}, vb_level='never')
+                self.assertNotIn('ActivationCheckpointing', config.callback_kwargs)
+                config = ModelConfig('nn@gru_gru@gru_gru_15m', resume=1,
+                                     override={'env.short_test': False,
+                                               'callbacks.ActivationCheckpointing': {'enabled': True}},
+                                     vb_level='never')
+                self.assertTrue(config.callback_kwargs['ActivationCheckpointing']['enabled'])
+
     def test_config_defaults_and_schedule(self):
         def read(path):
             return yaml.safe_load((ROOT / path).read_text())

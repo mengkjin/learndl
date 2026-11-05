@@ -222,6 +222,21 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         schedule_scheduler=self.schedule_config.get('train.trainer.scheduler',{})
         old_scheduler=self.Param.get('train.trainer.scheduler',{})
         self.Param.update(self.schedule_config.Param)
+        # Resumes keep their saved architecture/training configuration, but the
+        # explicitly selected schedule may opt into updated OOM recovery.
+        # Legacy model.yaml files can lack this key entirely; explicitly allow
+        # adding it because FlattenDict.update defaults to relevant keys only.
+        activation_key = 'callbacks.ActivationCheckpointing'
+        if activation_key in self.schedule_config.Param:
+            self.Param.update({activation_key: self.schedule_config[activation_key]}, relevant_only=False)
+        if self.base_path and self.schedule_name and self.module_type == 'nn':
+            current_path = ScheduleConfig.find_path(None, self.schedule_name)
+            current_schedule = get_config_dict(current_path)
+            if activation_key in current_schedule:
+                self.Param.update({activation_key: current_schedule[activation_key]}, relevant_only=False)
+                self.logger.alert1(
+                    f'Using {activation_key} from current schedule {current_path}: '
+                    f'{self.Param[activation_key]}', vb=1)
         if schedule_scheduler.get('name') and schedule_scheduler['name']!=old_scheduler.get('name'):
             prefix='train.trainer.scheduler'
             for key in list(self.Param.flattened):
@@ -239,6 +254,9 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         replace_scheduler = (requested_scheduler.get('name') is not None and
                              requested_scheduler['name'] != previous_scheduler.get('name'))
         self.Param.update(self.override)
+        explicit_activation = get_config_dict(self.override)
+        if activation_key in explicit_activation:
+            self.Param.update({activation_key: explicit_activation[activation_key]}, relevant_only=False)
         if replace_scheduler:
             prefix = 'train.trainer.scheduler'
             for key in list(self.Param.flattened):

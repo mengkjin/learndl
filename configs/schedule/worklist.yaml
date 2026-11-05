@@ -1,6 +1,6 @@
 fit:
   - gru_gru_15m
 
-resume: False
+resume: True
 force: False
-rerun_mark: 0
+rerun_mark: 1

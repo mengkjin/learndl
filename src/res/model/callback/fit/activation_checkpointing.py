@@ -20,6 +20,11 @@ class ActivationCheckpointing(BaseCallBack):
 
     The callback is registered in train.callbacks by default but enabled=false.
     Explicit enabled=true also registers it for older/custom callback lists.
+    When resuming via an explicit schedule_name, this callback's configuration
+    is refreshed from that current schedule if present, even when model.yaml
+    or the saved schedule predates the callback. Other saved settings stay in
+    force; explicit runtime overrides take precedence. Resuming only by model
+    path retains its saved settings.
     Disabled means
     no validation or recovery. Enabled requires an ActivationCheckpointMixin
     model declaring nonempty, callable regions; invalid models fail before the
