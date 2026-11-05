@@ -2,6 +2,31 @@
 
 本文件夹包含了用于自动化运行和启动learndl项目的Shell脚本。
 
+## 手动训练六个因子时序模型
+
+在服务器项目根目录运行：
+
+```bash
+bash runs/train_factor_sequence.sh
+```
+
+默认从 2017 年验证到最新成熟标签，按服务器发现的最早因子日期加载历史。
+先运行离线测试、数据构建、审计，再依次训练 MLP、GRU、M1、M2、Mask、Gate。
+默认固定种子 17，每个历史训练周期 3 epoch；这是流程验证预算。
+所有训练复用 `2_schedule_model.py`，每个候选模型一个根目录，邮件沿用普通 schedule 的完整模型训练结果粒度。
+任一步失败即停止，日志及配置保存在 `results/factor_sequence/<run_id>/`；本入口不删除旧目录，不重试旧 autofix，也不修改 worklist。
+
+脚本前台执行；远程长时间运行可在 tmux 会话内启动。可选参数：
+
+```bash
+bash runs/train_factor_sequence.sh --run-id fs_manual_20261105
+bash runs/train_factor_sequence.sh --resume-from fs_manual_20261105
+bash runs/train_factor_sequence.sh --help
+```
+
+每次执行使用新的 run ID（省略则自动生成）。`--resume-from` 仅接受新版 `schedule_model` 流程的已有运行，复用其数据、日期和已完成模型；不能接旧版逐折运行。
+邮件默认启用，也可传 `--recipient` 或 `--no-email`。本入口固定六个候选，不接受会扩大任务数的 `--research`、`--ablations`。
+
 ## 项目磁盘占用报告
 
 在项目 CLI 中选择 **Non-Research Operations → Project Storage Report**，默认扫描生产项目目录，报告保存到 `results/storage_reports/`，不再询问路径。扫描开始前仅询问是否在报告准备好后本地打开；报告交互提示和页面内容使用英文。
