@@ -88,6 +88,15 @@ configs/
 ## Logging
 Always use `src.proj.log.Logger` — never `print()` or stdlib `logging` directly.
 
+## Python module declarations
+- Apply these requirements when creating or editing `src/**/*.py`, including test modules under `src/`.
+- Add a module-level docstring describing the module's purpose. It must be the first Python statement; shebangs, encoding declarations, and comments may precede it.
+- Add `from __future__ import annotations` immediately after the module docstring, before ordinary imports and other statements.
+- Define an explicit module-level `__all__` listing the intended public functions, classes, constants, type aliases, and intentional re-exports. Keep it synchronized with API changes; use `__all__ = []` for modules with no public API.
+- Preserve symbols required by existing star-import consumers. Compatibility modules that replace themselves in `sys.modules` must preserve the target module's identity and exports.
+- Follow the existing `CheckCodeIssues` exemptions: `__init__.py` and `__version__.py` are exempt from all three presence checks; `src/func/**`, `src/proj/core/literals.py`, and `src/proj/core/alias.py` are additionally exempt from the `__all__` presence check.
+- Verify these declarations using the three presence checks in `src/api/calls/source_code.py` (`CheckCodeIssues`), in addition to Ruff and Pyright. Fix reported omissions in changed modules before completing the work.
+
 ## Path conventions
 - **Never hardcode paths.** Use `PATH.xxx` from `src.proj.env.path`.
 - All paths derive from `MACHINE.data_root` (set in machine config).

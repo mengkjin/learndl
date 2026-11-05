@@ -1,0 +1,4 @@
+interface:
+  display_name: "learndl Models and OOM Recovery"
+  short_description: "Develop models and verify training OOM recovery."
+  default_prompt: "Use $learndl-models to diagnose and resolve training CUDA OOM, evaluating ActivationCheckpointing as a recovery mechanism and verifying resume configuration, compatibility and actual workload success."
