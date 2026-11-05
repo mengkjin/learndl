@@ -26,7 +26,11 @@ class Universe:
     _cache_max_length : int = 5
     _cache_universes : dict[str , dict[int , pd.DataFrame]] = {}
 
-    def __init__(self , name : str , exclusion : str = 'st_lowprice_bse_loser_warnst'):
+    def __init__(self , name : str , exclusion : str = 'st_lowprice_bse_loser_warnst', *, prepared_root=None, prepared_mode='off'):
+        if prepared_mode not in ('off', 'auto', 'required'):
+            raise ValueError(prepared_mode)
+        self.prepared_root = prepared_root
+        self.prepared_mode = prepared_mode
         self.name = name
         self.exclusion = exclusion
 
@@ -67,9 +71,9 @@ class Universe:
         else:
             return Portfolio(name)
 
-    def get_universe_df(self , date : int) -> pd.DataFrame:
+    def get_universe_df(self , date : int, *, rebuild=False) -> pd.DataFrame:
         path = DB.path('universe' , self.name , date)
-        if path.exists():
+        if path.exists() and not rebuild:
             df = Load.df(path)
         else:
             desc = DATAVENDOR.INFO.get_desc()
@@ -90,8 +94,9 @@ class Universe:
             else:
                 raise Exception(f'{self.name} is not a valid benchmark')
  
+        old_columns = tuple(df.columns)
         df_new = UniverseExclusions.append_exclusions(df , date)
-        if len(df.columns) != len(df_new.columns):
+        if rebuild or not path.exists() or old_columns != tuple(df_new.columns):
             Save.df(df_new , path)
         return df
     
@@ -104,6 +109,21 @@ class Universe:
         else:
             dates = Dates(dates)
 
+        if self.prepared_mode != 'off':
+            from .prepared_universe import PreparedUniverse
+            if self.prepared_root is None:
+                raise ValueError('prepared_root is required')
+            try:
+                frame = PreparedUniverse(self.prepared_root, self.name).load(dates, exclusions)
+            except (OSError, ValueError, KeyError) as exc:
+                from .prepared_universe import StaleUniverse
+                if isinstance(exc, StaleUniverse):
+                    raise
+                if self.prepared_mode == 'required':
+                    raise
+            else:
+                frame = self._combine_caches_with_exclusion([frame], exclusions)
+                return Portfolio.from_dataframe(frame, name=self.name)
         dfs : list[pd.DataFrame] = []
         for d in dates:
             if self.name in self._cache_universes:
@@ -162,6 +182,37 @@ class UniverseExclusions:
                 exc = cls.get_loser(date)
             cls._cache_exclusions[exclusion][date] = exc
         return cls._cache_exclusions[exclusion][date]
+
+    @classmethod
+    def prepare_warnst(cls, dates, *, refresh=False):
+        """Batch the uncached 90-day announcement windows without writing sources.
+
+        Only requested dates with a missing stored warning snapshot are prepared.
+        Missing announcement coverage retains the legacy empty-result semantics;
+        callers must not interpret this as proof of complete source coverage.
+        """
+        dates = sorted(set(map(int, dates)))
+        cache = cls._cache_exclusions.setdefault('warnst', {})
+        needed = [d for d in dates if refresh or (d not in cache and not
+                  DB.path('exposure', 'warns_st_and_delist_90', d).exists())]
+        if not needed:
+            return
+        starts = {d: int(CALENDAR.cd(d, -89)) for d in needed}
+        days = CALENDAR.range(min(starts.values()), max(needed), 'cd')
+        paths = [DB.path('crawler', f'announcement_{ex}', d)
+                 for ex in ('bse', 'szse', 'sse') for d in days]
+        frame = Load.df(paths, key_column=None)
+        if frame.empty:
+            if refresh:
+                for date in needed:
+                    cache[date] = np.array([], dtype=int)
+            return
+        matched = frame['title'].str.contains(
+            r'可能.*(?:风险警示)|可能.*(?:退市)', regex=True, na=False)
+        frame = frame.loc[matched]
+        for date in needed:
+            window = frame[(frame['date'] >= starts[date]) & (frame['date'] <= date)]
+            cache[date] = window['secid'].astype(int).unique()
 
     @classmethod
     def get_bse(cls , date : int) -> np.ndarray:

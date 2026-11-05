@@ -159,7 +159,10 @@ def calc_style_corr(
     factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
-    style = DATAVENDOR.risk_style_exp(factor.secid , factor.date).to_dataframe()
+    from src.res.factor.training_analysis_snapshot import evaluation_input
+    style = evaluation_input('style', factor.secid, factor.date)
+    if style is None:
+        style = DATAVENDOR.risk_style_exp(factor.secid , factor.date).to_dataframe()
     def df_style_corr(subdf : pd.DataFrame , **kwargs):
         return subdf.corr(method='spearman').loc[factor.factor_names, style.columns.values]
     grouped = factor.frame().merge(style, on=['secid', 'date'], how='inner').groupby('date' , observed=True)

@@ -88,13 +88,26 @@ class T50FMPTest(BaseFactorAnalyticTest):
 
     def generate(self , factor: StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults'):
         alpha_models = factor.alpha_models()
-        benchmarks = [factor.universe(load = True).get('all').rename('univ')]
+        universe_portfolio = self.kwargs.pop('universe_portfolio', None)
+        if universe_portfolio is None:
+            from src.res.factor.util.classes.universe import Universe
+            universe_portfolio = Universe('top-1000').get(factor.date).rename('univ')
+        benchmarks = [universe_portfolio]
         self.update_kwargs()
+        from src.res.factor.fmp.generator_array import run_generator
+        builder_kwargs = self.kwargs.copy()
+        backend = builder_kwargs.pop('t50_backend', 'auto')
+        generic_backend = builder_kwargs.pop('generator_backend', None)
+        prepared_root = builder_kwargs.pop('prepared_market_root', None)
+        if generic_backend is not None and 't50_backend' in self.kwargs and generic_backend != backend:
+            raise ValueError('conflicting generator_backend and t50_backend')
         self.portfolio_group = PortfolioGroupBuilder(
             'top' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
             resume = self.resume , resume_path = self.resume_path , caller = self ,
-            start = self.start , end = self.end , **self.kwargs)
-        self.total_account = self.portfolio_group.build().total_account()
+            start = self.start , end = self.end , **builder_kwargs)
+        self.total_account = run_generator(
+            self.portfolio_group, generic_backend or backend, prepared_root=prepared_root)
+
 
     def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , **kwargs):
         self.generate(factor , benchmarks)
@@ -105,8 +118,6 @@ class T50FMPTest(BaseFactorAnalyticTest):
         return self
     
     def update_kwargs(self , **kwargs):
-        self.kwargs.update({
-            'n_best' : 50 , 
-        })
+        self.kwargs.setdefault('n_best', 50)
         self.kwargs.update(kwargs)
         return self

@@ -47,8 +47,11 @@ def append_indus(df : pd.DataFrame) -> pd.DataFrame:
     df = df.reset_index()
     secid = df['secid'].unique()
     date = df['date'].unique()
-    appending = DATAVENDOR.risk_industry_exp(secid , date).to_dataframe().fillna('unknown')
-    appending = pd.DataFrame(appending.idxmax(axis=1).rename('industry') , index = appending.index)
+    from src.res.factor.training_analysis_snapshot import evaluation_input
+    appending = evaluation_input('industry', secid, date)
+    if appending is None:
+        appending = DATAVENDOR.risk_industry_exp(secid , date).to_dataframe().fillna('unknown')
+        appending = pd.DataFrame(appending.idxmax(axis=1).rename('industry') , index = appending.index)
     df = df.merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 
@@ -76,7 +79,8 @@ def append_fut_ret(df : pd.DataFrame , nday : int = 10 , lag : int = 2 , ret_typ
     secid = df.index.get_level_values('secid').unique().to_numpy()
     date = df.index.get_level_values('date').unique().to_numpy()
     old_index = df.index.names
-    appending = DATAVENDOR.nday_fut_ret(secid , date , nday , lag , ret_type = ret_type).to_dataframe()
+    from src.res.factor.training_analysis_snapshot import return_labels
+    appending = return_labels(secid, date, (nday, lag, ret_type))
     df = df.reset_index().merge(appending , on = ['secid','date']).set_index(old_index)
     return df
 

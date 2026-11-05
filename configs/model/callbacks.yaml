@@ -4,6 +4,6 @@ EarlyStoppage:      {'peak_patience' : 20 , 'converge_patience' : 5 , 'converge_
 BadAttemptRetrain:  {'early_exit' : 10 , 'moderate_early_exit' : 20 , 'moderate_min_ic' : 0.1 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.3 , 0.1 , 0.03 , 0.01]}
 StatusDisplay:      {}
 SummaryWriter:      {}
-DetailedAlphaAnalysis:  {}
+DetailedAlphaAnalysis:  {'t50_backend': 'auto', 'analysis_snapshot': 'auto'} # array T50 when supported; legacy is the reference path
 MemoryOptimization: {'batch_interval' : 20}
 ActivationCheckpointing: {'enabled': false}

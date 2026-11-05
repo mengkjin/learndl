@@ -101,7 +101,7 @@ class UpdateAPI:
     @classmethod
     def weekly(cls):
         """
-        Weekly maintenance hook: currently triggers ``ModelAPI.update_models`` on updatable machines.
+        Refresh training analysis inputs, then update models on updatable machines.
 
         [API Interaction]:
           expose: true
@@ -117,6 +117,13 @@ class UpdateAPI:
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
+        from src.res.factor.training_analysis_snapshot import weekly_update
+        try:
+            with Logger.Timer('TrainingAnalysisSnapshot.weekly'):
+                report = weekly_update()
+                Logger.info(f'Training analysis snapshot: {report}')
+        except Exception as error:
+            Logger.warning(f'Training analysis snapshot maintenance failed: {error}')
         ModelAPI.update_models()
         print_update_records()
 

@@ -89,13 +89,20 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
 
     def generate(self , factor: StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults'):
         alpha_models = factor.alpha_models()
-        benchmarks = [factor.universe(load = True).get('all').rename('univ')]
+        universe_portfolio = self.kwargs.pop('universe_portfolio', None)
+        if universe_portfolio is None:
+            from src.res.factor.util.classes.universe import Universe
+            universe_portfolio = Universe('top-1000').get(factor.date).rename('univ')
+        benchmarks = [universe_portfolio]
         self.update_kwargs()
+        backend = self.kwargs.pop('generator_backend', 'auto')
+        prepared_root = self.kwargs.pop('prepared_market_root', None)
         self.portfolio_group = PortfolioGroupBuilder(
             'reinforce' , alpha_models , benchmarks , analytic = False , attribution = False , trade_engine = 'yale' , 
             resume = self.resume , resume_path = self.resume_path , caller = self , 
             start = self.start , end = self.end , **self.kwargs)
-        self.total_account = self.portfolio_group.build().total_account()
+        from src.res.factor.fmp.generator_array import run_generator
+        self.total_account = run_generator(self.portfolio_group, backend, prepared_root=prepared_root)
 
     def calc(self , factor : StockFactor , benchmarks : Base.alias.MultipleBenchmark = 'defaults' , **kwargs):
         self.generate(factor , benchmarks)
@@ -106,8 +113,6 @@ class ReinforceFMPTest(BaseFactorAnalyticTest):
         return self
     
     def update_kwargs(self , **kwargs):
-        self.kwargs.update({
-            'n_best' : 50 ,
-        })
+        self.kwargs.setdefault('n_best', 50)
         self.kwargs.update(kwargs)
         return self

@@ -24,7 +24,7 @@ FactorChoice : TypeAlias = Literal['first' , 'avg']
 class DetailedAlphaAnalysis(BaseCallBack):
     """Detailed Factor and Portfolio Level Analysis"""
     CB_ORDER : int = 50
-    CB_KEY_PARAMS = ['tasks']
+    CB_KEY_PARAMS = ['tasks', 't50_backend', 'generator_backend', 'prepared_universe_mode', 'analysis_snapshot']
     TABLE_VB_LEVELS = {'factor@frontface':'max'}
     FIGURE_VB_LEVELS = {
         'factor@ic_curve@best.market': 2 , 
@@ -37,9 +37,27 @@ class DetailedAlphaAnalysis(BaseCallBack):
 
     def __init__(self , 
         trainer , 
-        tasks : list[TestType | str] = ['factor' , 't50'] , **kwargs
+        tasks : list[TestType | str] = ['factor' , 't50'] , t50_backend: str = 'auto',
+        prepared_universe_root=None, prepared_universe_mode='off',
+        generator_backend=None, prepared_market_root=None, analysis_snapshot='auto', **kwargs
     ) -> None:
         super().__init__(trainer , **kwargs)
+        if t50_backend not in ('legacy', 'array', 'auto'):
+            raise ValueError(f'unknown t50_backend: {t50_backend}')
+        self.t50_backend = t50_backend
+        if prepared_universe_mode not in ('off', 'auto', 'required'):
+            raise ValueError(prepared_universe_mode)
+        if generator_backend not in (None, 'legacy', 'array', 'auto'):
+            raise ValueError(generator_backend)
+        if generator_backend is not None and t50_backend != 'auto' and generator_backend != t50_backend:
+            raise ValueError('conflicting generator_backend and t50_backend')
+        if analysis_snapshot not in ('off', 'auto', 'required'):
+            raise ValueError(analysis_snapshot)
+        self.analysis_snapshot = analysis_snapshot
+        self.generator_backend = generator_backend
+        self.prepared_market_root = prepared_market_root
+        self.prepared_universe_root = prepared_universe_root
+        self.prepared_universe_mode = prepared_universe_mode
         assert all(task in TestType for task in tasks) , \
             f'TASKS must be a list of valid tasks: {TestType} , but got {tasks}'
 
@@ -115,7 +133,9 @@ class DetailedAlphaAnalysis(BaseCallBack):
             with self.logger.timer(f'FactorPerfTest.get_factor'):
                 factor = self.get_factor_for_factor_test()
             with self.logger.timer(f'FactorPerfTest.load_day_rets'):
-                factor.day_returns()
+                from src.res.factor.training_analysis_snapshot import CURRENT
+                if CURRENT.get() is None:
+                    factor.day_returns()
             with self.logger.timer(f'FactorPerfTest.within_benchmarks'):
                 factor.within_benchmarks()
 
@@ -144,19 +164,39 @@ class DetailedAlphaAnalysis(BaseCallBack):
             with self.logger.timer(f'FactorFMPTest.load_risk_models'):
                 factor.risk_model()
             with self.logger.timer(f'FactorFMPTest.load_universe'):
-                factor.universe(load = True)
+                from src.res.factor.util.classes.universe import Universe
+                from src.res.factor.training_analysis_snapshot import CURRENT
+                snapshot = CURRENT.get()
+                universe_portfolio = snapshot.universe(factor.date) if snapshot else None
+                if universe_portfolio is None:
+                    universe_portfolio = Universe(
+                        'top-1000', prepared_root=self.prepared_universe_root,
+                        prepared_mode=self.prepared_universe_mode).get(factor.date).rename('univ')
             with self.logger.timer(f'FactorFMPTest.load_day_quotes' ):
-                factor.day_quotes()
+                if snapshot is None:
+                    factor.day_quotes()
 
             for task in self.fmp_tasks:
                 self.logger.divider(vb = 2)
                 with self.logger.timer(f'FactorFMPTest.{task}' , enter_vb=1):
+                    task_kwargs: dict[str, Any] = {'t50_backend': self.t50_backend} if task == TestType.T50 else {}
+                    if task in (TestType.T50, TestType.SCREEN, TestType.REVSCREEN, TestType.REINFORCE):
+                        task_kwargs['universe_portfolio'] = universe_portfolio
+                        if snapshot is not None:
+                            task_kwargs['generator_backend'] = self.t50_backend if task == TestType.T50 else 'auto'
+                            task_kwargs.pop('t50_backend', None)
+                        if getattr(self, 'generator_backend', None) is not None:
+                            task_kwargs['generator_backend'] = self.generator_backend
+                            task_kwargs.pop('t50_backend', None)
+                        if getattr(self, 'prepared_market_root', None) is not None:
+                            task_kwargs['prepared_market_root'] = self.prepared_market_root
                     results = FactorTestAPI.run_test(
                         task , factor , test_path = self.snap_folder , 
                         resume = self.config.is_resuming , save_resumable = True , 
                         start = self.trainer.config.beg_date , end = self.trainer.config.end_date,
                         indent = self.indent + 1 , vb_level = self.vb_level + 1,
-                        title_prefix=self.config.model_name)
+                        title_prefix=self.config.model_name,
+                        **task_kwargs)
 
                     self.test_results.update({f'{task}@{k}':v for k,v in results.get_rslts().items()})
                     self.test_figures.update({f'{task}@{k}':v for k,v in results.get_figs().items()})
@@ -226,7 +266,20 @@ class DetailedAlphaAnalysis(BaseCallBack):
         if not self.tasks:
             return
         assert self.factor_names , 'factor_names is empty'
-        with self.logger.paragraph('Detailed Alpha Analysis' , 3):
+        from src.res.factor.training_analysis_snapshot import TrainingAnalysisSnapshot, return_label_scope
+        scope = return_label_scope()
+        mode = getattr(self, 'analysis_snapshot', 'auto')
+        if mode != 'off':
+            try:
+                snapshot = TrainingAnalysisSnapshot(
+                    dates=self.test_dates, allow_partial=mode == 'auto',
+                )
+                scope = snapshot.activate()
+            except (OSError, ValueError, KeyError) as error:
+                if mode == 'required':
+                    raise
+                self.logger.note(f'Training analysis snapshot unavailable; using original inputs: {error}')
+        with scope, self.logger.paragraph('Detailed Alpha Analysis' , 3):
             self.factor_test()
             self.fmp_test()
             self.display_export()
