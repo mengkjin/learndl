@@ -6,6 +6,24 @@ whether that day has a usable cross-section. They live under
 """
 from __future__ import annotations
 
+__all__ = [
+    'STATS_DIR',
+    'VALID_VALUES_DIR',
+    'VALUE_COLUMNS',
+    'stats_root',
+    'valid_values_path',
+    'cross_section_stats',
+    'finite_value_count',
+    'read_valid_values',
+    'write_valid_values',
+    'upsert_valid_values',
+    'load_valid_dates',
+    'missing_stat_dates',
+    'backfill_valid_values',
+    'asof_map',
+    'stamp_asof',
+]
+
 import threading
 from collections.abc import Mapping
 from pathlib import Path

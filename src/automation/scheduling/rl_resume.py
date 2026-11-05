@@ -1,6 +1,14 @@
 """Explicit one-shot RL resume requests, executed by the shared idle worker."""
 from __future__ import annotations
 
+__all__ = [
+    'request_dir',
+    'validate_request',
+    'submit',
+    'candidate',
+    'recheck',
+]
+
 import hashlib
 import json
 import re

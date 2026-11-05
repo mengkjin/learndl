@@ -1,4 +1,13 @@
+"""Tests for schedule configuration, timeouts, installation, and task execution."""
 from __future__ import annotations
+
+__all__ = [
+    'ROOT',
+    'ScheduleConfigTest',
+    'TimeoutTest',
+    'InstallerTransactionTest',
+    'RunnerTest',
+]
 
 import copy
 import json
@@ -16,6 +25,7 @@ import psutil
 
 from src.automation.scheduling.config import duration, load_config, schedule_slots
 from src.automation.scheduling.installer import apply_plan, build_plan, command, cron_coverage, external_cron, service, validate_unit
+from src.automation.scheduling.maintenance_gate import MaintenanceBusy
 from src.automation.scheduling.runtime import RunStore, inspect_timeouts, members
 from src.automation.watchdog import default_jobs
 
@@ -204,9 +214,6 @@ class TimeoutTest(unittest.TestCase):
             proc.wait(timeout=5)
             if proc.stdout:
                 proc.stdout.close()
-
-
-from src.automation.scheduling.maintenance_gate import MaintenanceBusy
 
 
 class InstallerTransactionTest(unittest.TestCase):

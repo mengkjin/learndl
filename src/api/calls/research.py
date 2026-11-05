@@ -36,7 +36,7 @@ class CarryOutScheduleWorkList(DirectCall):
         return bool(PATH.read_yaml(PATH.sched_worklist)['resume'])
     @classmethod
     def get_description(cls , **kwargs) -> str:
-        return f'Carry out training of a predefined schedule model list: {cls.schedule_names()}'
+        return 'Carry out training of the configured schedule work list and requested schedules.'
     @classmethod
     def _load_schedule_main(cls) -> Callable[..., Any]:
         from src.proj.util.filesys.dynamic_import import dynamic_modules
@@ -205,8 +205,11 @@ class ScheduleModel(DirectCall):
             return
 
         with as_script_main(self.SCHEDULE_SCRIPT):
-            main = CarryOutScheduleWorkList._load_schedule_main()
-            schema = ScriptParamSchema.from_script(self.SCHEDULE_SCRIPT, main=main)
+            main = None
+            schema = ScriptParamSchema.from_source(self.SCHEDULE_SCRIPT)
+            if schema is None:
+                main = CarryOutScheduleWorkList._load_schedule_main()
+                schema = ScriptParamSchema.from_script(self.SCHEDULE_SCRIPT, main=main)
             for loop in AskFor.LoopTillExit(message = 'Do you want to train another schedule model?'):
                 flag_schedule = AskFor.Options(
                     schedules , confirm = False , multiple = False , allow_back = False ,
@@ -241,4 +244,6 @@ class ScheduleModel(DirectCall):
 
                 kwargs = flag_kwargs.result
                 Logger.note(f'Training schedule [{schedule_name}] with {kwargs}')
+                if main is None:
+                    main = CarryOutScheduleWorkList._load_schedule_main()
                 CarryOutScheduleWorkList._train_one_schedule(main , **kwargs)

@@ -23,10 +23,10 @@
 
 
 from src.proj.util.script import ScriptTool
-from src.api.pkgs.model import ModelAPI
 
 @ScriptTool('recalc_preds')
 def main(start : int | None = None , end : int | None = None , **kwargs):
+    from src.api.pkgs.model import ModelAPI
     ModelAPI.recalculate_preds(start = start , end = end)
     
 if __name__ == '__main__':

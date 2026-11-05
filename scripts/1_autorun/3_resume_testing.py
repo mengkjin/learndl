@@ -6,13 +6,13 @@
 # email: True
 # mode: shell
 
-from src.api.pkgs.model import ModelAPI
-from src.api.pkgs.summary import SummaryAPI
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('resume_testing' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
+    from src.api.pkgs.model import ModelAPI
+    from src.api.pkgs.summary import SummaryAPI
     ModelAPI.resume_testing(force_resume = True)
     SummaryAPI.update()
 

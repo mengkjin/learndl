@@ -1,6 +1,13 @@
 """Stop only previewed, identity-verified managed scopes before exclusive installation."""
 from __future__ import annotations
 
+__all__ = [
+    'IDENTITY',
+    'targets',
+    'mark_run',
+    'drain',
+]
+
 import json
 import signal
 import time
@@ -92,7 +99,7 @@ def drain(approval):
         survivors = False
         for target in actual:
             run = runs.get(target['id']) if target['kind'] == 'run' else fixes.get(target['id'])
-            if {key: run.get(key) for key in IDENTITY} != target['identity']:
+            if run is None or {key: run.get(key) for key in IDENTITY} != target['identity']:
                 raise RuntimeError('Managed process identity changed during drain')
             processes = members(run)
             if not processes:

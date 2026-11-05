@@ -8,12 +8,12 @@
 # email: True
 # mode: shell
 
-from src.api.pkgs.update import UpdateAPI
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('weekly_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(**kwargs):
+    from src.api.pkgs.update import UpdateAPI
     UpdateAPI.weekly()
 
 if __name__ == '__main__':

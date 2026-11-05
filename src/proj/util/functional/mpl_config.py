@@ -10,6 +10,11 @@ Override before importing matplotlib::
 """
 from __future__ import annotations
 
+__all__ = [
+    'prefer_agg_backend',
+    'configure_matplotlib',
+]
+
 import os
 
 _DEFAULT_BACKEND = 'Agg'

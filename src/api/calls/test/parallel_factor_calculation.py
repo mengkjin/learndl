@@ -3,6 +3,11 @@ Smoke test parallel stock factor update
 """
 from __future__ import annotations
 
+__all__ = [
+    'CompareMode',
+    'test_parallel_factor_calculation',
+]
+
 import time
 from typing import Any , Literal , TypeAlias
 

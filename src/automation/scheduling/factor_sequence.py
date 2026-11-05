@@ -1,6 +1,13 @@
 """One-shot factor-sequence validation requests handed from autofix to the idle GPU worker."""
 from __future__ import annotations
 
+__all__ = [
+    'requests_dir',
+    'submit',
+    'observe',
+    'execute',
+]
+
 import json
 import re
 import sys

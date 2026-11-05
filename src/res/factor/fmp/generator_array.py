@@ -6,9 +6,32 @@ caches belong to each run. The original builder supplies the reference backend.
 """
 from __future__ import annotations
 
+__all__ = [
+    'GeneratorBackend',
+    'BLOCK_DAYS',
+    'UnsupportedGenerator',
+    'Position',
+    'Quotes',
+    'Selection',
+    'descending_order',
+    'prepare_selection',
+    'select',
+    'matching',
+    'weighted_return',
+    'evolve',
+    'turnover',
+    'account_step',
+    'from_port',
+    'Inputs',
+    'validate_group',
+    'generate_arrays',
+    'account_arrays',
+    'publish',
+    'run_generator',
+]
+
 from dataclasses import dataclass
-from time import perf_counter
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -17,12 +40,15 @@ from src.data import DATAVENDOR
 from src.proj import CALENDAR, Const
 from src.res.factor.util import Portfolio, Port, PortCreateResult, PortfolioAccount
 from src.res.factor.util.agency.portfolio_accountant import AccountConfig
+from src.res.factor.util.classes.analysis_inputs import CURRENT, MarketInputs
+from .builder import PortfolioGroupBuilder
+from .generator.basic import BasicPortfolioCreator
 
-T50Backend = Literal['legacy', 'array', 'auto']
+GeneratorBackend = Literal['legacy', 'array', 'auto']
 BLOCK_DAYS = 128
 
 
-class UnsupportedT50(ValueError):
+class UnsupportedGenerator(ValueError):
     """A known unsupported contract; only this exception permits auto fallback."""
 
 
@@ -118,10 +144,10 @@ def evolve(position: Position, date: int, quotes: Quotes | None) -> Position:
     new = weights * (1. + quotes.returns[index])
     value = position.value * (1. + new.sum() - weights.sum())
     if not np.isfinite(value) or value == 0:
-        raise UnsupportedT50('nonfinite or zero portfolio value during evolution')
+        raise UnsupportedGenerator('nonfinite or zero portfolio value during evolution')
     weights = new * position.value / value
     if not np.isfinite(weights).all() or np.any(weights < 0):
-        raise UnsupportedT50('evolution left the finite long-only domain')
+        raise UnsupportedGenerator('evolution left the finite long-only domain')
     order = descending_order(weights)
     return Position(position.ids[valid][order], weights[order], int(date), value, position.exists)
 
@@ -160,22 +186,19 @@ def account_step(old, new, bench, close, bench_close, old_open, new_open, old_vw
 def from_port(port):
     ids, weights = port.secid.copy(), port.weight.copy()
     if len(np.unique(ids)) != len(ids) or np.any(weights < 0) or not np.isfinite(weights).all():
-        raise UnsupportedT50('positions must have unique IDs and finite long-only weights')
+        raise UnsupportedGenerator('positions must have unique IDs and finite long-only weights')
     if not np.isfinite(port.value) or port.value <= 0:
-        raise UnsupportedT50('positions must have positive finite value')
+        raise UnsupportedGenerator('positions must have positive finite value')
     return Position(ids, weights, int(port.date), float(port.value), bool(port))
 
 
 class Inputs:
     """Bounded, block-local adapters; quote requests shared across submodels."""
-    def __init__(self, prepared=None, generic=False):
+    def __init__(self, prepared: MarketInputs | None = None):
         self.prepared = prepared
-        self.generic = generic
         self.quotes = {}
         self.industries = {}
         self.benchmarks = {}
-        self.quote_requests = 0
-        self.seconds = 0.
 
     def clear(self):
         self.quotes.clear()
@@ -187,30 +210,25 @@ class Inputs:
         date1 = int(DATAVENDOR.td(date0, 1)) if date1 is None else int(date1)
         key = (date0, date1, price)
         if key not in self.quotes:
-            started = perf_counter()
             prepared = self.prepared.quote(date0, date1, price) if self.prepared else None
             if prepared is not None:
                 ids, raw = prepared
                 values = np.where(np.isnan(raw), 0., raw)
                 if not np.isfinite(values).all():
-                    raise UnsupportedT50('nonfinite prepared quote returns')
+                    raise UnsupportedGenerator('nonfinite prepared quote returns')
                 self.quotes[key] = Quotes(ids, values)
-                self.quote_requests += 1
-                self.seconds += perf_counter() - started
                 return self.quotes[key]
             q = DATAVENDOR.get_quote_ret(date0, date1, 'close', price)
             if q is None:
                 raise ValueError(f'Ret Quote (at {date1}) does not exist')
             ids = q['secid'].to_numpy(dtype=np.int64) if 'secid' in q else q.index.to_numpy(dtype=np.int64)
             if len(np.unique(ids)) != len(ids):
-                raise UnsupportedT50('duplicate security IDs in returns')
+                raise UnsupportedGenerator('duplicate security IDs in returns')
             values = q['ret'].fillna(0).to_numpy(dtype=float)
             if not np.isfinite(values).all():
-                raise UnsupportedT50('nonfinite quote returns')
+                raise UnsupportedGenerator('nonfinite quote returns')
             order = np.argsort(ids)
             self.quotes[key] = Quotes(ids[order], values[order])
-            self.quote_requests += 1
-            self.seconds += perf_counter() - started
         return self.quotes[key]
 
     def drift(self, state, date):
@@ -230,28 +248,20 @@ class Inputs:
         return self.benchmarks[key]
 
     def selection(self, builder, date):
-        started = perf_counter()
-        nested_before = self.seconds
         model = builder.alpha.get(date)
         if len(np.unique(model.secid)) != len(model.secid):
-            raise UnsupportedT50('duplicate alpha security IDs')
-        bench = self.benchmark(builder.benchmark, date)
-        candidates = (np.intersect1d(model.secid, bench.ids) if bench.exists and len(bench.ids)
-                      else np.unique(model.secid))
-        if self.generic:
-            # Keep screening semantics, including universe-relative ranks and
-            # external alpha normalization, in the existing configuration layer.
-            benchmark = builder.benchmark.get(date, closest=True)
-            candidates = builder.creator.conf.get_candidate_pool(date, model, benchmark)
+            raise UnsupportedGenerator('duplicate alpha security IDs')
+        benchmark = builder.benchmark.get(date, closest=True)
+        candidates = builder.creator.conf.get_candidate_pool(date, model, benchmark)
         if not len(candidates):
             # The reference cannot add an industry column to an empty frame
             # and raises in groupby. Do not silently invent an empty portfolio.
-            raise UnsupportedT50('empty candidate pool is unsupported by the legacy creator')
+            raise UnsupportedGenerator('empty candidate pool is unsupported by the legacy creator')
         # Preserve the self-composite normalization, including constant/NaN alpha.
         sorted_model = builder.creator.conf.get_sorting_alpha(date, model).align(candidates)
         alpha = sorted_model.alpha
         if np.isinf(alpha).any():
-            raise UnsupportedT50('infinite normalized alpha')
+            raise UnsupportedGenerator('infinite normalized alpha')
         # A missing prediction date uses the closest older Amodel; its
         # to_dataframe(indus=True) uses that model's date in the legacy path.
         industry_date = sorted_model.date
@@ -262,25 +272,22 @@ class Inputs:
         labels = self.industries[industry_date].reindex(candidates)['indus'].fillna('unknown')
         industry = pd.factorize(labels, sort=False)[0]
         result = prepare_selection(candidates, alpha, industry)
-        self.seconds += perf_counter() - started - (self.seconds - nested_before)
         return result
 
 
-def validate_group(group, generic=False):
-    if group.category not in (('top', 'screen', 'revscreen', 'reinforce') if generic else ('top',)) or group.lags != [0]:
-        raise UnsupportedT50('only unlagged top generation is supported')
+def validate_group(group):
+    if group.category not in ('top', 'screen', 'revscreen', 'reinforce') or group.lags != [0]:
+        raise UnsupportedGenerator('only unlagged top, screen, revscreen and reinforce generation is supported')
     if group.acc_kwargs != dict(analytic=False, attribution=False, trade_engine='yale', daily=False):
-        raise UnsupportedT50('requires yale accounting without daily mode or risk attribution')
+        raise UnsupportedGenerator('requires yale accounting without daily mode or risk attribution')
     for builder in group.builders:
         conf = builder.creator.conf
-        if not generic and (conf.sorter != ['self'] or conf.screener):
-            raise UnsupportedT50('only self alpha without an additional screener is supported')
         if type(builder.benchmark) is not Portfolio or builder.benchmark.is_default:
-            raise UnsupportedT50('requires an explicit, preloaded universe Portfolio')
+            raise UnsupportedGenerator('requires an explicit, preloaded universe Portfolio')
         values = [conf.n_best, conf.turn_control, conf.buffer_zone, conf.no_zone, conf.indus_control]
         if (not np.isfinite(values).all() or conf.n_best <= 0 or not isinstance(conf.n_best, (int, np.integer))
                 or not all(0 <= v <= 1 for v in values[1:])):
-            raise UnsupportedT50('invalid long-only top selection parameters')
+            raise UnsupportedGenerator('invalid long-only top selection parameters')
 
 
 def generate_arrays(group, inputs, block_days):
@@ -338,7 +345,7 @@ def account_arrays(group, records, inputs, block_days):
                                    inputs.quote(old.date, price='vwap'), inputs.quote(new.date, price='vwap'),
                                    Const.Factor.ROUNDING.ret, Const.Factor.ROUNDING.turnover)
                 if not np.isfinite(row).all():
-                    raise UnsupportedT50('nonfinite account result')
+                    raise UnsupportedGenerator('nonfinite account result')
                 plan['rows'][i] = row
                 plan['old'] = inputs.drift(new, end)
     return plans
@@ -374,81 +381,54 @@ def publish(group, records, plans):
         builder.account.save(builder.resume_path_account, indent=builder.indent + 1, vb_level=builder.vb_level)
 
 
-def run_t50(group, backend: T50Backend = 'legacy', *, block_days=BLOCK_DAYS,
-            prepared_root=None, generic=False):
-    """Return the normal total-account frame; diagnostics live on the group."""
+def run_generator(
+    group: PortfolioGroupBuilder,
+    backend: GeneratorBackend = 'auto',
+    *,
+    prepared_root=None,
+    block_days: int = BLOCK_DAYS,
+) -> pd.DataFrame:
+    """Build and account for portfolios using the supported production backend."""
     if backend not in ('legacy', 'array', 'auto'):
-        raise ValueError(f'unknown t50_backend: {backend}')
+        raise ValueError(f'unknown generator backend: {backend}')
     if block_days <= 0:
         raise ValueError('block_days must be positive')
-    started = perf_counter()
-    diagnostics: dict[str, Any] = dict(requested=backend, selected='legacy', fallback_reason=None, block_days=block_days)
-    group.t50_diagnostics = diagnostics
     if backend != 'legacy':
         try:
             group.builders_setup()
-            validate_group(group, generic)
-            if generic or prepared_root is not None:
-                for builder in group.builders:
-                    conf = builder.creator.conf
-                    default = type(conf)()
-                    for key in ('n_best', 'turn_control', 'buffer_zone', 'no_zone',
-                                'indus_control', 'screen_ratio', 'sorter', 'screener'):
-                        if getattr(conf, key) != getattr(default, key):
-                            raise UnsupportedT50(f'nondefault {key}: use legacy input and calculation path')
-            from src.res.factor.training_analysis_snapshot import CURRENT
-            prepared = CURRENT.get() if generic else None
+            validate_group(group)
+            configs = []
+            for builder in group.builders:
+                creator = builder.creator
+                if not isinstance(creator, BasicPortfolioCreator):
+                    raise UnsupportedGenerator('requires a basic portfolio creator')
+                conf = creator.conf
+                configs.append(conf)
+                default = type(conf)()
+                for key in ('n_best', 'turn_control', 'buffer_zone', 'no_zone',
+                            'indus_control', 'screen_ratio', 'sorter', 'screener'):
+                    if getattr(conf, key) != getattr(default, key):
+                        raise UnsupportedGenerator(f'nondefault {key}: use legacy input and calculation path')
+            prepared: MarketInputs | None = CURRENT.get()
             if prepared_root is not None:
                 from .prepared_market import PreparedMarket
                 try:
                     prepared = PreparedMarket(prepared_root)
                 except (OSError, ValueError, KeyError) as exc:
-                    raise UnsupportedT50(str(exc)) from exc
+                    raise UnsupportedGenerator(str(exc)) from exc
             group.builders_resume()
-            if generic:
-                for builder in group.builders:
-                    builder.creator.conf.alpha_sorter.get_alpha_models(group.relevant_dates)
-                    builder.creator.conf.alpha_screener.get_alpha_models(group.relevant_dates)
-            inputs = Inputs(prepared, generic)
-            setup_seconds = perf_counter() - started
-            at = perf_counter()
+            for conf in configs:
+                conf.alpha_sorter.get_alpha_models(group.relevant_dates)
+                conf.alpha_screener.get_alpha_models(group.relevant_dates)
+            inputs = Inputs(prepared)
             records = generate_arrays(group, inputs, block_days)
-            generation_elapsed = perf_counter() - at
-            generation_preparation = inputs.seconds
-            at = perf_counter()
             plans = account_arrays(group, records, inputs, block_days)
-            accounting_elapsed = perf_counter() - at
-            accounting_preparation = inputs.seconds - generation_preparation
-        except UnsupportedT50 as exc:
+        except UnsupportedGenerator as exc:
             if backend == 'array':
                 raise
-            diagnostics['fallback_reason'] = str(exc)
-            group.logger.warning(f'T50 array fallback: {exc}')
+            group.logger.warning(f'Portfolio array fallback: {exc}')
         else:
-            at = perf_counter()
             publish(group, records, plans)
-            result = group.total_account()
-            diagnostics.update(selected='array', setup_seconds=setup_seconds, prepared_hits=prepared.hits if prepared else 0,
-                               prepared_misses=prepared.misses if prepared else 0, preparation_seconds=inputs.seconds,
-                               generation_seconds=generation_elapsed - generation_preparation,
-                               accounting_seconds=accounting_elapsed - accounting_preparation,
-                               output_seconds=perf_counter() - at, quote_requests=inputs.quote_requests,
-                               total_seconds=perf_counter() - started)
-            group.logger.stdout(f'T50 backend: {diagnostics}')
-            return result
-    at = perf_counter()
+            return group.total_account()
     group.build()
-    diagnostics['build_seconds'] = perf_counter()-at
-    at = perf_counter()
-    result = group.total_account()
-    diagnostics['accounting_seconds'] = perf_counter()-at
-    diagnostics['total_seconds'] = perf_counter() - started
-    group.logger.stdout(f'T50 backend: {diagnostics}')
-    return result
-
-
-def run_generator(group, backend='auto', *, prepared_root=None, block_days=128):
-    result = run_t50(group, backend, prepared_root=prepared_root,
-                     block_days=block_days, generic=True)
-    group.generator_diagnostics = group.t50_diagnostics
-    return result
+    return group.total_account()

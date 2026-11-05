@@ -1,6 +1,16 @@
 """Conservative installation classification; compatibility is explicitly reviewed."""
 from __future__ import annotations
 
+__all__ = [
+    'PROTOCOL',
+    'COMPATIBILITY_FILE',
+    'reviewed_transitions',
+    'COMPATIBLE_SOURCE_UPGRADES',
+    'sources',
+    'classify',
+    'publish',
+]
+
 import hashlib
 import json
 from pathlib import Path
@@ -41,7 +51,8 @@ def sources():
 
 def classify(plan, directory):
     old_path, manifest_path = directory / 'installed.json', directory / 'manifest.json'
-    result = dict(mode='exclusive', groups=None, reasons=[], protocol=PROTOCOL, sources=sources())
+    current_sources = sources()
+    result = dict(mode='exclusive', groups=None, reasons=[], protocol=PROTOCOL, sources=current_sources)
     def exclusive(reason):
         return dict(result, reasons=[reason])
     if not old_path.exists() or not manifest_path.exists():
@@ -51,9 +62,9 @@ def classify(plan, directory):
     if not new or manifest.get('install_protocol') != PROTOCOL:
         return exclusive('Unknown installation protocol; migrate in an idle window')
     previous_sources = manifest.get('sources', {})
-    changed = {key for key in previous_sources.keys() | result['sources'].keys()
-               if previous_sources.get(key) != result['sources'].get(key)}
-    compatible = all((previous_sources.get(key), result['sources'].get(key)) in
+    changed = {key for key in previous_sources.keys() | current_sources.keys()
+               if previous_sources.get(key) != current_sources.get(key)}
+    compatible = all((previous_sources.get(key), current_sources.get(key)) in
                      COMPATIBLE_SOURCE_UPGRADES.get(key, set()) for key in changed)
     if changed and not compatible:
         return exclusive('Unreviewed framework source changes: ' + ', '.join(sorted(changed)))

@@ -1,3 +1,9 @@
+"""Tests for task monitor host resource sampling."""
+from __future__ import annotations
+
+__all__ = [
+    'MonitorResourcesTest',
+]
 import subprocess
 import unittest
 from pathlib import Path

@@ -1,6 +1,19 @@
 """Durable installation admission and notifications, independent of autofix activation."""
 from __future__ import annotations
 
+__all__ = [
+    'ACTIVE',
+    'directory',
+    'save',
+    'current',
+    'lock',
+    'finish',
+    'reconcile',
+    'pending',
+    'cancel',
+    'deliver',
+]
+
 import json
 import subprocess
 import time

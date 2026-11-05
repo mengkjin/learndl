@@ -6,6 +6,15 @@ python -m src.res.model.util.original_comparison --baseline-log OLD.html \
 Missing artifacts/metrics remain null. Test metrics use intersecting model/date keys.
 """
 from __future__ import annotations
+
+__all__ = [
+    'LogText',
+    'training_rows',
+    'sample_count',
+    'daily_results',
+    'compare_runs',
+    'main',
+]
 import argparse
 import json
 import re

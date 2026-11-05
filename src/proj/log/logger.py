@@ -448,9 +448,6 @@ class Logger:
     @classmethod
     def test_logger(cls):
         import tqdm , pandas as pd
-        from src.proj.util.functional.mpl_config import configure_matplotlib
-        configure_matplotlib()
-        import matplotlib.pyplot as plt
         with Proj.vb.temporary_vb('max'):
             with cls.Paragraph('ParagraphI' , 1):
                 cls.stdout('This is a stdout message')
@@ -476,6 +473,9 @@ class Logger:
             with cls.Timer('Timer'):
                 df = pd.DataFrame({'a':[1,2,3,4,5,6,7,8,9,10],'b':[4,5,6,7,8,9,10,11,12,13]})
                 cls.display(df)
+                from src.proj.util.functional.mpl_config import configure_matplotlib
+                configure_matplotlib()
+                import matplotlib.pyplot as plt
                 fig = plt.figure()
                 plt.plot([1,2,3],[4,5,6])
                 plt.close(fig)

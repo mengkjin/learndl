@@ -1,6 +1,13 @@
 """Registration at an installation boundary, under the short admission lock."""
 from __future__ import annotations
 
+__all__ = [
+    'freeze',
+    'queued_config',
+    'cancel_disabled',
+    'catch_up',
+]
+
 from datetime import datetime
 import json
 from zoneinfo import ZoneInfo

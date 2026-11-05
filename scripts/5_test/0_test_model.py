@@ -27,11 +27,11 @@
 #   path: "models/{model_name}/results/training_output.html"
 #   height : 600 # optional
 
-from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('test_model' , '@model_name' , lock_num = 0)
 def main(model_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
+    from src.api.pkgs.model import ModelAPI
     assert model_name is not None , 'model_name is required'
     ModelAPI.test_model(model_name , resume = 0 if resume is None else int(resume) , start = start , end = end)
 

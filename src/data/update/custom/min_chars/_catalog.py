@@ -7,6 +7,15 @@ Not a ``BasicCustomUpdater`` (``_`` prefix).  Run:
 """
 from __future__ import annotations
 
+__all__ = [
+    'CSV_PATH',
+    'CSV_FIELDS',
+    'is_selected',
+    'catalog_rows',
+    'selected_by_db_key',
+    'write_csv',
+]
+
 import csv
 from pathlib import Path
 from typing import Any

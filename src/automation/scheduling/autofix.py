@@ -1,6 +1,21 @@
 """At-most-once script requests. validate/plan/status do not import submitted scripts."""
 from __future__ import annotations
 
+__all__ = [
+    'commit',
+    'reconcile',
+    'discover',
+    'supervise',
+    'tick',
+    'deliver',
+    'execute',
+    'recorded_task_blocker',
+    'control_failure',
+    'worker_observation',
+    'worker',
+    'main',
+]
+
 import argparse
 import hashlib
 import json

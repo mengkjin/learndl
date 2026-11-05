@@ -117,7 +117,7 @@ class UpdateAPI:
         if not MACHINE.updatable:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
-        from src.res.factor.training_analysis_snapshot import weekly_update
+        from src.res.model.util.data.training_analysis_snapshot import weekly_update
         try:
             with Logger.Timer('TrainingAnalysisSnapshot.weekly'):
                 report = weekly_update()

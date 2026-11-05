@@ -1,6 +1,10 @@
 """Measured environment/inference/training costs; no GPU performance assumptions."""
 from __future__ import annotations
 
+__all__ = [
+    'profile_env',
+]
+
 import cProfile
 import pstats
 import resource

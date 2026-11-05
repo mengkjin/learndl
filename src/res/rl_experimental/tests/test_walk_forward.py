@@ -1,3 +1,10 @@
+"""Tests for walk-forward splits, evaluation windows, and experiment outputs."""
+from __future__ import annotations
+
+__all__ = [
+    'real_like_panel',
+    'WalkForwardTest',
+]
 import json
 import tempfile
 import unittest

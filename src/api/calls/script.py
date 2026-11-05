@@ -74,9 +74,12 @@ class RunPipelineScript(DirectCall):
 
             Logger.note(f'Selected script [{runner.script_key}]')
 
-            main = self._load_main(runner)
+            main = None
             with as_script_main(runner.script):
-                schema = ScriptParamSchema.from_script(runner.script, main=main)
+                schema = ScriptParamSchema.from_source(runner.script)
+                if schema is None:
+                    main = self._load_main(runner)
+                    schema = ScriptParamSchema.from_script(runner.script, main=main)
                 flag_kwargs = AskFor.ScriptKwargs(
                     schema,
                     help_description=(
@@ -91,6 +94,8 @@ class RunPipelineScript(DirectCall):
                 if runner.header.email:
                     kwargs = {**kwargs, 'email': True}
                 Logger.note(f'Running [{runner.script_key}] with {kwargs}')
+                if main is None:
+                    main = self._load_main(runner)
                 main(**kwargs)
 
     @staticmethod

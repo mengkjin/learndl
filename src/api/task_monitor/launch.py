@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+__all__ = [
+    'PAGE_SIZE',
+    'MAX_HTML_PREVIEW_BYTES',
+    'STATUS_OPTIONS',
+    'WINDOW_LABELS',
+    'STYLE_LABELS',
+]
+
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -10,6 +18,7 @@ from uuid import uuid4
 import psutil
 
 import streamlit as st
+from streamlit.components.v2 import component
 
 from src.api.task_monitor.core import (
     PageCursor, TaskMonitorRepository, TaskSnapshot, TaskStatus, TimeWindow,
@@ -27,7 +36,7 @@ WINDOW_LABELS: dict[str, TimeWindow] = {
     'Last week': 'last_week',
     'Last month': 'last_month',
 }
-STYLE_LABELS: dict[str, OutputStyle] = {'Text only': 'text', 'Colored text': 'colored'}
+STYLE_LABELS: dict[str, OutputStyle] = {'Colored text': 'colored', 'Text only': 'text'}
 
 
 def _time(value: float | None) -> str:
@@ -42,16 +51,33 @@ def _duration(task: TaskSnapshot) -> str:
     return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
 
 
+_LOG_CSS = """
+.output { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; }
+.output-line { margin: 0 0 2px; }
+.meta { color: #9ca3af; }
+.muted { color: #6b7280; font-style: italic; }
+.stderr { border-left: 2px solid #f87171; background: rgba(248, 113, 113, 0.08); padding-left: 6px; }
+.stderr .meta { color: #fca5a5; }
+"""
+_LOG_COLORS = "background: #111827; color: #e5e7eb; font: 12px/1.45 Monaco, Menlo, 'Ubuntu Mono', monospace;"
+
+_live_output = component(
+    'learndl_live_output',
+    html=('<div class="live-output" tabindex="0" role="region" aria-label="Live task output">'
+          '<div class="output"></div></div><button type="button" hidden>Jump to bottom</button>'),
+    css=_LOG_CSS + f"""
+.live-output {{ {_LOG_COLORS} height: 560px; overflow: auto; overflow-anchor: none; position: relative; }}
+button {{ margin-top: 6px; }}
+""",
+    js=Path(__file__).with_name('live_output.js').read_text(encoding='utf-8'),
+)
+
+
 def _colored_document(content: str) -> str:
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><style>
-body {{ margin: 0; background: #111827; color: #e5e7eb; font: 12px/1.45 Monaco, Menlo, 'Ubuntu Mono', monospace; }}
-.output {{ white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; }}
-.output-line {{ margin: 0 0 2px; }}
-.meta {{ color: #9ca3af; }}
-.muted {{ color: #6b7280; font-style: italic; }}
-.stderr {{ border-left: 2px solid #f87171; background: rgba(248, 113, 113, 0.08); padding-left: 6px; }}
-.stderr .meta {{ color: #fca5a5; }}
+body {{ margin: 0; {_LOG_COLORS} }}
+{_LOG_CSS}
 </style></head><body><div class="output">{content}</div></body></html>"""
 
 
@@ -136,7 +162,7 @@ def _render_task_output(task: TaskSnapshot, style: OutputStyle) -> None:
     if task.is_active:
         content = parse_live_output(source, style)
         if content:
-            _render_output(content, style)
+            _live_output(data={"content": content, "style": style}, key=f"live-{task.task_id}-{source}")
             try:
                 st.caption(f'Live tail · updated {_time(source.stat().st_mtime)} · no disk cache')
             except OSError:

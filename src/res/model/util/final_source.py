@@ -1,6 +1,13 @@
 """Scalar result inputs: exact sources, rolling checkpoints and daily preprocessing."""
 from __future__ import annotations
 
+__all__ = [
+    'final_weights',
+    'prepare_final_values',
+    'FinalSource',
+    'FinalInputLoader',
+]
+
 from dataclasses import dataclass
 import re
 

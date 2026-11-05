@@ -1,6 +1,12 @@
 """Public configuration and result objects for reproducible model comparisons."""
 from __future__ import annotations
 
+__all__ = [
+    'CompareModelSpec',
+    'CompareConfig',
+    'CompareResult',
+]
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any

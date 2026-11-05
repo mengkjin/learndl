@@ -5,6 +5,10 @@ Never starts installed Learndl services or executes the real autofix manifest.
 """
 from __future__ import annotations
 
+__all__ = [
+    'LinuxAcceptance',
+]
+
 import json
 import os
 from pathlib import Path

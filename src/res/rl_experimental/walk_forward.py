@@ -1,6 +1,30 @@
 """Sequential, resumable research suite. No database writes or production orders."""
 from __future__ import annotations
 
+__all__ = [
+    'write_json',
+    'fingerprint',
+    'day',
+    'intervals',
+    'slice_panel',
+    'load_config',
+    'folds',
+    'task_plan',
+    'config_for',
+    'train_task',
+    'code_fingerprint',
+    'choose_screen',
+    'cash_account',
+    'model_replay',
+    'retention_replay',
+    'add_exhausted_rows',
+    'quarter_returns',
+    'bootstrap_relative',
+    'summarize',
+    'report',
+    'run_walk_forward',
+]
+
 import contextlib
 import sys
 import hashlib

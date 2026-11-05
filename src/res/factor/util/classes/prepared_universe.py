@@ -1,6 +1,15 @@
 """Immutable monthly universe packs with incremental, dependency-aware publication."""
 from __future__ import annotations
 
+__all__ = [
+    'UniverseBuildReport',
+    'StaleUniverse',
+    'PreparedUniverse',
+]
+
+from collections.abc import Set
+from typing import TypedDict, NotRequired
+
 import hashlib
 import json
 import os
@@ -12,6 +21,19 @@ from pathlib import Path
 import pandas as pd
 
 from src.proj import DB, Load
+
+
+class UniverseBuildReport(TypedDict):
+    read_seconds: float
+    compute_seconds: float
+    save_seconds: float
+    total_seconds: float
+    changed_dates: int
+    rewritten_months: int
+    generation: str
+    source_finalize_seconds: NotRequired[float]
+    bytes: NotRequired[int]
+    dates: NotRequired[int]
 
 
 class StaleUniverse(ValueError):
@@ -123,14 +145,14 @@ class PreparedUniverse:
         report['total_seconds'] += source_seconds
         return report
 
-    def prepare(self, dates, *, _regenerated=frozenset()):
+    def prepare(self, dates, *, _regenerated: Set[int] = frozenset()) -> UniverseBuildReport:
         import fcntl
         self.root.mkdir(parents=True, exist_ok=True)
         with (self.root/'writer.lock').open('a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             return self._prepare(dates, _regenerated=_regenerated)
 
-    def _prepare(self, dates, *, _regenerated=frozenset()):
+    def _prepare(self, dates, *, _regenerated: Set[int] = frozenset()) -> UniverseBuildReport:
         """Import finalized snapshots; unchanged months are hard-linked.
 
         Initial import trusts existing daily snapshots. Subsequent upstream
@@ -153,15 +175,18 @@ class PreparedUniverse:
             raise ValueError('empty source snapshot requires explicit coverage handling')
         read_seconds = time.perf_counter()-started
         if old and not changed:
-            return dict(read_seconds=read_seconds, compute_seconds=0., save_seconds=0.,
-                        total_seconds=time.perf_counter()-started, changed_dates=0, rewritten_months=0,
-                        generation=old['generation'])
+            return {
+                'read_seconds': read_seconds, 'compute_seconds': 0., 'save_seconds': 0.,
+                'total_seconds': time.perf_counter()-started, 'changed_dates': 0,
+                'rewritten_months': 0, 'generation': old['generation'],
+            }
         begin = time.perf_counter()
         coverage = dict(old['coverage']) if old else {}
         coverage.update({str(d): list(df.columns) for d, df in frames.items()})
         all_sources = dict(old['sources']) if old else {}
         all_deps = dict(old['dependencies']) if old else {}
-        all_sources.update(sources); all_deps.update(deps)
+        all_sources.update(sources)
+        all_deps.update(deps)
         months = sorted({d//100 for d in changed})
         packs = {}
         for month in months:
@@ -195,16 +220,18 @@ class PreparedUniverse:
         pointer = self.root/f'.{generation}.tmp'
         pointer.write_text(generation)
         os.replace(pointer, self.root/'current')
-        return dict(read_seconds=read_seconds, compute_seconds=compute_seconds,
-                    save_seconds=time.perf_counter()-begin, total_seconds=time.perf_counter()-started,
-                    bytes=sum(p.stat().st_size for p in folder.iterdir()), dates=len(all_sources),
-                    changed_dates=len(changed), rewritten_months=len(months), generation=generation)
+        return {
+            'read_seconds': read_seconds, 'compute_seconds': compute_seconds,
+            'save_seconds': time.perf_counter()-begin, 'total_seconds': time.perf_counter()-started,
+            'bytes': sum(p.stat().st_size for p in folder.iterdir()), 'dates': len(all_sources),
+            'changed_dates': len(changed), 'rewritten_months': len(months), 'generation': generation,
+        }
 
     def load(self, dates, exclusions):
         """Validate requested dependencies, then read a single pinned generation."""
         dates = sorted(set(map(int, dates)))
         folder, meta = self.current()
-        if meta is None:
+        if folder is None or meta is None:
             raise FileNotFoundError('no prepared universe generation')
         sources, deps = self.sources(dates), self.dependencies(dates)
         for date, source in sources.items():

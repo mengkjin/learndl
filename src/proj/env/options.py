@@ -24,19 +24,18 @@ class OptionsDefinition:
     @classmethod
     def available_modules(cls) -> list[str]:
         """Get the available nn/boost modules in the src/res/algo directory"""
-        from src.res.algo import AlgoModule
+        from src.res.algo.registry import BOOST_MODULES, NN_MODULES, FACTOR_SEQUENCE_MODULES
         from src.proj.log import Logger
         Logger.info(f'Redefine available modules at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
-        return [f'{module_type}/{module}' for module_type, modules in AlgoModule._availables.items() for module in modules.keys()]
+        return ([f'boost/{name}' for name in BOOST_MODULES]
+                + [f'nn/{name}' for name in NN_MODULES]
+                + [f'nn/{name}' for name in FACTOR_SEQUENCE_MODULES])
 
     @classmethod
     def available_schedules(cls) -> list[str]:
         """Get the available schedules in the config/model/schedule directory"""
-        from src.res.model.util.config.config import ScheduleConfig
-        names = sorted({p.stem for root in (PATH.sched, PATH.sched_shared, PATH.sched_linear) for p in root.glob('*.yaml')})
-        for name in names:
-            ScheduleConfig.find_path(None, name)  # fail clearly on ambiguous names
-        return names
+        from .schedules import available_schedules
+        return available_schedules()
 
     @classmethod
     def available_linear_schedules(cls) -> list[str]:

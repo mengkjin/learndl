@@ -1,4 +1,9 @@
+"""Tests for training histories, metrics, and progress logging."""
 from __future__ import annotations
+
+__all__ = [
+    'TrainingLoggingTest',
+]
 
 import csv
 import tempfile

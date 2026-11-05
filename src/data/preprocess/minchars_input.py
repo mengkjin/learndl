@@ -1,6 +1,11 @@
 """Audit min_chars identifiers before building dense historical tensors."""
 from __future__ import annotations
 
+__all__ = [
+    'validate_keys',
+    'load_selected',
+]
+
 import numpy as np
 import polars as pl
 from pathlib import Path

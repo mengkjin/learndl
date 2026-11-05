@@ -1,4 +1,10 @@
 """Git-triggered RL attempts, using temporary repositories and no SMTP/GPU."""
+from __future__ import annotations
+
+__all__ = [
+    'require_rl',
+    'RLSchedulingTest',
+]
 import json
 import os
 from typing import Any, cast

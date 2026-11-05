@@ -1,8 +1,22 @@
 """Annual, versioned market/evaluation inputs for model-training analysis."""
 
 from __future__ import annotations
+
+__all__ = [
+    'SCHEMA',
+    'SnapshotBuildReport',
+    'root_path',
+    'source_state',
+    'market_frame',
+    'evaluation_frame',
+    'membership_frame',
+    'build_snapshot',
+    'TrainingAnalysisSnapshot',
+    'weekly_update',
+    'prune_generations',
+    'main',
+]
 import contextlib
-import contextvars
 import fcntl
 import hashlib
 import json
@@ -11,6 +25,7 @@ import shutil
 import uuid
 from collections import OrderedDict
 from pathlib import Path
+from typing import NotRequired, TypedDict
 from time import perf_counter
 
 import numpy as np
@@ -21,9 +36,27 @@ from src.proj import PATH, DB, CALENDAR, Const, Load, Logger
 from src.res.factor.fmp.prepared_market import default_contract, fingerprints
 from src.res.factor.util.classes.prepared_universe import PreparedUniverse
 
-CURRENT = contextvars.ContextVar("training_analysis_snapshot", default=None)
+from src.res.factor.util.classes.analysis_inputs import (
+    CURRENT,
+    LABEL,
+    Axis,
+    EvaluationKind,
+    LabelParams,
+    Quote,
+    return_label_scope,
+)
+
 SCHEMA = 3
-LABEL = (10, 2, "close")
+
+
+class SnapshotBuildReport(TypedDict):
+    compute_seconds: float
+    save_seconds: float
+    total_seconds: float
+    rewritten_years: list[int]
+    generation: str
+    bytes: NotRequired[int]
+    removed_generations: NotRequired[list[str]]
 
 
 def root_path():
@@ -32,7 +65,7 @@ def root_path():
 
 def source_state(dates):
     dates = sorted(set(map(int, dates)))
-    paths = fingerprints(dates)
+    paths: dict[str, object] = dict(fingerprints(dates))
     calendar = DB.path("information_ts", "calendar")
     paths[str(calendar)] = PreparedUniverse.fingerprint(calendar)
     paths["next_dates"] = [int(CALENDAR.td(d, 1)) for d in dates]
@@ -126,7 +159,9 @@ def membership_frame(dates):
     )
 
 
-def build_snapshot(dates, root=None, *, force=False, resume=True):
+def build_snapshot(
+    dates, root=None, *, force=False, resume=True
+) -> SnapshotBuildReport:
     root = Path(root) if root is not None else root_path()
     root.mkdir(parents=True, exist_ok=True)
     with (root / "writer.lock").open("a") as lock:
@@ -143,7 +178,7 @@ def build_snapshot(dates, root=None, *, force=False, resume=True):
             CURRENT.reset(token)
 
 
-def _build(dates, root, force=False, resume=True):
+def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
     start = perf_counter()
     compute = save = 0.0
     pointer = root / "current.json"
@@ -192,6 +227,7 @@ def _build(dates, root, force=False, resume=True):
             prior = old["years"].get(str(year))
             if (
                 not force
+                and old_folder is not None
                 and old.get("schema") == SCHEMA
                 and old.get("label") == list(LABEL)
                 and old.get("contract") == manifest["contract"]
@@ -325,7 +361,6 @@ class TrainingAnalysisSnapshot:
         ):
             raise ValueError("snapshot schema/default configuration mismatch")
         self.cache = OrderedDict()
-        self.hits = self.misses = 0
         years = (
             set(self.meta["years"])
             if dates is None
@@ -421,9 +456,14 @@ class TrainingAnalysisSnapshot:
                 )
         return pd.concat(frames, ignore_index=True) if frames else None
 
-    def evaluation(self, kind, secids, dates, params=LABEL):
+    def evaluation(
+        self,
+        kind: EvaluationKind,
+        secids: Axis,
+        dates: Axis,
+        params: LabelParams = LABEL,
+    ) -> pd.DataFrame | None:
         if kind == "ret" and tuple(params) != LABEL:
-            self.misses += 1
             return None
         frame = self.table("evaluation", dates)
         columns = {
@@ -432,16 +472,13 @@ class TrainingAnalysisSnapshot:
             "style": ["style_" + v for v in Const.Factor.RISK.style],
         }[kind]
         if frame is None or any(c not in frame for c in columns):
-            self.misses += 1
             return None
         requested = pd.MultiIndex.from_product([secids, dates], names=["secid", "date"])
         frame = frame.set_index(["secid", "date"])[columns]
         if not frame.index.is_unique:
-            self.misses += 1
             return None
         positions = frame.index.get_indexer(requested)
         if (positions < 0).any():
-            self.misses += 1
             return None
         frame = frame.take(positions).set_axis(requested)
         frame.columns = (
@@ -453,12 +490,10 @@ class TrainingAnalysisSnapshot:
         )
         if kind == "industry":
             frame = frame.astype(object)
-        self.hits += 1
         return frame
 
-    def quote(self, date, end, price):
+    def quote(self, date: int, end: int, price: str) -> Quote | None:
         if end != int(DATAVENDOR.td(date, 1)):
-            self.misses += 1
             return None
         frame = self._day("market", date)
         key = f"close_to_next_{price}"
@@ -468,15 +503,13 @@ class TrainingAnalysisSnapshot:
             or key not in frame
             or key + "_present" not in frame
         ):
-            self.misses += 1
             return None
         present = frame[key + "_present"].to_numpy(bool)
-        self.hits += 1
         return frame.secid.to_numpy(np.int64)[present], frame[key].to_numpy(float)[
             present
         ]
 
-    def industry(self, date):
+    def industry(self, date: int) -> pd.DataFrame | None:
         frame = self._day("market", date)
         return (
             None
@@ -486,9 +519,13 @@ class TrainingAnalysisSnapshot:
             .astype(object)
         )
 
-    def universe(self, dates, exclusions="st_lowprice_bse_loser_warnst"):
+    def universe(
+        self, dates, exclusions="st_lowprice_bse_loser_warnst", *, name="top-1000"
+    ):
         from src.res.factor.util import Universe, Portfolio
 
+        if name != "top-1000":
+            return None
         frame = self.table("membership", dates)
         required = exclusions.split("_")
         if frame is None or any(c not in frame for c in ["universe_member", *required]):
@@ -501,42 +538,6 @@ class TrainingAnalysisSnapshot:
             return None
         frame = Universe._combine_caches_with_exclusion([frame], exclusions)
         return Portfolio.from_dataframe(frame, name="univ")
-
-
-_RETURN_LABELS = contextvars.ContextVar("training_return_labels", default=None)
-
-
-@contextlib.contextmanager
-def return_label_scope():
-    token = _RETURN_LABELS.set({})
-    try:
-        yield
-    finally:
-        _RETURN_LABELS.reset(token)
-
-
-def return_labels(secids, dates, params):
-    cache = _RETURN_LABELS.get()
-    if cache is not None:
-        key = (params, tuple(map(int, secids)), tuple(map(int, dates)))
-        if key in cache:
-            return cache[key]
-    labels = evaluation_input("ret", secids, dates, params)
-    if labels is None:
-        nday, lag, ret_type = params
-        labels = DATAVENDOR.nday_fut_ret(
-            secids, dates, nday, lag, ret_type=ret_type
-        ).to_dataframe()
-    if cache is not None:
-        cache[key] = labels
-    return labels
-
-
-def evaluation_input(kind, secids, dates, params=LABEL):
-    snapshot = CURRENT.get()
-    return (
-        None if snapshot is None else snapshot.evaluation(kind, secids, dates, params)
-    )
 
 
 def weekly_update():

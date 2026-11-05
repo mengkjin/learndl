@@ -1,4 +1,12 @@
 """RCQuant per-day exclusion and atomic publication; no provider calls here."""
+from __future__ import annotations
+
+__all__ = [
+    'sample_size',
+    'date_lock',
+    'locked_day',
+    'atomic_frame',
+]
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps

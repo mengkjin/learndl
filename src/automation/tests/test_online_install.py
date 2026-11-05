@@ -1,4 +1,9 @@
 """Online publication, real lock contention, and strictly scoped force termination."""
+from __future__ import annotations
+
+__all__ = [
+    'OnlineInstallTest',
+]
 import copy
 import json
 import signal
@@ -29,12 +34,26 @@ class OnlineInstallTest(unittest.TestCase):
         self.store = Store(self.control)
         channels.initialize(self.store)
         priority.initialize(self.store)
-        self.config = dict(scheduler_version=3, timezone='UTC', tasks={
-            'daily': dict(enabled=True, channel='data', lock_group='daily', timeout_seconds=100, priority=0)},
+        self.tasks: dict[str, dict[str, bool | str | int]] = {
+            'daily': dict(enabled=True, channel='data', lock_group='daily', timeout_seconds=100, priority=0),
+        }
+        self.config = dict(
+            scheduler_version=3, timezone='UTC', tasks=self.tasks,
             schedules={'daily': dict(task='daily', every_minutes=1)},
-            watchdog={'units': [], 'tick_seconds': 60, 'jobs': {'task_timeouts': {'enabled': True}}})
-        self.plan = dict(config=copy.deepcopy(self.config), units={'learndl-schedule-daily.timer': 'timer'},
-                         impact={'mode': 'config', 'groups': []})
+            watchdog={'units': [], 'tick_seconds': 60, 'jobs': {'task_timeouts': {'enabled': True}}},
+        )
+        self.plan_tasks = copy.deepcopy(self.tasks)
+        self.plan_schedules: dict[str, dict[str, str | int | list[str]]] = {
+            'daily': dict(task='daily', every_minutes=1),
+        }
+        self.plan_timeout_job = {'enabled': True}
+        self.plan = dict(
+            config=dict(self.config, tasks=self.plan_tasks, schedules=self.plan_schedules,
+                        watchdog={'units': [], 'tick_seconds': 60,
+                                  'jobs': {'task_timeouts': self.plan_timeout_job}}),
+            units={'learndl-schedule-daily.timer': 'timer'},
+            impact={'mode': 'config', 'groups': []},
+        )
         (self.directory / 'installed.json').write_text(json.dumps(self.config))
         (self.directory / 'manifest.json').write_text(json.dumps(
             dict(install_protocol=impact.PROTOCOL, sources=impact.sources(), units=self.plan['units'])))
@@ -49,13 +68,13 @@ class OnlineInstallTest(unittest.TestCase):
         self.enterContext(patch.object(force, 'RunStore', return_value=self.runs))
 
     def test_classification_defaults_and_scopes(self):
-        self.plan['config']['schedules']['daily'] = dict(task='daily', times=['21:00'])
+        self.plan_schedules['daily'] = dict(task='daily', times=['21:00'])
         self.assertEqual(impact.classify(self.plan, self.directory)['mode'], 'config')
-        self.plan['config']['tasks']['daily']['lock_group'] = 'different'
+        self.plan_tasks['daily']['lock_group'] = 'different'
         result = impact.classify(self.plan, self.directory)
         self.assertEqual(result['mode'], 'exclusive')
         self.assertEqual(result['groups'], ['data', 'manual'])
-        self.plan['config']['watchdog']['jobs']['task_timeouts']['enabled'] = False
+        self.plan_timeout_job['enabled'] = False
         self.assertIsNone(impact.classify(self.plan, self.directory)['groups'])
 
     def test_compatibility_requires_reviewed_hash_transition(self):
@@ -75,7 +94,9 @@ class OnlineInstallTest(unittest.TestCase):
                 publication.freeze(self.store, 'daily:10', 'daily', self.config)
                 self.store.enqueue('daily', 10)
                 new = copy.deepcopy(self.config)
-                new['tasks']['daily']['timeout_seconds'] = 200
+                tasks = copy.deepcopy(self.tasks)
+                tasks['daily']['timeout_seconds'] = 200
+                new['tasks'] = tasks
                 digest = impact.publish(self.directory, new)
                 self.assertTrue((self.directory / 'generations' / (digest + '.json')).exists())
                 self.assertEqual(publication.queued_config(self.store, 'daily:10', new), self.config)
@@ -99,7 +120,7 @@ class OnlineInstallTest(unittest.TestCase):
         publication.catch_up(self.directory, self.config, self.plan['units'], 600.5, 720)
         publication.catch_up(self.directory, self.config, self.plan['units'], 600.5, 720)
         self.assertEqual(self.store.scheduled(), [('daily:12', 'daily')])
-        self.config['tasks']['daily']['enabled'] = False
+        self.tasks['daily']['enabled'] = False
         publication.cancel_disabled(self.config)
         self.assertEqual(self.store.scheduled(), [])
         with self.store.connect() as db:
@@ -198,11 +219,11 @@ class OnlineInstallTest(unittest.TestCase):
 
     def test_priority_only_orders_ready_same_lock_requests(self):
         from src.automation.scheduling.calendar_lanes import preferred_request
-        self.config['tasks']['urgent'] = dict(self.config['tasks']['daily'], priority=10)
+        self.tasks['urgent'] = dict(self.tasks['daily'], priority=10)
         self.store.enqueue('daily', 10)
         self.store.enqueue('urgent', 11)
         self.assertEqual(preferred_request(self.store, 'daily:10', 'daily', self.config), 'urgent:11')
-        self.config['tasks']['urgent']['enabled'] = False
+        self.tasks['urgent']['enabled'] = False
         self.assertEqual(preferred_request(self.store, 'daily:10', 'daily', self.config), 'daily:10')
 
 

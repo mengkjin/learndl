@@ -1,6 +1,11 @@
 """Preflight large CPU allocations against physical and cgroup headroom."""
 from __future__ import annotations
 
+__all__ = [
+    'available_bytes',
+    'check_allocation',
+]
+
 from pathlib import Path
 
 import psutil

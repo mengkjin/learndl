@@ -5,6 +5,10 @@ Encode intra-day bars with a Transformer, then process day sequence with GRU.
 
 from __future__ import annotations
 
+__all__ = [
+    'transformer_gru',
+]
+
 import torch
 from torch import nn, Tensor
 

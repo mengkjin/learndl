@@ -1,6 +1,11 @@
 """OOM recovery uses synthetic evidence; no real OOM, mail or systemd changes."""
 from __future__ import annotations
 
+__all__ = [
+    'require_candidate',
+    'RecoveryTest',
+]
+
 import os
 import shutil
 import sys

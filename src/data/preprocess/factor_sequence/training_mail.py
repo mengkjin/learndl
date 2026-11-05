@@ -1,4 +1,11 @@
 """One durable delivery per training attempt, including failures; no SMTP in offline tests."""
+from __future__ import annotations
+
+__all__ = [
+    'Tee',
+    'capture_log',
+    'send_training_result',
+]
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from pathlib import Path
 import json

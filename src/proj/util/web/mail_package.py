@@ -1,6 +1,24 @@
 """Immutable, size-bounded MIME packages. No network or project configuration access."""
 from __future__ import annotations
 
+__all__ = [
+    'MAX_BYTES',
+    'MAX_ATTACHMENT_BYTES',
+    'BODY_BYTES',
+    'wire',
+    'atomic_json',
+    'atomic_bytes',
+    'fsync_dir',
+    'digest',
+    'decoded',
+    'fingerprint',
+    'serialization_differences',
+    'attachment_capacity',
+    'balanced_sizes',
+    'needs_preparation',
+    'prepare',
+]
+
 import copy
 import base64
 import hashlib

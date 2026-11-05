@@ -1,5 +1,12 @@
 """Default-generator market inputs; predictions and portfolios are never persisted."""
 from __future__ import annotations
+
+__all__ = [
+    'default_contract',
+    'fingerprints',
+    'prepare_market',
+    'PreparedMarket',
+]
 import hashlib
 import json
 import os
@@ -90,8 +97,6 @@ class PreparedMarket:
             raise ValueError('prepared market source revision')
         self.month = None
         self.arrays = {}
-        self.hits = 0
-        self.misses = 0
 
     def _month(self, date):
         month = int(date)//100
@@ -109,9 +114,7 @@ class PreparedMarket:
     def quote(self, date, end, price):
         key = f'{date}_{price}'
         if self.meta['next_dates'].get(str(date)) != end or not self._month(date) or key not in self.arrays:
-            self.misses += 1
             return None
-        self.hits += 1
         return self.arrays[key+'_ids'], self.arrays[key]
 
     def industry(self, date):

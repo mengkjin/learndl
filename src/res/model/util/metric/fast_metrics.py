@@ -1,6 +1,12 @@
 """Opt-in metric fast path. Legacy classes remain the default and reference implementation."""
 from __future__ import annotations
 
+__all__ = [
+    'ReusingAccuracyFunction',
+    'FastBatchMetrics',
+    'FastEpochMetrics',
+]
+
 import pandas as pd
 import torch
 

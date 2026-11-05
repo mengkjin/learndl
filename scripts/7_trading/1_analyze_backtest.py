@@ -17,11 +17,11 @@
 #       type : int
 #       desc : end yyyymmdd
 
-from src.api.pkgs.trading import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('analyze_tradeport' , '@port_name_starter' , lock_num = 0)
 def main(port_name_starter : str | None = None , start : int | None = None , end : int | None = None , **kwargs):
+    from src.api.pkgs.trading import TradingAPI
     assert port_name_starter is not None , 'port_name_starter is required'
     TradingAPI.backtest(port_name_starter, start , end)
     

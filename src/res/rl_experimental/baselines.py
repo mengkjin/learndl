@@ -1,4 +1,13 @@
+"""Portfolio baselines, replay histories, and evaluation metrics for RL experiments."""
 from __future__ import annotations
+
+__all__ = [
+    'BaselineKind',
+    'write_history',
+    'history_metrics',
+    'project_robust_target',
+    'replay_baseline',
+]
 
 import csv
 import json

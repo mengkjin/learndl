@@ -282,7 +282,7 @@ class MACHINE:
     assert python_path , f'python_path not set for {name}'
 
     @classmethod
-    def info(cls) -> dict[str, Any]:
+    def info(cls, *, include_device: bool = True) -> dict[str, Any]:
         """return the machine info list"""
         return {
             'Machine Name' : cls.name, 
@@ -291,7 +291,7 @@ class MACHINE:
             'Timezone' : cls.timezone,
             'Main Path' : cls.main_path, 
             'Python Path' : cls.python_path,
-            'Best Device' : cls.best_device(),
+            **({'Best Device': cls.best_device()} if include_device else {}),
         }
 
     @classmethod

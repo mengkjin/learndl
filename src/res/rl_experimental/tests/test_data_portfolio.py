@@ -1,4 +1,9 @@
+"""Tests for panel preparation, portfolio projection, and execution."""
 from __future__ import annotations
+
+__all__ = [
+    'DataAndPortfolioTest',
+]
 
 import tempfile
 import unittest

@@ -1,4 +1,16 @@
 """Versioned, explicit schema; no database imports or implicit feature discovery."""
+from __future__ import annotations
+
+__all__ = [
+    'KEYS',
+    'SHARED_KEYS',
+    'VERSION',
+    'FACTORS',
+    'EVENTS',
+    'STOCK_CHANNELS',
+    'DIAGNOSTIC_CHANNELS',
+    'BuildConfig',
+]
 from dataclasses import asdict, dataclass
 import hashlib
 import json

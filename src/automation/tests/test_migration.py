@@ -1,4 +1,9 @@
 """Upgrade compatibility without production state, services, SMTP or training."""
+from __future__ import annotations
+
+__all__ = [
+    'MigrationTest',
+]
 import hashlib
 import importlib
 import json

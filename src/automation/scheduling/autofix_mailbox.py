@@ -1,4 +1,12 @@
 """Host access to an untrusted sandbox mailbox, without following symlinks."""
+from __future__ import annotations
+
+__all__ = [
+    'directory',
+    'create',
+    'write',
+    'read',
+]
 from contextlib import contextmanager
 import json
 import os

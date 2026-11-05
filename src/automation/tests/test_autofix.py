@@ -1,6 +1,20 @@
 """Autofix contracts; all writes use disposable fixtures, never production data."""
 from __future__ import annotations
 
+__all__ = [
+    'SCRIPT',
+    'Fixture',
+    'SpecTests',
+    'LedgerTests',
+    'IsolationTests',
+    'ExecutionTests',
+    'AdmissionTests',
+    'ScriptContractTests',
+    'TypedParameterTests',
+    'WorkerDiagnosticsTests',
+    'MailboxSafetyTests',
+]
+
 import concurrent.futures
 import json
 import os

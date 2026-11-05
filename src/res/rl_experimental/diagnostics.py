@@ -1,6 +1,11 @@
 """Comparable portfolio summaries and plots, independent of PPO training."""
 from __future__ import annotations
 
+__all__ = [
+    'compare_metrics',
+    'comparison_figure',
+]
+
 from typing import Any
 
 import numpy as np

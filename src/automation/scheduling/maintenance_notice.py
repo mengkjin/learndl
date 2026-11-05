@@ -1,9 +1,22 @@
 """Read-only, bounded evidence snapshots for delayed maintenance notifications."""
+from __future__ import annotations
+
+__all__ = [
+    'PREFIX',
+    'stamp',
+    'duration',
+    'MaintenanceSnapshot',
+    'capture',
+    'render',
+    'record_failure',
+    'attachment',
+]
 from datetime import datetime, timezone
 import json
 import socket
 import sqlite3
 import time
+from typing import TypedDict
 
 import portalocker
 import psutil
@@ -23,9 +36,20 @@ def duration(value):
     return f'{minutes // 60}h {minutes % 60}m'
 
 
-def capture(state):
+class MaintenanceSnapshot(TypedDict):
+    state: dict
+    captured_at: float
+    host: str
+    tasks: list[dict]
+    limitations: list[str]
+
+
+def capture(state: dict) -> MaintenanceSnapshot:
     now = time.time()
-    result = dict(state=state, captured_at=now, host=socket.gethostname(), tasks=[], limitations=[])
+    result: MaintenanceSnapshot = {
+        'state': state, 'captured_at': now, 'host': socket.gethostname(),
+        'tasks': [], 'limitations': [],
+    }
     deadline = time.monotonic() + 2
     sources = [(runtime_dir() / 'runs.sqlite', 'runs', ('starting', 'running', 'terminating', 'finalizing')),
                (state_dir() / 'ledger.sqlite', 'fixes', ('starting', 'running'))]

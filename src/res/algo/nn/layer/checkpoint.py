@@ -1,6 +1,11 @@
 """Explicit, state-dict-neutral activation checkpoint regions for NN models."""
 from __future__ import annotations
 
+__all__ = [
+    'is_cuda_oom',
+    'ActivationCheckpointMixin',
+]
+
 from typing import Any
 
 import torch

@@ -1,4 +1,9 @@
 """Shared lifecycle guard against automatic in-place code replacement."""
+from __future__ import annotations
+
+__all__ = [
+    'training_code_guard',
+]
 from contextlib import contextmanager
 
 import portalocker

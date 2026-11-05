@@ -1,4 +1,9 @@
 """In-memory source cleanup; never rewrites project database files."""
+from __future__ import annotations
+
+__all__ = [
+    'deduplicate_table',
+]
 import pandas as pd
 
 from .progress import progress

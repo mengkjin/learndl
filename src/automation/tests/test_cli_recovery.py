@@ -1,4 +1,9 @@
+"""Tests for registered CLI session recovery and ownership."""
 from __future__ import annotations
+
+__all__ = [
+    'RecoveryTest',
+]
 
 import json
 import subprocess

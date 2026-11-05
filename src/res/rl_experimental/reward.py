@@ -1,6 +1,17 @@
 """Stateless, auditable reward functions for the portfolio environment."""
 from __future__ import annotations
 
+__all__ = [
+    'JsonValue',
+    'RewardConfig',
+    'RewardContext',
+    'RewardResult',
+    'RewardFunction',
+    'builtin_reward',
+    'example_drawdown_aware_reward',
+    'RewardEvaluator',
+]
+
 import hashlib
 import importlib
 import inspect

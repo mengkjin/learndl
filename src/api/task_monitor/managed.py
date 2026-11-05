@@ -1,5 +1,11 @@
 """Read-only monitor adapter for scheduler and autofix process groups."""
 from __future__ import annotations
+
+__all__ = [
+    'PHASES',
+    'rows',
+    'snapshots',
+]
 import json
 import sqlite3
 from pathlib import Path

@@ -1,4 +1,10 @@
+"""Tests for reward evaluation and experiment bundle persistence."""
 from __future__ import annotations
+
+__all__ = [
+    'RewardTest',
+    'BundleTest',
+]
 
 import json
 import shutil

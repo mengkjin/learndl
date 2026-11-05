@@ -1,4 +1,11 @@
 """Read-only project source adapter. Missing required sources are errors, not synthetic fallbacks."""
+from __future__ import annotations
+
+__all__ = [
+    'read_daily_factor',
+    'preflight',
+    'read_project',
+]
 import numpy as np
 import pandas as pd
 from .schema import BuildConfig, EVENTS

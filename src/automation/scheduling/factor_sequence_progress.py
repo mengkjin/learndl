@@ -1,4 +1,11 @@
 """Bounded, read-only evidence collection; never reconciles or creates run ledgers."""
+from __future__ import annotations
+
+__all__ = [
+    'read_json',
+    'log_tail',
+    'collect',
+]
 from pathlib import Path
 import json
 import os

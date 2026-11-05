@@ -1,4 +1,9 @@
+"""Tests for task monitor repository queries and task records."""
 from __future__ import annotations
+
+__all__ = [
+    'TaskMonitorRepositoryTest',
+]
 
 import json
 import sqlite3

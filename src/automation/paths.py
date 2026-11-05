@@ -1,4 +1,12 @@
 """Checkout locations only; no project initialization or runtime-state migration."""
+from __future__ import annotations
+
+__all__ = [
+    'project_root',
+    'ROOT',
+    'config_directory',
+    'autofix_manifest',
+]
 from pathlib import Path
 
 

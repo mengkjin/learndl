@@ -5,6 +5,17 @@ No execution identities are created or reset by this module.
 """
 from __future__ import annotations
 
+__all__ = [
+    'KEY',
+    'enabled',
+    'read',
+    'write',
+    'initialize',
+    'git_due',
+    'blocker',
+    'status',
+]
+
 import json
 import math
 import time

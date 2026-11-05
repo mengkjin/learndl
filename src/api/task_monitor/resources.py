@@ -1,6 +1,12 @@
 """Host-wide resource sampling; no CUDA context or task lifecycle writes."""
 from __future__ import annotations
 
+__all__ = [
+    'GPUUsage',
+    'ResourceSnapshot',
+    'sample_resources',
+]
+
 import csv
 import io
 import math

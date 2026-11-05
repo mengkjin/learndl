@@ -1,6 +1,12 @@
 """Same-machine, read-only browsing of a storage report's SQLite snapshot."""
 from __future__ import annotations
 
+__all__ = [
+    'machine_identity',
+    'SnapshotIndex',
+    'StorageReportServer',
+]
+
 import hashlib
 import json
 import platform

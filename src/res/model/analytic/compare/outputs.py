@@ -1,6 +1,12 @@
 """Sampled cross-sectional comparisons and exact historical checkpoint routing."""
 from __future__ import annotations
 
+__all__ = [
+    'checkpoint_for_date',
+    'ArchivedOutputProvider',
+    'analyze_outputs',
+]
+
 from itertools import combinations_with_replacement
 
 import numpy as np

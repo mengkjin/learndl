@@ -33,12 +33,12 @@
 
 from pathlib import Path
 
-from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2 , markdown_catcher = True)
 def main(schedule_name : str | None = None , short_test : bool | None = None , 
          resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
+    from src.api.pkgs.model import ModelAPI
     assert schedule_name is not None , 'schedule_name is required'
     ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end ,
                             resume_selection=kwargs.get('resume_selection', 'interactive'),

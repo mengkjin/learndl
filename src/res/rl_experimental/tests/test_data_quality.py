@@ -1,3 +1,9 @@
+"""Tests for market panel quality checks and invalid input handling."""
+from __future__ import annotations
+
+__all__ = [
+    'DataQualityTest',
+]
 import io
 import unittest
 from contextlib import redirect_stderr, redirect_stdout

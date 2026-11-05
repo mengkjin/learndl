@@ -1,6 +1,11 @@
 """Admission races and independent helper contracts, using disposable ledgers."""
 from __future__ import annotations
 
+__all__ = [
+    'PriorityTests',
+    'HelperQueueTests',
+]
+
 import json
 import os
 from pathlib import Path

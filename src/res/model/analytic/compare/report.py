@@ -1,6 +1,12 @@
 """Compact matplotlib reports and typed Excel tables using project dependencies."""
 from __future__ import annotations
 
+__all__ = [
+    'make_highlights',
+    'build_figures',
+    'export_report',
+]
+
 import json
 import re
 import textwrap

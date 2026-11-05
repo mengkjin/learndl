@@ -1,3 +1,9 @@
+"""Tests for automation control notifications and delivery state."""
+from __future__ import annotations
+
+__all__ = [
+    'NoticeTests',
+]
 import unittest
 from src.automation.scheduling.auxiliary import control_notice
 

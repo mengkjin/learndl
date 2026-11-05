@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from subprocess import CalledProcessError
 from typing import Type
 
 from src.api.util.backend.script import ScriptRunner, iter_runnable_scripts
@@ -238,7 +239,15 @@ class DirectCallHub(DirectCall):
             from src.api.calls.source_code import GitClearPull
 
             Logger.note('Pulling latest code before restarting the hub')
-            GitClearPull().run()
+            try:
+                GitClearPull().run()
+            except CalledProcessError as exc:
+                detail = (exc.stderr or '').strip() or (exc.stdout or '').strip() or str(exc)
+                Logger.error(f'Git Pull failed: {detail}')
+                return
+            except (AssertionError, OSError, ValueError) as exc:
+                Logger.error(f'Git Pull failed: {exc}')
+                return
             raise ProcessReload('Git Pull completed')
 
         if choice == 'Train Schedule Model':

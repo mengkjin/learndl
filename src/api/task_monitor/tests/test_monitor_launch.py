@@ -1,4 +1,9 @@
 """Regressions for monitor launch targeting and current Streamlit rendering."""
+from __future__ import annotations
+
+__all__ = [
+    'MonitorLaunchTest',
+]
 import unittest
 from unittest.mock import MagicMock, patch
 

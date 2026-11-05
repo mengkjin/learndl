@@ -1,6 +1,16 @@
 """Conservative, bounded master fast-forward for the short-lived watchdog."""
 from __future__ import annotations
 
+__all__ = [
+    'queue_update_email',
+    'deliver_update_emails',
+    'GitUpdateError',
+    'repository_blocker',
+    'training_blocker',
+    'check_and_update',
+    'main',
+]
+
 import json
 import hashlib
 import os

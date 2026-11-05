@@ -1,6 +1,33 @@
 """Plan and install project schedules without taking ownership of external cron."""
 from __future__ import annotations
 
+__all__ = [
+    'BEGIN',
+    'END',
+    'PREFIX',
+    'UNIT_DIR',
+    'desktop_path',
+    'desktop_entry',
+    'command',
+    'read_cron',
+    'timer_state',
+    'external_cron',
+    'field_values',
+    'cron_slots',
+    'normalize_args',
+    'cron_coverage',
+    'unit_quote',
+    'service',
+    'protected_service',
+    'unit_path',
+    'next_times',
+    'build_plan',
+    'atomic_json',
+    'validate_unit',
+    'apply_plan',
+    'main',
+]
+
 import argparse
 import difflib
 import hashlib

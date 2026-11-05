@@ -8,12 +8,12 @@
 # email: true
 # mode: shell
 
-from src.api.pkgs.update import UpdateAPI
 
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('tracking_update')
 def main(**kwargs):
+    from src.api.pkgs.update import UpdateAPI
     UpdateAPI.tracking_port()
         
 if __name__ == '__main__':

@@ -1,4 +1,10 @@
+"""Command-line entry point for portfolio RL experiments."""
 from __future__ import annotations
+
+__all__ = [
+    'parser',
+    'main',
+]
 
 import argparse
 import json

@@ -1,6 +1,22 @@
 """Side-effect-free autofix parsing. Never import submitted scripts or eval types."""
 from __future__ import annotations
 
+__all__ = [
+    'ID',
+    'RESERVED',
+    'ManifestError',
+    'UniqueLoader',
+    'canonical',
+    'digest',
+    'manifest',
+    'declaration',
+    'timeout_seconds',
+    'script_path',
+    'header',
+    'validate',
+    'redact',
+]
+
 import ast
 import hashlib
 import json

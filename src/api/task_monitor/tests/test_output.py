@@ -1,4 +1,9 @@
+"""Tests for task output reading, formatting, and refresh behavior."""
 from __future__ import annotations
+
+__all__ = [
+    'TaskOutputTest',
+]
 
 import os
 import tempfile

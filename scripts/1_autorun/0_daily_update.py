@@ -12,7 +12,6 @@
 #       required: False
 #       default: True
 
-from src.api.pkgs.update import UpdateAPI
 
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
@@ -20,6 +19,7 @@ from src.proj.util.filesys.shared_sync import SharedSync
 
 @ScriptTool('daily_update' , CALENDAR.update_to() , forfeit_if_done = True)
 def main(forfeit_if_done : bool = True , **kwargs):
+    from src.api.pkgs.update import UpdateAPI
     SharedSync.sync()
     UpdateAPI.daily()
 

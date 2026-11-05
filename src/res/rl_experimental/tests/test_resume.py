@@ -1,3 +1,9 @@
+"""Tests for experiment checkpoint recovery and resume validation."""
+from __future__ import annotations
+
+__all__ = [
+    'ResumeTest',
+]
 import importlib
 import json
 import shutil

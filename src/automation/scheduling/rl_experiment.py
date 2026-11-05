@@ -1,6 +1,22 @@
 """Lightweight RL configuration and Git eligibility; never import training here."""
 from __future__ import annotations
 
+__all__ = [
+    'CONFIG_PATH',
+    'TASK',
+    'ConfigurationPending',
+    'parse_config',
+    'read_config',
+    'settings',
+    'git_revision',
+    'observe',
+    'save_state',
+    'status',
+    'waiting',
+    'fit_guard',
+    'execute',
+]
+
 import hashlib
 import json
 from typing import Any

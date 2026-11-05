@@ -324,26 +324,43 @@ class ResumeValidationTest(unittest.TestCase):
         base.with_new_index.assert_called_once_with(2)
 
     def test_real_schedule_config_keeps_old_directory_and_resumes_exact_path(self):
+        schedule_name = 'resume_fixture'
+        schedule_roots = [self.root / name for name in ('schedules', 'shared_schedules', 'linear_schedules')]
+        for folder in schedule_roots:
+            folder.mkdir()
+        (schedule_roots[0] / f'{schedule_name}.yaml').write_text(
+            'model.module: gru\n'
+            'model.submodels: [best]\n'
+            'model.labels: [std_lag1_10]\n'
+            'input.type: data\n'
+            'input.data.types: day\n'
+            'input.sequence.lens: {day: 30}\n'
+            'input.sequence.steps: {day: 1}\n',
+            encoding='utf-8',
+        )
         model_root = (self.root / 'models').resolve()
         nn_root = model_root / 'nn'
         nn_root.mkdir(parents=True)
         with patch.object(PATH, 'model', model_root), patch.object(PATH, 'model_nn', nn_root), \
+             patch.object(PATH, 'sched', schedule_roots[0]), \
+             patch.object(PATH, 'sched_shared', schedule_roots[1]), \
+             patch.object(PATH, 'sched_linear', schedule_roots[2]), \
              patch.object(ModelPath, 'log_operation'):
-            config = ModelConfig(schedule_name='gru_day_new_rtn', stage=1, resume=0,
+            config = ModelConfig(schedule_name=schedule_name, stage=1, resume=0,
                                  selection=0, short_test=False, vb_level='never').start_model()
             original = config.base_path.base
             # An interrupted run with configs but no checkpoints must keep its folder.
-            fresh = ModelConfig(schedule_name='gru_day_new_rtn', stage=1, resume=0,
+            fresh = ModelConfig(schedule_name=schedule_name, stage=1, resume=0,
                                 selection=0, short_test=False, vb_level='never').start_model()
             self.assertNotEqual(fresh.base_path.base, original)
             self.assertTrue(original.is_dir())
             with self.assertRaisesRegex(FileNotFoundError, 'no saved models'):
-                ModelConfig(original, schedule_name='gru_day_new_rtn', stage=1, resume=1,
+                ModelConfig(original, schedule_name=schedule_name, stage=1, resume=1,
                             selection=0, short_test=False, vb_level='never').start_model()
             artifact = original / 'archive/0/20240101/best/state_dict.pt'
             artifact.parent.mkdir(parents=True)
             torch.save({'weight': torch.ones(1)}, artifact)
-            resumed = ModelConfig(original, schedule_name='gru_day_new_rtn', stage=1, resume=1,
+            resumed = ModelConfig(original, schedule_name=schedule_name, stage=1, resume=1,
                                   selection=0, short_test=False, vb_level='never').start_model()
             self.assertEqual(resumed.base_path.base, original)
             with history.collect_training_runs() as runs, patch.object(PATH, 'lc_machine', self.root), \
@@ -351,7 +368,7 @@ class ResumeValidationTest(unittest.TestCase):
                 trainer = FakeTrainer(original)
                 trainer.config = resumed
                 trainer.execute()
-            self.assertEqual(runs[0]['schedule_name'], 'gru_day_new_rtn')
+            self.assertEqual(runs[0]['schedule_name'], schedule_name)
             self.assertTrue(runs[0]['resume'])
 
 

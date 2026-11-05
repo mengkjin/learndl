@@ -1,6 +1,13 @@
 """Protected, explicit-initialization ledger. Opening a missing DB never creates it."""
 from __future__ import annotations
 
+__all__ = [
+    'ACTIVE',
+    'state_dir',
+    'initialize',
+    'Store',
+]
+
 import hashlib
 import json
 import os

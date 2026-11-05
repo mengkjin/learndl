@@ -1,5 +1,6 @@
 """Non-instantiable project facade: config namespaces, verbosity, logging, and shared instances."""
 from __future__ import annotations
+import sys
 from typing import Any , Literal , TypeAlias
 
 from src.__version__ import __version__
@@ -33,9 +34,9 @@ class Proj(metaclass=ProjMeta):
         return cls.debug['complete_verbosity'] or not cls.vb.ignore(vb_level)
 
     @classmethod
-    def info(cls) -> dict[str, Any]:
+    def info(cls, *, include_device: bool = True) -> dict[str, Any]:
         """Merge ``MACHINE.info()`` with verbosity and log-writer summary."""
-        return {**MACHINE.info(), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
+        return {**MACHINE.info(include_device=include_device), 'Proj Verbosity' : cls.vb, 'Proj Log File' : cls.log_writer}
 
     @classmethod
     def print_info(cls , once_type : InfoPrintType = None , identifier = 'project_initialized'):
@@ -44,12 +45,15 @@ class Proj(metaclass=ProjMeta):
 
         Warns if this host is marked ``cuda_server`` but CUDA is unavailable.
         """
-        import torch
         from src.proj.log import Logger
         object = 'logger' if once_type == 'script' else 'os'
-        Logger.only_once(cls.info() , printer = 'stdout_pairs' , title = 'Project Info:' , object = object , mark = identifier)
-        if MACHINE.cuda_server and not torch.cuda.is_available():
-            Logger.only_once(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status' , printer = 'error' , object = object , mark = identifier)
+        # Ordinary scripts should not load Torch just to print their startup banner.
+        include_device = MACHINE.cuda_server or 'torch' in sys.modules
+        Logger.only_once(cls.info(include_device=include_device) , printer = 'stdout_pairs' , title = 'Project Info:' , object = object , mark = identifier)
+        if MACHINE.cuda_server:
+            import torch
+            if not torch.cuda.is_available():
+                Logger.only_once(f'[{MACHINE.name}] server should have cuda but not available, please check the cuda status' , printer = 'error' , object = object , mark = identifier)
 
 
     @classmethod

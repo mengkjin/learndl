@@ -1,4 +1,16 @@
 """Delete only recorded legacy per-fold model roots, then run six ordinary schedules."""
+from __future__ import annotations
+
+__all__ = [
+    'LEGACY_RUNS',
+    'MODELS',
+    'MODEL_PATTERN',
+    'LEGACY_NAME',
+    'plan_cleanup',
+    'delete_planned',
+    'check_managed_scopes',
+    'execute',
+]
 from pathlib import Path
 import json
 import re

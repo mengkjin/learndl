@@ -24,7 +24,6 @@ from __future__ import annotations
 from src.proj import DB , Dates , Logger
 from src.proj.util.script import ScriptTool
 from src.api.util.wrapper import wrap_update
-from src.data.update.custom.min_chars import MinCharsTaggedUpdater
 from src.data.update.custom.min_chars._common import DB_MIN_SRC , DB_SRC , START_DATE , min_dates
 
 
@@ -39,6 +38,7 @@ def _resolve_end(end : int) -> int:
 @ScriptTool('recalc_min_chars_tag')
 def main(start : int = START_DATE , end : int = 0 , **kwargs):
     """Overwrite ``min_chars/min_chars_tag`` over ``[start, end]`` (roll must exist)."""
+    from src.data.update.custom.min_chars import MinCharsTaggedUpdater
     start = max(int(start) , START_DATE)
     end = _resolve_end(end)
     assert start <= end , f'empty range: start={start} end={end}'

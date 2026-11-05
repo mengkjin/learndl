@@ -1,6 +1,16 @@
 """Linux-only filesystem isolation. No unsandboxed fallback is supported."""
 from __future__ import annotations
 
+__all__ = [
+    'READONLY',
+    'WRITABLE',
+    'check_mounts',
+    'preflight',
+    'check_tree',
+    'command',
+    'script_event',
+]
+
 import json
 import os
 import re

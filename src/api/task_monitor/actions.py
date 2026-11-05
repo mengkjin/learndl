@@ -1,6 +1,15 @@
 """Explicit operator actions, separate from the monitor's read-only queries."""
 from __future__ import annotations
 
+__all__ = [
+    'ALIVE_STATUSES',
+    'KillTarget',
+    'KillResult',
+    'kill_unavailable_reason',
+    'prepare_kill',
+    'kill_task',
+]
+
 import os
 from dataclasses import dataclass
 from typing import Literal
@@ -55,8 +64,11 @@ def prepare_kill(task: TaskSnapshot) -> KillTarget:
     assert task.pid is not None
     if task.managed_kind == 'scheduler':
         from src.automation.scheduling.operator_stop import prepare
-        identity=prepare(task.task_id,task.pid,task.process_created)
-        return KillTarget(task.task_id,task.pid,task.process_created,task.script,task.effective_start,identity)
+        created = task.process_created
+        if created is None:
+            raise ValueError('Missing managed process creation time.')
+        identity = prepare(task.task_id, task.pid, created)
+        return KillTarget(task.task_id, task.pid, created, task.script, task.effective_start, identity)
     return KillTarget(task.task_id, task.pid, psutil.Process(task.pid).create_time(),
                       task.script, task.effective_start)
 

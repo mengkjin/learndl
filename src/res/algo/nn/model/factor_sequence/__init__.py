@@ -3,6 +3,7 @@
 Streams: stock [N,60,Dx], performance [1,120,Dp], market [1,120,Dm].
 Every batch is one date; shared streams are never copied to N in storage.
 """
+from src.res.algo.registry import FACTOR_SEQUENCE_MODULES
 import torch
 from torch import nn
 
@@ -125,9 +126,7 @@ class FactorValueGate(FactorSequence):
     mode = 'gate'
 
 
-MODELS = {'factorseq_mlp':FactorSnapshot, 'factorseq_gru':FactorGRU,
-          'factorseq_m1':FactorLateFusion, 'factorseq_m2':FactorConditioned,
-          'factorseq_mask':FactorMissingness, 'factorseq_gate':FactorValueGate}
+MODELS = {name: globals()[class_name] for name, class_name in FACTOR_SEQUENCE_MODULES.items()}
 CATALOG = {name: {'status':'implemented','version':1,'mode':model.mode,
                   'streams':['factorseq','factorperf','factormarket'],
                   'windows':[60,120,120], 'shared_streams':['factorperf','factormarket'],

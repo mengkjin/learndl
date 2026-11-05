@@ -159,7 +159,7 @@ def calc_style_corr(
     factor : StockFactor , benchmark : Base.alias.SingleBenchmark = None
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
-    from src.res.factor.training_analysis_snapshot import evaluation_input
+    from src.res.factor.util.classes.analysis_inputs import evaluation_input
     style = evaluation_input('style', factor.secid, factor.date)
     if style is None:
         style = DATAVENDOR.risk_style_exp(factor.secid , factor.date).to_dataframe()

@@ -1,4 +1,12 @@
 """Explicit immutable-bundle loading through the existing processor registry."""
+from __future__ import annotations
+
+__all__ = [
+    'load_block',
+    'PrePro_factorseq',
+    'PrePro_factorperf',
+    'PrePro_factormarket',
+]
 from pathlib import Path
 import numpy as np
 import torch

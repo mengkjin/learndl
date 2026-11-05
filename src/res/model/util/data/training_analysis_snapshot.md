@@ -61,23 +61,13 @@ The manifest must never be manually edited to bypass invalidation.
 Commands (from the project environment):
 
 ```sh
-python -m src.res.factor.training_analysis_snapshot inspect
-python -m src.res.factor.training_analysis_snapshot validate --start 20240101 --end 20241231
-python -m src.res.factor.training_analysis_snapshot rebuild --start 20240101 --end 20241231
+python -m src.res.model.util.data.training_analysis_snapshot inspect
+python -m src.res.model.util.data.training_analysis_snapshot validate --start 20240101 --end 20241231
+python -m src.res.model.util.data.training_analysis_snapshot rebuild --start 20240101 --end 20241231
 ```
 
 `rebuild` forces regeneration of the requested plus existing snapshot coverage.
-Preparation reports compute, save and total wall time separately. Runtime benchmark
-excludes preparation but includes reader opening, source validation and first reads:
-
-```sh
-python -m src.res.model.diagnostics.training_snapshot_benchmark --output results/nn_training_review/training_snapshot/year_final
-```
-
-The diagnostic uses frozen real `gru_day_V1` predictions and compares all factor
-result tables plus the portfolio account with tolerances `rtol=1e-6, atol=1e-8`.
-Its previous path uses the stage-2 monthly market package. It measures analysis
-replay, not neural-network fitting, plotting, export or full train_schedule time.
+Preparation reports compute, save and total wall time separately.
 
 ## Historical data limitation
 
@@ -97,9 +87,9 @@ that upstream discrepancy is resolved; this change preserves existing analysis r
 Run from the repository root:
 
 ```sh
-.venv/bin/python scripts/data/create_training_analysis_snapshot.py
-.venv/bin/python scripts/data/create_training_analysis_snapshot.py --resume false
-.venv/bin/python scripts/data/create_training_analysis_snapshot.py --start 20240101 --end 20241231
+.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py
+.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py --resume false
+.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py --start 20240101 --end 20241231
 ```
 
 The default `resume=true` preserves existing coverage and rebuilds changed years.
@@ -142,13 +132,22 @@ export and neural fitting. Historical local warnst coverage is incomplete; both
 paths used the same stored four-flag universe. Benchmark weights use the original
 loader because historical projected weights disagree with raw reconstruction.
 
-The production portfolio entrypoints share generator_array.py. The former
-t50_array.py module and its obsolete documentation have been removed. Historical
-contract tests and monthly package diagnostics remain as compatibility/reference
-coverage. Raw benchmark artifacts and snapshot data remain local, outside Git.
+The production portfolio entrypoints share `run_generator`. Historical timing
+results are retained for reference. The diagnostic executables have been retired.
 
-After consolidating the generator module, all 42 related regression tests passed.
-An additional full-2024 paired replay passed all 11 output-table comparisons.
-Its core replay times were 41.895s and 20.407s, with FMP times 7.329s and 4.452s.
-This final pair verifies integration; the five-pair medians above remain the
-performance summary because single-run timing is variable.
+## Layout and retirement verification
+
+The model data package owns snapshot construction, publication and readers.
+The factor package owns the input provider contract and callback-scoped return
+label memoization. Both import orders work with the same provider context.
+The existing schema 3 generation was read directly after the move.
+
+A replay over the same 242 trading dates and the same stored predictions and
+snapshot generation matched all 11 factor and account tables before and after
+cleanup at `rtol=1e-6, atol=1e-8`. The temporary replay code was removed.
+
+The affected Python files pass the project Ruff and Pyright configurations.
+The wider `src` and `scripts` comparison introduced no diagnostics. At that
+point, the remaining baseline was 31 Ruff findings and 90 Pyright errors plus
+21 warnings. The follow-up cleanup passed `ruff check .` and the full project
+Pyright check with zero errors and warnings across 865 Python files.

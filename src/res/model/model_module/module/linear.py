@@ -1,6 +1,10 @@
 """Fixed linear combination of the already preprocessed final input columns."""
 from __future__ import annotations
 
+__all__ = [
+    'LinearPredictor',
+]
+
 import torch
 from src.res.model.util import PredictorModel, BatchInput
 

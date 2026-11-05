@@ -36,7 +36,6 @@
 
 from __future__ import annotations
 from src.proj.util.script import ScriptTool
-from src.api.calls.test.parallel_factor_calculation import test_parallel_factor_calculation
 
 @ScriptTool('test_parallel_factors', lock_num=0)
 def main(
@@ -47,6 +46,7 @@ def main(
     lookback_td: int | None = 10,
     **kwargs,
 ) -> None:
+    from src.api.calls.test.parallel_factor_calculation import test_parallel_factor_calculation
     assert compare == 'both' or compare == 'forloop' or compare == 'process'
     return test_parallel_factor_calculation(date, n_factors, compare, overwrite, lookback_td)
 

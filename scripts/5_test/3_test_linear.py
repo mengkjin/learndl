@@ -28,12 +28,12 @@
 
 from src.proj import Options
 from src.proj.util.script import ScriptTool
-from src.res.model.model_module.application import ModelTrainer
 
 
 @ScriptTool('test_linear', '@schedule_name', lock_num=0)
 def main(schedule_name: str | None = None, resume: bool = False,
          start: int | None = None, end: int | None = None, **kwargs):
+    from src.res.model.model_module.application import ModelTrainer
     if schedule_name not in Options.available_linear_schedules(refresh=True):
         raise ValueError(f'A schedule in configs/schedule/linear is required: {schedule_name!r}')
     return ModelTrainer.schedule(schedule_name, short_test=False, resume=int(bool(resume)), start=start, end=end)

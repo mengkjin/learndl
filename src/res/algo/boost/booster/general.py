@@ -13,17 +13,15 @@ from functools import cached_property
 from typing import Any
 
 from src.proj.bases.enums import BoostModuleType
+from src.res.algo.registry import BOOST_MODULES
 from . import ada , catboost , lgbm , xgboost
 from ..util import BasicBoostModel , BoostInput
 
 __all__ = ['GeneralBoostModel' , 'AVAILABLE_BOOSTS']
 
-AVAILABLE_BOOSTS = {
-    BoostModuleType.ADA : ada.AdaBoost,
-    BoostModuleType.LGMB : lgbm.Lgbm,
-    BoostModuleType.XGBOOST : xgboost.XgBoost,
-    BoostModuleType.CATBOOST : catboost.CatBoost,
-}
+_BACKENDS = {'ada': ada, 'lgbm': lgbm, 'xgboost': xgboost, 'catboost': catboost}
+AVAILABLE_BOOSTS = {BoostModuleType(name): getattr(_BACKENDS[path.split(".")[0]], path.split(".")[1])
+                    for name, path in BOOST_MODULES.items()}
 
 class GeneralBoostModel:
     """Unified wrapper around LGBM / XGBoost / CatBoost / AdaBoost back-ends.

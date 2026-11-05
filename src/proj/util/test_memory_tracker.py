@@ -1,4 +1,9 @@
+"""Tests for process memory tracking records and lifecycle markers."""
 from __future__ import annotations
+
+__all__ = [
+    'TestProcessMemoryTracker',
+]
 
 import json
 import os

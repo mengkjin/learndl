@@ -12,11 +12,11 @@
 #       required : True
 #       default : False
 
-from src.api.pkgs.trading import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('backtest_rebuild_all')
 def main(confirm : bool | None = None , **kwargs):
+    from src.api.pkgs.trading import TradingAPI
     assert confirm , 'confirm is required'
     TradingAPI.backtest_rebuild_all()
 

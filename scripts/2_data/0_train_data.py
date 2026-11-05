@@ -6,11 +6,11 @@
 # email: True
 # mode: shell
 
-from src.api.pkgs.data import DataAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('reconstruct_train_data')
 def main(**kwargs):
+    from src.api.pkgs.data import DataAPI
     DataAPI.reconstruct_train_data(confirm = 1)
     
 if __name__ == '__main__':

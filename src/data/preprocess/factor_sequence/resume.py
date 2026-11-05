@@ -2,6 +2,13 @@
 
 Never claims epoch/checkpoint continuation. Original attempts remain immutable.
 """
+from __future__ import annotations
+
+__all__ = [
+    'inspect_resume',
+    'copy_completed_fold',
+    'verify_current_labels',
+]
 from pathlib import Path
 import json
 import re

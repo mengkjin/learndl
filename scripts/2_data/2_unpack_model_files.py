@@ -11,10 +11,10 @@
 
 from src.proj.util.script import ScriptTool
 
-from src.res.model.util import PredictorPath
 
 @ScriptTool('unpack_model_files')
 def main(**kwargs):
+    from src.res.model.util import PredictorPath
     PredictorPath.UnpackModelArchives()
     
 if __name__ == '__main__':

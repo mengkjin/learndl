@@ -1,16 +1,16 @@
+from typing import cast
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import pandas as pd
 
-from src.res.factor.training_analysis_snapshot import (
+from src.res.model.util.data.training_analysis_snapshot import (
     build_snapshot,
-    return_label_scope,
     TrainingAnalysisSnapshot,
-    CURRENT,
     prune_generations,
 )
+from src.res.factor.util.classes.analysis_inputs import CURRENT, return_label_scope
 from src.res.factor.util.classes.stock_factor import append_fut_ret
 
 
@@ -45,7 +45,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             CURRENT.reset(token)
         with (
             patch(
-                "src.res.factor.training_analysis_snapshot.DATAVENDOR.nday_fut_ret"
+                "src.res.model.util.data.training_analysis_snapshot.DATAVENDOR.nday_fut_ret"
             ) as old,
             return_label_scope(),
         ):
@@ -75,22 +75,24 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch(
-                "src.res.factor.training_analysis_snapshot.source_state",
+                "src.res.model.util.data.training_analysis_snapshot.source_state",
                 side_effect=source,
             ),
             patch(
-                "src.res.factor.training_analysis_snapshot.market_frame",
+                "src.res.model.util.data.training_analysis_snapshot.market_frame",
                 side_effect=table,
             ),
             patch(
-                "src.res.factor.training_analysis_snapshot.evaluation_frame",
+                "src.res.model.util.data.training_analysis_snapshot.evaluation_frame",
                 side_effect=table,
             ),
             patch(
-                "src.res.factor.training_analysis_snapshot.membership_frame",
+                "src.res.model.util.data.training_analysis_snapshot.membership_frame",
                 side_effect=table,
             ),
-            patch("src.res.factor.training_analysis_snapshot.DATAVENDOR.clear_all"),
+            patch(
+                "src.res.model.util.data.training_analysis_snapshot.DATAVENDOR.clear_all"
+            ),
         ):
             root = Path(tmp)
             first = build_snapshot([20240102], root)
@@ -111,6 +113,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             with snapshot.activate():
                 self.assertIs(CURRENT.get(), snapshot)
                 result = snapshot.evaluation("ret", [1], [20240102])
+                assert result is not None
                 self.assertEqual(result.ret.iloc[0], 0.1)
                 self.assertIsNone(
                     snapshot.evaluation("ret", [1], [20240102], (20, 2, "close"))
@@ -132,7 +135,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             self.assertIn(second["generation"], prune_generations(root))
             repaired = third
             with patch(
-                "src.res.factor.training_analysis_snapshot.evaluation_frame",
+                "src.res.model.util.data.training_analysis_snapshot.evaluation_frame",
                 side_effect=RuntimeError("interrupted"),
             ):
                 revision[2024] = 3
@@ -173,7 +176,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         with (
             patch.object(module, "MACHINE", SimpleNamespace(updatable=True)),
             patch(
-                "src.res.factor.training_analysis_snapshot.weekly_update",
+                "src.res.model.util.data.training_analysis_snapshot.weekly_update",
                 side_effect=lambda: calls.append("snapshot") or {},
             ),
             patch.object(
@@ -188,7 +191,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         with (
             patch.object(module, "MACHINE", SimpleNamespace(updatable=True)),
             patch(
-                "src.res.factor.training_analysis_snapshot.weekly_update",
+                "src.res.model.util.data.training_analysis_snapshot.weekly_update",
                 side_effect=RuntimeError("unavailable"),
             ),
             patch.object(module.ModelAPI, "update_models") as models,
@@ -218,22 +221,83 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         )
         with (
             patch(
-                "src.res.factor.training_analysis_snapshot.TrainingAnalysisSnapshot",
+                "src.res.model.util.data.training_analysis_snapshot.TrainingAnalysisSnapshot",
                 side_effect=FileNotFoundError,
             ),
             patch(
-                "src.res.factor.training_analysis_snapshot.build_snapshot",
+                "src.res.model.util.data.training_analysis_snapshot.build_snapshot",
                 side_effect=AssertionError("callback must not build a snapshot"),
             ),
         ):
-            DetailedAlphaAnalysis.on_test_end(callback)
+            DetailedAlphaAnalysis.on_test_end(cast(DetailedAlphaAnalysis, callback))
             callback.factor_test.assert_called_once()
             callback.analysis_snapshot = "required"
             with self.assertRaises(OSError):
-                DetailedAlphaAnalysis.on_test_end(callback)
+                DetailedAlphaAnalysis.on_test_end(cast(DetailedAlphaAnalysis, callback))
+
+    def test_callback_uses_complete_membership_and_falls_back_without_warnst(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from src.proj.bases import TestType
+        from src.res.model.callback.test.detail import DetailedAlphaAnalysis
+
+        dates = [20240102]
+        membership = pd.DataFrame(
+            {
+                "date": dates * 2,
+                "secid": [1, 2],
+                "universe_member": [True, True],
+                "st": [False, False],
+                "lowprice": [False, False],
+                "bse": [False, False],
+                "loser": [False, False],
+                "warnst": [False, True],
+            }
+        )
+        snapshot = object.__new__(TrainingAnalysisSnapshot)
+        callback = cast(
+            DetailedAlphaAnalysis,
+            SimpleNamespace(
+                fmp_tasks=[TestType.T50],
+                t50_backend="auto",
+                prepared_universe_root=None,
+                prepared_universe_mode="off",
+                get_factor_for_fmp_test=lambda: MagicMock(date=dates),
+                logger=MagicMock(
+                    subprocess=lambda **kw: nullcontext(),
+                    timer=lambda *args, **kw: nullcontext(),
+                ),
+                snap_folder=None,
+                config=SimpleNamespace(is_resuming=False, model_name="test"),
+                trainer=SimpleNamespace(
+                    config=SimpleNamespace(beg_date=dates[0], end_date=dates[0])
+                ),
+                indent=0,
+                vb_level=0,
+                test_results={},
+                test_figures={},
+            ),
+        )
+        with (
+            snapshot.activate(),
+            patch.object(snapshot, "table", return_value=membership) as table,
+            patch(
+                "src.res.factor.util.classes.universe.Universe",
+            ) as loader,
+            patch("src.res.model.callback.test.detail.FactorTestAPI.run_test") as run,
+        ):
+            self.assertIsNone(snapshot.universe(dates, name="all"))
+            DetailedAlphaAnalysis.fmp_test(callback)
+            loader.assert_not_called()
+            portfolio = run.call_args.kwargs["universe_portfolio"]
+            self.assertEqual(portfolio.get(dates[0]).secid.tolist(), [1])
+            table.return_value = membership.drop(columns="warnst")
+            loader.side_effect = lambda *args, **kw: MagicMock()
+            DetailedAlphaAnalysis.fmp_test(callback)
+            loader.assert_called_once()
 
     def test_quote_outer_join_keeps_presence_masks(self):
-        from src.res.factor.training_analysis_snapshot import market_frame
+        from src.res.model.util.data.training_analysis_snapshot import market_frame
         from types import SimpleNamespace
 
         info = pd.DataFrame({"indus": ["a"]}, index=pd.Index([1], name="secid"))
@@ -242,7 +306,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             for i in (1, 2, 3)
         ]
         with patch(
-            "src.res.factor.training_analysis_snapshot.DATAVENDOR",
+            "src.res.model.util.data.training_analysis_snapshot.DATAVENDOR",
             SimpleNamespace(
                 INFO=SimpleNamespace(get_indus=lambda d: info),
                 td=lambda d, n: 20240103,

@@ -1,6 +1,12 @@
 """Real local Git repositories; no remote service, training or email required."""
 from __future__ import annotations
 
+__all__ = [
+    'GitUpdateTest',
+    'TrainingActivityTest',
+    'WatchdogUpdateOrderTest',
+]
+
 import json
 import os
 import subprocess

@@ -11,11 +11,11 @@
 #       desc : factor names by ","
 #       required : True
 
-from src.res.factor.api import FactorUpdaterAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('recalc_one' , lock_name = 'update_factors')
 def main(factor_names : str | None = None , **kwargs):
+    from src.res.factor.api import FactorUpdaterAPI
     assert factor_names is not None , 'factor_names is required'
     factors = [s.strip() for s in factor_names.split(',')]
     assert len(factors) == 1 , f'only one factor is supported , got {factors}'

@@ -1,4 +1,10 @@
 """Source-qualified model labels, independent of config and data loading."""
+from __future__ import annotations
+
+__all__ = [
+    'LabelSpec',
+    'parse_labels',
+]
 from dataclasses import dataclass
 import re
 

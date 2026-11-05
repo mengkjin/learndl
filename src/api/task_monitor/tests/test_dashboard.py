@@ -1,6 +1,10 @@
 """Streamlit interaction tests with fake processes and bounded temporary logs."""
 from __future__ import annotations
 
+__all__ = [
+    'MonitorDashboardTest',
+]
+
 import tempfile
 import unittest
 from contextlib import ExitStack
@@ -40,6 +44,7 @@ class MonitorDashboardTest(unittest.TestCase):
                                  KillTarget(t.task_id, t.pid, 99, t.script, t.effective_start)))
         self.kill = stack.enter_context(patch('src.api.task_monitor.launch.kill_task',
                                              return_value=KillResult('success', 'Killed target')))
+        self.live_output = stack.enter_context(patch('src.api.task_monitor.launch._live_output'))
         self.refresh = stack.enter_context(patch('streamlit_autorefresh.st_autorefresh'))
 
     def app(self, entry='_render_running'):
@@ -54,8 +59,9 @@ class MonitorDashboardTest(unittest.TestCase):
 
     def test_default_dashboard_shows_latest_log_without_a_click(self):
         app = self.app('_render_dashboard')
+        self.assertEqual(app.radio(key='running-style').value, 'Colored text')
         self.assertIn('new.py', [item.value for item in app.subheader])
-        self.assertIn('visible live output', app.code[0].value)
+        self.assertIn('visible live output', self.live_output.call_args.kwargs['data']['content'])
         self.assertEqual(self.repository.list_tasks.call_args.kwargs['statuses'], {'running'})
         self.assertEqual(self.repository.list_tasks.call_args.kwargs['window'], 'history')
         self.refresh.assert_called_with(interval=3000, key='running-refresh')
@@ -82,7 +88,7 @@ class MonitorDashboardTest(unittest.TestCase):
         app.run()
         self.log.write_text('visible live output\nappended line\n')
         app.run()
-        self.assertIn('appended line', app.code[0].value)
+        self.assertIn('appended line', self.live_output.call_args.kwargs['data']['content'])
         self.log.unlink()
         app.run()
         self.assertTrue(any('No live output' in item.value for item in app.info))
@@ -126,6 +132,7 @@ class MonitorDashboardTest(unittest.TestCase):
     def test_finished_has_only_terminal_filters_and_independent_state(self):
         self.tasks[:] = [replace(self.old, status='complete', end_time=150)]
         app = self.app('_render_finished')
+        self.assertEqual(app.radio(key='finished-style').value, 'Colored text')
         self.assertEqual(app.multiselect[0].options, ['complete', 'error', 'killed'])
         self.assertEqual(self.repository.list_tasks.call_args.kwargs['statuses'], {'complete', 'error', 'killed'})
         self.assertEqual(self.repository.list_tasks.call_args.kwargs['window'], 'history')

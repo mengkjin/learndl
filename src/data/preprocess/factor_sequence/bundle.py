@@ -1,4 +1,14 @@
 """Immutable content-addressed bundles, audit evidence and strict prefix replay."""
+from __future__ import annotations
+
+__all__ = [
+    'digest',
+    'file_digest',
+    'write_json',
+    'build',
+    'load',
+    'audit',
+]
 from dataclasses import asdict
 from pathlib import Path
 import hashlib

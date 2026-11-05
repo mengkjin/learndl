@@ -1,6 +1,10 @@
 """Host-side recovery admission; isolated autofix only submits this work."""
-from pathlib import Path
-import json
+from __future__ import annotations
+
+__all__ = [
+    'original_inactive',
+    'recover',
+]
 import os
 import traceback
 

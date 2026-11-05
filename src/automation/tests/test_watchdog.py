@@ -1,4 +1,9 @@
+"""Tests for watchdog task inspection and lifecycle recovery."""
 from __future__ import annotations
+
+__all__ = [
+    'TaskWatchdogTest',
+]
 
 import json
 import tempfile

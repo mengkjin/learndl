@@ -4,6 +4,11 @@ Use resnet to encode the input features, and then use gru to process the feature
 """
 
 from __future__ import annotations
+
+__all__ = [
+    'resnet_gru',
+    'gru_gru',
+]
 from torch import nn , Tensor
 
 from .. import layer as Layer

@@ -1,4 +1,7 @@
 """Compatibility entrypoint for src.automation.scheduling.autofix_store; no implementation belongs here."""
+from __future__ import annotations
+
+__all__ = []
 import importlib
 import runpy
 import sys

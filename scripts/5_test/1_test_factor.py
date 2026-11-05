@@ -26,11 +26,11 @@
 #       default : 99991231
 #       desc : end date
 
-from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('test_factor' , '@factor_name' , lock_num = 0)
 def main(factor_name : str | None = None , resume : bool | None = None , start : int | None = None , end : int | None = None , **kwargs):
+    from src.api.pkgs.model import ModelAPI
     assert factor_name is not None , 'factor_name is required'
     ModelAPI.test_factor(factor_name , resume = 0 if resume is None else int(resume) , start = start , end = end)
 

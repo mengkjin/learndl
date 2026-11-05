@@ -1,6 +1,25 @@
 """Queue idle work in watchdog; execute one schedule in an independent service."""
 from __future__ import annotations
 
+__all__ = [
+    'OWNER',
+    'ACTIVE',
+    'DEFERRED',
+    'settings',
+    'queue_lock',
+    'version',
+    'gpu_memory_percent',
+    'idle_reason',
+    'worklist_schedules',
+    'candidate',
+    'dispatch',
+    'worker',
+    'child',
+    'reset_worklist',
+    'reset',
+    'main',
+]
+
 import argparse
 import hashlib
 import json
@@ -162,10 +181,18 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
     return None
 
 
+def _defer_retired_requests(store: RunStore) -> None:
+    for run in store.owned(OWNER):
+        if run.get('task_kind') == 'nn_metrics_ab' and run['phase'] == 'queued':
+            run.update(phase='deferred', blocked_by='NN metrics A/B workflow retired')
+            store.put(run)
+
+
 def dispatch(options: dict, store: RunStore | None = None) -> dict:
     from . import rl_experiment as rl
     store = store or RunStore()
     with queue_lock():
+        _defer_retired_requests(store)
         rl_request = rl.observe(store, throttle=True)
         # Superseded queues are deferrals, not attempted training. Running jobs
         # keep their exact snapshot even if the configuration changes.
@@ -187,8 +214,6 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
         last = next((r for r in reversed(store.owned(OWNER)) if r.get('started_at') and r['phase'] != 'deferred'), {})
         request = (rl_request if rl_request and (not model_request or last.get('task_kind') != rl.TASK)
                    else model_request)
-        from .nn_metrics_ab import observe as observe_nn_ab
-        request = (observe_nn_ab(store) if options.get('enabled') else None) or request
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
         if request is None:
@@ -272,6 +297,7 @@ def worker() -> int:
         with ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases:
             store = RunStore()
             with queue_lock():
+                _defer_retired_requests(store)
                 queued = [run for run in store.owned(OWNER) if run['phase'] == 'queued']
                 if not queued:
                     return 0
@@ -281,10 +307,7 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                if request.get('task_kind') == 'nn_metrics_ab':
-                    from .nn_metrics_ab import observe
-                    next_candidate = observe(store) if options.get('enabled') else None
-                elif request.get('task_kind') == 'factor_sequence':
+                if request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
@@ -320,11 +343,10 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
-    if request.get('task_kind') in {'nn_metrics_ab', 'factor_sequence'}:
-        if request['task_kind'] == 'factor_sequence':
-            from .factor_sequence import execute
-        else:
-            from .nn_metrics_ab import execute
+    if request.get('task_kind') == 'nn_metrics_ab':
+        return DEFERRED
+    if request.get('task_kind') == 'factor_sequence':
+        from .factor_sequence import execute
         from .recovery import record
         try:
             return execute(request, store)

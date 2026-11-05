@@ -176,7 +176,7 @@ class TaskMonitorRepository:
         from .managed import snapshots
         return snapshots(self, detail=detail, task_id=task_id)
 
-    def list_tasks(self, *, statuses=None, window='last_day', cursor=None, limit=50, now=None):
+    def list_tasks(self, *, statuses=None, window: TimeWindow = 'last_day', cursor=None, limit=50, now=None):
         """Merge script rows and managed groups with one stable pagination cursor."""
         selected = {'running','complete','error','killed'} if statuses is None else statuses
         cutoff = self._cutoff(window, now)

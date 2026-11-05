@@ -149,6 +149,15 @@ Do not suggest committing paths under `.local_resources/` or `.secret/` to git.
 
 ## Post-edit checks (substantive code changes)
 ```bash
-ruff check src scripts
-pyright src scripts
+.venv/bin/ruff check src scripts
+.venv/bin/pyright --pythonpath .venv/bin/python src scripts
 ```
+
+
+### Python checks and diagnostic boundaries
+
+- Run Ruff with the full project configuration and Pyright with the project interpreter. Check changed tests explicitly because the main Pyright include list covers source and scripts.
+- Give `ContextVar` its actual value type, including `None` when appropriate. Use `TypedDict` for fixed mixed-type records, and match signatures to the containers and literals passed by callers.
+- Narrow optional values before using them, including paths and operands. Fix the type at its source instead of adding broad `Any`, blanket ignores or weaker lint settings.
+- Put each statement on its own line and use indented control-flow blocks (`E701/E702`). Remove imports when their callers disappear.
+- Keep one production implementation. Benchmark drivers and profiling hooks belong in diagnostic tools, and reference implementations belong in tests. Removing a diagnostic also requires checking its scripts, scheduled entry points, imports and tests.

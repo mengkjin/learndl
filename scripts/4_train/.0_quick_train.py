@@ -10,11 +10,11 @@
 #   path: "configs/model/model.yaml"
 #   height : 300 # optional
 
-from src.api.pkgs.model import ModelAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('quick_train_model')
 def main(**kwargs):
+    from src.api.pkgs.model import ModelAPI
     ModelAPI.train_model(short_test = True)
         
 if __name__ == '__main__':

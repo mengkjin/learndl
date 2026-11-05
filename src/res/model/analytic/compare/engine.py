@@ -1,6 +1,10 @@
 """Run the three comparison templates over one normalized input collection."""
 from __future__ import annotations
 
+__all__ = [
+    'compare_models',
+]
+
 from dataclasses import asdict
 
 import numpy as np

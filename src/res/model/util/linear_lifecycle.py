@@ -1,6 +1,10 @@
 """Linear test lifecycle; independent of null-model and checkpoint discovery rules."""
 from __future__ import annotations
 
+__all__ = [
+    'prepare_linear_run',
+]
+
 import shutil
 from src.proj import PATH
 

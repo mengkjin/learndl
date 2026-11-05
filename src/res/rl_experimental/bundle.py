@@ -1,6 +1,13 @@
 """Portable result bundles, safe local extraction and resumable email delivery."""
 from __future__ import annotations
 
+__all__ = [
+    'create_bundle',
+    'analyze_bundle',
+    'bundle_attachments',
+    'send_bundle',
+]
+
 import hashlib
 import json
 import shutil

@@ -2,6 +2,16 @@
 
 The entry point sends the suite summary; each training sends its own result mail.
 """
+from __future__ import annotations
+
+__all__ = [
+    'discover',
+    'execute',
+    'aggregate',
+    'run_suite',
+    'report_package',
+    'send_result',
+]
 from pathlib import Path
 from datetime import datetime, timezone
 import json
@@ -44,6 +54,7 @@ def execute(command, log, root):
     with Path(log).open('x') as stream:
         with subprocess.Popen(command,cwd=root,env=env,stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT,text=True,errors='replace',bufsize=1) as process:
+            assert process.stdout is not None
             for line in process.stdout:
                 stream.write(line)
                 stream.flush()

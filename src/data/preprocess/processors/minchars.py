@@ -1,5 +1,10 @@
 """Minchars preprocessors."""
 from __future__ import annotations
+
+__all__ = [
+    'PrePro_minc',
+    'PrePro_mincr',
+]
 import os
 import numpy as np
 import polars as pl

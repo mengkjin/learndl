@@ -19,12 +19,12 @@
 #       required : False
 #       default : 5
 
-from src.data.download.other_source.rcquant import RcquantMinBarDownloader
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('rcquant_sec_backfill' , CALENDAR.today() , forfeit_if_done = True)
 def main(force : bool = False , max_days : int | str | None = 5 , **kwargs):
+    from src.data.download.other_source.rcquant import RcquantMinBarDownloader
     RcquantMinBarDownloader.backfill_sec_min(
         force = bool(force) , max_days = max_days ,
     )

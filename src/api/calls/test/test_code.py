@@ -1,6 +1,11 @@
 """
 Direct calls related to testing if code is working as expected.
 """
+from __future__ import annotations
+
+__all__ = [
+    'TestCode',
+]
 
 from src.api.util.direct_call import DirectCall
 from src.proj.util.cli import AskFor

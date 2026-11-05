@@ -46,11 +46,6 @@ from __future__ import annotations
 from src.proj import DB , Dates , Logger
 from src.proj.util.script import ScriptTool
 from src.api.util.wrapper import wrap_update
-from src.data.update.custom.min_chars import (
-    MinCharsDailyUpdater ,
-    MinCharsRollUpdater ,
-    MinCharsTaggedUpdater ,
-)
 from src.data.update.custom.min_chars._common import (
     DB_MIN_SRC ,
     DB_SRC ,
@@ -86,6 +81,7 @@ def main(
     **kwargs ,
 ):
     """Backfill ``min_chars`` stages in dependency order over ``[start, end]``."""
+    from src.data.update.custom.min_chars import MinCharsDailyUpdater, MinCharsRollUpdater, MinCharsTaggedUpdater
     start = max(int(start) , START_DATE)
     end = _resolve_end(end)
     overwrite = bool(overwrite)

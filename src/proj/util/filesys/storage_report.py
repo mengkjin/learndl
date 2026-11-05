@@ -1,6 +1,18 @@
 """Read-only allocated-space scan and standalone HTML reporting (standard library only)."""
 from __future__ import annotations
 
+__all__ = [
+    'StorageNode',
+    'StorageScan',
+    'display_depth',
+    'format_size',
+    'scan_storage',
+    'render_node',
+    'render_html',
+    'write_report',
+    'generate_report',
+]
+
 import html
 import os
 import shutil

@@ -1,6 +1,18 @@
 """Bounded abnormal-exit recovery with optional, identity-bound OOM diagnostics."""
 from __future__ import annotations
 
+__all__ = [
+    'RECOVERABLE_EXITS',
+    'evidence',
+    'record',
+    'stop_post',
+    'child_progress',
+    'script_result',
+    'exit_reason',
+    'recovery_plan',
+    'resume_path',
+]
+
 import json
 import os
 import time

@@ -11,11 +11,11 @@
 #       desc : backtest trade port name
 #       required : True
 
-from src.api.pkgs.trading import TradingAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('backtest_rebuild' , '@port_name')
 def main(port_name : str | None = None , **kwargs):
+    from src.api.pkgs.trading import TradingAPI
     assert port_name is not None , 'port_name is required'
     TradingAPI.backtest_rebuild(port_name)
 

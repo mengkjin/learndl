@@ -91,14 +91,9 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
                 return path
             config_path = base_path.conf_file("schedule")
             return config_path if config_path.exists() else None
-        elif not name:
-            return None
         else:
-            candidates = [root / f"{name}.yaml" for root in (PATH.sched, PATH.sched_shared, PATH.sched_linear)]
-            existing = [path for path in candidates if path.is_file()]
-            if len(existing) > 1:
-                raise ValueError(f'Duplicate schedule {name}: {existing}')
-            return existing[0] if existing else None
+            from src.proj.env.schedules import find_schedule_path
+            return find_schedule_path(name, roots=(PATH.sched, PATH.sched_shared, PATH.sched_linear))
 
     @classmethod
     def check_name_exist(cls , model_name: str | None = None) -> bool:

@@ -16,10 +16,10 @@
 
 from src.proj import Proj
 from src.proj.util.script import ScriptTool
-from src.res.model.util import PredictorPath
 
 @ScriptTool('pack_model_files')
 def main(start_model_date : int = 20240101 , **kwargs):
+    from src.res.model.util import PredictorPath
     path = PredictorPath.PackModelArchives(start_model_date = start_model_date)
     Proj.email_attachments.append(path)
     

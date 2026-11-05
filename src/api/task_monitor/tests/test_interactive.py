@@ -1,4 +1,10 @@
+"""Tests for interactive task registration and lifecycle contexts."""
 from __future__ import annotations
+
+__all__ = [
+    'require_task',
+    'InteractiveTest',
+]
 
 import io
 import json

@@ -1,3 +1,10 @@
+"""Tests for RL task progress and result email packaging."""
+from __future__ import annotations
+
+__all__ = [
+    'FakeEmail',
+    'TaskMailTest',
+]
 import io
 import json
 import os

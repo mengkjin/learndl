@@ -1,4 +1,9 @@
 """Installation authorization, immutable privileges and admission without real sudo/systemd."""
+from __future__ import annotations
+
+__all__ = [
+    'InstallationTest',
+]
 import json
 import os
 import subprocess

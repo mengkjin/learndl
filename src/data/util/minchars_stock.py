@@ -1,6 +1,11 @@
 """Stock membership for minute characteristics, including delisted stocks."""
 from __future__ import annotations
 
+__all__ = [
+    'historical_stock_ids',
+    'stock_rows',
+]
+
 import logging
 
 import numpy as np

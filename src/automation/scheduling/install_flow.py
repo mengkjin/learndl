@@ -1,6 +1,21 @@
 """Preview/confirm once; install now or register an immutable one-shot background request."""
 from __future__ import annotations
 
+__all__ = [
+    'broker_command',
+    'baseline',
+    'preview',
+    'check_business_tasks',
+    'admission',
+    'rollback_plan',
+    'transact',
+    'verify',
+    'register',
+    'run_interactive',
+    'worker',
+    'main',
+]
+
 import argparse
 import copy
 import difflib

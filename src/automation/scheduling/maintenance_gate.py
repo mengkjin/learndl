@@ -1,6 +1,17 @@
 """Shared ordinary-task / exclusive maintenance admission, including nested calls."""
 from __future__ import annotations
 
+__all__ = [
+    'MaintenanceBusy',
+    'configured',
+    'sandbox_request',
+    'inherited_fd',
+    'pass_fds',
+    'child_env',
+    'pending',
+    'permit',
+]
+
 import contextvars
 import json
 import os

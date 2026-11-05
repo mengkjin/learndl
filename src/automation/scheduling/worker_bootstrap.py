@@ -3,6 +3,13 @@
 Run as a file, never with -m: package imports must occur after flock. Both the
 bootstrap and its settings are copied by the explicit scheduling installer.
 """
+from __future__ import annotations
+
+__all__ = [
+    'code_pending',
+    'wait_for_code',
+    'main',
+]
 import fcntl
 import json
 import os

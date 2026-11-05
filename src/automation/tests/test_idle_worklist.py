@@ -1,6 +1,12 @@
 """Idle dispatch, durable supervision and shared fit occupancy without GPUs."""
 from __future__ import annotations
 
+__all__ = [
+    'require_candidate',
+    'IdleTest',
+    'FitOccupancyTest',
+]
+
 import os
 import signal
 import subprocess
@@ -52,6 +58,17 @@ class IdleTest(unittest.TestCase):
         self.folder = self.root / 'model'
         self.folder.mkdir()
         self.options = {'enabled': True, 'progress_timeout_seconds': 43200}
+
+    def test_retired_nn_ab_defers_queued_requests_and_preserves_history(self):
+        records = [
+            {'task_kind': 'nn_metrics_ab', 'phase': phase}
+            for phase in ('queued', 'running', 'success')
+        ]
+        store = Mock(owned=Mock(return_value=records))
+        idle._defer_retired_requests(store)
+        self.assertEqual([run['phase'] for run in records], ['deferred', 'running', 'success'])
+        self.assertIn('retired', records[0]['blocked_by'])
+        store.put.assert_called_once_with(records[0])
 
     def save_success(self, name='first'):
         WorklistState(name).save(status='success', revisions=WorklistState.revisions(name), model_path=str(self.folder))

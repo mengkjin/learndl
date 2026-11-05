@@ -40,15 +40,5 @@ DetailedAlphaAnalysis accepts `prepared_universe_root` and
 `prepared_universe_mode`. Its preload constructs the Portfolio once and passes
 that object explicitly to top/screen/revscreen/reinforce. Reuse lasts only that
 callback invocation. Direct FMP calls construct once for their exact factor
-dates, not every date left in a process-global cache. Generator algorithms and
-weekly_update are unchanged; weekly integration remains phase 3.
-
-Benchmark:
-`python -m src.res.model.diagnostics.universe_benchmark --output <new-directory>`
-uses 2024 real stored snapshots and four fully available exclusion columns.
-It reports initial preparation, the last five dates' incremental preparation,
-and a no-change preparation separately. Three alternating pairs run in fresh
-processes; OS caches are not flushed. Reads include dependency checks. The
-callback-universe timing reproduces the original three constructions versus one
-explicitly shared object; it is not a full callback/training benchmark. Default
-warnst coverage is incomplete locally, so it is not advertised as measured.
+dates, not every date left in a process-global cache. The model training snapshot uses annual membership partitions by default.
+This monthly format remains available for explicit legacy configurations.

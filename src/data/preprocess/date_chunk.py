@@ -6,6 +6,10 @@ Calendar-year (or N-year) date windows for large ``DataBlock`` preprocess jobs.
 """
 from __future__ import annotations
 
+__all__ = [
+    'calendar_year_spans',
+]
+
 
 def calendar_year_spans(start : int , end : int , years : int) -> list[tuple[int , int]]:
     """

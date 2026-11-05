@@ -133,7 +133,7 @@ class DetailedAlphaAnalysis(BaseCallBack):
             with self.logger.timer(f'FactorPerfTest.get_factor'):
                 factor = self.get_factor_for_factor_test()
             with self.logger.timer(f'FactorPerfTest.load_day_rets'):
-                from src.res.factor.training_analysis_snapshot import CURRENT
+                from src.res.factor.util.classes.analysis_inputs import CURRENT
                 if CURRENT.get() is None:
                     factor.day_returns()
             with self.logger.timer(f'FactorPerfTest.within_benchmarks'):
@@ -165,9 +165,13 @@ class DetailedAlphaAnalysis(BaseCallBack):
                 factor.risk_model()
             with self.logger.timer(f'FactorFMPTest.load_universe'):
                 from src.res.factor.util.classes.universe import Universe
-                from src.res.factor.training_analysis_snapshot import CURRENT
+                from src.res.factor.util.classes.analysis_inputs import CURRENT
+                from src.res.model.util.data.training_analysis_snapshot import TrainingAnalysisSnapshot
                 snapshot = CURRENT.get()
-                universe_portfolio = snapshot.universe(factor.date) if snapshot else None
+                universe_portfolio = (
+                    snapshot.universe(factor.date, name='top-1000')
+                    if isinstance(snapshot, TrainingAnalysisSnapshot) else None
+                )
                 if universe_portfolio is None:
                     universe_portfolio = Universe(
                         'top-1000', prepared_root=self.prepared_universe_root,
@@ -266,7 +270,8 @@ class DetailedAlphaAnalysis(BaseCallBack):
         if not self.tasks:
             return
         assert self.factor_names , 'factor_names is empty'
-        from src.res.factor.training_analysis_snapshot import TrainingAnalysisSnapshot, return_label_scope
+        from src.res.factor.util.classes.analysis_inputs import return_label_scope
+        from src.res.model.util.data.training_analysis_snapshot import TrainingAnalysisSnapshot
         scope = return_label_scope()
         mode = getattr(self, 'analysis_snapshot', 'auto')
         if mode != 'off':

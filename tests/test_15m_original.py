@@ -19,7 +19,7 @@ import yaml
 from src.data import DataBlock
 from src.data.util.classes import data_block
 from src.data.preprocess.processors.original_15m import (
-    BASELINE_COMMIT, PrePro_15m_original, trade_min_reform, trade_min_fillna,
+    BASELINE_COMMIT, PrePro_15m_original, trade_min_reform,
 )
 from src.data.preprocess.processors.trade import PrePro_15m
 from src.data.preprocess import PrePros

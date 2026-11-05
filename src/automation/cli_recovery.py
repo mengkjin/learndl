@@ -6,6 +6,28 @@ the recovered window. This file can run directly without importing the project.
 """
 from __future__ import annotations
 
+__all__ = [
+    'ENV_KEYS',
+    'state_path',
+    'load',
+    'save',
+    'lock',
+    'process_identity',
+    'live',
+    'desktop_environment',
+    'terminal_identity',
+    'hub_alive',
+    'display_reachable',
+    'register',
+    'stop',
+    'session_active',
+    'dispatch',
+    'tick',
+    'deliver',
+    'launch',
+    'main',
+]
+
 import argparse
 import hashlib
 import json

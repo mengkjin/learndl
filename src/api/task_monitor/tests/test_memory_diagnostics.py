@@ -1,4 +1,9 @@
+"""Tests for process memory diagnostics and sampling."""
 from __future__ import annotations
+
+__all__ = [
+    'MemoryDiagnosticsTest',
+]
 
 import io
 import unittest

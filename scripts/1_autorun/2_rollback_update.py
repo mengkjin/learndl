@@ -14,11 +14,11 @@
 #       required : True
 #       default : 20250814
 
-from src.api.pkgs.update import UpdateAPI
 from src.proj.util.script import ScriptTool
 
 @ScriptTool('rollback_update' , '@rollback_date')
 def main(rollback_date : int | None = None , **kwargs):
+    from src.api.pkgs.update import UpdateAPI
     assert rollback_date is not None , 'rollback_date is required'
     UpdateAPI.rollback(rollback_date = rollback_date)
         

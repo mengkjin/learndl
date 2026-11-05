@@ -13,6 +13,7 @@ Special class attributes read by the training loop:
 """
 from __future__ import annotations
 from torch import nn
+from src.res.algo.registry import NN_MODULES
 
 from . import layer as Layer
 from . import model as Model
@@ -23,33 +24,9 @@ __all__ = [
     'Layer' , 'Model']
 
 # Mapping from registry key to model constructor.
-# 19 registered architectures as of 2026-06.
-AVAILABLE_NNS = {
-    'simple_lstm'       : Model.RNN.simple_lstm,
-    'gru'               : Model.RNN.gru, 
-    'lstm'              : Model.RNN.lstm, 
-    'transformer'       : Model.RNN.transformer, 
-    'tcn'               : Model.RNN.tcn, 
-    'rnn_ntask'         : Model.RNN.rnn_ntask, 
-    'rnn_general'       : Model.RNN.rnn_general, 
-    'gru_dsize'         : Model.RNN.gru_dsize, 
-    'patch_tst'         : Model.PatchTST.patch_tst, 
-    'modern_tcn'        : Model.ModernTCN.modern_tcn, 
-    'ts_mixer'          : Model.TSMixer.ts_mixer, 
-    'tra'               : Model.TRA.tra, 
-    'factor_vae'        : Model.FactorVAE.FactorVAE,
-    'risk_att_gru'      : Model.RiskAttGRU.risk_att_gru,
-    'ple_gru'           : Model.PLE.ple_gru,
-    'moe_gru'           : Model.MoE.moe_gru,
-    'tft'               : Model.TFT.TemporalFusionTransformer,
-    'astgnn'            : Model.gnn.Astgnn,
-    'astgnn_legacy'     : Model.gnn.AstgnnLegacy,
-    'resnet_gru'        : Model.resnet_gru.resnet_gru,
-    'gru_gru'           : Model.resnet_gru.gru_gru,
-    'transformer_gru'   : Model.transformer_gru.transformer_gru,
-    'resnet_transformer': Model.resnet_transformer.resnet_transformer,
-    'resnet_mlp'        : Model.resnet_mlp.resnet_mlp,
-}
+# Names and constructor paths are also used by dependency-free CLI discovery.
+AVAILABLE_NNS = {name: getattr(getattr(Model, path.split(".")[0]), path.split(".")[1])
+                 for name, path in NN_MODULES.items()}
 
 # Factor-sequence models share the standard prediction/hidden contract.
 AVAILABLE_NNS.update(FACTOR_SEQUENCE_MODELS)

@@ -1,4 +1,9 @@
 """Real file-lock admission, expiry, independent workers and version-3 policy."""
+from __future__ import annotations
+
+__all__ = [
+    'ChannelsTest',
+]
 import os
 import json
 from pathlib import Path

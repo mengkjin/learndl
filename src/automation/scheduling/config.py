@@ -1,6 +1,21 @@
 """Validated configuration shared by the installer, runner and watchdog."""
 from __future__ import annotations
 
+__all__ = [
+    'ENTRYPOINTS',
+    'DAYS',
+    'JOB_NAMES',
+    'IDENTIFIER',
+    'runtime_dir',
+    'duration',
+    'UniqueLoader',
+    'read_yaml',
+    'schedule_slots',
+    'load_config',
+    'installed_config',
+    'require_installed_config',
+]
+
 import json
 import re
 from pathlib import Path

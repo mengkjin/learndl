@@ -239,15 +239,23 @@ def run_script_interactive(
 
     runner = ScriptRunner.from_key(script_key)
     resolved_main = main
-    if resolved_main is None:
+    schema = ScriptParamSchema.from_source(Path(runner.script)) if resolved_main is None else None
+    if resolved_main is None and schema is None:
         for module in dynamic_modules(runner.script):
             resolved_main = module.main
             break
         if resolved_main is None:
             raise FileNotFoundError(f'Script main not found: {runner.script}')
 
-    schema = ScriptParamSchema.from_script(Path(runner.script), main=resolved_main)
+    if schema is None:
+        schema = ScriptParamSchema.from_script(Path(runner.script), main=resolved_main)
     flag = prompt_script_kwargs(schema, preset=preset)
     if flag.valid and flag.result is not None:
+        if resolved_main is None:
+            for module in dynamic_modules(runner.script):
+                resolved_main = module.main
+                break
+            if resolved_main is None:
+                raise FileNotFoundError(f'Script main not found: {runner.script}')
         resolved_main(**flag.result)
     return flag

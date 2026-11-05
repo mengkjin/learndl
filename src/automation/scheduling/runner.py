@@ -1,6 +1,15 @@
 """Run only installed project entrypoints with shared locks and durable identity."""
 from __future__ import annotations
 
+__all__ = [
+    'run',
+    'run_deferred',
+    'deferred_worker',
+    'inherited_lock',
+    'legacy',
+    'main',
+]
+
 import argparse
 import os
 import subprocess

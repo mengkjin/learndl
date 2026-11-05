@@ -1,4 +1,11 @@
 """Explicit, identity-bound operator stop of a supervised process group."""
+from __future__ import annotations
+
+__all__ = [
+    'store_for',
+    'prepare',
+    'stop',
+]
 import json
 import signal
 import time

@@ -5,6 +5,27 @@ Physical flock leases, not elapsed time or PIDs alone, protect running work.
 """
 from __future__ import annotations
 
+__all__ = [
+    'KEY',
+    'WAIT_SECONDS',
+    'COOLDOWN_SECONDS',
+    'GROUPS',
+    'BLOCKING',
+    'enabled',
+    'initialize',
+    'read',
+    'write',
+    'request',
+    'save_request',
+    'reserve',
+    'release',
+    'running',
+    'blocker',
+    'group_for',
+    'leases',
+    'preferred_maintenance',
+]
+
 from contextlib import ExitStack, contextmanager
 import json
 import time
@@ -143,7 +164,7 @@ def leases(store, task_class, exclusive_groups=None):
     group = group_for(task_class)
     groups = [group] if group in GROUPS else []
     exclusive = exclusive_groups is not None
-    if exclusive:
+    if exclusive_groups is not None:
         groups = sorted(set(exclusive_groups))
     if task_class.startswith('autofix:'):
         state = request(store, task_class)

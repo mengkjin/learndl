@@ -1,4 +1,10 @@
 """Frozen rolling splits used by the ordinary model trainer."""
+from __future__ import annotations
+
+__all__ = [
+    'validate_folds',
+    'select_fold',
+]
 import numpy as np
 
 

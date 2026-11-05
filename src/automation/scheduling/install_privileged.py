@@ -5,6 +5,15 @@ can only install approved bytes or operate on the exact approved service names.
 """
 from __future__ import annotations
 
+__all__ = [
+    'BASE',
+    'UNITS',
+    'NAME',
+    'execute',
+    'serve',
+    'register',
+]
+
 import json
 import os
 import pwd

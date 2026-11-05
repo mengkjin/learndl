@@ -1,6 +1,10 @@
 """Generate a self-contained Chinese explanation and result report."""
 from __future__ import annotations
 
+__all__ = [
+    'generate_report',
+]
+
 import base64
 import csv
 import html

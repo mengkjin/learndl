@@ -5,6 +5,16 @@ directory. Only a dedicated worker process may swap the RL package namespace.
 """
 from __future__ import annotations
 
+__all__ = [
+    'PREFIX',
+    'SOURCE',
+    'fingerprint',
+    'git_sources',
+    'inspect_resume',
+    'historical_package',
+    'resume_suite',
+]
+
 import hashlib
 import importlib
 import importlib.metadata

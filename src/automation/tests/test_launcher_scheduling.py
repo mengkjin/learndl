@@ -1,4 +1,9 @@
 """The management entry must never implicitly install schedules."""
+from __future__ import annotations
+
+__all__ = [
+    'SchedulingMenuTest',
+]
 import unittest
 from unittest.mock import MagicMock, patch
 

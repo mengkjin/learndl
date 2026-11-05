@@ -1,6 +1,11 @@
 """Exact model references shared by hidden and final inputs."""
 from __future__ import annotations
 
+__all__ = [
+    'parse_model_source',
+    'model_source_path',
+]
+
 import re
 
 from src.res.algo import AlgoModule
