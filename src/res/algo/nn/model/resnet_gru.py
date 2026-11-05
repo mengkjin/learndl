@@ -12,6 +12,7 @@ __all__ = [
 from torch import nn , Tensor
 
 from .. import layer as Layer
+from ..layer.checkpoint import ActivationCheckpointMixin
 from .Attention import TimeWiseAttention
 from .CNN import mod_resnet_1d
 from .RNN import mod_gru
@@ -97,11 +98,16 @@ class resnet_gru(nn.Module):
     #     return pen
 
 
-class gru_gru(nn.Module):
+class gru_gru(ActivationCheckpointMixin, nn.Module):
     """GRU with intra-day GRU encoder.  Registry key: ``'gru_gru'``.
 
     Requires ``inday_dim`` (intra-day bar count) in kwargs.
+    Both GRU stages support activation checkpointing; the BatchNorm output
+    head stays outside recomputation. Parameter names and batch layout remain
+    compatible with existing weights.
     """
+    activation_checkpoint_regions = ('encode_intraday', 'encode_days')
+
     def __init__(
         self,
         input_dim ,
@@ -140,14 +146,23 @@ class gru_gru(nn.Module):
         
         self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
         
+    def encode_intraday(self, x: Tensor) -> Tensor:
+        """Encode all stock/day sequences with the original flattened layout."""
+        bs, seq_len, inday_dim, input_dim = x.shape
+        encoded = self.fc_enc_in(x.reshape(-1, inday_dim, input_dim))[:, -1]
+        return encoded.reshape(bs, seq_len, -1)
+
+    def encode_days(self, x: Tensor) -> Tensor:
+        """Encode days and pool before the stateful output head."""
+        x = self.fc_rnn(x)
+        return self.fc_enc_att(x) if self.fc_enc_att is not None else x[:, -1]
+
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         """
         in: [bs x seq_len x inday_dim x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
         """
-        bs, seq_len, inday_dim, input_dim = x.shape
-        x = self.fc_enc_in(x.reshape(-1 , inday_dim, input_dim))[:,-1]
-        x = self.fc_rnn(x.reshape(bs, seq_len, -1))
-        x = self.fc_enc_att(x) if self.fc_enc_att is not None else x[:,-1]
+        x = self.checkpoint_region('encode_intraday', x)
+        x = self.checkpoint_region('encode_days', x)
         x, o = self.output(x)
         return o , {'hidden' : x}

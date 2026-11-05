@@ -20,6 +20,7 @@ import yaml
 
 from src.res.algo.nn.layer.checkpoint import ActivationCheckpointMixin, is_cuda_oom
 from src.res.algo.nn.model.transformer_gru import transformer_gru
+from src.res.algo.nn.model.resnet_gru import gru_gru
 from src.res.model.callback.consolidate import ConsolidateCallBack
 from src.res.model.callback.fit.activation_checkpointing import ActivationCheckpointing
 from src.res.model.callback.fit.early_stop import EarlyStoppage
@@ -80,6 +81,48 @@ def make_trainer(enabled=True):
 
 
 class RegionTests(unittest.TestCase):
+    def test_gru_gru_matches_legacy_forward_and_gradients(self):
+        for attention in (False, True):
+            with self.subTest(attention=attention):
+                torch.manual_seed(5)
+                legacy = gru_gru(6, enc_in_dim=16, dropout=.1, enc_att=attention)
+                plain = copy.deepcopy(legacy)
+                checked = copy.deepcopy(legacy)
+                checked.set_activation_checkpointing(True)
+                checked.load_state_dict(legacy.state_dict(), strict=True)
+                self.assertEqual(tuple(legacy.state_dict()), tuple(checked.state_dict()))
+                x = torch.randn(4, 30, 16, 6)
+                weights = torch.randn(4, 64)
+                results = []
+                for model in (legacy, plain, checked):
+                    torch.manual_seed(10)
+                    if model is legacy:
+                        encoded = model.fc_enc_in(x.reshape(-1, 16, 6))[:, -1]
+                        hidden = model.fc_rnn(encoded.reshape(4, 30, -1))
+                        hidden = model.fc_enc_att(hidden) if model.fc_enc_att is not None else hidden[:, -1]
+                        hidden, y = model.output(hidden)
+                    else:
+                        y, other = model(x)
+                        hidden = other['hidden']
+                    (y.square().mean() + (hidden * weights).mean()).backward()
+                    results.append((y.detach(), hidden.detach()))
+                for model, result in zip((plain, checked), results[1:]):
+                    torch.testing.assert_close(results[0], result, atol=0, rtol=0)
+                    for a, b in zip(legacy.parameters(), model.parameters()):
+                        self.assertIsNotNone(b.grad)
+                        torch.testing.assert_close(a.grad, b.grad, atol=1e-6, rtol=1e-5)
+                    for a, b in zip(legacy.buffers(), model.buffers()):
+                        torch.testing.assert_close(a, b)
+
+    def test_gru_gru_eval_and_no_grad_bypass(self):
+        model = gru_gru(6, enc_in_dim=16)
+        model.set_activation_checkpointing(True)
+        x = torch.randn(4, 30, 16, 6)
+        with patch('src.res.algo.nn.layer.checkpoint.checkpoint', side_effect=AssertionError('called')):
+            model.eval()(x)
+            with torch.no_grad():
+                model.train()(x)
+
     def test_transformer_outputs_gradients_and_state_dict(self):
         torch.manual_seed(5)
         plain = transformer_gru(6, enc_in_dim=32, dropout=.1)
@@ -147,7 +190,12 @@ class RegionTests(unittest.TestCase):
             torch.testing.assert_close(a.grad, b.grad)
 
     def test_saved_encoder_storage_reduced(self):
-        model = transformer_gru(6, enc_in_dim=32)
+        self.check_saved_encoder_storage(transformer_gru(6, enc_in_dim=32))
+
+    def test_gru_gru_saved_storage_reduced(self):
+        self.check_saved_encoder_storage(gru_gru(6, enc_in_dim=16))
+
+    def check_saved_encoder_storage(self, model):
         x = torch.randn(4, 30, 16, 6)
         sizes = []
         for enabled in (False, True):
@@ -168,10 +216,17 @@ class RegionTests(unittest.TestCase):
 
     @unittest.skipUnless(torch.cuda.is_available(), 'CUDA unavailable; server acceptance still required')
     def test_cuda_checkpoint_forward_backward(self):
+        self.check_cuda_forward_backward(transformer_gru, enc_in_dim=32)
+
+    @unittest.skipUnless(torch.cuda.is_available(), 'CUDA unavailable; server acceptance still required')
+    def test_gru_gru_cuda_checkpoint_forward_backward(self):
+        self.check_cuda_forward_backward(gru_gru, enc_in_dim=64)
+
+    def check_cuda_forward_backward(self, model_class, **kwargs):
         batch = int(os.environ.get('AC_TEST_CUDA_BATCH_SIZE', '64'))
         def measure(enabled):
             torch.cuda.reset_peak_memory_stats()
-            model = transformer_gru(6, enc_in_dim=32).cuda()
+            model = model_class(6, **kwargs).cuda()
             model.set_activation_checkpointing(enabled)
             y, other = model(torch.randn(batch, 30, 16, 6, device='cuda'))
             (y.square().mean() + other['hidden'].square().mean()).backward()
@@ -188,7 +243,7 @@ class RegionTests(unittest.TestCase):
                 if enabled:
                     raise
                 peaks.append(None)
-        print(f'CUDA synthetic batch={batch}: normal/checkpoint peak allocated bytes={peaks}')
+        print(f'{model_class.__name__} CUDA synthetic batch={batch}: normal/checkpoint peak allocated bytes={peaks}')
         if peaks[0] is not None:
             self.assertLess(peaks[1], peaks[0])
 
@@ -201,7 +256,8 @@ class CallbackTests(unittest.TestCase):
         self.assertFalse(read('configs/model/default/optional.yaml')['callbacks.ActivationCheckpointing']['enabled'])
         self.assertIn('ActivationCheckpointing', read('configs/model/train.yaml')['callbacks'])
         self.assertIn('ActivationCheckpointing', read('configs/model/default/required.yaml')['train.callbacks'])
-        self.assertTrue(read('configs/schedule/current/transformer_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
+        self.assertTrue(read('configs/schedule/archive/transformer_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
+        self.assertTrue(read('configs/schedule/current/gru_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
         self.assertIs(ConsolidateCallBack.get_callback_class('ActivationCheckpointing'), ActivationCheckpointing)
 
     def test_explicit_opt_in_with_legacy_callback_list(self):
