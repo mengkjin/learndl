@@ -109,14 +109,10 @@ class WorklistState:
         """Return run/skip reason and effective resume; no time-based policy."""
         if force:
             return 'forced', resume
-        if previous and previous.get('model_path') and not Path(previous['model_path']).is_dir():
-            return 'training directory missing', False
         if not previous or previous['status'] != 'success':
             return 'no successful completion', resume
         if previous['revisions'] != revisions:
             return 'worklist or schedule changed', resume
-        if not previous.get('model_path'):
-            return 'training directory unknown', resume
         return 'completed', resume
 
     def save(self, **data):

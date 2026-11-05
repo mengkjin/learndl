@@ -106,7 +106,13 @@ class BaseTrainer(BasePipeline):
         schedule_resume = config_kwargs.get('schedule_name') and self._kwargs.get('resume') == 1
         linear_schedule = bool(config_kwargs.get('schedule_name') and
                                (PATH.sched_linear / f"{config_kwargs['schedule_name']}.yaml").is_file())
-        if schedule_resume and not linear_schedule:
+        automatic_resume = (schedule_resume and not linear_schedule
+                            and not config_kwargs.get('base_path')
+                            and model_kwargs.get('resume_selection') == 'latest')
+        if automatic_resume:
+            from ..schedule_resume import automatic_schedule_config
+            self._config = automatic_schedule_config(config_kwargs, model_kwargs)
+        elif schedule_resume and not linear_schedule:
             from src.res.model.util.core import ModelPath
             from ..schedule_resume import select_schedule_run, validate_saved_configs
 
@@ -125,9 +131,10 @@ class BaseTrainer(BasePipeline):
             validate_saved_configs(model_path)
 
         model_kwargs.pop('resume_selection', None)
-        self._config = ModelConfig(**config_kwargs , **model_kwargs)
+        if not automatic_resume:
+            self._config = ModelConfig(**config_kwargs , **model_kwargs)
         try:
-            if schedule_resume and not linear_schedule and self._config.boost_head_config:
+            if not automatic_resume and schedule_resume and not linear_schedule and self._config.boost_head_config:
                 validate_saved_configs(self._config.base_path, boost_head=self._config.boost_head_config.model_module)
             self._config.start_model()
         finally:

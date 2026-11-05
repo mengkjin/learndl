@@ -428,7 +428,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                 message += '\nRecovery: ' + json.dumps(recovery_plan(store, current, settings()), ensure_ascii=False) + '\n'
                 message += 'Exit evidence: ' + json.dumps(evidence(store, run['id']), ensure_ascii=False) + '\n'
             if run.get('parent_run_id'):
-                message += f'\nAbnormal-exit resume attempt: {run["retry_index"]}; parent: {run["parent_run_id"]}; directory: {run["resume_model_path"]}\n'
+                message += f'\nAbnormal-exit resume attempt: {run["retry_index"]}; parent: {run["parent_run_id"]}; directory: selected by trainer\n'
             completion = run.get('completion') or {}
             message += (f'\nModel directory: {completion.get("model_path", "pending")}\n'
                         f'Training runs: {completion.get("training_run_ids", [])}\n'

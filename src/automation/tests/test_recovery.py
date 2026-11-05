@@ -99,7 +99,7 @@ class RecoveryTest(unittest.TestCase):
         with patch.object(recovery.psutil, 'virtual_memory', return_value=SimpleNamespace(total=100, available=19)):
             self.assertEqual(recovery.recovery_plan(self.store, self.parent_run, {}, now=1000)['recovery_status'], 'system memory busy')
         self.folder.rmdir()
-        self.assertIn('directory missing', recovery.recovery_plan(self.store, self.parent_run, {}, now=1000)['recovery_status'])
+        self.assertTrue(recovery.recovery_plan(self.store, self.parent_run, {}, now=1000)['retry'])
 
     def test_abnormal_exit_recovers_without_oom_evidence(self):
         recovery.record(self.store, 'parent', service_result='signal')
@@ -112,7 +112,7 @@ class RecoveryTest(unittest.TestCase):
                 self.assertEqual(plan['exit_reason'], expected)
                 self.assertTrue(plan['retry'])
                 request = dict(require_candidate(self.store), pid=os.getpid())
-                self.assertEqual(recovery.resume_path(self.store, request, 'first', run['version']), str(self.folder))
+                self.assertIsNone(recovery.validate_recovery_request(self.store, request, 'first', run['version']))
 
     def test_ctrl_c_sigterm_and_normal_outcomes_never_retry_even_after_reboot(self):
         for code in (-2, -15, 130, 143, 1, 0):
@@ -152,7 +152,7 @@ class RecoveryTest(unittest.TestCase):
     def test_latest_attempt_recovery_then_error_blocks_older_oom(self):
         request = require_candidate(self.store)
         self.assertEqual(request['parent_run_id'], 'parent')
-        self.assertEqual(request['resume_model_path'], str(self.folder))
+        self.assertNotIn('resume_model_path', request)
         self.assertEqual(request['retry_index'], 1)
         failed = dict(request, id='retry', owner=idle.OWNER, phase='error', returncode=1, finished_at=100)
         self.store.put(failed)
@@ -201,13 +201,13 @@ class RecoveryTest(unittest.TestCase):
             idle.worker()
             launch.assert_not_called()
 
-    def test_removed_resume_directory_emits_one_blocked_notification(self):
+    def test_removed_audit_directory_does_not_block_recovery(self):
         self.assertEqual(require_candidate(self.store)['task'], 'first')
         self.folder.rmdir()
-        self.assertEqual(require_candidate(self.store)['task'], 'second')
+        self.assertEqual(require_candidate(self.store)['task'], 'first')
         idle.candidate(self.store)
         with self.store.connect() as connection:
-            self.assertEqual(connection.execute("SELECT count(*) FROM events WHERE id LIKE '%:recovery_blocked'").fetchone()[0], 1)
+            self.assertEqual(connection.execute("SELECT count(*) FROM events WHERE id LIKE '%:recovery_blocked'").fetchone()[0], 0)
 
     def test_outcome_persisted_before_smtp_exception(self):
         from datetime import datetime
@@ -239,14 +239,13 @@ class RecoveryTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     load_config(directory, 'mengkjin-server')
 
-    def test_resume_path_rejects_replaced_identity_and_missing_directory(self):
+    def test_recovery_identity_validated_without_directory_binding(self):
         request = dict(require_candidate(self.store), pid=os.getpid())
-        self.assertEqual(recovery.resume_path(self.store, request, 'first', self.parent_run['version']), str(self.folder))
+        self.assertIsNone(recovery.validate_recovery_request(self.store, request, 'first', self.parent_run['version']))
         with self.assertRaises(RuntimeError):
-            recovery.resume_path(self.store, dict(request, pid=-1), 'first', self.parent_run['version'])
+            recovery.validate_recovery_request(self.store, dict(request, pid=-1), 'first', self.parent_run['version'])
         self.folder.rmdir()
-        with self.assertRaises(FileNotFoundError):
-            recovery.resume_path(self.store, request, 'first', self.parent_run['version'])
+        recovery.validate_recovery_request(self.store, request, 'first', self.parent_run['version'])
 
     def test_progress_outcome_is_durable_without_email(self):
         recovery.child_progress('parent', dict(run_id='training', status='failed', model_path=str(self.folder)), self.store)

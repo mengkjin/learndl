@@ -132,15 +132,15 @@ class CarryOutScheduleWorkList(DirectCall):
                             raise AutomaticDeferred('Already completed')
                         Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
                         continue
-                    model_path = previous.get('model_path') if previous else None
+                    model_path = None  # Audit output only; the trainer selects its directory.
                     if automatic and (recovery_run_id := self.kwargs.get('recovery_run_id')):
-                        from src.automation.scheduling.recovery import resume_path
+                        from src.automation.scheduling.recovery import validate_recovery_request
                         from src.automation.scheduling.runtime import RunStore
                         store = RunStore()
-                        model_path = resume_path(store, store.get(recovery_run_id), schedule_name,
+                        validate_recovery_request(store, store.get(recovery_run_id), schedule_name,
                                                  self.kwargs['expected_version'])
                         effective_resume, reason = True, 'abnormal exit recovery'
-                    Logger.note(f'Run [{schedule_name}]: {reason}; resume={effective_resume}')
+                    Logger.note(f'Run [{schedule_name}]: {reason}; requested_resume={effective_resume}')
                     details: dict[str, Any] = {'revisions': revisions, 'reason': reason, 'resume': effective_resume,
                                'force': force, 'model_path': model_path, 'training_run_ids': []}
                     state.save(status='running', **details)
@@ -158,11 +158,10 @@ class CarryOutScheduleWorkList(DirectCall):
 
                     with collect_training_runs(on_update=record_progress) as runs:
                         try:
-                            kwargs = {'base_path': model_path} if effective_resume and model_path else {}
                             task = self._train_one_schedule(
                                 main, schedule_name=schedule_name, short_test=None,
                                 resume=effective_resume, start=None, end=None, email=True,
-                                resume_selection='latest' if automatic else 'interactive', **kwargs,
+                                resume_selection='latest' if automatic else 'interactive',
                             )
                             if not (task.success and task.execution_success and runs
                                     and all(run['status'] == 'success' for run in runs)):

@@ -10,13 +10,12 @@ __all__ = [
     'script_result',
     'exit_reason',
     'recovery_plan',
-    'resume_path',
+    'validate_recovery_request',
 ]
 
 import json
 import os
 import time
-from pathlib import Path
 
 import psutil
 
@@ -123,11 +122,8 @@ def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | Non
         return dict(result, recovery_status='abnormal-exit recovery disabled')
     if count >= options.get('recovery_max_retries', 3):
         return dict(result, recovery_status='retry limit reached')
-    path = evidence(store, run['id']).get('model_path')
-    if not path or not Path(path).is_dir():
-        return dict(result, recovery_status='cannot resume: recorded training directory missing')
     due = run.get('finished_at', now) + options.get('recovery_delay_seconds', 900)
-    result.update(parent_run_id=run['id'], retry_index=count + 1, resume_model_path=path, retry_not_before=due)
+    result.update(parent_run_id=run['id'], retry_index=count + 1, retry_not_before=due)
     if now < due:
         return dict(result, recovery_status='cooldown')
     try:
@@ -140,19 +136,14 @@ def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | Non
     return dict(result, retry=True, recovery_status='ready')
 
 
-def resume_path(store: RunStore, request: dict, task: str, version: str) -> str:
-    """Recheck the immutable parent and exact path inside the schedule lock."""
+def validate_recovery_request(store: RunStore, request: dict, task: str, version: str) -> None:
+    """Validate retry identity; directory discovery belongs to the trainer."""
     parent = store.get(request.get('parent_run_id', ''))
-    path = request.get('resume_model_path')
     if (request.get('pid') != os.getpid() or request.get('task') != task or request.get('version') != version
             or parent.get('suppress_auto_recovery') or parent.get('installation_stop')
             or parent.get('task') != task or parent.get('version') != version
-            or exit_reason(store, parent) not in RECOVERABLE_EXITS
-            or path != evidence(store, parent['id']).get('model_path')):
+            or exit_reason(store, parent) not in RECOVERABLE_EXITS):
         raise RuntimeError('Abnormal-exit recovery identity/configuration changed')
-    if not path or not Path(path).is_dir():
-        raise FileNotFoundError('Cannot resume: recorded training directory missing')
-    return path
 
 
 if __name__ == '__main__':

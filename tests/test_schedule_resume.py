@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import patch
 
 import torch
@@ -22,14 +23,17 @@ from src.res.model.util.trainer.base_trainer import BaseTrainer
 
 
 class LegacyTrainer:
-    def __init__(self, base_path=None, short_test=False):
+    training_run: history.TrainingRun
+    _config: ModelConfig
+
+    def __init__(self, base_path=None, short_test: bool | None = False):
         self._config_kwargs = {'base_path': base_path, 'schedule_name': 'gru_day_new_rtn'}
         self._kwargs = dict(stage=1, resume=1, selection=0, short_test=short_test, vb_level='never')
         self.input_model_kwargs = self._kwargs
 
     @history.record_training
     def execute(self):
-        BaseTrainer.init_config(self)
+        BaseTrainer.init_config(cast(BaseTrainer, self))
         self.training_run.configured(self._config)
         return self._config
 
@@ -39,7 +43,7 @@ class LegacyScheduleTest(unittest.TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name).resolve()
-        source = (PATH.sched / 'gru_day_new_rtn.yaml').read_text()
+        source = 'model.module: gru\ninput.data.types: day\n'
         for key, relative in [('model', 'models'), ('model_nn', 'models/nn'),
                               ('model_boost', 'models/boost'), ('model_st', 'models/st'),
                               ('lc_machine', 'local'), ('sched', 'schedule')]:
@@ -59,6 +63,115 @@ class LegacyScheduleTest(unittest.TestCase):
         artifact = self.original / 'archive/0/20240101/best/state_dict.pt'
         artifact.parent.mkdir(parents=True)
         torch.save({'weight': torch.ones(1)}, artifact)
+
+    def auto_config(self):
+        return recovery.automatic_schedule_config(
+            {'schedule_name': 'gru_day_new_rtn', 'base_path': None, 'vb_level': 'never'},
+            {'resume': 1, 'stage': 1, 'selection': 0, 'short_test': False,
+             'resume_selection': 'latest'})
+
+    def copy_run(self, index):
+        other = self.original.with_name(self.original.name + f'@{index}')
+        shutil.copytree(self.original, other)
+        return other
+
+    def test_automatic_numeric_order_deleted_and_renamed_runs(self):
+        second = self.copy_run(2)
+        tenth = self.copy_run(10)
+        self.assertEqual(self.auto_config().base_path.base, tenth)
+        shutil.rmtree(tenth)
+        self.assertEqual(self.auto_config().base_path.base, second)
+        renamed = second.with_name(self.original.name + '@7')
+        second.rename(renamed)
+        self.assertEqual(self.auto_config().base_path.base, renamed)
+        shutil.rmtree(renamed)
+        chosen = self.auto_config()
+        self.assertEqual(chosen.base_path.base, self.original)
+        chosen.start_model()
+        self.assertTrue(chosen.is_resuming)
+
+    def test_automatic_skips_mismatch_and_corruption(self):
+        other = self.copy_run(2)
+        file = other / 'configs' / 'algo.gru.yaml'
+        algo = yaml.safe_load(file.read_text())
+        algo['hidden_dim'] = [999]
+        file.write_text(yaml.safe_dump(algo))
+        self.assertEqual(self.auto_config().base_path.base, self.original)
+        file.write_text('invalid: [')
+        self.assertEqual(self.auto_config().base_path.base, self.original)
+        shutil.rmtree(self.original)
+        chosen = self.auto_config()
+        self.assertEqual(chosen.options.resume, 0)
+        self.assertFalse(chosen.base_path.base.exists())
+        chosen.start_model()
+        self.assertNotEqual(chosen.base_path.base, other)
+        self.assertEqual(file.read_text(), 'invalid: [')
+
+    def test_automatic_definition_changes_and_runtime_settings(self):
+        original = self.source.read_text()
+        for change in ('input.sequence.lens: {day: 19}', 'model.window: 19',
+                       'train.trainer.learn_rate.base: 0.123',
+                       'train.max_epoch: 99'):
+            with self.subTest(change=change):
+                self.source.write_text(original + change + '\n')
+                config = self.auto_config()
+                self.assertEqual(config.options.resume, 0)
+                self.assertNotEqual(config.base_path.base, self.original)
+        self.source.write_text(original + 'callbacks.ActivationCheckpointing: {enabled: true}\n')
+        chosen = self.auto_config()
+        self.assertEqual(chosen.base_path.base, self.original)
+        self.assertTrue(chosen.callback_kwargs['ActivationCheckpointing']['enabled'])
+
+    def test_automatic_trainer_initialization_pins_existing_directory(self):
+        self.copy_run(2)
+        trainer = LegacyTrainer()
+        trainer._kwargs['resume_selection'] = 'latest'
+        config = trainer.execute()
+        self.assertEqual(config.base_path.model_name_index, 2)
+        self.assertTrue(config.is_resuming)
+
+    def test_automatic_rejects_inconsistent_saved_module(self):
+        other = self.copy_run(2)
+        saved = other / 'configs' / 'model.yaml'
+        content = yaml.safe_load(saved.read_text())
+        content['model.module'] = 'nn@lstm'
+        saved.write_text(yaml.safe_dump(content))
+        self.assertEqual(self.auto_config().base_path.base, self.original)
+
+    def test_automatic_missing_saved_artifact_falls_back(self):
+        other = self.copy_run(2)
+        (other / 'archive/0/20240101/best/state_dict.pt').unlink()
+        self.assertEqual(self.auto_config().base_path.base, self.original)
+
+    def test_automatic_rechecks_configuration_before_start(self):
+        from src.res.model.util import resume_validation
+        validate = resume_validation.validate_resume
+        saved = self.original / 'configs' / 'model.yaml'
+        calls = []
+        def change_once(config):
+            validate(config)
+            calls.append(1)
+            if len(calls) == 1:
+                saved.write_text(saved.read_text() + '\n# changed during validation\n')
+        with patch.object(resume_validation, 'validate_resume', side_effect=change_once):
+            self.assertEqual(self.auto_config().base_path.base, self.original)
+        self.assertEqual(len(calls), 2)
+
+        def change_always(config):
+            validate(config)
+            saved.write_text(saved.read_text() + '\n# changed again\n')
+        with patch.object(resume_validation, 'validate_resume', side_effect=change_always):
+            with self.assertRaisesRegex(RuntimeError, 'changed repeatedly'):
+                self.auto_config()
+
+    def test_automatic_no_directories_creates_only_after_start(self):
+        shutil.rmtree(self.original)
+        chosen = self.auto_config()
+        self.assertEqual(chosen.options.resume, 0)
+        self.assertFalse(chosen.base_path.base.exists())
+        chosen.start_model()
+        self.assertTrue(chosen.base_path.base.is_dir())
+        self.assertFalse(chosen.is_resuming)
 
     def test_numbered_directory_and_changed_current_module(self):
         target = self.original.with_name(self.original.name + '@3')
@@ -85,7 +198,7 @@ class LegacyScheduleTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Multiple training directories'):
                 LegacyTrainer().execute()
 
-    def test_automatic_latest_uses_creation_log_then_saved_config_time(self):
+    def test_automatic_latest_uses_numeric_suffix_despite_creation_time(self):
         other = self.original.with_name(self.original.name + '@2')
         shutil.copytree(self.original, other)
         models = [ModelPath(self.original), ModelPath(other)]
@@ -98,7 +211,7 @@ class LegacyScheduleTest(unittest.TestCase):
             timestamp = datetime.fromtimestamp(200 if model.base == self.original else 100)
             return SimpleNamespace(read=lambda: [SimpleNamespace(timestamp=timestamp, title='create_model_path')])
         with patch.object(ModelPath, 'log_file', property(entries)):
-            self.assertEqual(recovery.select_schedule_run('gru_day_new_rtn', short_test=False, policy='latest').base, self.original)
+            self.assertEqual(recovery.select_schedule_run('gru_day_new_rtn', short_test=False, policy='latest').base, other)
 
     def test_cancel_does_not_start_or_modify_models(self):
         other = self.original.with_name(self.original.name + '@2')

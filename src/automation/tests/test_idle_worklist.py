@@ -341,11 +341,11 @@ class IdleTest(unittest.TestCase):
         self.schedule.write_text('model.module: gru\n# changed\n')
         self.assertEqual(require_candidate(self.store)['task'], 'first')
 
-    def test_missing_directory_retrains_completed_resume_true(self):
+    def test_missing_audit_directory_does_not_retrain_completed(self):
         self.save_success()
         self.assertEqual(require_candidate(self.store)['task'], 'second')
         self.folder.rmdir()
-        self.assertEqual(require_candidate(self.store)['task'], 'first')
+        self.assertEqual(require_candidate(self.store)['task'], 'second')
 
     def test_manual_schedule_lock_defers_only_that_schedule(self):
         with WorklistState('first').lock():

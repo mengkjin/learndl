@@ -205,14 +205,29 @@ execution retains its force behavior. Raw worklist edits (including comments,
 reordering, or `rerun_mark`) and edits to a schedule create a new version.
 `rerun_mark` is symbolic: bump it when model code changed but the schedule YAML
 did not. Watchdog idle-training mail includes `Rerun mark: <value>` (`none` if
-absent). Unrelated training code or data changes do not. Missing recorded
-directories remain eligible for new training. `resume: true` with no recoverable checkpoint is an error. Unrecorded
-legacy directories resume the newest candidate automatically, by creation log
-time, falling back to saved `model.yaml` modification time and then model index;
-manual use still prompts when ambiguous. `resume: false` creates a new directory.
+absent). Unrelated training code or data changes do not trigger reruns. Completion
+uses status and configuration version only; deleting or renaming a recorded model
+directory does not invalidate completion. Use a rerun mark or explicit reset to
+request another attempt.
 
-A failed, killed or interrupted automatic attempt is not retried for that version;
-other eligible schedules continue. A configuration version change or explicit
+For automatic `resume: true`, the trainer scans current directories for the same
+schedule and chooses the highest numeric suffix with a matching effective training
+definition and valid saved artifacts (the unsuffixed directory is index 1).
+Creation times and worklist audit paths do not influence selection. Matching
+includes model/algo, input, labels, date grid/window, loss and optimizer settings;
+Callback, logging, device, compilation and execution-range settings are excluded.
+Invalid or incompatible directories are logged and skipped. With no matching run,
+the trainer safely creates an unused directory without clearing existing ones.
+`resume: false` requests a fresh run. Explicit manual paths and interactive choices
+keep their existing behavior.
+
+Abnormal-exit retries also delegate directory selection to the trainer. Legacy
+`model_path`/`resume_model_path` fields remain audit data, not directory bindings.
+Retry identity, configuration version, stop suppression, cooldown, memory admission
+and retry limits remain enforced.
+
+Ordinary script errors and explicit interruptions are not retried for that version;
+recoverable abnormal exits follow the bounded retry policy above. Other eligible schedules continue. A configuration version change or explicit
 reset makes it eligible again. Reset preserves past run records:
 
 ```bash

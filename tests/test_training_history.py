@@ -149,7 +149,7 @@ class WorklistTest(unittest.TestCase):
         self.run_hub()
         self.assertEqual(self.main.call_count, 2)
         self.assertTrue(self.main.call_args.kwargs['resume'])
-        self.assertEqual(self.main.call_args.kwargs['base_path'], str(self.folder.resolve()))
+        self.assertNotIn('base_path', self.main.call_args.kwargs)
 
     def test_automatic_runs_one_schedule_and_force_only_once(self):
         from src.api.calls.worklist_state import AutomaticDeferred
@@ -169,15 +169,19 @@ class WorklistTest(unittest.TestCase):
             automatic.run()
         self.main.assert_called_once()
 
-    def test_missing_directory_starts_new_training(self):
+    def test_deleted_audit_directory_does_not_rerun_completed_work(self):
         self.worklist.write_text('fit: [example]\nresume: true\n')
         self.run_hub()
         self.folder.rmdir()
+        self.main.reset_mock()
         self.run_hub()
-        self.assertFalse(self.main.call_args.kwargs['resume'])
+        self.main.assert_not_called()
+        self.worklist.write_text('fit: [example]\nresume: true\nrerun_mark: 2\n')
+        self.run_hub()
+        self.assertTrue(self.main.call_args.kwargs['resume'])
         self.assertNotIn('base_path', self.main.call_args.kwargs)
 
-    def test_recovery_overrides_resume_false_with_exact_parent_directory(self):
+    def test_recovery_requests_resume_without_binding_parent_directory(self):
         import os
         from src.automation.scheduling import runtime, recovery
         from src.automation.scheduling.idle_worklist import version
@@ -197,7 +201,7 @@ class WorklistTest(unittest.TestCase):
                 CarryOutScheduleWorkList(automatic=True, only_schedule='example', expected_version=expected,
                                         recovery_run_id=request['id']).run()
             self.assertTrue(self.main.call_args.kwargs['resume'])
-            self.assertEqual(self.main.call_args.kwargs['base_path'], str(self.folder))
+            self.assertNotIn('base_path', self.main.call_args.kwargs)
             self.assertEqual(self.state.read()['reason'], 'abnormal exit recovery')
             self.assertEqual(recovery.evidence(store, request['id'])['training_status'], 'success')
             self.assertIn('resume: false', self.worklist.read_text())

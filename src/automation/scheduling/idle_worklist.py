@@ -138,7 +138,7 @@ def candidate(store: RunStore, *, only: str | None = None, options: dict | None 
 def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None,
                options: dict | None = None) -> dict | None:
     from src.api.calls.worklist_state import WorklistState
-    from .recovery import recovery_plan, record, evidence
+    from .recovery import recovery_plan, record
     options = settings() if options is None else options
     resume, force = worklist.get('resume', False), worklist.get('force', False)
     attempts = store.owned(OWNER)
@@ -158,10 +158,6 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
             if latest['phase'] in ACTIVE:
                 continue
             recovery = recovery_plan(store, latest, options)
-            previous_plan = evidence(store, latest['id']).get('recovery', {})
-            if (previous_plan.get('recovery_status') in {'ready', 'cooldown', 'system memory busy', 'system memory unavailable'}
-                    and recovery['recovery_status'] == 'cannot resume: recorded training directory missing'):
-                store.event(latest, 'recovery_blocked', recovery['recovery_status'])
             record(store, latest['id'], recovery=recovery)
             if not recovery['retry']:
                 continue
@@ -175,7 +171,7 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
             continue
         if reason != 'completed':
             resume_request = {field: recovery[field] for field in
-                              ('parent_run_id', 'retry_index', 'resume_model_path', 'retry_not_before') if field in recovery}
+                              ('parent_run_id', 'retry_index', 'retry_not_before') if field in recovery}
             return {'task': name, 'version': key, 'revisions': revisions, **resume_request,
                     'rerun_mark': WorklistState.rerun_mark(worklist)}
     return None
