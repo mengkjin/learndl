@@ -85,19 +85,19 @@ class ChannelsTest(unittest.TestCase):
         self.assertTrue(channels.reserve(self.store, 'autofix:first', ['research'], start + 4500))
         self.assertEqual(channels.request(self.store, 'autofix:first')['requested_at'], start)
 
-    def test_git_cooldown_and_notice_survive_reopening_store(self):
+    def test_git_retries_without_cooldown_and_notice_survives_reopening_store(self):
         start = time.time()
         with patch('src.automation.scheduling.auxiliary.control_error') as notice, \
                 patch('src.automation.scheduling.maintenance_notice.capture', return_value={}):
             channels.reserve(self.store, 'git', channels.GROUPS, start)
-            self.assertFalse(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
+            self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
             notice.assert_called_once()
             reopened = Store(self.control)
-            self.assertEqual(channels.request(reopened, 'git')['cooldown_until'], start + 4500)
-            self.assertFalse(channels.reserve(reopened, 'git', channels.GROUPS, start + 4499))
+            self.assertNotIn('cooldown_until', channels.request(reopened, 'git'))
+            self.assertTrue(channels.reserve(reopened, 'git', channels.GROUPS, start + 3660))
             self.assertTrue(channels.reserve(reopened, 'git', channels.GROUPS, start + 4500))
             # A later timeout, even on another day, must not generate another alert.
-            self.assertFalse(channels.reserve(reopened, 'git', channels.GROUPS, start + 90000))
+            self.assertTrue(channels.reserve(reopened, 'git', channels.GROUPS, start + 90000))
             notice.assert_called_once()
             self.assertEqual(channels.request(reopened, 'git')['requested_at'], start)
             # Completion/cancellation removes the request; a new request can alert.
@@ -112,8 +112,22 @@ class ChannelsTest(unittest.TestCase):
         state = channels.request(self.store, 'git')
         channels.save_request(self.store, dict(state, notified_at=start - 86400))
         with patch('src.automation.scheduling.auxiliary.control_error') as notice:
-            self.assertFalse(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
+            self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
             notice.assert_not_called()
+
+    def test_existing_git_cooldown_resumes_immediately(self):
+        start = time.time()
+        channels.reserve(self.store, 'git', channels.GROUPS, start)
+        state = channels.request(self.store, 'git')
+        channels.save_request(self.store, dict(state, phase='cooldown',
+                             cooldown_until=start + 4500, notified_at=start + 3600))
+        with patch('src.automation.scheduling.auxiliary.control_error') as notice:
+            self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3601))
+            notice.assert_not_called()
+        updated = channels.request(self.store, 'git')
+        self.assertEqual(updated['phase'], 'waiting')
+        self.assertEqual(updated['requested_at'], start)
+        self.assertNotIn('cooldown_until', updated)
 
     def test_running_maintenance_not_expired_by_wait_deadline(self):
         channels.reserve(self.store, 'autofix:fix', ['data'])

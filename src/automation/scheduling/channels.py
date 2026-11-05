@@ -83,15 +83,25 @@ def save_request(store, state):
 
 
 def _expire(store, state, now):
+    if state.get('owner') == 'git':
+        # Migrate existing cooldown records on the next poll without resetting
+        # their age or notification receipt. Git admission remains nonblocking.
+        if state.get('phase') == 'cooldown':
+            state = dict(state, phase='waiting')
+            state.pop('cooldown_until', None)
+        if state.get('phase') == 'waiting' and now >= state['deadline']:
+            state = dict(state, deadline=now + WAIT_SECONDS,
+                         reason='Maintenance admission delayed for over one hour')
+            if state.get('notified_at') is None:
+                from .auxiliary import control_error
+                from .maintenance_notice import PREFIX, capture
+                control_error(RuntimeError(PREFIX + json.dumps(capture(state))))
+                state['notified_at'] = now
+        return state
     if state.get('phase') == 'waiting' and now >= state['deadline']:
         state = dict(state, phase='cooldown', cooldown_until=now + COOLDOWN_SECONDS,
                      reason='Maintenance admission timed out after one hour', expired_at=now)
-        # Git keeps one request across cooldowns. Alert once for its whole
-        # lifetime, including records notified before this policy was deployed.
-        notified_at = state.get('notified_at')
-        notify = (notified_at is None if state.get('owner') == 'git'
-                  else now - (notified_at or 0) >= 86400)
-        if notify:
+        if now - state.get('notified_at', 0) >= 86400:
             from .auxiliary import control_error
             from .maintenance_notice import PREFIX, capture
             control_error(RuntimeError(PREFIX + json.dumps(capture(state))))

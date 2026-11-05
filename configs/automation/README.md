@@ -563,9 +563,9 @@ Linux 验收使用上文 `LEARNDL_SYSTEMD_ACCEPTANCE=1` 命令；本机测试通
 
 ### Maintenance delay diagnostics
 
-Git checks retain their 60-second interval. After one hour without admission, the
-Git request cools down for 15 minutes before it may seek execution permission again.
-Only one delay notice is generated per Git request, across cooldowns, subsequent
+Git checks retain their 60-second interval, with no admission cooldown after an
+hour of waiting. Existing Git cooldown records resume admission attempts on the
+next poll. Only one delay notice is generated per Git request, across subsequent
 days and worker restarts. Existing notification timestamps count as already notified.
 Completion or cancellation clears the request, so a new request may notify again.
 Delivery failures still retry the original queued notice. This policy is loaded by
