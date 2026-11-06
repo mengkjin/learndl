@@ -242,7 +242,11 @@ def execute(request: dict, store) -> int:
             try:
                 with as_script_main(script):
                     module = next(iter(dynamic_modules(script)))
-                    task = module.main(request_path=request['resume_request_path'], email=not doc['no_email'])
+                    main = module.main
+                    if not callable(main):
+                        raise TypeError('Research script main is not callable')
+                    record(store, request['id'], script_notification_handoff=True)
+                    task = main(request_path=request['resume_request_path'], email=not doc['no_email'])
             finally:
                 sys.argv = previous_argv
             success = bool(task.success and task.execution_success)
@@ -277,7 +281,11 @@ def execute(request: dict, store) -> int:
         try:
             with as_script_main(script):
                 module = next(iter(dynamic_modules(script)))
-                task = module.main(config_path=str(resolved), recipient=request['config']['recipient'],
+                main = module.main
+                if not callable(main):
+                    raise TypeError('Research script main is not callable')
+                record(store, request['id'], script_notification_handoff=True)
+                task = main(config_path=str(resolved), recipient=request['config']['recipient'],
                                    no_email=request['no_email'], email=not request['no_email'])
         finally:
             sys.argv = previous_argv

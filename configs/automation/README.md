@@ -366,8 +366,8 @@ python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/r
 自动请求刻意使用新目录，不继承另一版本的筛选结果。
 
 正常完成或 Python 异常由任务发送一封 HTML 日志和 ZIP/JSON 附件邮件。
-未送达的任务结果、进程被杀等由 watchdog 兜底；`no_email: true` 同时关闭这两种
-通知。运行详情及失败记录可在上述 status 中查看。手动运行不消耗 Git 自动请求。
+watchdog 发送一次启动通知，脚本接手执行后的收尾邮件由脚本负责；启动准备或导入失败
+由 watchdog 提醒。`no_email: true` 关闭这些通知。运行详情及失败记录可在上述 status 中查看。手动运行不消耗 Git 自动请求。
 
 
 ## Pending email retry
@@ -607,3 +607,20 @@ reported without creating or repairing them. Collection has a two-second query/i
 budget and a 100-record cap; the body shows ten candidates, with larger snapshots attached
 as JSON. SMTP retries retain the captured observation rather than attributing historical
 blocking to newly running tasks. Legacy queued notices retain their original limited detail.
+
+
+### Research notification ownership
+
+Automatic RL (including resume) and factor-sequence research send one durable
+watchdog start notice per run. Delivery retries retain the same event ID and body;
+`no_email` still disables notifications. Flat request metadata is supported as well
+as Git revision mappings. Previously suppressed historical start events are not replayed.
+Once the worker hands execution to the script entry point, result mail belongs to
+the script, including runtime errors and failed/deferred SMTP delivery. Watchdog
+continues supervising the process but does not generate a second completion email,
+including for later termination. Failures before that handoff (such as script import,
+entry-point validation or launch preparation failures) retain watchdog failure mail.
+Successful legacy runs do not receive duplicate result mail; older failed runs without
+handoff evidence retain the existing receipt-based fallback. Model-training and autofix
+notification policies are unchanged. Pulling this code updates new worker behavior;
+no systemd timer or watchdog reinstall is required.

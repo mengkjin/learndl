@@ -116,6 +116,10 @@ def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
     if run['phase'] == 'deferred' or run.get('no_email'):
         return False
     if run.get('task_kind') in {'rl_experiment', 'nn_metrics_ab', 'factor_sequence'}:
+        from .recovery import evidence
+        if (evidence(store, run['id']).get('script_notification_handoff')
+                or run['phase'] == 'complete' or run.get('returncode') == 0):
+            return False
         with store.connect() as connection:
             return connection.execute('SELECT 1 FROM script_mail WHERE run_id=?', (run['id'],)).fetchone() is None
     # Signals, reboot, launcher failure and watchdog termination are distinct
@@ -379,7 +383,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
         run = event['run']
         mail_options = ({'recipient': run.get('recipient') or run.get('config', {}).get('recipient')}
                         if run.get('task_kind') == 'rl_experiment' else {})
-        if run.get('no_email') or (run.get('task_kind') == 'rl_experiment' and event['kind'] == 'started'):
+        if run.get('no_email'):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=-1 WHERE id=?', (event_id,))
             continue
@@ -435,7 +439,10 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                         f'Error: {completion.get("error", "")}\n'
                         f'Rerun mark: {run.get("rerun_mark", "none")}\n')
             for name, revision in run.get('revisions', {}).items():
-                message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
+                if isinstance(revision, dict):
+                    message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
+                else:
+                    message += f'{name}: {json.dumps(revision, ensure_ascii=False)}\n'
         # Freeze dynamic elapsed/recovery text on the first attempt. A durable
         # delivery ID must refer to the same payload on every subsequent retry.
         if 'delivery_message' not in event:

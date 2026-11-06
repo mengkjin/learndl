@@ -217,7 +217,7 @@ class RLSchedulingTest(unittest.TestCase):
         request = require_rl(self.store) | dict(id='run', owner=idle.OWNER, phase='complete',
                                                returncode=0, started_at=1, timeout_seconds=None)
         self.store.put(request)
-        self.assertTrue(runtime.idle_exit_needs_email(self.store, request))
+        self.assertFalse(runtime.idle_exit_needs_email(self.store, request))
         with self.store.connect() as db:
             db.execute('INSERT INTO script_mail VALUES (?,?,?)', ('run', 'success', 1))
         self.assertFalse(runtime.idle_exit_needs_email(self.store, request))

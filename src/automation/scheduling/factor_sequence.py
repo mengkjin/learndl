@@ -79,19 +79,30 @@ def execute(request, store):
         sys.argv = [str(script)]
         with as_script_main(script):
             module = next(iter(dynamic_modules(script)))
+            main = module.main
+            if not callable(main):
+                raise TypeError('Research script main is not callable')
+
+            def invoke(**kwargs):
+                record(store, request['id'], script_notification_handoff=True)
+                return main(**kwargs)
+
+            # Preparation helpers may fail or defer before entering the script.
+            from types import SimpleNamespace
+            entry = SimpleNamespace(main=invoke)
             try:
                 resume_from=request.get('revisions',{}).get('resume_from')
                 if request.get('revisions',{}).get('cleanup_legacy'):
                     from .factor_sequence_restart import execute as restart
-                    restart(request['request_id'],module)
+                    restart(request['request_id'],entry)
                 elif resume_from:
                     from .factor_sequence_recovery import recover
-                    if recover(request['request_id'],resume_from,module)==75:
+                    if recover(request['request_id'],resume_from,entry)==75:
                         return 75
                 else:
-                    module.main(run_id=request['request_id'])
+                    invoke(run_id=request['request_id'])
             finally:
-                # Record only confirmed delivery; otherwise supervisor retains its alert.
+                # Keep confirmed receipts for audit and legacy notification compatibility.
                 receipt = PATH.result / 'factor_sequence' / request['request_id'] / 'mail_status.json'
                 if receipt.exists() and json.loads(receipt.read_text()).get('status') == 'sent':
                     from .runtime import record_script_email

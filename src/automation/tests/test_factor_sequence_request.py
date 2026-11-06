@@ -59,6 +59,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
             argv = sys.argv
             with (
                 patch("src.proj.PATH.result", root),
+                patch("src.automation.scheduling.recovery.record") as handoff,
                 patch("src.proj.util.script.FitLock.is_held", return_value=False),
                 patch("src.proj.util.script.FitLock.guard") as guard,
                 patch(
@@ -71,10 +72,23 @@ class FactorSequenceRequestTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "test failure"):
                     queue.execute({"request_id": "test", "id": "managed_test"}, Mock())
+                handoff.assert_called_once_with(unittest.mock.ANY, 'managed_test', script_notification_handoff=True)
                 guard.return_value.__exit__.assert_called_once()
                 module.main.assert_called_once_with(run_id="test")
                 receipt.assert_called_once_with(success=False)
             self.assertIs(sys.argv, argv)
+
+    def test_import_failure_does_not_handoff_notification(self):
+        with (
+            patch("src.proj.util.script.FitLock.is_held", return_value=False),
+            patch("src.proj.util.script.FitLock.guard"),
+            patch("src.proj.util.filesys.dynamic_import.dynamic_modules", side_effect=ImportError('broken script')),
+            patch("src.automation.scheduling.recovery.record") as handoff,
+        ):
+            with self.assertRaises(ImportError):
+                queue.execute({'request_id': 'test', 'id': 'managed_test'}, Mock())
+            handoff.assert_not_called()
+
 
 
 if __name__ == "__main__":
