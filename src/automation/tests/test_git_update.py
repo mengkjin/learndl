@@ -119,6 +119,43 @@ class GitUpdateTest(unittest.TestCase):
         self.assertTrue(marker.exists())
         self.assertEqual(self.git(self.checkout, 'rev-parse', 'HEAD'), self.before)
 
+    def test_dirty_notice_is_durable_once_per_episode_and_retries(self):
+        import time
+        log = self.checkout / 'manual.log'
+        log.write_text('private log contents')
+        self.assertEqual(self.update()['reason'], 'local changes or untracked files')
+        log.write_text('more private log contents')
+        self.update()
+        sender = Mock(side_effect=[False, True, True])
+        self.assertFalse(updater.deliver_update_emails(sender))
+        first = sender.call_args
+        self.assertTrue(updater.deliver_update_emails(sender))
+        self.assertEqual(first, sender.call_args)
+        self.assertIn('Git Update Paused', first.args[0])
+        self.assertIn('?? manual.log', first.args[1])
+        self.assertNotIn('private log contents', first.args[1])
+        self.assertIn('has not been checked', first.args[1])
+        self.update()
+        updater.deliver_update_emails(sender)
+        self.assertEqual(sender.call_count, 2)
+        # Observing a clean checkout closes the episode; recurrence can notify.
+        log.unlink()
+        self.assertIsNone(updater.repository_blocker(self.checkout, time.monotonic() + 10))
+        log.write_text('new episode')
+        self.update()
+        updater.deliver_update_emails(sender)
+        self.assertEqual(sender.call_count, 3)
+        self.assertNotEqual(first.kwargs['delivery_id'], sender.call_args.kwargs['delivery_id'])
+
+    def test_ignored_logs_do_not_block_or_notify(self):
+        import time
+        (self.checkout / '.git' / 'info' / 'exclude').write_text('ignored.log\n')
+        (self.checkout / 'ignored.log').write_text('runtime output')
+        self.assertIsNone(updater.repository_blocker(self.checkout, time.monotonic() + 10))
+        sender = Mock()
+        updater.deliver_update_emails(sender)
+        sender.assert_not_called()
+
     def test_local_commit_branch_and_detached_head_never_rewritten(self):
         self.git(self.checkout, 'checkout', '-b', 'experiment')
         self.assertEqual(self.update()['status'], 'deferred')

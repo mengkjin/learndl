@@ -17,6 +17,7 @@ import os
 import signal
 import subprocess
 import time
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 from collections.abc import Callable
@@ -50,6 +51,47 @@ def queue_update_email(result: dict, root: Path) -> str:
     return notice_id
 
 
+def _record_repository_status(root: Path, status: str) -> None:
+    """Atomically enqueue once per observed dirty episode, independent of file churn."""
+    from src.proj import MACHINE
+    repository = str(root.resolve())
+    store = _mail_store()
+    with store.connect() as db:
+        db.execute('CREATE TABLE IF NOT EXISTS git_repository_notice '
+                   '(repository TEXT PRIMARY KEY, notice_id TEXT NOT NULL)')
+        db.execute('BEGIN IMMEDIATE')
+        if not status:
+            db.execute('DELETE FROM git_repository_notice WHERE repository=?', (repository,))
+            return
+        if db.execute('SELECT 1 FROM git_repository_notice WHERE repository=?', (repository,)).fetchone():
+            return
+        notice_id = 'dirty-' + uuid.uuid4().hex
+        lines = status.splitlines()
+        data = dict(kind='dirty_repository', host=MACHINE.name, repository=repository,
+                    observed_at=datetime.now(timezone.utc).isoformat(),
+                    file_status=lines[:100], entry_count=len(lines))
+        db.execute('INSERT INTO git_update_mail(id,data) VALUES (?,?)', (notice_id, json.dumps(data)))
+        db.execute('INSERT INTO git_repository_notice VALUES (?,?)', (repository, notice_id))
+
+
+def _repository_notice_body(data: dict) -> str:
+    return (f'Host: {data["host"]}\nRepository: {data["repository"]}\n'
+            f'Operation: Automatic Git update (origin/master)\n'
+            f'Evidence captured: {data["observed_at"]}\n'
+            'Reason: Local changes or untracked files; automatic update is paused.\n'
+            'Remote availability has not been checked at this stage.\n'
+            f'Git status entries ({data["entry_count"]}; first 100 shown):\n' +
+            '\n'.join(data['file_status']) +
+            '\nStatus: ?? = untracked; first column = index, second = working tree.\n'
+            'Directories may summarize multiple untracked files. File contents are not included.\n'
+            'Action: Review git status --short. Commit intended source changes, or move generated '
+            'logs outside the checkout / configure appropriate ignore rules. Ignore rules do not '
+            'hide changes to already tracked files. No files were deleted, stashed or overwritten.\n'
+            'Checks continue normally and updates resume when all safety checks pass. '
+            'This episode is notified once, even if files keep changing. Failed delivery retries '
+            'this same snapshot; it may no longer reflect the state at delivery time.')
+
+
 def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> bool:
     """Retry pending notices each watchdog tick; only mark delivered after SMTP success."""
     store = _mail_store()
@@ -59,16 +101,21 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
     delivered = True
     for key, raw in rows:
         data = json.loads(raw)
-        files = data.get('changed_files', [])
-        body = (f'Host: {data["host"]}\nRepository: {data["repository"]}\n'
-                f'Branch: master (origin/master)\nUpdated at: {data["updated_at"]}\n'
-                f'Before: {data["before"]}\nAfter: {data["after"]}\n'
-                f'Changed files ({len(files)}):\n' + '\n'.join(files[:100]))
-        if len(files) > 100:
-            body += f'\n... {len(files) - 100} more; see watchdog state for the full list.'
-        body += '\nFollow-up: ' + ('; '.join(data.get('follow_up', [])) or 'none detected')
+        if data.get('kind') == 'dirty_repository':
+            subject = f'Watchdog Git Update Paused - {data["host"]} - Local changes'
+            body = _repository_notice_body(data)
+        else:
+            files = data.get('changed_files', [])
+            body = (f'Host: {data["host"]}\nRepository: {data["repository"]}\n'
+                    f'Branch: master (origin/master)\nUpdated at: {data["updated_at"]}\n'
+                    f'Before: {data["before"]}\nAfter: {data["after"]}\n'
+                    f'Changed files ({len(files)}):\n' + '\n'.join(files[:100]))
+            if len(files) > 100:
+                body += f'\n... {len(files) - 100} more; see watchdog state for the full list.'
+            body += '\nFollow-up: ' + ('; '.join(data.get('follow_up', [])) or 'none detected')
+            subject = f'Watchdog Git Updated - {data["host"]} - {data["after"][:12]}'
         try:
-            sent = sender(f'Watchdog Git Updated - {data["host"]} - {data["after"][:12]}', body,
+            sent = sender(subject, body,
                           confirmation_message='Learndl automatic Git update', queue_on_failure=False,
                           delivery_id=f'git-update:{key}')
         except Exception:
@@ -104,7 +151,9 @@ def _git(root: Path, args: list[str], deadline: float, *, allow_failure: bool = 
         if process.returncode and not allow_failure:
             # Do not copy remote URLs/credential-helper diagnostics into watchdog state.
             raise GitUpdateError(f'git {args[0]} failed (exit {process.returncode}); inspect repository/authentication')
-        return output.strip() if process.returncode == 0 else ''
+        if process.returncode:
+            return ''
+        return output.rstrip('\n') if '--porcelain=v1' in args else output.strip()
 
 
 def repository_blocker(root: Path, deadline: float) -> str | None:
@@ -114,7 +163,9 @@ def repository_blocker(root: Path, deadline: float) -> str | None:
         path = Path(_git(root, ['rev-parse', '--git-path', name], deadline))
         if (path if path.is_absolute() else root / path).exists():
             return 'another Git operation is in progress'
-    if _git(root, ['status', '--porcelain=v1', '--untracked-files=normal', '--ignore-submodules=none'], deadline):
+    status = _git(root, ['-c', 'core.quotePath=true', 'status', '--porcelain=v1', '--untracked-files=normal', '--ignore-submodules=none'], deadline)
+    _record_repository_status(root, status)
+    if status:
         return 'local changes or untracked files'
     return None
 

@@ -274,7 +274,19 @@ Only the existing `origin` remote's `master` is fetched. A successful update que
 update time, before/after commit hashes, changed files and required follow-up.
 Failed delivery is retried by the mail worker from a persistent outbox
 in `runs.sqlite`; already delivered commit transitions are not mailed again.
-Unchanged, deferred and failed pulls do not produce success mail. SMTP cannot
+Unchanged, deferred and failed pulls do not produce success mail.
+Local changes (staged, unstaged, or non-ignored untracked files) generate a separate
+English `Watchdog Git Update Paused` notice with host, repository, observation time,
+and up to 100 Git status entries. No file contents are included. This check runs
+before fetch, so the notice does not imply that a remote update is available.
+One durable notice is queued per continuously observed dirty episode; changing
+log files or worker restarts do not generate more notices. A clean observation
+resets this suppression, allowing a later dirty episode to notify. Failed mail
+retries retain the original snapshot. Generated files are never deleted or stashed
+automatically. Move them outside the checkout or configure appropriate ignore rules
+(after reviewing whether any are already tracked). These notices use the existing
+mail worker and require no timer reinstall after pulling the code.
+ SMTP cannot
 promise exactly-once delivery if the process dies after sending but before saving
 its receipt. Normal checks send no additional email. Inspect `PATH.runtime/task_watchdog/state.json`, job
 `git_auto_update`, for outcome, before/after hashes, changed files and follow-up
