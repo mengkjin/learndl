@@ -166,3 +166,80 @@ class gru_gru(ActivationCheckpointMixin, nn.Module):
         x = self.checkpoint_region('encode_days', x)
         x, o = self.output(x)
         return o , {'hidden' : x}
+
+class gru_gru_new(ActivationCheckpointMixin, nn.Module):
+    """GRU with intra-day GRU encoder.  Registry key: ``'gru_gru'``.
+
+    Requires ``inday_dim`` (intra-day bar count) in kwargs.
+    Both GRU stages support activation checkpointing; the BatchNorm output
+    head stays outside recomputation. Parameter names and batch layout remain
+    compatible with existing weights.
+    """
+    activation_checkpoint_regions = ('encode_intraday', 'encode_days')
+
+    def __init__(
+        self,
+        input_dim ,
+        hidden_dim      = 2**6,
+        dropout         = 0.1,
+        act_type        = 'leaky',
+        enc_in          = None,
+        enc_in_dim      = None ,
+        inday_rnn_dim   = None,
+        rnn_layers      = 2,
+        loss_corr_lamb  = 0.1,
+        hidden_as_factors = True,
+        hidden_mean_pool = False,
+        **kwargs
+    ):
+        super().__init__()
+        self.loss_corr_lamb = loss_corr_lamb
+
+        if enc_in_dim is None:
+            enc_in_dim = max(hidden_dim // 4 , 1)
+
+        if inday_rnn_dim is None:
+            inday_rnn_dim = enc_in_dim
+
+        if enc_in == 'linear' or enc_in is True:
+            self.fc_enc_in = nn.Sequential(nn.Linear(input_dim, enc_in_dim),nn.Tanh())
+        else:
+            enc_in_dim = input_dim
+            self.fc_enc_in = nn.Sequential()
+        
+        self.inday_rnn = mod_gru(enc_in_dim , inday_rnn_dim, num_layers=rnn_layers, dropout=dropout)
+
+        self.fc_rnn = mod_gru(
+            input_dim = enc_in_dim,
+            output_dim = hidden_dim,
+            num_layers = rnn_layers,
+            dropout = dropout,
+        )
+        
+        self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
+
+    def encode_in(self, x: Tensor) -> Tensor:
+        """Encode the input features."""
+        return self.fc_enc_in(x)
+        
+    def encode_intraday(self, x: Tensor) -> Tensor:
+        """Encode all stock/day sequences with the original flattened layout."""
+        bs, seq_len, inday_dim, inday_rnn_dim = x.shape
+        encoded = self.inday_rnn(x.reshape(-1, inday_dim, inday_rnn_dim))[:, -1]
+        return encoded.reshape(bs, seq_len, -1)
+
+    def encode_days(self, x: Tensor) -> Tensor:
+        """Encode days and pool before the stateful output head."""
+        x = self.fc_rnn(x)
+        return x[:, -1]
+
+    def forward(self , x : Tensor) -> tuple[Tensor,dict]:
+        """
+        in: [bs x seq_len x inday_dim x input_dim]
+        out:[bs x 1] , [bs x hidden_dim]
+        """
+        x = self.encode_in(x)
+        x = self.checkpoint_region('encode_intraday', x)
+        x = self.checkpoint_region('encode_days', x)
+        x, o = self.output(x)
+        return o , {'hidden' : x}

@@ -29,6 +29,7 @@ NN_MODULES = {
     'astgnn_legacy': 'gnn.AstgnnLegacy',
     'resnet_gru': 'resnet_gru.resnet_gru',
     'gru_gru': 'resnet_gru.gru_gru',
+    'gru_gru_new': 'resnet_gru.gru_gru_new',
     'transformer_gru': 'transformer_gru.transformer_gru',
     'resnet_transformer': 'resnet_transformer.resnet_transformer',
     'resnet_mlp': 'resnet_mlp.resnet_mlp',
