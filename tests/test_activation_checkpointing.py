@@ -20,7 +20,7 @@ import yaml
 
 from src.res.algo.nn.layer.checkpoint import ActivationCheckpointMixin, is_cuda_oom
 from src.res.algo.nn.model.transformer_gru import transformer_gru
-from src.res.algo.nn.model.resnet_gru import gru_gru
+from src.res.algo.nn.model.resnet_gru import gru_gru, gru_gru_new
 from src.res.model.callback.consolidate import ConsolidateCallBack
 from src.res.model.callback.fit.activation_checkpointing import ActivationCheckpointing
 from src.res.model.callback.fit.early_stop import EarlyStoppage
@@ -83,6 +83,53 @@ def make_trainer(enabled=True):
 
 
 class RegionTests(unittest.TestCase):
+    def test_intraday_chunks_for_both_models(self):
+        for cls in (gru_gru, gru_gru_new):
+            for dropout in (0., .1):
+                with self.subTest(model=cls.__name__, dropout=dropout):
+                    torch.manual_seed(7)
+                    plain = cls(6, hidden_dim=8, enc_in_dim=8, enc_in=True, dropout=dropout)
+                    plain.intraday_chunk_size = 5
+                    checked = copy.deepcopy(plain)
+                    checked.set_activation_checkpointing(True)
+                    checked.load_state_dict(plain.state_dict(), strict=True)
+                    x = torch.randn(4, 3, 2, 6)
+                    outputs = []
+                    for model in (plain, checked):
+                        torch.manual_seed(9)
+                        y, other = model(x)
+                        (y.square().mean() + other['hidden'].square().mean()).backward()
+                        outputs.append(y)
+                    torch.testing.assert_close(*outputs)
+                    for a, b in zip(plain.parameters(), checked.parameters()):
+                        self.assertIsNotNone(b.grad)
+                        torch.testing.assert_close(a.grad, b.grad)
+                    for a, b in zip(plain.buffers(), checked.buffers()):
+                        torch.testing.assert_close(a, b)
+                    if dropout == 0:
+                        legacy = copy.deepcopy(plain).eval()
+                        flat = x.reshape(-1, 2, 6)
+                        if isinstance(legacy, gru_gru_new):
+                            expected = legacy.inday_rnn(legacy.encode_in(flat))[:, -1]
+                        else:
+                            expected = legacy.fc_enc_in(flat)[:, -1]
+                        torch.testing.assert_close(legacy.encode_intraday(x), expected.reshape(4, 3, -1))
+                    sizes = []
+                    encoder = cast(nn.Module, checked.fc_enc_in if cls is gru_gru else checked.inday_rnn)
+                    handle = encoder.register_forward_pre_hook(lambda module, args: sizes.append(args[0].shape[0]))
+                    try:
+                        checked.train()(x)[0].sum().backward()
+                    finally:
+                        handle.remove()
+                    self.assertEqual(sizes[:3], [5, 5, 2])
+                    self.assertEqual(len(sizes), 6)  # each chunk recomputed independently
+                    self.assertLessEqual(max(sizes), 5)
+                    checked.eval()
+                    with patch('src.res.algo.nn.layer.checkpoint.checkpoint', side_effect=AssertionError('called')):
+                        checked(x)
+                        with torch.no_grad():
+                            checked.train()(x)
+
     def test_gru_gru_matches_legacy_forward_and_gradients(self):
         for attention in (False, True):
             with self.subTest(attention=attention):

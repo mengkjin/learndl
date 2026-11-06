@@ -8,8 +8,9 @@ from __future__ import annotations
 __all__ = [
     'resnet_gru',
     'gru_gru',
+    'gru_gru_new',
 ]
-from torch import nn , Tensor
+from torch import nn , Tensor, cat
 
 from .. import layer as Layer
 from ..layer.checkpoint import ActivationCheckpointMixin
@@ -106,7 +107,8 @@ class gru_gru(ActivationCheckpointMixin, nn.Module):
     head stays outside recomputation. Parameter names and batch layout remain
     compatible with existing weights.
     """
-    activation_checkpoint_regions = ('encode_intraday', 'encode_days')
+    activation_checkpoint_regions = ('encode_intraday_chunk', 'encode_days')
+    intraday_chunk_size = 12500
 
     def __init__(
         self,
@@ -146,11 +148,19 @@ class gru_gru(ActivationCheckpointMixin, nn.Module):
         
         self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
         
+    def encode_intraday_chunk(self, x: Tensor) -> Tensor:
+        """Return compact last-step outputs without detaching their gradients."""
+        return self.fc_enc_in(x)[:, -1].clone()
+
     def encode_intraday(self, x: Tensor) -> Tensor:
-        """Encode all stock/day sequences with the original flattened layout."""
-        bs, seq_len, inday_dim, input_dim = x.shape
-        encoded = self.fc_enc_in(x.reshape(-1, inday_dim, input_dim))[:, -1]
-        return encoded.reshape(bs, seq_len, -1)
+        """Bound each GRU call; checkpoint each chunk independently when active."""
+        bs, days, bars, features = x.shape
+        flat = x.reshape(-1, bars, features)
+        encoded = cat([
+            self.checkpoint_region('encode_intraday_chunk', part)
+            for part in flat.split(self.intraday_chunk_size)
+        ], dim=0)
+        return encoded.reshape(bs, days, -1)
 
     def encode_days(self, x: Tensor) -> Tensor:
         """Encode days and pool before the stateful output head."""
@@ -162,7 +172,7 @@ class gru_gru(ActivationCheckpointMixin, nn.Module):
         in: [bs x seq_len x inday_dim x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
         """
-        x = self.checkpoint_region('encode_intraday', x)
+        x = self.encode_intraday(x)
         x = self.checkpoint_region('encode_days', x)
         x, o = self.output(x)
         return o , {'hidden' : x}
@@ -175,7 +185,8 @@ class gru_gru_new(ActivationCheckpointMixin, nn.Module):
     head stays outside recomputation. Parameter names and batch layout remain
     compatible with existing weights.
     """
-    activation_checkpoint_regions = ('encode_intraday', 'encode_days')
+    activation_checkpoint_regions = ('encode_intraday_chunk', 'encode_days')
+    intraday_chunk_size = 12500
 
     def __init__(
         self,
@@ -222,11 +233,19 @@ class gru_gru_new(ActivationCheckpointMixin, nn.Module):
         """Encode the input features."""
         return self.fc_enc_in(x)
         
+    def encode_intraday_chunk(self, x: Tensor) -> Tensor:
+        """Include feature projection in the independently recomputed chunk."""
+        return self.inday_rnn(self.encode_in(x))[:, -1].clone()
+
     def encode_intraday(self, x: Tensor) -> Tensor:
-        """Encode all stock/day sequences with the original flattened layout."""
-        bs, seq_len, inday_dim, inday_rnn_dim = x.shape
-        encoded = self.inday_rnn(x.reshape(-1, inday_dim, inday_rnn_dim))[:, -1]
-        return encoded.reshape(bs, seq_len, -1)
+        """Preserve stock/day ordering while bounding each intraday GRU call."""
+        bs, days, bars, features = x.shape
+        flat = x.reshape(-1, bars, features)
+        encoded = cat([
+            self.checkpoint_region('encode_intraday_chunk', part)
+            for part in flat.split(self.intraday_chunk_size)
+        ], dim=0)
+        return encoded.reshape(bs, days, -1)
 
     def encode_days(self, x: Tensor) -> Tensor:
         """Encode days and pool before the stateful output head."""
@@ -238,8 +257,7 @@ class gru_gru_new(ActivationCheckpointMixin, nn.Module):
         in: [bs x seq_len x inday_dim x input_dim]
         out:[bs x 1] , [bs x hidden_dim]
         """
-        x = self.encode_in(x)
-        x = self.checkpoint_region('encode_intraday', x)
+        x = self.encode_intraday(x)
         x = self.checkpoint_region('encode_days', x)
         x, o = self.output(x)
         return o , {'hidden' : x}
