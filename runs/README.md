@@ -4,13 +4,9 @@
 
 ## 手动训练六个因子时序模型
 
-若要通过常规 worklist 分别调度，复用已有审计与切分（不再运行整个验证套件）：
+六个 `factorseq_*_verify` 已直接登记到 `configs/schedule/worklist.yaml`，由普通闲时训练启动，无需准备脚本。对应 schedule 在训练启动时读取服务器 `results/factor_sequence/20261031_factor_sequence_verify_01` 的已审计数据和冻结历史切分，每个候选一个模型根目录，固定种子 17、每期 3 epoch。缺少源数据、审计或切分时明确失败。日期沿用该运行，不自动延长至今天。已有其他 worklist 项保留。
 
-```bash
-.venv/bin/python scripts/4_train/7_factor_sequence_worklist.py --suite results/factor_sequence/20261031_factor_sequence_verify_01
-```
-
-可将 `--suite` 换为更新且已有 `walk_forward.json` 的运行目录。准备程序校验数据完整性与审计版本，生成六份 shared schedule，并将六项放到 worklist 前部，保留已有其他任务与 rerun_mark。日期沿用所选运行的冻结计划，不会自动延长至今天。每项由普通空闲训练队列执行、恢复和发送模型级邮件。重复准备同一 suite 不重复入队；已有终态的任务也不会被强制重跑。机器重启是否由系统 OOM 引起、真实训练是否满足内存预算，仍需服务器日志和实际执行确认。
+以下是另行手动运行整套验证的旧入口，worklist 路线不需要执行：
 
 在服务器项目根目录运行：
 

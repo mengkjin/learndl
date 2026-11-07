@@ -73,6 +73,10 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     def get_config_dict(self , base_path: ModelPath | None = None, schedule_name: str | None = None) -> Base.FlattenDict:
         config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
+        if config.get('factor_sequence_source'):
+            from src.data.preprocess.factor_sequence.worklist import resolve_schedule
+            config = get_config_dict(resolve_schedule(
+                config['factor_sequence_source'], config['model.module'], schedule_name))
         if not base_path and config:
             self.logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb = 1)
         if schedule_name and config:

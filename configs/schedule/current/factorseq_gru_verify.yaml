@@ -1,0 +1,3 @@
+# Resolved on the server from the existing audited dataset and frozen folds.
+factor_sequence_source: 20261031_factor_sequence_verify_01
+model.module: factorseq_gru
