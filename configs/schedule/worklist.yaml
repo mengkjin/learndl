@@ -1,5 +1,4 @@
 fit:
-  - factorseq_mlp_verify
   - factorseq_gru_verify
   - factorseq_m1_verify
   - factorseq_m2_verify
