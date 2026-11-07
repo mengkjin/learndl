@@ -7,6 +7,7 @@ from __future__ import annotations
 
 __all__ = [
     'resnet_gru',
+    'resnet_gru_new',
     'gru_gru',
     'gru_gru_new',
 ]
@@ -74,29 +75,57 @@ class resnet_gru(nn.Module):
         x, o = self.output(x)
         return o , {'hidden' : x}
 
-    # def loss(self, pred : Tensor , label : Tensor , hidden : Tensor , weight : float = 1.0, **kwargs):
-    #     """Composite ABCM loss: MSE + R² + corr penalty + turnover penalty.
 
-    #     Args:
-    #         pred:        Scalar predictions ``[bs, 1]``.
-    #         label:       Two-column label ``[bs, 2]`` where ``[...,0]`` is the
-    #                      return target and ``[...,1]`` is the R² target. (std and rtn)
-    #         hidden:      Hidden states ``[bs, hidden_dim]``.
-    #     """
-    #     from torch.nn import functional as F
-    #     mse = F.mse_loss(pred.squeeze() , label.squeeze())
-    #     corr = self.corr_loss(hidden)
-    #     all_losses = {
-    #         'mse': mse,
-    #         'corr': self.loss_corr_lamb * corr,
-    #     }
-    #     return all_losses
+class resnet_gru_new(nn.Module):
+    """Optional per-bar projection, daily ResNet encoding and cross-day GRU.
 
-    # def corr_loss(self, hiddens : Tensor , **kwargs):
-    #     """Frobenius norm of the standardized beta covariance matrix."""
-    #     h = (hiddens - hiddens.mean(dim=0,keepdim=True)) / (hiddens.std(dim=0,keepdim=True) + 1e-6)
-    #     pen = h.T.cov().norm()
-    #     return pen
+    enc_in: True/'linear' enables Linear + Tanh; False/None disables it.
+    enc_in_dim: projection width (default hidden_dim // 4, minimum 1).
+    inday_resnet_dim: daily ResNet output and GRU input width (default hidden_dim).
+    hidden_dim: cross-day GRU output width. dim_med controls the ResNet
+    bottleneck independently (None uses inday_resnet_dim // 4, minimum 1).
+    Input is [stocks, days, inday_dim, input_dim]. ResNet BatchNorm retains
+    full stock/day statistics; no chunking or recomputation is applied here.
+    """
+
+    def __init__(self, input_dim, hidden_dim=64, dropout=.1, act_type='leaky',
+                 enc_in: bool | str | None = True, enc_in_dim=None, inday_resnet_dim=None,
+                 enc_att=False, rnn_type='gru', rnn_layers=2,
+                 loss_corr_lamb=.1, hidden_as_factors=True, hidden_mean_pool=False,
+                 *, inday_dim, resnet_blocks=3, dim_med=None, clip_value=None, **kwargs):
+        super().__init__()
+        if rnn_type != 'gru':
+            raise ValueError('resnet_gru_new supports only rnn_type=gru')
+        if enc_in is not None and enc_in is not True and enc_in is not False and enc_in != 'linear':
+            raise ValueError("enc_in must be True, 'linear', False or None")
+        enc_in_dim = max(hidden_dim // 4, 1) if enc_in_dim is None else enc_in_dim
+        inday_resnet_dim = hidden_dim if inday_resnet_dim is None else inday_resnet_dim
+        for name, value in dict(input_dim=input_dim, hidden_dim=hidden_dim,
+                                enc_in_dim=enc_in_dim, inday_resnet_dim=inday_resnet_dim,
+                                rnn_layers=rnn_layers).items():
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f'{name} must be a positive integer')
+        if rnn_layers > 3:
+            raise ValueError('rnn_layers must be <= 3 (mod_gru limit)')
+        self.loss_corr_lamb = loss_corr_lamb
+        project = enc_in is True or enc_in == 'linear'
+        self.fc_enc_in = (nn.Sequential(nn.Linear(input_dim, enc_in_dim), nn.Tanh())
+                          if project else nn.Identity())
+        self.inday_resnet = mod_resnet_1d(
+            inday_dim, enc_in_dim if project else input_dim, inday_resnet_dim,
+            resnet_blocks=resnet_blocks, dim_med=dim_med, act_type=act_type,
+            clip_value=clip_value,
+        )
+        self.fc_rnn = mod_gru(inday_resnet_dim, hidden_dim, num_layers=rnn_layers, dropout=dropout)
+        self.fc_enc_att = TimeWiseAttention(hidden_dim, hidden_dim, dropout=dropout) if enc_att else None
+        self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
+
+    def forward(self, x: Tensor) -> tuple[Tensor, dict]:
+        x = self.inday_resnet(self.fc_enc_in(x))
+        x = self.fc_rnn(x)
+        x = self.fc_enc_att(x) if self.fc_enc_att is not None else x[:, -1]
+        hidden, prediction = self.output(x)
+        return prediction, {'hidden': hidden}
 
 
 class gru_gru(ActivationCheckpointMixin, nn.Module):
