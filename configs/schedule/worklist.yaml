@@ -1,10 +1,9 @@
 fit:
-  - factorseq_gru_verify
-  - factorseq_m1_verify
-  - factorseq_m2_verify
   - factorseq_mask_verify
   - factorseq_gate_verify
   - resnet_gru_new_15m
+  - resnet_gru_new_15m_att
+  - resnet_gru_new_15m_conv2
 
 resume: True
 force: False

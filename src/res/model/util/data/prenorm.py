@@ -43,20 +43,69 @@ class SingleDataPrenorm:
         2.histnorm: normalized by history avg and std
         3.channelnorm: normalized by channel avg
         """
+        if self.histnorm:
+            self.validate_histnorm(x, histnorm)
+        else:
+            histnorm = None
+        if self.name == '30mcont':
+            return SpecialDataPrenorm.sp_30mcont(x, histnorm, features, divlast=self.divlast)
         if hasattr(SpecialDataPrenorm, f'sp_{self.name}'):
             return getattr(SpecialDataPrenorm, f'sp_{self.name}')(x , histnorm = histnorm , features = features)
         assert not ((self.histnorm and histnorm is not None) and (self.channelnorm and x.ndim > 2)) , f'histnorm and channelnorm cannot be used together'
         if self.divlast and x.shape[-2] > 1:
             x = x / (x.select(-2,-1).unsqueeze(-2) + 1e-6)
-        if self.histnorm and histnorm is not None:
-            x = x - histnorm.avg[-x.shape[-2]:]
-            x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
+        if histnorm is not None:
+            if self.name == '15m':
+                # [bars, features] broadcasts over both stocks and days.
+                avg = histnorm.avg
+                std = histnorm.std
+            else:
+                # Daily windows align to the endpoint of the historical window.
+                window_length = x.shape[-2]
+                avg = histnorm.avg[-window_length:]
+                std = histnorm.std[-window_length:]
+            x = (x - avg) / (std + 1e-6)
             if self.divlast and x.shape[-2] > 1:
-                x[:,-1] = 0
+                x[:, -1] = 0
         if self.channelnorm and x.ndim > 2:
             norm_dim = tuple(range(1 , x.ndim - 1))
             x = x / (x.mean(dim = norm_dim, keepdim = True).abs() + 1e-6) - 1
         return x
+
+    def validate_histnorm(self, x: torch.Tensor, histnorm: PreProHistNorm | None) -> None:
+        """Validate shared statistics, then check the dataset's time-axis contract."""
+        if self.name in ('day', '30mcont') and not self.divlast:
+            raise ValueError(f'{self.name}: histnorm requires divlast')
+        if histnorm is None:
+            raise ValueError(f'{self.name}: missing historical normalization statistics')
+
+        avg, std = histnorm.avg, histnorm.std
+        error = f'{self.name}: invalid historical normalization statistics'
+        if avg.ndim != 2 or avg.shape != std.shape:
+            raise ValueError(f'{error}: avg and std must have matching [time, feature] shapes')
+        if avg.shape[1] != x.shape[-1]:
+            raise ValueError(f'{error}: feature count does not match input')
+        if not torch.isfinite(avg).all() or not torch.isfinite(std).all():
+            raise ValueError(f'{error}: avg and std must be finite')
+        if (std < 0).any():
+            raise ValueError(f'{error}: std must be nonnegative')
+
+        if self.name == '15m':
+            # One statistic per intraday bar; the same statistics serve every day.
+            intraday_bars = x.shape[-2]
+            if avg.shape[0] != intraday_bars:
+                raise ValueError(f'{error}: expected exactly {intraday_bars} intraday positions')
+        elif self.name == '30mcont':
+            # The special handler flattens days and intraday bars into one sequence.
+            days, intraday_bars = x.shape[-3:-1]
+            required_positions = days * intraday_bars
+            if avg.shape[0] < required_positions:
+                raise ValueError(f'{error}: need at least {required_positions} flattened positions')
+        else:
+            # Day data uses the trailing portion of the fitted historical window.
+            window_length = x.shape[-2]
+            if avg.shape[0] < window_length:
+                raise ValueError(f'{error}: need at least {window_length} sequence positions')
 
     @classmethod
     def from_input(cls, name : str , prenorm_method: dict[str, Any] | None = None):
@@ -71,16 +120,17 @@ class SingleDataPrenorm:
 class SpecialDataPrenorm:
     """special prenorm for special data types, if defined will override other prenorm methods"""
     @classmethod
-    def sp_30mcont(cls , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None) -> torch.Tensor:
+    def sp_30mcont(cls , x : torch.Tensor , histnorm : PreProHistNorm | None = None , features : Base.alias.NamesType = None, *, divlast: bool = True) -> torch.Tensor:
         assert features is not None , 'features is required for 30mcont'
         assert x.ndim == 4 , f'x must be 4-dimensional for 30mcont, but got {x.shape}'
+        last_day_sum = x[:, -1].sum(dim=-2, keepdim=True)
         x = x.reshape(x.shape[0], -1, x.shape[-1])
         price_idx = torch.tensor([feat in ('close' , 'high' , 'low' , 'open' , 'vwap') for feat in Base.ensure_name_list(features , [])])
 
         # divlast
-        if x.shape[-2] > 1:
-            x_div = x[:,-1:]
-            x_div[...,~price_idx] = x[...,~price_idx].sum(dim = -2, keepdim = True)
+        if divlast:
+            x_div = x[:,-1:].clone()
+            x_div[...,~price_idx] = last_day_sum[...,~price_idx]
             x = x / (x_div + 1e-6)
 
         # histnorm
@@ -88,7 +138,7 @@ class SpecialDataPrenorm:
             x = x - histnorm.avg[-x.shape[-2]:]
             x = x / (histnorm.std[-x.shape[-2]:] + 1e-6)
             if x.shape[-2] > 1:
-                x[:,-1] = 0
+                x[:,-1,price_idx] = 0
         return x
 
     @classmethod

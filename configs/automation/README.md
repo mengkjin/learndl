@@ -348,6 +348,11 @@ bash runs/install_schedules.sh apply --host mengkjin-server
 如需停用，提交 `enabled: false`，或关闭 maintenance 中的 RL 作业并重新 apply。
 禁用只取消尚未启动的请求，不中断正在进行的实验。
 
+Git 检查每条命令最多等待 10 秒，并禁用可选的索引写锁。超时表示暂时无法核实配置，
+状态记为 `waiting for git`，按 RL 检查间隔重试（默认 120 秒），不发送配置错误邮件。
+不会使用旧缓存启动 RL；尚未启动的旧队列会延后，正在运行的实验不受影响，普通模型
+worklist 仍可参与调度。YAML 内容或参数确实无效时仍按原规则发送配置错误通知。
+
 ```bash
 python -m src.automation.scheduling.idle_worklist rl-status
 python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml

@@ -173,6 +173,43 @@ class _resnet_block_1d(nn.Module):
         return self.act(shortcut + self.conv(x))
 
 
+class _IntradayPool(nn.Module):
+    """Reduce [N,C,L] without a dense channel/time projection."""
+    def __init__(self, length, channels, mode, attn_dim=None, conv_layers=1, act_type='leaky'):
+        super().__init__()
+        self.mode = mode
+        _validate_resnet_dims(conv_layers=conv_layers)
+        if mode == 'linear':
+            self.net = nn.Linear(length, 1)
+            nn.init.constant_(self.net.weight, 1 / length)
+            nn.init.zeros_(self.net.bias)
+        elif mode == 'attention':
+            width = max(1, channels // 4) if attn_dim is None else attn_dim
+            _validate_resnet_dims(attn_dim=width)
+            self.net = nn.Sequential(nn.Linear(channels, width), nn.Tanh(), nn.Linear(width, 1))
+            self.position = nn.Parameter(torch.zeros(length))
+        elif mode == 'conv':
+            layers = []
+            for _ in range(conv_layers - 1):
+                layers.extend([nn.Conv1d(channels, channels, 3, stride=2, padding=1, groups=channels),
+                               Layer.Act.get_activation_fn(act_type)])
+                length = (length + 1) // 2
+            layers.append(nn.Conv1d(channels, channels, length, groups=channels))
+            self.net = nn.Sequential(*layers)
+        elif mode != 'mean':
+            raise ValueError(f'Unknown resnet_pool: {mode}')
+
+    def weights(self, x):
+        return (self.net(x.transpose(1, 2)).squeeze(-1) + self.position).softmax(dim=-1)
+
+    def forward(self, x):
+        if self.mode == 'mean':
+            return x.mean(-1)
+        if self.mode == 'attention':
+            return (x * self.weights(x).unsqueeze(1)).sum(-1)
+        return self.net(x).squeeze(-1)
+
+
 class mod_resnet_1d(nn.Module):
     """Stack 1-D residual blocks, then flatten and linearly project each day.
 
@@ -192,7 +229,8 @@ class mod_resnet_1d(nn.Module):
     Extra kwargs are accepted for shared model configuration compatibility.
     """
     def __init__(self, seq_len, feat_len, dim_out=64, clip_value=None, resnet_blocks=3,
-                 dim_med=None, act_type='leaky', **kwargs):
+                 dim_med=None, act_type='leaky', resnet_pool='flatten',
+                 resnet_pool_attn_dim=None, resnet_pool_conv_layers=1, **kwargs):
         super().__init__()
         _validate_resnet_dims(seq_len=seq_len, feat_len=feat_len, resnet_blocks=resnet_blocks)
         dim_med = _resnet_bottleneck_dim(feat_len, dim_out, dim_med, clip_value)
@@ -208,13 +246,18 @@ class mod_resnet_1d(nn.Module):
                 d_in, dim_out, dim_med=dim_med, clip_value=clip_value, act_type=act_type,
             ))
             d_in = dim_out
-        self.fc_out = nn.Linear(seq_len * dim_out, dim_out)
+        self.resnet_pool = resnet_pool
+        self.fc_out = (nn.Linear(seq_len * dim_out, dim_out) if resnet_pool == 'flatten' else
+                       _IntradayPool(seq_len, dim_out, resnet_pool, resnet_pool_attn_dim,
+                                     resnet_pool_conv_layers, act_type))
 
     def forward(self, x: Tensor) -> Tensor:
         _validate_resnet_input(x, (None, None, self.seq_len, self.dim_in))
-        output = self.blocks(x.reshape(-1, self.seq_len, self.dim_in).permute(0, 2, 1))
-        output = self.fc_out(output.flatten(start_dim=1))
-        return output.reshape(x.shape[0], x.shape[1], self.dim_out)
+        batch, days = x.shape[:2]
+        x = x.reshape(-1, self.seq_len, self.dim_in).permute(0, 2, 1)
+        output = self.blocks(x)
+        output = self.fc_out(output.flatten(start_dim=1) if self.resnet_pool == 'flatten' else output)
+        return output.reshape(batch, days, self.dim_out)
 
 
 class _resnet_block_2d(nn.Module):
@@ -279,7 +322,8 @@ class mod_resnet_2d(nn.Module):
     Extra kwargs are accepted for shared model configuration compatibility.
     """
     def __init__(self, seq_len, feat_len, dim_out=64, clip_value=None, resnet_blocks=3,
-                 dim_med=None, act_type='leaky', **kwargs):
+                 dim_med=None, act_type='leaky', resnet_pool='flatten',
+                 resnet_pool_attn_dim=None, resnet_pool_conv_layers=1, **kwargs):
         super().__init__()
         _validate_resnet_dims(seq_len=seq_len, feat_len=feat_len, resnet_blocks=resnet_blocks)
         dim_med = _resnet_bottleneck_dim(1, dim_out, dim_med, clip_value)
@@ -295,12 +339,17 @@ class mod_resnet_2d(nn.Module):
                 d_in, dim_out, dim_med=dim_med, clip_value=clip_value, act_type=act_type,
             ))
             d_in = dim_out
-        self.fc_out = nn.Linear(feat_len * seq_len * dim_out, dim_out)
+        self.resnet_pool = resnet_pool
+        self.fc_out = (nn.Linear(feat_len * seq_len * dim_out, dim_out) if resnet_pool == 'flatten' else
+                       _IntradayPool(seq_len, dim_out, resnet_pool, resnet_pool_attn_dim,
+                                     resnet_pool_conv_layers, act_type))
+        self.feature_pool = nn.Linear(feat_len, 1) if resnet_pool != 'flatten' else nn.Identity()
 
     def forward(self, x: Tensor) -> Tensor:
         _validate_resnet_input(x, (None, None, self.seq_len, self.dim_in))
         output = self.blocks(x.reshape(-1, 1, self.seq_len, self.dim_in))
-        output = self.fc_out(output.flatten(start_dim=1))
+        output = self.fc_out(output.flatten(start_dim=1) if self.resnet_pool == 'flatten'
+                             else self.feature_pool(output).squeeze(-1))
         return output.reshape(x.shape[0], x.shape[1], self.dim_out)
 
 

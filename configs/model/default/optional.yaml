@@ -43,6 +43,7 @@ input.data.prenorm:
   day: {'divlast' : True  , 'histnorm' : True}
   week: {'channelnorm' : True}
   30m: {'channelnorm' : False}
+  30mcont: {divlast: true, histnorm: true}
 # x sample verify: max_nan_ratio=0 keeps NN require_all; >0 allows short-halt autofill
 input.verify.x.max_nan_ratio: 0.1
 input.verify.x.autofill:

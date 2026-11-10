@@ -48,6 +48,7 @@ class resnet_gru(nn.Module):
             enc_in_dim = hidden_dim
         
         res_kwargs = {k:v for k,v in kwargs.items() if k != 'seq_len'}
+        res_kwargs.setdefault('resnet_pool', 'linear')
         self.fc_enc_in = mod_resnet_1d(kwargs['inday_dim'] , input_dim , enc_in_dim, act_type=act_type, **res_kwargs)
 
         self.fc_rnn = mod_gru(
@@ -115,6 +116,9 @@ class resnet_gru_new(nn.Module):
             inday_dim, enc_in_dim if project else input_dim, inday_resnet_dim,
             resnet_blocks=resnet_blocks, dim_med=dim_med, act_type=act_type,
             clip_value=clip_value,
+            resnet_pool=kwargs.get('resnet_pool', 'linear'),
+            resnet_pool_attn_dim=kwargs.get('resnet_pool_attn_dim'),
+            resnet_pool_conv_layers=kwargs.get('resnet_pool_conv_layers', 1),
         )
         self.fc_rnn = mod_gru(inday_resnet_dim, hidden_dim, num_layers=rnn_layers, dropout=dropout)
         self.fc_enc_att = TimeWiseAttention(hidden_dim, hidden_dim, dropout=dropout) if enc_att else None

@@ -18,7 +18,7 @@ from src.data.util import DataBlock
 __all__ = ['PreProHistNorm']
 
 HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , '15m' , '30m')
-HistNorm : tuple[str,...] = ('day' , '30mcont')
+HistNorm : tuple[str,...] = ('day' , '30mcont', '15m')
 DivLast : tuple[str,...] = ('day' , '30mcont')
 SequenceLens : dict[str,int] = defaultdict(lambda: 1) | {'day': 60 , '30mcont': 30}
 SequenceSteps : dict[str,int] = defaultdict(lambda: 1) 
@@ -124,12 +124,14 @@ class PreProHistNorm:
             else:
                 raise ValueError(f'Unsupported divlast key: {key}')
         nan_sample = (x_div == 0).reshape(*re_shape).any(dim = -1)
-        nan_sample += x_div.isnan().reshape(*re_shape).any(dim = -1)
+        nan_sample += (~x_div.isfinite()).reshape(*re_shape).any(dim = -1)
         for i in range(seq_len):
-            nan_sample += x[:,x_endpoint-i*seq_step].reshape(*re_shape).isnan().any(dim=-1)
+            nan_sample += (~x[:,x_endpoint-i*seq_step].reshape(*re_shape).isfinite()).any(dim=-1)
 
+        if int((nan_sample == 0).sum()) < 2:
+            raise ValueError(f'{key}: at least two valid historical samples required')
         for i in range(seq_len):
-            vijs = ((x[:,x_endpoint - (seq_len - 1 - i)*seq_step]) / (x_div + 1e-6))[nan_sample == 0]
+            vijs = (x[:,x_endpoint - (seq_len - 1 - i)*seq_step] / (x_div + 1e-6) if cls.is_divlast(key) else x[:,x_endpoint - (seq_len - 1 - i)*seq_step])[nan_sample == 0]
             avg_x[i*inday:(i+1)*inday] = vijs.mean(dim = 0)
             std_x[i*inday:(i+1)*inday] = vijs.std(dim = 0)
 

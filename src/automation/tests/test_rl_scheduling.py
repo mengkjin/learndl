@@ -307,6 +307,41 @@ class RLSchedulingTest(unittest.TestCase):
         idle.dispatch(self.options, self.store)
         self.assertNotEqual(self.store.owned(idle.OWNER)[-1]['version'], request['version'])
 
+    def test_git_timeouts_wait_without_configuration_email_and_recover(self):
+        run = subprocess.run
+        for command in ('status', 'rev-parse', 'show', 'log'):
+            def probe(argv, **kwargs):
+                if command in argv:
+                    raise subprocess.TimeoutExpired(argv, 10)
+                return run(argv, **kwargs)
+            with self.subTest(command=command), patch.object(rl.subprocess, 'run', side_effect=probe):
+                self.assertIsNone(rl.observe(self.store))
+                self.assertEqual(rl.status(self.store)['status'], 'waiting for git')
+                self.assertNotIn('_revision', rl.status(self.store))
+                with self.store.connect() as db:
+                    self.assertEqual(db.execute('SELECT COUNT(*) FROM events').fetchone()[0], 0)
+            self.assertIsInstance(require_rl(self.store), dict)
+
+    def test_git_timeout_backoff_and_worker_recheck(self):
+        with patch.object(rl, 'settings', return_value={'enabled': True, 'interval_seconds': 120}):
+            with patch.object(rl, 'git_revision', side_effect=rl.GitProbeUnavailable('timeout')) as probe:
+                self.assertIsNone(rl.observe(self.store, throttle=True))
+                self.assertIsNone(rl.observe(runtime.RunStore(self.store.path), throttle=True))
+                probe.assert_called_once()
+            self.assertIsInstance(require_rl(self.store), dict)  # Fresh worker does not use the backoff cache.
+
+    def test_git_timeout_defers_stale_rl_queue_but_allows_model_worklist(self):
+        idle.dispatch(self.options, self.store)
+        queued = self.store.owned(idle.OWNER)[0]
+        model = dict(task='model', version='model-v1')
+        with patch.object(rl, 'git_revision', side_effect=rl.GitProbeUnavailable('timeout')), \
+             patch.object(idle, 'worklist_schedules', return_value=({}, {'model': {}}, [])), \
+             patch.object(idle, '_candidate', return_value=model), \
+             patch('src.automation.scheduling.factor_sequence.observe', return_value=None):
+            result = idle.dispatch({'enabled': True}, self.store)
+        self.assertEqual(result['queued'], 'model')
+        self.assertEqual(self.store.get(queued['id'])['phase'], 'deferred')
+
     def test_invalid_config_notification_deduplicated(self):
         self.doc['mode'] = 'invalid'
         self.commit()

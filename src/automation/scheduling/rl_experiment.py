@@ -5,6 +5,7 @@ __all__ = [
     'CONFIG_PATH',
     'TASK',
     'ConfigurationPending',
+    'GitProbeUnavailable',
     'parse_config',
     'read_config',
     'settings',
@@ -37,6 +38,10 @@ TASK = 'rl_experiment'
 
 class ConfigurationPending(ValueError):
     """The checkout is not yet a usable committed configuration."""
+
+
+class GitProbeUnavailable(RuntimeError):
+    """A bounded Git observation timed out; no configuration verdict is available."""
 
 
 def parse_config(content: str, *, yaml_format: bool = True) -> dict:
@@ -99,8 +104,12 @@ def settings() -> dict:
 def git_revision(root: Path) -> dict | None:
     """Committed bytes only. The last file commit distinguishes A -> B -> A."""
     def git(*args):
-        return subprocess.run(['git', '-C', str(root), *args], check=True,
-                              capture_output=True, text=True, timeout=10).stdout
+        try:
+            return subprocess.run(['git', '--no-optional-locks', '-C', str(root), *args], check=True,
+                                  capture_output=True, text=True, timeout=10).stdout
+        except subprocess.TimeoutExpired as exc:
+            raise GitProbeUnavailable(f'Git {args[0]} timed out after 10 seconds while checking {CONFIG_PATH}; '
+                                      'configuration was not verified; retrying on a later poll') from exc
     if not (root / CONFIG_PATH).exists():
         return None
     if git('status', '--porcelain', '--', CONFIG_PATH).strip():
@@ -118,6 +127,7 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
     state: dict[str, Any] = dict(status='disabled', updated_at=time.time())
     old = status(store)
     request = None
+    options = {}
     try:
         options = settings()
         if options.get('enabled'):
@@ -130,6 +140,8 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
                     resume_request_id=resume['resume_request_id'], output_directory=request_doc['run_directory'],
                     updated_at=time.time(), wait_reason=old.get('wait_reason') if old.get('version') == resume['version'] else None))
                 return resume
+            if throttle and old.get('status') == 'waiting for git' and time.time() < old.get('retry_not_before', 0):
+                return None
             # The two watchdog jobs share an arbiter, but RL's configured
             # polling interval still applies when the model job runs faster.
             # Workers always bypass this cache before claiming/starting work.
@@ -165,6 +177,9 @@ def observe(store, *, root: Path | None = None, throttle: bool = False) -> dict 
                         request = dict(task=TASK, task_kind=TASK, version=version,
                                        revisions={'rl_config': revision}, config=config,
                                        rerun_mark=config['rerun_mark'], no_email=config['no_email'])
+    except GitProbeUnavailable as exc:
+        state.update(status='waiting for git', error=str(exc),
+                     retry_not_before=time.time() + max(1, options.get('interval_seconds', 120)))
     except ConfigurationPending as exc:
         state.update(status='waiting for committed configuration', error=str(exc))
     except (ValueError, OSError, subprocess.SubprocessError, yaml.YAMLError) as exc:
@@ -249,7 +264,7 @@ def execute(request: dict, store) -> int:
                     task = main(request_path=request['resume_request_path'], email=not doc['no_email'])
             finally:
                 sys.argv = previous_argv
-            success = bool(task.success and task.execution_success)
+            success = bool(task.success and task.execution_success) # type: ignore
             record(store, request['id'], script_outcome='success' if success else 'error',
                    error=None if success else 'RL resumption failed; inspect its audit and task log')
             return 0 if success else 1
@@ -289,7 +304,7 @@ def execute(request: dict, store) -> int:
                                    no_email=request['no_email'], email=not request['no_email'])
         finally:
             sys.argv = previous_argv
-        success = bool(task.success and task.execution_success)
+        success = bool(task.success and task.execution_success) # type: ignore
         record(store, request['id'], script_outcome='success' if success else 'error',
                error=None if success else 'RL script failed; see its task log and diagnostic bundle')
         return 0 if success else 1
