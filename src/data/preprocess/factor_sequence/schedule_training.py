@@ -43,7 +43,7 @@ def schedule_config(dataset, name, model, folds, research=False, seed=17, varian
 def variants(ablations=False):
     from src.res.algo.nn.model.factor_sequence import MODELS
 
-    values = [(model, {}) for model in MODELS]
+    values = [(model, {}) for model in MODELS if model != 'factorseq_residual']
     if ablations:
         values += [
             ("factorseq_m1", {"use_performance": False}),

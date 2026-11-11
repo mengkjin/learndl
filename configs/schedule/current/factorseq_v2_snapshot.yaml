@@ -1,0 +1,3 @@
+factor_sequence_source: 20261031_factor_sequence_verify_01
+factor_sequence_mode: snapshot
+model.module: factorseq_residual

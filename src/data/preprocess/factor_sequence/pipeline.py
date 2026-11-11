@@ -200,7 +200,7 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
     np.savez_compressed(folder/'realized_returns.npz',values=future.values.cpu().numpy(),
                         dates=future.date,secids=future.secid)
     runs=[]
-    variants=[(key,{}) for key in MODELS]
+    variants=[(key,{}) for key in MODELS if key != "factorseq_residual"]
     if ablations:
         variants += [('factorseq_m1',{'use_performance':False}),('factorseq_m1',{'use_market':False}),
                      ('factorseq_m2',{'modulation':False})]

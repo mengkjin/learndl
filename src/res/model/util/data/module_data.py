@@ -46,6 +46,7 @@ class ModuleDataConfig:
     filter_secid: str | None
     filter_date: str | None
     dtype: torch.dtype
+    factor_sequence_view: str = "full"
     factor_sequence_dataset: str | None = None
 
     def __post_init__(self):
@@ -71,6 +72,7 @@ class ModuleDataConfig:
             self.filter_secid == other.filter_secid and
             self.filter_date == other.filter_date and
             self.dtype == other.dtype and
+            self.factor_sequence_view == getattr(other, "factor_sequence_view", "full") and
             self.factor_sequence_dataset == getattr(other, "factor_sequence_dataset", None)
         )
 
@@ -129,7 +131,7 @@ class ModuleData(Base.BoundLogger):
         filter_secid: str | None = None,
         filter_date: str | None = None,
         indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2, dtype=torch.float,
-        factor_sequence_dataset: str | None = None
+        factor_sequence_dataset: str | None = None, factor_sequence_view: str = "full"
     ) -> ModuleData:
         config = ModuleDataConfig(
             data_type_list=tuple(sorted([cls.abbr(data_type) for data_type in data_type_list])),
@@ -141,13 +143,13 @@ class ModuleData(Base.BoundLogger):
             filter_secid=filter_secid,
             filter_date=filter_date,
             dtype=ModuleDataConfig.get_torch_dtype(dtype),
-            factor_sequence_dataset=factor_sequence_dataset,
+            factor_sequence_dataset=factor_sequence_dataset, factor_sequence_view=factor_sequence_view,
         )
         if factor_sequence_dataset:
             from src.data.preprocess.factor_sequence.schema import KEYS
-            if set(config.data_type_list) != set(KEYS):
+            if set(config.data_type_list) != set(KEYS) and not (factor_sequence_view == "compact" and set(config.data_type_list)=={"factorseq"}):
                 raise ValueError('Factor-sequence experiments require exactly the three versioned streams')
-            config.data_type_list = KEYS
+            config.data_type_list = tuple(k for k in KEYS if k in config.data_type_list)
         return cls(config = config, indent = indent, vb_level = vb_level)
 
     @property
@@ -353,7 +355,7 @@ class ModuleData(Base.BoundLogger):
         for key , block in self.blocks.items():
             if key in ('factorseq', 'factorperf', 'factormarket'):
                 from src.data.preprocess.factor_sequence.processors import load_block
-                self.blocks[key] = load_block(self.config.factor_sequence_dataset, key, date, secid)
+                self.blocks[key] = load_block(self.config.factor_sequence_dataset, key, date, secid, view=self.config.factor_sequence_view)
                 continue
             if (
                 key == 'market' and block.initiated and len(block.secid) == 1
@@ -404,7 +406,7 @@ class ModuleData(Base.BoundLogger):
         type = "predict" if self.use_data == "predict" else "fit"
         vb_level = kwargs.pop('vb_level', self.vb_level + 2)
         if key in ('factorseq','factorperf','factormarket'):
-            kwargs = {**kwargs, 'dataset': self.config.factor_sequence_dataset}
+            kwargs = {**kwargs, 'dataset': self.config.factor_sequence_dataset, 'view': self.config.factor_sequence_view}
         block = PrePros.get_processor(key, type, self.indent + 1, vb_level).load(dates, secid=secid, **kwargs)
         return block
 

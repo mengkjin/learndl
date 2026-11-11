@@ -276,7 +276,7 @@ class DataOperator:
                     effs.append(eff)
         if 'factorseq' in x:
             stock = x['factorseq']
-            k = stock.shape[-1] // 10
+            k = stock.shape[-1] // (4 if self.config.Param.get('input.factor_sequence.view') == 'compact' else 10)
             effs.append((stock[:,index1,...,k:2*k] > 0).flatten(2).any(-1))
         final_keys = getattr(self.config, 'input_final_types', [])
         if final_keys:

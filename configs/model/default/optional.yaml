@@ -137,3 +137,5 @@ train.factor_sequence.train_dates: []
 train.factor_sequence.valid_dates: []
 
 train.factor_sequence.folds: [] # Optional frozen splits for ordinary rolling schedule training
+
+input.factor_sequence.view: full

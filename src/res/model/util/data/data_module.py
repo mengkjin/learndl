@@ -104,13 +104,15 @@ class DataModule(Base.BoundLogger):
     def load_data(self , use_data : Base.lit.DataBlockTimeFrames | None = None):
         """load prepared data at training begin , only load data once in a fitting"""
         if self.config.Param.get('input.factor_sequence.dataset'):
-            keys = ('factorseq','factorperf','factormarket')
-            if tuple(self.input_keys) != keys or self.config.sample_method != 'sequential':
+            keys = tuple(self.input_keys)
+            if keys not in (('factorseq',), ('factorseq','factorperf','factormarket')):
+                raise ValueError('Invalid factor streams')
+            if self.config.sample_method != 'sequential':
                 raise ValueError('Factor sequence requires ordered streams and single-date sequential batches')
             if any(self.config.seq_steps.get(k,1) != 1 for k in keys):
                 raise ValueError('Factor sequence v1 requires daily aligned windows')
             lens = self.config.seq_lens
-            if lens.get('factorperf') != lens.get('factormarket') or lens.get('factorperf',0) < lens.get('factorseq',0):
+            if len(keys)>1 and (lens.get('factorperf') != lens.get('factormarket') or lens.get('factorperf',0) < lens.get('factorseq',0)):
                 raise ValueError('Context windows must match and cover the stock window')
         if self.no_need_to_load_data(use_data):
             return self
@@ -124,7 +126,8 @@ class DataModule(Base.BoundLogger):
             filter_secid = self.config.input_filter_secid , 
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision,
-            factor_sequence_dataset=self.config.Param.get('input.factor_sequence.dataset'))
+            factor_sequence_dataset=self.config.Param.get('input.factor_sequence.dataset'),
+            factor_sequence_view=self.config.Param.get('input.factor_sequence.view','full'))
 
         self._memory_mark(
             'module_data_load_start', input_keys=self.input_keys,

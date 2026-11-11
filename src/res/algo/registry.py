@@ -37,6 +37,7 @@ NN_MODULES = {
 }
 
 FACTOR_SEQUENCE_MODULES = {
+    'factorseq_residual': 'FactorResidual',
     'factorseq_mlp': 'FactorSnapshot',
     'factorseq_gru': 'FactorGRU',
     'factorseq_m1': 'FactorLateFusion',

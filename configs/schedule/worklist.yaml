@@ -1,6 +1,7 @@
 fit:
-  - factorseq_mask_verify
-  - factorseq_gate_verify
+  - factorseq_v2_snapshot
+  - factorseq_v2_temporal
+  - factorseq_v2_contextual
   - resnet_gru_new_15m
   - resnet_gru_new_15m_att
   - resnet_gru_new_15m_conv2

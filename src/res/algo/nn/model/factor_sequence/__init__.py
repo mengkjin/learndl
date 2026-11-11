@@ -126,6 +126,8 @@ class FactorValueGate(FactorSequence):
     mode = 'gate'
 
 
+from .residual import FactorResidual
+
 MODELS = {name: globals()[class_name] for name, class_name in FACTOR_SEQUENCE_MODULES.items()}
 CATALOG = {name: {'status':'implemented','version':1,'mode':model.mode,
                   'streams':['factorseq','factorperf','factormarket'],
@@ -134,6 +136,7 @@ CATALOG = {name: {'status':'implemented','version':1,'mode':model.mode,
                   'config':f'configs/algo/nn/{name}.yaml',
                   'experiment':'configs/experience/model/factor_sequence/README.md'}
            for name,model in MODELS.items()}
+CATALOG['factorseq_residual'].update(version=2, channels=['value','valid','gap','never'])
 CATALOG['factorseq_gate'].update(gate_target='factor levels only',
     gate_inputs='stock values and metadata + causal performance/market context',
     context_to_head=False,gate_scale=.5)
