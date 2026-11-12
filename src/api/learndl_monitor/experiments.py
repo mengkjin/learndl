@@ -90,6 +90,18 @@ class Instances:
         return sorted(rows, key=lambda row: (row['created'], row['pid']))
 
     def act(self, data):
+        if data.get('action') == 'email':
+            # Packaging/mail must not hold the process-control lock.
+            from src.api.learndl_monitor.experiment_mail import send_experiment
+
+            with portalocker.Lock(str(self.state / 'email.lock'), timeout=0):
+                row = next((r for r in self.discover() if r['pid'] == data.get('pid')
+                            and r['created'] == data.get('created') and r['kind'] == data.get('kind')), None)
+                if row is None:
+                    raise ValueError('Instance identity changed; refresh and retry')
+                if not row['source']:
+                    raise ValueError('Instance data source is unavailable')
+                return {'mail_status': 'sent' if send_experiment(row['kind'], Path(row['source'])) else 'pending'}
         with portalocker.Lock(str(self.state / 'operations.lock'), timeout=1):
             return self._act(data)
 
@@ -296,7 +308,7 @@ def main():
                 if not isinstance(data, dict):
                     raise ValueError('Expected object')
                 self.reply(manager.act(data))
-            except (ValueError, TypeError, KeyError, OSError, RuntimeError, psutil.Error, portalocker.LockException) as exc:
+            except Exception as exc:
                 self.reply({'error': str(exc)}, 409)
 
     with portalocker.Lock(str(manager.state / 'server.lock'), timeout=0):
