@@ -76,7 +76,11 @@ class ModelTrainer(BaseTrainer):
             cls.logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
+            from src.res.model.util.lifecycle import ModelLifecycle
+            ModelLifecycle.inspect_registered()
             for model in PredictorPath.SelectModels():
+                if ModelLifecycle(model.base).state:
+                    continue  # Managed repairs run on the shared training worker.
                 cls.GO(base_path = model , 
                        title = f'Updating Model {model.model_name}' , paragraph = True ,
                        check_operation = None if force_update else 'update_models' ,

@@ -179,7 +179,9 @@ class _IntradayPool(nn.Module):
         super().__init__()
         self.mode = mode
         _validate_resnet_dims(conv_layers=conv_layers)
-        if mode == 'linear':
+        if mode == 'flatten':
+            self.net = nn.Linear(length * channels, channels)
+        elif mode == 'linear':
             self.net = nn.Linear(length, 1)
             nn.init.constant_(self.net.weight, 1 / length)
             nn.init.zeros_(self.net.bias)
@@ -203,6 +205,8 @@ class _IntradayPool(nn.Module):
         return (self.net(x.transpose(1, 2)).squeeze(-1) + self.position).softmax(dim=-1)
 
     def forward(self, x):
+        if self.mode == 'flatten':
+            return self.net(x.flatten(start_dim=1))
         if self.mode == 'mean':
             return x.mean(-1)
         if self.mode == 'attention':
@@ -247,16 +251,15 @@ class mod_resnet_1d(nn.Module):
             ))
             d_in = dim_out
         self.resnet_pool = resnet_pool
-        self.fc_out = (nn.Linear(seq_len * dim_out, dim_out) if resnet_pool == 'flatten' else
-                       _IntradayPool(seq_len, dim_out, resnet_pool, resnet_pool_attn_dim,
-                                     resnet_pool_conv_layers, act_type))
+        self.fc_out = _IntradayPool(seq_len, dim_out, resnet_pool, resnet_pool_attn_dim,
+                                    resnet_pool_conv_layers, act_type)
 
     def forward(self, x: Tensor) -> Tensor:
         _validate_resnet_input(x, (None, None, self.seq_len, self.dim_in))
         batch, days = x.shape[:2]
         x = x.reshape(-1, self.seq_len, self.dim_in).permute(0, 2, 1)
         output = self.blocks(x)
-        output = self.fc_out(output.flatten(start_dim=1) if self.resnet_pool == 'flatten' else output)
+        output = self.fc_out(output)
         return output.reshape(batch, days, self.dim_out)
 
 

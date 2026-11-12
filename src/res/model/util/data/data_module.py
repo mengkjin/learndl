@@ -186,12 +186,13 @@ class DataModule(Base.BoundLogger):
             if self.use_data == 'predict':
                 self.model_date_list = dates[:1]
             else:
-                self.model_date_list = dates[::self.config.interval]
+                from src.res.model.util.lifecycle import ModelLifecycle
+                self.model_date_list = np.asarray(ModelLifecycle.training_nodes(self.config, dates), dtype=int)
 
         folds=self.config.Param.get('train.factor_sequence.folds',[])
         if folds and self.use_data != 'predict':
-            from .factor_sequence_plan import validate_folds
-            self.model_date_list,self.test_full_dates=validate_folds(folds,dates)
+            from src.res.model.util.lifecycle import ModelLifecycle
+            self.model_date_list, self.test_full_dates = ModelLifecycle.fold_nodes(self.config, folds, dates)
 
     def ensure_hidden_values(self):
         """
@@ -502,7 +503,7 @@ class DataModule(Base.BoundLogger):
         if not self.stage == 'fit' or not Proj.verbose(self.vb_level + 1) or getattr(self , f'_display_loader_static_stats_{self.stage}_done', False):
             return
         self.logger.stdout(f'Loader Parameters: stage={self.stage} , model_date={self.model_date} , seqlens={self.seq_lens}')
-        self.logger.stdout(f'Sample Input Share: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
+        self.logger.stdout(f'Sample Input Shapes: {[f'{key}: {value.shape}' for key,value in x_full.items()]}' , idt = 1)
         self.logger.stdout(f'Sample Dates Range: {Dates(self.y_date)}' , idt = 1)
 
         if eff_mask is not None:
@@ -610,6 +611,8 @@ class DataModule(Base.BoundLogger):
             elif self.config.Param.get('train.factor_sequence.train_dates'):
                 explicit={key:self.config.Param[f'train.factor_sequence.{key}_dates'] for key in ('train','valid')}
         if explicit is not None:
+            from src.res.model.util.lifecycle import ModelLifecycle
+            explicit = ModelLifecycle.compressed_split(self.config, explicit, {int(self.y_date[int(t)]) for t in index1})
             tr = explicit['train']
             va = explicit['valid']
             horizon = self.config.Param.get('train.dataloader.purge_horizon', 0)

@@ -993,6 +993,10 @@ class ModelConfig(BaseModelConfig):
         **kwargs,
     ):
         self.set_vb(vb_level , indent)
+        self.lifecycle_repair = bool(kwargs.pop("lifecycle_repair", False))
+        from src.res.model.util.lifecycle import ModelLifecycle
+        self.lifecycle_options = ModelLifecycle.training_options(
+            kwargs.pop('training_mode', None), kwargs.pop('lifecycle_options', None))
         self.options = ModelConfigOptions(start, end, stage, resume, selection)
         self.model_config = BaseModelConfig(
             base_path, module=module, schedule_name=schedule_name, override=override,
@@ -1065,7 +1069,10 @@ class ModelConfig(BaseModelConfig):
         self.start_time = datetime.now()
         self.process_parser()
         from src.res.model.util.resume_validation import validate_resume
-        validate_resume(self)
+        from src.res.model.util.lifecycle import ModelLifecycle
+        ModelLifecycle.validate_entry(self)
+        if not self.lifecycle_repair:
+            validate_resume(self)
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
@@ -1076,9 +1083,10 @@ class ModelConfig(BaseModelConfig):
         if self.module_type == 'linear':
             from src.res.model.util.linear_lifecycle import prepare_linear_run
             prepare_linear_run(self)
+        ModelLifecycle.prepare(self)
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
         dump_kwargs = {'overwrite': self.short_test or self.module_type == 'linear', 'vb_level': 'never'}
-        self.model_config.Param.dump_yaml(self.base_path.conf_file("model") , **dump_kwargs)
+        ModelLifecycle.dump_training_config(self, dump_kwargs)
         self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , **dump_kwargs)
         self.algo_config.Param.dump_yaml(self.base_path.conf_file(f"algo.{self.algo_config.model_module}") , **dump_kwargs)
         if self.boost_head_config:

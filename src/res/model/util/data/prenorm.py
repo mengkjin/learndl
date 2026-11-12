@@ -76,6 +76,8 @@ class SingleDataPrenorm:
         """Validate shared statistics, then check the dataset's time-axis contract."""
         if self.name in ('day', '30mcont') and not self.divlast:
             raise ValueError(f'{self.name}: histnorm requires divlast')
+        if self.name == '15m':
+            assert self.histnorm , '15m should use histnorm'
         if histnorm is None:
             raise ValueError(f'{self.name}: missing historical normalization statistics')
 

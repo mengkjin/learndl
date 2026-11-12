@@ -52,6 +52,8 @@ class UpdateAPI:
         FactorAPI.update_market_factors()
         FactorAPI.update_stock_factors(timeout = 3)
         FactorAPI.update_affiliate_factors()
+        from src.res.model.util.lifecycle import ModelLifecycle
+        ModelLifecycle.inspect_registered()
         ModelAPI.update()
         FactorAPI.update_pooling_factors(timeout = 3)
         FactorAPI.update_factor_stats()

@@ -115,7 +115,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
     def config(self) -> ModelConfig:
         with Proj.silence:
             if not self._strict_model_source:
-                return ModelConfig(self.model_name, stage=2, resume=1).start_model()
+                return ModelConfig(self.path.base, stage=2, resume=1, selection=0).start_model()
             if not self.path.base.is_dir():
                 raise FileNotFoundError(f'Prediction model directory does not exist: {self.path.base}')
             return ModelConfig(self.path.base, stage=2, resume=1, selection=0,

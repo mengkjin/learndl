@@ -200,7 +200,11 @@ class ModelPath:
     def exists(self , model_num , model_date , submodel) -> bool:
         """check if a given model date / num / submodel exists"""
         path = self.full_path(model_num , model_date , submodel)
-        return path.exists() and len([s for s in path.iterdir()]) > 0
+        if self.module_type not in ('nn', 'boost'):
+            return path.is_dir() and any(file.is_file() for file in path.iterdir())
+        required = 'state_dict.pt' if self.module_type == 'nn' else 'boost_dict.pt'
+        weight = path / required
+        return weight.is_file() and weight.stat().st_size > 0
     def mkdir(self , model_nums = None , exist_ok=False):
         """create model directory"""
         if not self.base.exists():
@@ -337,7 +341,9 @@ class ModelPath:
         return CALENDAR.td(self.model_dates[-1] , config.interval).as_int()
     def collect_model_archives(self , start_model_date : int = -1 , end_model_date : int = 99991231) -> list[Path]:
         """collect model archive paths"""
-        return [p for _,_,_,p in self.iter_model_archives(start_model_date , end_model_date)]
+        from src.res.model.util.lifecycle import ModelLifecycle
+        return ([p for _,_,_,p in self.iter_model_archives(start_model_date , end_model_date)]
+                + ModelLifecycle(self.base).portable_files())
 
     def log_operation(self , operation : str | None = None):
         if operation is None or not self:
@@ -543,7 +549,12 @@ class PredictorPath(ModelPath , Base.BoundLogger):
                 name     = reg_dict['name']
                 num      = reg_dict['num']
                 submodel = reg_dict['submodel']
-                paths.append(cls(name , num , submodel , pred_name = key))
+                from src.res.model.util.lifecycle import ModelLifecycle
+                selected = cls(name, num, submodel, pred_name=key)
+                try:
+                    paths.append(ModelLifecycle.approved_path(selected, registered=True))
+                except ValueError as exc:
+                    Logger.warning(str(exc))
         return paths
 
     @classmethod

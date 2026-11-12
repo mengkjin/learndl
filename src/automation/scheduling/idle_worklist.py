@@ -99,12 +99,10 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
     from src.res.model.util.training_history import file_revision
     worklist_revision = file_revision(PATH.sched_worklist)
     worklist = yaml.safe_load(worklist_revision['content'])
-    resume, force = worklist.get('resume', False), worklist.get('force', False)
-    if type(resume) is not bool or type(force) is not bool:
-        raise ValueError('worklist resume and force must be YAML booleans')
+    entries = WorklistState.entries(worklist)
     rerun_mark = WorklistState.rerun_mark(worklist)
     schedules, missing = {}, []
-    for name in dict.fromkeys([*worklist['fit'], *WorklistState.requested_schedules()]):
+    for name in dict.fromkeys([*entries, *WorklistState.requested_schedules()]):
         try:
             revisions = WorklistState.revisions(name)
         except FileNotFoundError:
@@ -140,12 +138,13 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
     from src.api.calls.worklist_state import WorklistState
     from .recovery import recovery_plan, record
     options = settings() if options is None else options
-    resume, force = worklist.get('resume', False), worklist.get('force', False)
     attempts = store.owned(OWNER)
     # Explicit post-maintenance requests take precedence over ordinary worklist order.
     # Existing version/completion checks below still suppress repeat execution.
     ordered = sorted(schedules.items(), key=lambda item: 'training_request' not in item[1])
     for name, revisions in ordered:
+        entry = WorklistState.options(worklist, name)
+        resume, force = entry['resume'], entry['force']
         if only is not None and name != only:
             continue
         key = version(revisions)
@@ -212,6 +211,8 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
                    else model_request)
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
+        from .model_lifecycle import candidate as lifecycle_candidate
+        request = lifecycle_candidate(store, options) or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -303,7 +304,10 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                if request.get('task_kind') == 'factor_sequence':
+                if request.get('task_kind') == 'model_lifecycle':
+                    from .model_lifecycle import candidate as lifecycle_candidate
+                    next_candidate = lifecycle_candidate(store, options)
+                elif request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
@@ -339,6 +343,9 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
+    if request.get('task_kind') == 'model_lifecycle':
+        from .model_lifecycle import execute
+        return execute(request, store)
     if request.get('task_kind') == 'nn_metrics_ab':
         return DEFERRED
     if request.get('task_kind') == 'factor_sequence':

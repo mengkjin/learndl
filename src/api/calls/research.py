@@ -20,7 +20,7 @@ class CarryOutScheduleWorkList(DirectCall):
         from src.res.model.util.config.config import ScheduleConfig
 
         from src.api.calls.worklist_state import WorklistState
-        ret = list(dict.fromkeys([*PATH.read_yaml(PATH.sched_worklist)['fit'],
+        ret = list(dict.fromkeys([*WorklistState.entries(PATH.read_yaml(PATH.sched_worklist)),
                                  *WorklistState.requested_schedules()]))
         missing = [name for name in ret if not ScheduleConfig.check_name_exist(name)]
         if missing:
@@ -33,7 +33,8 @@ class CarryOutScheduleWorkList(DirectCall):
         return ', '.join(schedules) if schedules else '(none)'
     @classmethod
     def get_schedule_resume_param(cls) -> bool:
-        return bool(PATH.read_yaml(PATH.sched_worklist)['resume'])
+        from src.api.calls.worklist_state import WorklistState
+        return WorklistState.options(PATH.read_yaml(PATH.sched_worklist), '')['resume']
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return 'Carry out training of the configured schedule work list and requested schedules.'
@@ -87,11 +88,9 @@ class CarryOutScheduleWorkList(DirectCall):
         # Parse the exact bytes fingerprinted above, once per invocation.
         import yaml
         worklist = yaml.safe_load(worklist_revision['content'])
-        resume, force = worklist.get('resume', False), worklist.get('force', False)
-        if type(resume) is not bool or type(force) is not bool:
-            raise ValueError('worklist resume and force must be YAML booleans')
+        entries = WorklistState.entries(worklist)
         from src.res.model.util.config.config import ScheduleConfig
-        schedules = list(dict.fromkeys([*worklist['fit'], *WorklistState.requested_schedules()]))
+        schedules = list(dict.fromkeys([*entries, *WorklistState.requested_schedules()]))
         missing = [name for name in schedules if not ScheduleConfig.check_name_exist(name)]
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
@@ -107,6 +106,8 @@ class CarryOutScheduleWorkList(DirectCall):
         with as_script_main(self.SCHEDULE_SCRIPT):
             main = self._load_schedule_main()
             for schedule_name in schedules:
+                entry = WorklistState.options(worklist, schedule_name)
+                resume, force = entry['resume'], entry['force']
                 state = WorklistState(schedule_name)
                 lock = state.lock()
                 try:
@@ -142,7 +143,7 @@ class CarryOutScheduleWorkList(DirectCall):
                         effective_resume, reason = True, 'abnormal exit recovery'
                     Logger.note(f'Run [{schedule_name}]: {reason}; requested_resume={effective_resume}')
                     details: dict[str, Any] = {'revisions': revisions, 'reason': reason, 'resume': effective_resume,
-                               'force': force, 'model_path': model_path, 'training_run_ids': []}
+                               'force': force, 'model_path': model_path, 'training_run_ids': [], 'options': entry}
                     state.save(status='running', **details)
                     def record_progress(run):
                         import os
@@ -159,8 +160,9 @@ class CarryOutScheduleWorkList(DirectCall):
                     with collect_training_runs(on_update=record_progress) as runs:
                         try:
                             task = self._train_one_schedule(
-                                main, schedule_name=schedule_name, short_test=None,
-                                resume=effective_resume, start=None, end=None, email=True,
+                                main, schedule_name=schedule_name, short_test=entry.get('short_test'),
+                                resume=effective_resume, start=entry.get('start'), end=entry.get('end'), email=True,
+                                **({'lifecycle_options': entry['lifecycle']} if entry.get('lifecycle') else {}),
                                 resume_selection='latest' if automatic else 'interactive',
                             )
                             if not (task.success and task.execution_success and runs

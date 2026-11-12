@@ -4,6 +4,8 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
+from collections.abc import Mapping
 
 import portalocker
 import yaml
@@ -26,6 +28,73 @@ class WorklistState:
         self.path = self.root / f'{key}.json'
         self.schedule_name = schedule_name
 
+    @staticmethod
+    def _options(value: Mapping) -> dict[str, Any]:
+        from src.res.model.util.lifecycle import ModelLifecycle
+        options = {key: value[key] for key in ('resume', 'force', 'short_test', 'start', 'end') if key in value}
+        for key in ('resume', 'force', 'short_test'):
+            if key in options and type(options[key]) is not bool:
+                raise ValueError(f'worklist {key} must be a YAML boolean')
+        from datetime import datetime
+        for key in ('start', 'end'):
+            if key in options:
+                if type(options[key]) is not int:
+                    raise ValueError(f'worklist {key} must be a YYYYMMDD integer')
+                try:
+                    datetime.strptime(str(options[key]), '%Y%m%d')
+                except ValueError as exc:
+                    raise ValueError(f'Invalid worklist {key}: {options[key]}') from exc
+        if 'mode' in value and value['mode'] not in ('auto', 'quick', 'sparse', 'full'):
+            raise ValueError('worklist mode must be auto, quick, sparse or full')
+        lifecycle = ModelLifecycle.training_options(options=value.get('lifecycle'))
+        if 'mode' in value:
+            if 'mode' in lifecycle and lifecycle['mode'] != value['mode']:
+                raise ValueError('Conflicting worklist mode and lifecycle.mode')
+            lifecycle['mode'] = value['mode']
+        if lifecycle:
+            options['lifecycle'] = lifecycle
+        return options
+
+    @classmethod
+    def entries(cls, worklist: Mapping) -> dict[str, dict[str, Any]]:
+        """Normalize string/dictionary entries once for manual and automatic runners.
+
+        Item settings override global defaults. Identical repeats are deduplicated;
+        conflicting duplicate schedules are rejected rather than run ambiguously.
+        """
+        if not isinstance(worklist, Mapping) or not isinstance(worklist.get('fit'), list):
+            raise ValueError('worklist.fit must be a list of schedule names or mappings')
+        defaults: dict[str, Any] = {'resume': False, 'force': False} | cls._options(worklist)
+        entries: dict[str, dict[str, Any]] = {}
+        allowed = {'name', 'resume', 'force', 'short_test', 'start', 'end', 'mode', 'lifecycle'}
+        for item in worklist['fit']:
+            if isinstance(item, str):
+                name, local = item, {}
+            elif isinstance(item, Mapping):
+                unknown = set(item) - allowed
+                if unknown:
+                    raise ValueError(f'Unknown worklist entry options: {sorted(unknown)}')
+                name, local = item.get('name'), cls._options(item)
+            else:
+                raise ValueError('Each worklist entry must be a schedule string or mapping')
+            if not isinstance(name, str) or not name.strip() or name != name.strip():
+                raise ValueError('A worklist entry requires a nonempty schedule name')
+            resolved = defaults | local
+            lifecycle = dict(defaults.get('lifecycle', {})) | local.get('lifecycle', {})
+            if lifecycle:
+                resolved['lifecycle'] = lifecycle
+            if resolved.get('start', 0) > resolved.get('end', 99991231):
+                raise ValueError(f'worklist start exceeds end: {name}')
+            if name in entries and entries[name] != resolved:
+                raise ValueError(f'Conflicting worklist entries for schedule: {name}')
+            entries[name] = resolved
+        return entries
+
+    @classmethod
+    def options(cls, worklist: Mapping, name: str) -> dict[str, Any]:
+        """Standalone requests inherit global options without requiring a list entry."""
+        return cls.entries(worklist).get(name, {'resume': False, 'force': False} | cls._options(worklist))
+
     def lock(self):
         self.root.mkdir(parents=True, exist_ok=True)
         return portalocker.Lock(str(self.path.with_suffix('.lock')), mode='a', timeout=0)
@@ -47,7 +116,7 @@ class WorklistState:
         if not isinstance(request_id, str) or not request_id:
             raise ValueError('A nonempty training request ID is required')
         worklist = yaml.safe_load(PATH.sched_worklist.read_text())
-        if not allow_unlisted and self.schedule_name not in worklist.get('fit', []):
+        if not allow_unlisted and self.schedule_name not in self.entries(worklist):
             raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
         self.revisions(self.schedule_name)  # Verify the schedule config before writing.
         request = {'id': request_id}

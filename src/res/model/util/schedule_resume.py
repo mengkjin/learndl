@@ -139,6 +139,9 @@ def automatic_schedule_config(config_kwargs: dict, model_kwargs: dict):
         logger.note(f'Automatic resume: schedule={schedule_name}, requested_resume=True, '
                     f'candidates={[str(p.base) for p in candidates]}')
         for path in candidates:
+            from .lifecycle import ModelLifecycle
+            if ModelLifecycle(path.base).state.get('origin'):
+                continue  # Isolated production candidates are not exploration resumes.
             try:
                 before = snapshot(path)
                 validate_saved_configs(path)

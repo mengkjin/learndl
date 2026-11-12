@@ -58,6 +58,7 @@ class IdleTest(unittest.TestCase):
         self.folder = self.root / 'model'
         self.folder.mkdir()
         self.options = {'enabled': True, 'progress_timeout_seconds': 43200}
+        self.enterContext(patch('src.res.model.util.lifecycle.ModelLifecycle.inspect_registered', return_value=[]))
 
     def test_retired_nn_ab_defers_queued_requests_and_preserves_history(self):
         records = [

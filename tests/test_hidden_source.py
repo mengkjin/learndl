@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -15,7 +16,7 @@ import torch
 from src.proj import PATH
 from src.res.model.model_module.application.predictor import ArchivedPredictorModel
 from src.res.model.util.config import ModelConfig
-from src.res.model.util.core import ModelPath, BatchData, BatchOutput
+from src.res.model.util.core import ModelPath, BatchData, BatchOutput, BatchInput
 from src.res.model.util.data.data_module import DataModule
 
 
@@ -29,6 +30,10 @@ class HiddenSourceTest(unittest.TestCase):
             folder = self.root / relative
             folder.mkdir(parents=True, exist_ok=True)
             self.enterContext(patch.object(PATH, key, folder))
+        schedules = self.root / 'schedules'
+        schedules.mkdir()
+        (schedules / 'gru_day_new_rtn.yaml').write_text('model.module: gru\ninput.data.types: day\n')
+        self.enterContext(patch.object(PATH, 'sched', schedules))
         self.enterContext(patch.object(ModelPath, 'log_operation'))
         self.prompt = self.enterContext(patch('builtins.input', side_effect=AssertionError('No input allowed')))
         config = ModelConfig(schedule_name='gru_day_new_rtn', stage=1, resume=0, selection=0,
@@ -51,7 +56,7 @@ class HiddenSourceTest(unittest.TestCase):
                 inputs = SimpleNamespace(secid=np.array([20, 10]), date=np.array([date, date]), date0=date)
                 output = BatchOutput((torch.tensor([[2., 20.], [1., 10.]]),
                                       {'hidden': torch.tensor([[200.], [100.]])}))
-                yield BatchData(inputs, output)
+                yield BatchData(cast(BatchInput, inputs), output)
 
         iterator = self.enterContext(patch.object(source, 'iter_batch_data', side_effect=batches))
         return source, iterator
@@ -160,10 +165,10 @@ class HiddenSourceTest(unittest.TestCase):
         original = source.hidden_block
         with patch.object(ArchivedPredictorModel, 'from_model_str', return_value=source), \
              patch.object(source, 'hidden_block', side_effect=lambda *a, **kw: original(*a, **kw, async_save=False)):
-            DataModule.setup_loader_inputs_hidden(loader)
+            DataModule.setup_loader_inputs_hidden(cast(DataModule, loader))
             self.assertEqual(len(loader.datas.x[key].feature), 1)
             loader.config.input_hidden_include_pred = True
-            DataModule.setup_loader_inputs_hidden(loader)
+            DataModule.setup_loader_inputs_hidden(cast(DataModule, loader))
             self.assertEqual(len(loader.datas.x[key].feature), 3)
             self.assertTrue(any(name.endswith('.pred.1') for name in loader.datas.x[key].feature))
         self.assertEqual(loader.config.update_data_param.call_count, 2)

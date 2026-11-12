@@ -10,7 +10,7 @@ model:
   # if module is nn , use multiloss combination of the labels
   # if module is boost , only use the first label
   labels: 
-    - std_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
+    - rtn_lag1_10 # any of [res_lag1_10, res_lag1_20, rtn_lag1_10, rtn_lag1_20, std_lag1_10, std_lag1_20]
 
   special:
     global2top: true
@@ -24,7 +24,7 @@ input:  # input specification --------------------------------------------------
 
 train:
   criterion.weight:
-    fit:    'equal'
+    fit:    'polar'
   # criterion.loss: 
   #   ccc_hcorr: {alpha : 0.1}
   trainer.learn_rate:
@@ -42,7 +42,7 @@ callbacks:
 
 algo:
   resnet_gru_new:
-    resnet_pool: [linear]
+    resnet_pool:    [flatten]
     hidden_dim:     [64] #  2**5
     seqlens:        [{'15m': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]
@@ -54,5 +54,3 @@ algo:
     rnn_layers:     [2]
     resnet_blocks:  [1]
     dim_med:        [null] # null: max(1, inday_resnet_dim // 4); or a positive integer
-    hidden_as_factors: [true]
-    hidden_mean_pool: [false]

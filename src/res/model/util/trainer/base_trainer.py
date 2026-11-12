@@ -301,7 +301,8 @@ class BaseTrainer(BasePipeline):
 
         from src.proj.util.memory_tracker import ProcessMemoryTracker
         tracker_label = self.config.model_name or self.config.full_module_name
-        with ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker:
+        from src.res.model.util.lifecycle import ModelLifecycle
+        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker:
             self.data.memory_tracker = self.memory_tracker
             self.memory_tracker.mark('trainer_setup_complete')
 
@@ -335,6 +336,10 @@ class BaseTrainer(BasePipeline):
             self.init_cores()
             self.init_utils()
             self.on_configure_model()
+            from src.res.model.util.lifecycle import ModelLifecycle
+            ModelLifecycle.configured(self.config)
+            if self.training_run is not None:
+                self.training_run.configured(self.config)
             self.print_out()
 
     def stage_data(self):
@@ -364,6 +369,8 @@ class BaseTrainer(BasePipeline):
                         self.on_fit_model_date_start()
                     self.fit_current_model()
                     self.on_fit_model_end()
+                    from src.res.model.util.lifecycle import ModelLifecycle
+                    ModelLifecycle.record_node(self)
                     if self.status.model_num == self.config.model_num:
                         self.on_fit_model_date_end()
                 self.on_fit_end()
@@ -455,12 +462,9 @@ class BaseTrainer(BasePipeline):
         if self.config.is_resuming:
             match self.status.stage:
                 case 'fit':
-                    models_trained = np.full(len(model_iter) , True , dtype = bool)
-                    for i , (model_date , model_num) in enumerate(model_iter):
-                        if not self.deposition.exists(model_num , model_date):
-                            models_trained[max(i,0):] = False
-                            break
-                    condition = ~models_trained
+                    from src.res.model.util.lifecycle import ModelLifecycle
+                    pending = set(ModelLifecycle.pending_nodes(self, model_iter))
+                    condition = np.array([node in pending for node in model_iter], dtype=bool)
                 case 'test':
                     resumed_models_finished = self.record.resumed_models.groupby(['model_date' , 'model_num']).groups
                     resumed = [(model_date , model_num) not in resumed_models_finished for model_date , model_num in model_iter]

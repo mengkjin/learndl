@@ -40,6 +40,8 @@ def model_source_path(reference: str) -> PredictorPath:
     short_test, module_type, module, name, index, number, submodel = parse_model_source(reference)
     model = ModelPath(f'{"st@" if short_test else ""}{module_type}@{module}@{name}')
     model.with_new_index(int(index or 1))
+    from .lifecycle import ModelLifecycle
+    model = ModelLifecycle.approved_path(model)
     if not model.base.is_dir():
         raise FileNotFoundError(f'Model source {reference}: training directory does not exist: {model.base}')
     validate_saved_configs(model)
