@@ -10,6 +10,23 @@ export default function ({ data, parentElement }) {
         state.top = viewport.scrollTop;
     }
 
+    function fitViewport() {
+        if (!viewport.isConnected) {
+            state.resizeObserver?.disconnect();
+            window.removeEventListener('resize', fitViewport);
+            return;
+        }
+        const height = Math.max(120, window.innerHeight - viewport.getBoundingClientRect().top - 32);
+        viewport.style.height = `${height}px`;
+        if (state.following) setTop(viewport.scrollHeight);
+    }
+    if (!state.resizeObserver) {
+        state.resizeObserver = new ResizeObserver(() => requestAnimationFrame(fitViewport));
+        state.resizeObserver.observe(viewport);
+        window.addEventListener('resize', fitViewport);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(fitViewport));
+
     viewport.onscroll = () => {
         // A content update can also emit a scroll event.
         if (viewport.scrollTop === state.top) return;

@@ -53,6 +53,15 @@ class TaskOutputTest(unittest.TestCase):
         self.assertIn('font-weight: bold', colored)
         self.assertIn('2 blank/control-output lines suppressed', colored)
 
+    def test_catcher_time_groups_removed_but_logger_time_preserved(self):
+        path = self.root / 'raw.md'
+        path.write_text('### 2026-11-12 23:12 \n- 23:12:01.123: 26-11-12 23:12:01 | epoch 1\n')
+        for style in ('text', 'colored'):
+            content = parse_live_output(path, style)
+            self.assertNotIn('###', content)
+            self.assertNotIn('23:12:01.123', content)
+            self.assertIn('26-11-12 23:12:01 | epoch 1', content)
+
     def test_html_cache_is_style_specific_chunked_and_survives_source_removal(self) -> None:
         path = self.root / 'report.html'
         rows = ''.join(
@@ -95,7 +104,9 @@ class TaskOutputTest(unittest.TestCase):
         assert colored is not None and plain is not None
         self.assertIn('2 blank/control-output lines suppressed', colored.content)
         self.assertIn('class="output-line stderr"', colored.content)
-        self.assertIn('[STDERR]', plain.content)
+        self.assertIn('boom', plain.content)
+        self.assertNotIn('[STDERR]', plain.content)
+        self.assertNotIn('09:00:02', plain.content)
         self.assertNotIn('<div', plain.content)
 
     def test_source_change_creates_new_fingerprint(self) -> None:

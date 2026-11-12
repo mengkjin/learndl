@@ -20,7 +20,7 @@ from typing import Literal, TypeAlias
 from src.proj import PATH
 
 OutputStyle: TypeAlias = Literal['text', 'colored']
-PARSER_VERSION = 1
+PARSER_VERSION = 2
 MAX_RECORDS_PER_CHUNK = 200
 MAX_CHUNK_BYTES = 256 * 1024
 MAX_RECORD_CHARS = 64 * 1024
@@ -121,6 +121,9 @@ def _plain_payload(line: str) -> str:
 def _compact_records(records: Iterator[str], style: OutputStyle) -> Iterator[str]:
     suppressed = 0
     for record in records:
+        if re.fullmatch(r'#{2,3} \d{4}-\d{2}-\d{2}(?: \d{2}(?::\d{2})?(?::\d{2})?)?\s*', record.strip()):
+            continue
+        record = _LOG_PREFIX.sub('', record)
         payload = _plain_payload(record)
         if not payload or _CONTROL_ONLY.fullmatch(payload):
             suppressed += 1
@@ -236,22 +239,20 @@ class _HtmlOutputParser(HTMLParser):
             while self.inline_tags:
                 self.fields['content'].append(f'</{self.inline_tags.pop()}>')
             kind = ''.join(self.fields['type']).strip()
-            when = ''.join(self.fields['time']).strip()
             content = ''.join(self.fields['content']).strip()
             plain_content = ''.join(self.plain_content).strip()
             if not plain_content or _CONTROL_ONLY.fullmatch(plain_content):
                 self.suppressed += 1
             else:
                 self._emit_suppressed()
-                prefix = f'{when} [{kind}] '.strip() + ' '
                 if self.style == 'colored':
                     kind_class = ' stderr' if kind.casefold() == 'stderr' else ''
                     self.emit(
                         f'<div class="output-line{kind_class}">'
-                        f'<span class="meta">{html.escape(prefix)}</span>{content}</div>'
+                        f'{content}</div>'
                     )
                 else:
-                    self.emit(prefix + content)
+                    self.emit(content)
             self.in_row = False
             self.cell = None
 

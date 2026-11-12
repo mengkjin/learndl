@@ -66,7 +66,7 @@ _live_output = component(
     html=('<div class="live-output" tabindex="0" role="region" aria-label="Live task output">'
           '<div class="output"></div></div><button type="button" hidden>Jump to bottom</button>'),
     css=_LOG_CSS + f"""
-.live-output {{ {_LOG_COLORS} height: 560px; overflow: auto; overflow-anchor: none; position: relative; }}
+.live-output {{ {_LOG_COLORS} height: clamp(180px, calc(100dvh - 260px), 560px); overflow: auto; overflow-anchor: none; position: relative; }}
 button {{ margin-top: 6px; }}
 """,
     js=Path(__file__).with_name('live_output.js').read_text(encoding='utf-8'),
@@ -326,12 +326,12 @@ def _resource_row(label: str, value: str) -> None:
 
 
 def _render_header(style_key: str = 'running-style') -> str:
-    st.markdown('<style>.block-container{padding-top:4rem;padding-bottom:1rem}h1{padding-top:0!important;font-size:2rem!important}</style>', unsafe_allow_html=True)
+    st.markdown('<style>.block-container{padding-top:3.5rem;padding-bottom:.25rem}h1{padding-top:0!important;font-size:1.6rem!important}h3{font-size:1.1rem!important;padding:.2rem 0!important}.st-key-running-list [data-testid=stMarkdownContainer] p{font-size:12px;margin:0}.task-start{display:block;font-size:11px;line-height:1.5;color:#718096}</style>', unsafe_allow_html=True)
     title, settings, system = st.columns((6, 1, 1), vertical_alignment='center')
     title.title('Task Center')
-    with settings.popover('Settings', icon=':material/settings:', width='stretch'):
+    with settings.popover('', icon=':material/settings:', help='Settings', width='content'):
         style_label = st.radio('Output style', list(STYLE_LABELS), key=style_key)
-    with system.popover('System', icon=':material/device_thermostat:', width='stretch'):
+    with system.popover('', icon=':material/device_thermostat:', help='System resources', width='content'):
         snapshot = _resources()
         st.caption(f'Host resources · sampled {_time(snapshot.sampled_at)}')
         _resource_row('Memory', _usage(snapshot.memory))
@@ -442,16 +442,16 @@ def _render_running() -> None:
         st.subheader(f'Running ({len(tasks)})')
         st.button('Follow latest', on_click=_follow_latest, disabled=pinned is None,
                   key='running-follow', width='stretch')
-        with st.container(height=640, border=False):
+        with st.container(height=400, border=False, key='running-list'):
             if not tasks:
                 st.info('No running tasks.')
             for task in tasks:
                 with st.container(border=True):
-                    st.markdown(f'**{Path(task.script).name}**')
-                    st.caption(f'{task.display_status.upper()} · PID {task.pid or "—"}')
+                    status = f'{task.display_status.upper()} · PID {task.pid or "—"}'
                     if task.managed_kind:
-                        st.caption(f'Watchdog group · {task.managed_phase}')
-                    st.caption(f'Started {_time(task.effective_start)} · {_duration(task)}')
+                        status += f' · Watchdog {task.managed_phase}'
+                    st.markdown(f'**{Path(task.script).name}**', help=status)
+                    st.markdown(f'<span class="task-start" title="{escape(status, quote=True)}">{_time(task.effective_start)}</span>', unsafe_allow_html=True)
                     view, kill = st.columns(2)
                     view.button('Output', key=f'view-{task.task_id}', on_click=_pin_task,
                                 args=(task.task_id,), type='primary' if task.task_id == selected else 'secondary',
@@ -460,8 +460,6 @@ def _render_running() -> None:
                     kill.button('Kill', key=f'kill-{task.task_id}', disabled=reason is not None,
                                 help=reason or 'Review and confirm termination', on_click=_start_kill,
                                 args=(task,), width='stretch')
-                    if reason:
-                        st.caption(reason)
     with right:
         task = repository.get_task(selected) if selected else None
         if task is not None and task.is_active:
