@@ -134,6 +134,19 @@ class CompareInputTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'distinct'):
             load_inputs([CompareModelSpec(self.paths[0], name='x'), CompareModelSpec(self.paths[0], name='y')], CompareConfig())
 
+    def test_web_comparison_does_not_export_or_build_static_figures(self):
+        with patch('src.res.model.analytic.compare.report.build_figures') as figures, \
+                patch.object(CompareResult, 'export') as export, \
+                patch('src.res.model.analytic.compare.outputs.ArchivedOutputProvider.get', side_effect=AssertionError('inference forbidden')):
+            result = compare_models(self.paths, config=CompareConfig(trade_dates=tuple(self.dates)),
+                                    display=False, generate_figures=False, export=False)
+        figures.assert_not_called()
+        export.assert_not_called()
+        self.assertFalse(result.figures)
+        self.assertFalse(result.output_paths)
+        self.assertEqual(result.summary.ic_n.tolist(), [3, 3])
+        self.assertAlmostEqual(result.summary.top_pf_return.iloc[0], .089)
+
     def test_pipeline_offline_export_and_no_inference(self):
         with patch('src.res.model.analytic.compare.outputs.ArchivedOutputProvider.get', side_effect=AssertionError('inference forbidden')):
             result = compare_models(self.paths, config=CompareConfig(trade_dates=tuple(self.dates)),

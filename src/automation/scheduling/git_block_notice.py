@@ -1,4 +1,7 @@
 """Durable, observation-based Git operation blockage notifications."""
+from __future__ import annotations
+
+__all__ = ['WAIT_SECONDS', 'MARKERS', 'stamp', 'observe']
 import json
 import time
 import uuid

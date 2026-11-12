@@ -15,7 +15,7 @@ from .statistics import correlation_matrix, ic_stats, periods, top_stats
 from .types import CompareConfig, CompareResult
 
 
-def compare_models(models, *, config=None, output_dir=None, display=True) -> CompareResult:
+def compare_models(models, *, config=None, output_dir=None, display=True, generate_figures=True, export=True) -> CompareResult:
     config = config or CompareConfig()
     config.validate()
     inputs = load_inputs(list(models), config)
@@ -119,10 +119,13 @@ def compare_models(models, *, config=None, output_dir=None, display=True) -> Com
         result.samples = samples
         diagnostics.extend(messages)
     result.diagnostics = pd.DataFrame(diagnostics)
-    from .report import build_figures, make_highlights
-    result.highlights = make_highlights(result)
-    build_figures(result)
-    result.export(output_dir)
+    if generate_figures or export:
+        from .report import build_figures, make_highlights
+        result.highlights = make_highlights(result)
+        if generate_figures:
+            build_figures(result)
+        if export:
+            result.export(output_dir)
     if display:
         result.display()
     return result

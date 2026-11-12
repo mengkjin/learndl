@@ -50,8 +50,8 @@ class SchedulingMenuTest(unittest.TestCase):
             'Check Code Issues', 'Preview Project File',
         ])
         self.assertEqual(_TOP_LEVEL_LABELS, (
-            'Git Pull', 'Train Schedule Model', 'Learndl Monitor',
-            'Non-Research Operations', 'Research Operations', 'Run Pipeline Script',
+            'Git Pull', 'Learndl Monitor', 'Run Pipeline Script',
+            'Train Schedule Model', 'Non-Research Operations', 'Research Operations',
         ))
         with patch.object(DirectCallHub, '_pick_direct_call', return_value=ManageTaskSchedules), \
              patch('src.proj.util.cli.AskFor.Options', return_value=MagicMock(valid=True, result='View Installation Status')), \

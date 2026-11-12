@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 from src.automation.scheduling import factor_sequence as queue
 
 
@@ -72,7 +72,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(RuntimeError, "test failure"):
                     queue.execute({"request_id": "test", "id": "managed_test"}, Mock())
-                handoff.assert_called_once_with(unittest.mock.ANY, 'managed_test', script_notification_handoff=True)
+                handoff.assert_called_once_with(ANY, 'managed_test', script_notification_handoff=True)
                 guard.return_value.__exit__.assert_called_once()
                 module.main.assert_called_once_with(run_id="test")
                 receipt.assert_called_once_with(success=False)

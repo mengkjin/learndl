@@ -89,6 +89,8 @@ class PathItem:
         assert folder_path.is_dir() , f'{folder_path} is not a folder'
 
         for item in folder_path.iterdir():
+            if item.is_file() and item.suffix != '.py':
+                continue
             if any(re.match(pattern, item.name) for pattern in cls.ignore_patterns):
                  continue
             if item.is_dir() and not list(item.iterdir()):

@@ -1,4 +1,5 @@
 """Daily residual/coverage diagnostics without retaining the full test panel in RAM."""
+from __future__ import annotations
 
 import json
 import resource

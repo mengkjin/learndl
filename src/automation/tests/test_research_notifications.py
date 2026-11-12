@@ -1,4 +1,7 @@
 """Research start mail and script-owned completion, without real mail or workers."""
+from __future__ import annotations
+
+__all__ = ['ResearchNotificationsTest']
 import tempfile
 import unittest
 from pathlib import Path
@@ -44,7 +47,9 @@ class ResearchNotificationsTest(unittest.TestCase):
         for kind in ('rl_experiment', 'factor_sequence'):
             run = self.run_record(kind)
             self.store.put(run)
-            recovery.record(self.store, run['id'], script_notification_handoff=True)
+            run_id = run['id']
+            assert isinstance(run_id, str)
+            recovery.record(self.store, run_id, script_notification_handoff=True)
             for phase, code in [('complete', 0), ('error', 1), ('killed', -9)]:
                 run.update(phase=phase, returncode=code)
                 self.assertFalse(runtime.idle_exit_needs_email(self.store, run))

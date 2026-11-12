@@ -62,13 +62,11 @@ class CompareCliTest(unittest.TestCase):
                 self.assertEqual(events, ['select', 'select', 'configure'] + ([] if cancel else ['calculate']))
                 self.assertEqual(compute.call_count, 0 if cancel else 1)
 
-    def test_research_menu_dispatch(self):
+    def test_dashboard_entries_move_out_of_research_menu(self):
         from src.api.calls.launcher import DirectCallHub
-        self.assertIn(CompareModels, [entry[1] for entry in DirectCallHub._research_entries()])
-        with patch.object(DirectCallHub, '_pick_direct_call', return_value=CompareModels), \
-             patch.object(CompareModels, 'spawn_in_pane') as spawn:
-            DirectCallHub()._dispatch_top_level('Research Operations')
-        spawn.assert_called_once_with()
+        labels = [entry[0] for entry in DirectCallHub._research_entries()]
+        for label in ('Compare Models', 'Tensorboard', 'Optuna Dashboard'):
+            self.assertNotIn(label, labels)
 
 
 if __name__ == '__main__':

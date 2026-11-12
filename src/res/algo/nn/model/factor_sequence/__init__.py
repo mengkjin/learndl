@@ -7,6 +7,8 @@ from src.res.algo.registry import FACTOR_SEQUENCE_MODULES
 import torch
 from torch import nn
 
+from .residual import FactorResidual
+
 CHANNELS = ('value', 'valid', 'observed', 'gap', 'never', 'change',
             'change_valid', 'source_age', 'source_age_valid', 'degenerate')
 DIAGNOSTIC = ('valid', 'observed', 'gap', 'never', 'source_age', 'source_age_valid')
@@ -126,7 +128,6 @@ class FactorValueGate(FactorSequence):
     mode = 'gate'
 
 
-from .residual import FactorResidual
 
 MODELS = {name: globals()[class_name] for name, class_name in FACTOR_SEQUENCE_MODULES.items()}
 CATALOG = {name: {'status':'implemented','version':1,'mode':model.mode,

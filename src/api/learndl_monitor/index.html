@@ -24,21 +24,35 @@ h2:hover+.tooltip,h2:focus+.tooltip{display:block}#notice{color:#ffb6a6;margin-b
 <div id="notice" role="alert"></div><section class="grid" id="cards"></section>
 </main>
 <script>
-const token=document.querySelector('meta[name=console-token]').content;
+let token=document.querySelector('meta[name=console-token]').content;
 if(token)sessionStorage.setItem('learndl-token',token);
 history.replaceState(null,'',location.pathname);
 let lang=localStorage.getItem('learndl-language')||'zh',services=[];
 if(!['zh','en'].includes(lang))lang='zh';
 const labels={
- zh:{start:'启动',open:'打开',restart:'重启',stop:'关闭',stopped:'已关闭',running:'运行中',starting:'启动中',stopping:'关闭中',restarting:'重启中',scanning:'扫描中',unavailable:'未就绪',managed:'控制台启动',external:'外部发现',confirm:'确认执行此操作？',descriptions:{tasks:'任务状态、运行输出与进程管理',storage:'磁盘占用、目录分布与快照报告',research:'数据、模型与研究工作流'}},
- en:{start:'Start',open:'Open',restart:'Restart',stop:'Stop',stopped:'Stopped',running:'Running',starting:'Starting',stopping:'Stopping',restarting:'Restarting',scanning:'Scanning',unavailable:'Not ready',managed:'Console managed',external:'Discovered externally',confirm:'Confirm this operation?',descriptions:{tasks:'Task status, live output and process controls',storage:'Disk usage, directory insights and snapshot reports',research:'Data, models and research workflows'}}
+ zh:{start:'启动',open:'打开',restart:'重启',stop:'关闭',stopped:'已关闭',running:'运行中',starting:'启动中',stopping:'关闭中',restarting:'重启中',scanning:'扫描中',unavailable:'未就绪',managed:'控制台启动',external:'外部发现',confirm:'确认执行此操作？',descriptions:{compare:'已有模型结果的交互对比',experiments:'TensorBoard 与 Optuna 多实例管理',tasks:'任务状态、运行输出与进程管理',storage:'磁盘占用、目录分布与快照报告',research:'数据、模型与研究工作流'}},
+ en:{start:'Start',open:'Open',restart:'Restart',stop:'Stop',stopped:'Stopped',running:'Running',starting:'Starting',stopping:'Stopping',restarting:'Restarting',scanning:'Scanning',unavailable:'Not ready',managed:'Console managed',external:'Discovered externally',confirm:'Confirm this operation?',descriptions:{compare:'Interactive comparison of existing model results',experiments:'TensorBoard and Optuna instance management',tasks:'Task status, live output and process controls',storage:'Disk usage, directory insights and snapshot reports',research:'Data, models and research workflows'}}
 };
 const t=key=>labels[lang][key]||key;
-async function api(path,body){
- const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+async function request(path,options={}){
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),10000);
+ try{return await fetch(path,{...options,cache:'no-store',signal:controller.signal});}
+ finally{clearTimeout(timeout);}
+}
+async function api(path,body,retry=true){
+ const r=await request(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ if(r.status===403&&retry){
+  // A running console may have restarted since this tab was opened.
+  const page=await request('/');
+  if(page.ok){
+   const current=new DOMParser().parseFromString(await page.text(),'text/html').querySelector('meta[name=console-token]');
+   if(current&&current.content!==token){token=current.content;return api(path,body,false);}
+  }
+ }
  if(!r.ok){
-  const fallback=lang==='zh'?'请求失败，请刷新页面重试。':'Request failed. Refresh the page and try again.';
-  if(r.status===403)throw Error(lang==='zh'?'会话已过期，请刷新页面重新连接。':'Session expired. Refresh the page to reconnect.');
+  const fallback=lang==='zh'?'请求失败，请稍后重试。':'Request failed. Please try again.';
+  if(r.status===403)throw Error(lang==='zh'?'会话已过期，正在重连。':'Session expired. Reconnecting.');
   const error=await r.json().catch(()=>({}));throw Error(error.error||fallback);
  }
  return r.json();
@@ -66,16 +80,54 @@ function render(){
    b.textContent=t(action);b.className=action==='start'?'primary':'';
    b.disabled=action==='start'?s.state!=='stopped':action==='open'?!s.url:action==='stop'?(!s.pid||['stopping','restarting'].includes(s.state)):!['running','unavailable'].includes(s.state);
    b.onclick=async()=>{
+    let popup=null;
     try{
      if(action==='open'){window.open(s.url,'_blank','noopener');return;}
      if(['restart','stop'].includes(action)&&!confirm(`${t('confirm')}\n${s[lang]} · PID ${s.pid} · ${t(s.source)}`))return;
-     b.disabled=true;await api('/api/action',{service:s.id,action,pid:s.pid,created:s.created});await refresh();
-    }catch(e){document.getElementById('notice').textContent=e.message;}
+     if(action==='start'){popup=window.open('','_blank');if(popup){popup.opener=null;popup.document.body.textContent=lang==='zh'?'正在启动…':'Starting…';}}
+     b.disabled=true;await api('/api/action',{service:s.id,action,pid:s.pid,created:s.created});notifyChange();await refresh();
+     if(action==='start'){
+      let address='';
+      for(let attempt=0;attempt<90;attempt++){
+       const state=(await api('/api/services')).services.find(item=>item.id===s.id);
+       if(state?.url){address=state.url;break;}
+       if(state?.error)throw Error(state.error);
+       await new Promise(resolve=>setTimeout(resolve,1000));
+      }
+      if(!address)throw Error(lang==='zh'?'启动尚未就绪，请稍后点击打开。':'Not ready yet. Use Open when ready.');
+      if(popup&&!popup.closed)popup.location.replace(address);else document.getElementById('notice').textContent=lang==='zh'?'浏览器阻止了新窗口，请点击打开。':'Popup blocked. Click Open.';
+     }
+    }catch(e){if(popup&&!popup.closed)popup.close();document.getElementById('notice').textContent=e.message;}
    };
   }
  });
 }
-async function refresh(){try{services=(await api('/api/services')).services;render();}catch(e){document.getElementById('notice').textContent=e.message;}}
+let refreshing=null,refreshAgain=false,lastState='';
+const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('learndl-services'):null;
+function notifyChange(){
+ if(channel)channel.postMessage('changed');
+ // Also covers browsers without BroadcastChannel. Never transmit credentials.
+ try{localStorage.setItem('learndl-services-changed',Date.now()+':'+Math.random());}catch{}
+}
+function refresh(){
+ if(refreshing){refreshAgain=true;return refreshing;}
+ refreshing=(async()=>{
+  try{
+   services=(await api('/api/services')).services;
+   render();document.getElementById('notice').textContent='';
+   const state=JSON.stringify(services.map(s=>[s.id,s.state,s.pid,s.created,s.url,s.error,s.snapshot]));
+   if(state!==lastState){lastState=state;notifyChange();}
+  }catch(e){document.getElementById('notice').textContent=e.message;}
+  finally{refreshing=null;if(refreshAgain){refreshAgain=false;queueMicrotask(refresh);}}
+ })();
+ return refreshing;
+}
+if(channel)channel.onmessage=()=>refresh();
+window.addEventListener('storage',event=>{if(event.key==='learndl-services-changed')refresh();});
+window.addEventListener('focus',()=>refresh());
+window.addEventListener('pageshow',()=>refresh());
+window.addEventListener('online',()=>refresh());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 document.getElementById('language').value=lang;
 document.getElementById('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);render();};
 refresh();setInterval(refresh,2000);

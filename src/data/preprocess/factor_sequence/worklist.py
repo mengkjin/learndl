@@ -1,4 +1,7 @@
 """Resolve a checked, frozen server dataset when an ordinary schedule starts."""
+from __future__ import annotations
+
+__all__ = ['resolve_schedule']
 
 import json
 import re

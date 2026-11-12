@@ -13,11 +13,11 @@ __all__ = ['DirectCallHub']
 
 _TOP_LEVEL_LABELS = (
     'Git Pull',
-    'Train Schedule Model',
     'Learndl Monitor',
+    'Run Pipeline Script',
+    'Train Schedule Model',
     'Non-Research Operations',
     'Research Operations',
-    'Run Pipeline Script',
 )
 
 
@@ -67,7 +67,7 @@ class DirectCallHub(DirectCall):
             ),
             'Learndl Monitor': 'Open or reuse the background service console; child services start only on request.',
             'Non-Research Operations': 'Submenu: watchdog, tests, project auto-fix, code checks, and file preview.',
-            'Research Operations': 'Submenu: model comparison, data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
+            'Research Operations': 'Submenu: data updates/rebuild, model archive, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
 
@@ -93,16 +93,12 @@ class DirectCallHub(DirectCall):
 
     @classmethod
     def _research_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
-        from src.api.calls.dashboard import OptunaDashboard, Tensorboard
         from src.api.calls.data import (
             ReconstructPreprocessedData, RecalculateHistNorm, UpdateProjectData,
         )
         from src.api.calls.files import ModelArchiveOperations
-        from src.api.calls.research import CarryOutScheduleWorkList
-        from src.api.calls.model_compare import CompareModels
 
         return [
-            ('Compare Models', CompareModels, CompareModels.get_description()),
             (
                 'Update Project Data',
                 UpdateProjectData,
@@ -122,21 +118,6 @@ class DirectCallHub(DirectCall):
                 'Model Archive Operations',
                 ModelArchiveOperations,
                 'Archive, resume, rename, or inspect trained model directories.',
-            ),
-            (
-                'Tensorboard',
-                Tensorboard,
-                'Browse training logs via TensorBoard in a new pane.',
-            ),
-            (
-                'Optuna Dashboard',
-                OptunaDashboard,
-                'Browse hyperparameter study SQLite databases via Optuna Dashboard.',
-            ),
-            (
-                'Carry Out Schedules',
-                CarryOutScheduleWorkList,
-                CarryOutScheduleWorkList.get_description(),
             ),
         ]
 

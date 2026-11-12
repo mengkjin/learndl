@@ -233,7 +233,9 @@ class GitUpdateTest(unittest.TestCase):
         sender = Mock(side_effect=[False, True, True])
         for now in (1000, 1899):
             with patch.object(notices.time, 'time', return_value=now):
-                self.assertIn('index.lock', updater.repository_blocker(self.checkout, time.monotonic()+10))
+                blocker = updater.repository_blocker(self.checkout, time.monotonic()+10)
+                assert blocker is not None
+                self.assertIn('index.lock', blocker)
         updater.deliver_update_emails(sender)
         sender.assert_not_called()
         for now in (1900, 100000):

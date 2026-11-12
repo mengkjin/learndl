@@ -1,4 +1,7 @@
 """Compact residual factor models; context conditions the temporal encoder only."""
+from __future__ import annotations
+
+__all__ = ['FactorResidual']
 
 import torch
 from torch import nn
