@@ -629,3 +629,32 @@ Successful legacy runs do not receive duplicate result mail; older failed runs w
 handoff evidence retain the existing receipt-based fallback. Model-training and autofix
 notification policies are unchanged. Pulling this code updates new worker behavior;
 no systemd timer or watchdog reinstall is required.
+
+### Persistent Git operation blockers
+
+The updater observes `index.lock` and unfinished merge/rebase/cherry-pick/revert
+markers before fetch. After 15 minutes of continuously observed blockage it queues
+one English `Watchdog Git Update Blocked` email through the existing mail worker.
+The notice includes marker paths, sizes, modification times, first observation,
+elapsed wait and the last updater timeout evidence when available. Marker age is
+not treated as proof that a lock is stale. Changing markers and worker restarts do
+not repeat the notice; an observation with no operation markers resets the episode.
+Delivery retries reuse the captured snapshot. This is a notification threshold,
+not an admission cooldown: checks continue on their normal schedule.
+
+Git subprocesses set `GIT_OPTIONAL_LOCKS=0` so read-only status checks do not refresh
+the index through an optional write lock. Required locks for updates remain enabled.
+On command timeout the updater sends TERM to its own subprocess group, allows five
+seconds for Git cleanup, and sends KILL only if that grace expires. Termination
+evidence is saved atomically to `runtime/scheduling/git-timeout.json`, without
+remote URLs or command output. Forced kills, host crashes and external service
+termination can still leave locks; this change never automatically removes them.
+Historical locks without contemporaneous evidence cannot be attributed conclusively.
+
+On this server the units are system-level: inspect with
+`sudo journalctl -u learndl-git-update.service -n 100 --no-pager` (without `--user`).
+Before manual stale-lock recovery, pause the actual Git timer, allow active Git
+operations to finish and verify processes/open files. Preserve `.git/index` and
+unfinished-operation markers. A code pull activates this policy for new workers;
+no timer reinstall is required. An already blocked server must first resolve its
+existing blocker to receive this update automatically.

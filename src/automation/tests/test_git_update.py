@@ -225,6 +225,62 @@ class GitUpdateTest(unittest.TestCase):
         self.assertIn(result['status'], {'error', 'deferred'})
         self.assertEqual(self.git(self.checkout, 'rev-parse', 'HEAD'), self.after)
 
+    def test_operation_marker_notice_waits_deduplicates_and_resets(self):
+        import time
+        from src.automation.scheduling import git_block_notice as notices
+        lock = self.checkout / '.git' / 'index.lock'
+        lock.touch()
+        sender = Mock(side_effect=[False, True, True])
+        for now in (1000, 1899):
+            with patch.object(notices.time, 'time', return_value=now):
+                self.assertIn('index.lock', updater.repository_blocker(self.checkout, time.monotonic()+10))
+        updater.deliver_update_emails(sender)
+        sender.assert_not_called()
+        for now in (1900, 100000):
+            with patch.object(notices.time, 'time', return_value=now):
+                updater.repository_blocker(self.checkout, time.monotonic()+10)
+        self.assertFalse(updater.deliver_update_emails(sender))
+        first = sender.call_args
+        self.assertTrue(updater.deliver_update_emails(sender))
+        self.assertEqual(first, sender.call_args)
+        updater.deliver_update_emails(sender)
+        self.assertEqual(sender.call_count, 2)
+        self.assertIn('index.lock', first.args[1])
+        self.assertTrue(lock.exists())
+        lock.unlink()
+        updater.repository_blocker(self.checkout, time.monotonic()+10)
+        # Unfinished operations share the same conservative notification policy.
+        (self.checkout / '.git' / 'MERGE_HEAD').write_text(self.after)
+        for now in (101000, 101900):
+            with patch.object(notices.time, 'time', return_value=now):
+                updater.repository_blocker(self.checkout, time.monotonic()+10)
+        updater.deliver_update_emails(sender)
+        self.assertEqual(sender.call_count, 3)
+        self.assertIn('MERGE_HEAD', sender.call_args.args[1])
+
+    def test_timeout_uses_term_then_kill_only_if_needed(self):
+        import time
+        import signal
+        for stubborn in (False, True):
+            with self.subTest(stubborn=stubborn):
+                process = Mock(pid=12345)
+                timeout = subprocess.TimeoutExpired('git', 1)
+                process.communicate.side_effect = ([timeout, timeout, ('', '')] if stubborn
+                                                   else [timeout, ('', '')])
+                popen = Mock()
+                popen.return_value.__enter__ = Mock(return_value=process)
+                popen.return_value.__exit__ = Mock(return_value=False)
+                with patch.object(updater.subprocess, 'Popen', popen), \
+                     patch.object(updater.os, 'killpg') as kill:
+                    with self.assertRaises(updater.GitUpdateError):
+                        updater._git(self.checkout, ['fetch', 'SECRET-REMOTE'], time.monotonic()+1)
+                self.assertEqual([call.args[1] for call in kill.call_args_list],
+                                 [signal.SIGTERM, signal.SIGKILL] if stubborn else [signal.SIGTERM])
+                self.assertEqual(popen.call_args.kwargs['env']['GIT_OPTIONAL_LOCKS'], '0')
+                audit = (self.root / 'runtime' / 'git-timeout.json').read_text()
+                self.assertNotIn('SECRET-REMOTE', audit)
+                self.assertIn('KILL required' if stubborn else 'no KILL sent', audit)
+
     def test_network_timeout_is_bounded_and_preserves_head(self):
         original = updater._git
         def timed_out(root, args, deadline, **kwargs):

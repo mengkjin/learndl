@@ -101,7 +101,10 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
     delivered = True
     for key, raw in rows:
         data = json.loads(raw)
-        if data.get('kind') == 'dirty_repository':
+        if data.get('kind') == 'git_operation':
+            subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
+            body = data['body']
+        elif data.get('kind') == 'dirty_repository':
             subject = f'Watchdog Git Update Paused - {data["host"]} - Local changes'
             body = _repository_notice_body(data)
         else:
@@ -132,11 +135,30 @@ class GitUpdateError(RuntimeError):
     pass
 
 
+def _timeout_audit(root, args, pid, termination):
+    # Never persist remote URLs, credentials, command output or arbitrary arguments.
+    temporary = runtime_dir() / f'.git-timeout-{uuid.uuid4().hex}.tmp'
+    try:
+        temporary.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(json.dumps(dict(
+            repository=str(root.resolve()), command=args[0], pid=pid,
+            observed_at=datetime.now(timezone.utc).isoformat(), termination=termination)))
+        temporary.replace(runtime_dir() / 'git-timeout.json')
+    except OSError:
+        pass  # Diagnostics must not prevent terminating a timed-out subprocess.
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _git(root: Path, args: list[str], deadline: float, *, allow_failure: bool = False) -> str:
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise GitUpdateError('Git update time budget exhausted')
-    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never')
+    env = dict(os.environ, GIT_TERMINAL_PROMPT='0', GCM_INTERACTIVE='Never',
+               GIT_OPTIONAL_LOCKS='0')
     # A non-interactive watchdog must never wait for an SSH password/passphrase.
     env.setdefault('GIT_SSH_COMMAND', 'ssh -o BatchMode=yes -o ConnectTimeout=10')
     command = ['git', '-c', 'core.hooksPath=/dev/null', '-c', 'submodule.recurse=false', '-C', str(root), *args]
@@ -145,9 +167,23 @@ def _git(root: Path, args: list[str], deadline: float, *, allow_failure: bool = 
         try:
             output, _ = process.communicate(timeout=remaining)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
-            process.communicate()
-            raise GitUpdateError('Git command timed out') from None
+            _timeout_audit(root, args, process.pid, 'TERM requested')
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            try:
+                process.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                _timeout_audit(root, args, process.pid, 'KILL required after 5-second TERM grace')
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.communicate(timeout=5)
+            else:
+                _timeout_audit(root, args, process.pid, 'Exited during TERM grace; no KILL sent')
+            raise GitUpdateError('Git command timed out; inspect git-timeout.json for termination evidence') from None
         if process.returncode and not allow_failure:
             # Do not copy remote URLs/credential-helper diagnostics into watchdog state.
             raise GitUpdateError(f'git {args[0]} failed (exit {process.returncode}); inspect repository/authentication')
@@ -159,10 +195,19 @@ def _git(root: Path, args: list[str], deadline: float, *, allow_failure: bool = 
 def repository_blocker(root: Path, deadline: float) -> str | None:
     if _git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD'], deadline, allow_failure=True) != 'master':
         return 'current branch is not master'
-    for name in ('MERGE_HEAD', 'REBASE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'rebase-merge', 'rebase-apply', 'sequencer', 'index.lock'):
+    from .git_block_notice import MARKERS, observe
+    markers = []
+    for name in MARKERS:
         path = Path(_git(root, ['rev-parse', '--git-path', name], deadline))
-        if (path if path.is_absolute() else root / path).exists():
-            return 'another Git operation is in progress'
+        path = path if path.is_absolute() else root / path
+        try:
+            info = path.stat()
+        except FileNotFoundError:
+            continue
+        markers.append(dict(path=str(path), mtime=info.st_mtime, size=info.st_size))
+    observe(_mail_store(), root, markers)
+    if markers:
+        return 'another Git operation is in progress: ' + ', '.join(item['path'] for item in markers)
     status = _git(root, ['-c', 'core.quotePath=true', 'status', '--porcelain=v1', '--untracked-files=normal', '--ignore-submodules=none'], deadline)
     _record_repository_status(root, status)
     if status:
