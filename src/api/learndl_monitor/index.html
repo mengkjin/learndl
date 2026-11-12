@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Learndl Monitor</title>
+<meta name="console-token" content="__CONSOLE_TOKEN__">
+<style>
+:root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
+*{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:60px auto;padding:0 28px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;gap:20px}h1{font-size:30px;font-weight:550;letter-spacing:-1px;margin:0}
+select,button{background:#202c3a;color:#dce8ee;border:1px solid #344355;border-radius:7px;padding:10px 12px;cursor:pointer}
+button:hover,button:focus-visible{border-color:#55ccb9}button:disabled{opacity:.3;cursor:default}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.card{position:relative;background:#17212c;border:1px solid #293748;border-radius:12px;padding:24px}
+h2{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:550;margin:0 0 24px;outline-offset:5px}
+.dot{width:7px;height:7px;flex:none;border-radius:50%;background:#67778b}.running .dot{background:#55ccb9}.starting .dot,.scanning .dot,.restarting .dot{background:#e9bd6d}.failed .dot{background:#ef9f91}
+.actions{display:flex;flex-wrap:wrap;gap:7px}.primary{background:#27564f;color:#96edda;border-color:#33776b}
+.tooltip{display:none;position:absolute;z-index:10;left:16px;right:16px;top:65px;padding:16px;background:#243342;border:1px solid #466079;border-radius:8px;box-shadow:0 12px 30px #0008;font:13px/1.8 monospace;white-space:pre-line;overflow-wrap:anywhere;color:#c3d1df;pointer-events:none}
+h2:hover+.tooltip,h2:focus+.tooltip{display:block}#notice{color:#ffb6a6;margin-bottom:15px;font-size:13px}#notice:empty{display:none}
+@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.grid{grid-template-columns:1fr}main{margin-top:30px}h1{font-size:25px}}
+</style>
+<main>
+<header><h1>Learndl Monitor</h1><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></header>
+<div id="notice" role="alert"></div><section class="grid" id="cards"></section>
+</main>
+<script>
+const token=document.querySelector('meta[name=console-token]').content;
+if(token)sessionStorage.setItem('learndl-token',token);
+history.replaceState(null,'',location.pathname);
+let lang=localStorage.getItem('learndl-language')||'zh',services=[];
+if(!['zh','en'].includes(lang))lang='zh';
+const labels={
+ zh:{start:'启动',open:'打开',restart:'重启',stop:'关闭',stopped:'已关闭',running:'运行中',starting:'启动中',stopping:'关闭中',restarting:'重启中',scanning:'扫描中',unavailable:'未就绪',managed:'控制台启动',external:'外部发现',confirm:'确认执行此操作？',descriptions:{tasks:'任务状态、运行输出与进程管理',storage:'磁盘占用、目录分布与快照报告',research:'数据、模型与研究工作流'}},
+ en:{start:'Start',open:'Open',restart:'Restart',stop:'Stop',stopped:'Stopped',running:'Running',starting:'Starting',stopping:'Stopping',restarting:'Restarting',scanning:'Scanning',unavailable:'Not ready',managed:'Console managed',external:'Discovered externally',confirm:'Confirm this operation?',descriptions:{tasks:'Task status, live output and process controls',storage:'Disk usage, directory insights and snapshot reports',research:'Data, models and research workflows'}}
+};
+const t=key=>labels[lang][key]||key;
+async function api(path,body){
+ const r=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ if(!r.ok){
+  const fallback=lang==='zh'?'请求失败，请刷新页面重试。':'Request failed. Refresh the page and try again.';
+  if(r.status===403)throw Error(lang==='zh'?'会话已过期，请刷新页面重新连接。':'Session expired. Refresh the page to reconnect.');
+  const error=await r.json().catch(()=>({}));throw Error(error.error||fallback);
+ }
+ return r.json();
+}
+function element(tag,text,cls){const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;}
+function render(){
+ document.documentElement.lang=lang;
+ const root=document.getElementById('cards');
+ // Keep card nodes in place during polling so hovering and keyboard focus remain stable.
+ services.forEach(s=>{
+  let card=document.getElementById('service-'+s.id);
+  if(!card){
+   card=element('article',null,'card');card.id='service-'+s.id;
+   const title=element('h2');title.tabIndex=0;title.append(element('span',null,'dot'),element('span'));
+   const tip=element('div',null,'tooltip');tip.id='details-'+s.id;tip.role='tooltip';title.setAttribute('aria-describedby',tip.id);
+   card.append(title,tip,element('div',null,'actions'));root.append(card);
+  }
+  card.className='card '+s.state+(s.error?' failed':'');
+  card.querySelector('h2 span:last-child').textContent=s[lang];
+  card.querySelector('.tooltip').textContent=[labels[lang].descriptions[s.id],t(s.state),s.pid?`PID ${s.pid} · ${t(s.source)} · ${s.uptime}s · ${s.count} ${lang==='zh'?'个实例':'instance(s)'}`:'',s.url||`127.0.0.1:${s.port}`,s.snapshot,s.error].filter(Boolean).join('\n');
+  const actions=card.querySelector('.actions');
+  for(const action of ['start','open','restart','stop']){
+   let b=actions.querySelector('[data-action='+action+']');
+   if(!b){b=element('button');b.dataset.action=action;actions.append(b);}
+   b.textContent=t(action);b.className=action==='start'?'primary':'';
+   b.disabled=action==='start'?s.state!=='stopped':action==='open'?!s.url:action==='stop'?(!s.pid||['stopping','restarting'].includes(s.state)):!['running','unavailable'].includes(s.state);
+   b.onclick=async()=>{
+    try{
+     if(action==='open'){window.open(s.url,'_blank','noopener');return;}
+     if(['restart','stop'].includes(action)&&!confirm(`${t('confirm')}\n${s[lang]} · PID ${s.pid} · ${t(s.source)}`))return;
+     b.disabled=true;await api('/api/action',{service:s.id,action,pid:s.pid,created:s.created});await refresh();
+    }catch(e){document.getElementById('notice').textContent=e.message;}
+   };
+  }
+ });
+}
+async function refresh(){try{services=(await api('/api/services')).services;render();}catch(e){document.getElementById('notice').textContent=e.message;}}
+document.getElementById('language').value=lang;
+document.getElementById('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);render();};
+refresh();setInterval(refresh,2000);
+</script>
+</html>

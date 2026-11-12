@@ -14,6 +14,7 @@ __all__ = ['DirectCallHub']
 _TOP_LEVEL_LABELS = (
     'Git Pull',
     'Train Schedule Model',
+    'Learndl Monitor',
     'Non-Research Operations',
     'Research Operations',
     'Run Pipeline Script',
@@ -52,7 +53,7 @@ class DirectCallHub(DirectCall):
     @classmethod
     def get_description(cls, **kwargs) -> str:
         return (
-            'CLI launcher hub: Streamlit app, task monitor, train schedule model, non-research tools, '
+            'CLI launcher hub: Learndl Monitor, train schedule model, non-research tools, '
             'research workflows, and pipeline scripts. Submenus spawn the selected action in a new pane.'
         )
 
@@ -64,55 +65,30 @@ class DirectCallHub(DirectCall):
                 'Train a schedule model (scripts/4_train/2_schedule_model.py). '
                 'Pick schedule_name, resume, short_test, and optional date range.'
             ),
-            'Non-Research Operations': (
-                'Submenu: Streamlit, monitor, watchdog, tests, lint, preview, project auto-fix, '
-                'and kill running scripts.'
-            ),
+            'Learndl Monitor': 'Open or reuse the background service console; child services start only on request.',
+            'Non-Research Operations': 'Submenu: watchdog, tests, project auto-fix, code checks, and file preview.',
             'Research Operations': 'Submenu: model comparison, data rebuild, model archive, TensorBoard, Optuna, and schedule work list.',
             'Run Pipeline Script': 'Submenu: pick a numbered script from scripts/ to run in a new pane.',
         }
 
     @classmethod
     def _source_code_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
-        from src.api.calls.app import LaunchApp, LaunchTaskMonitor, ManageTaskSchedules
+        from src.api.calls.app import ManageTaskSchedules
         from src.api.calls.files import ProjectAutoFix
         from src.api.calls.preview import PreviewProjectFile
-        from src.api.calls.script import KillRunningScript
         from src.api.calls.source_code import CheckCodeIssues
         from src.api.calls.test import TestCode
-        from src.api.calls.computer import ProjectStorageReport
 
         return [
-            ('Project Storage Report', ProjectStorageReport, ProjectStorageReport.get_description()),
-            ('Launch Streamlit App', LaunchApp, 'Open the Streamlit interactive app in a new pane.'),
-            ('Launch Learndl Monitor', LaunchTaskMonitor, 'Monitor running scripts, host resources, and finished tasks; confirm before killing a task.'),
             ('Watchdog / Schedule Management', ManageTaskSchedules,
              'Choose preview, status, install/update, or rollback; defaults to preview.'),
-            (
-                'Test Code',
-                TestCode,
-                'Smoke tests for logging, quick training, and parallel factor calculation.',
-            ),
-            (
-                'Preview Project File',
-                PreviewProjectFile,
-                PreviewProjectFile.get_description(),
-            ),
-            (
-                'Check Code Issues',
-                CheckCodeIssues,
-                'Static scans for style, typing, and project-specific code hygiene.',
-            ),
-            (
-                'Project AutoFix',
-                ProjectAutoFix,
-                'Config fixes, WezTerm template sync, and outdated log cleanup.',
-            ),
-            (
-                'Kill Running Script',
-                KillRunningScript,
-                KillRunningScript.get_description(),
-            ),
+            ('Test Code', TestCode,
+             'Smoke tests for logging, quick training, and parallel factor calculation.'),
+            ('Project AutoFix', ProjectAutoFix,
+             'Config fixes, WezTerm template sync, and outdated log cleanup.'),
+            ('Check Code Issues', CheckCodeIssues,
+             'Static scans for style, typing, and project-specific code hygiene.'),
+            ('Preview Project File', PreviewProjectFile, PreviewProjectFile.get_description()),
         ]
 
     @classmethod
@@ -257,6 +233,12 @@ class DirectCallHub(DirectCall):
             ScheduleModel.spawn_in_pane(vertical=True, done_action='close')
             return
 
+        if choice == 'Learndl Monitor':
+            from src.api.calls.app import LaunchLearndlMonitor
+
+            LaunchLearndlMonitor().run()
+            return
+
         if choice == 'Watchdog / Schedule Management':
             from src.api.calls.app import ManageTaskSchedules
             from src.proj.util.cli import AskFor
@@ -304,12 +286,10 @@ class DirectCallHub(DirectCall):
                 ),
             )
             if selected_cls is not None:
-                from src.api.calls.app import LaunchApp, LaunchTaskMonitor, ManageTaskSchedules
+                from src.api.calls.app import ManageTaskSchedules
 
                 if selected_cls is ManageTaskSchedules:
                     self._dispatch_top_level('Watchdog / Schedule Management')
-                elif selected_cls in (LaunchApp, LaunchTaskMonitor):
-                    selected_cls.spawn_in_pane(vertical=True, done_action='close')
                 else:
                     Logger.note(f'Spawning [{selected_cls.__name__}] in new pane')
                     selected_cls.spawn_in_pane()
@@ -353,7 +333,8 @@ class DirectCallHub(DirectCall):
                 title='DirectCall Hub — what do you want to do?',
                 help_description=(
                     'Git Pull runs here and restarts the hub on success. Train Schedule Model opens a split pane; '
-                    'the remaining entries open submenus. Watchdog management defaults to preview. '
+                    'Learndl Monitor opens the background console without a new pane. '
+                    'The remaining entries open submenus. Watchdog management defaults to preview. '
                     'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                 ),
                 option_help=self._top_level_help(),

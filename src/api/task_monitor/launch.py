@@ -127,46 +127,44 @@ def _output_candidates(task: TaskSnapshot) -> list[Path]:
 
 
 def _render_task_detail(task: TaskSnapshot, style: OutputStyle) -> None:
-    st.subheader(task.script)
-    st.caption(f'Task ID: `{task.task_id}`')
-    st.code(task.cmd, language='shell')
-    columns = st.columns(4)
-    columns[0].metric('Status', task.display_status.upper())
-    columns[1].metric('Started', _time(task.effective_start))
-    columns[2].metric('Duration', _duration(task))
-    columns[3].metric('PID', str(task.pid) if task.pid is not None else '—')
-    st.caption(
-        f'Source: `{task.source or "unknown"}` · Background: {"yes" if task.is_background else "no"} '
-        f'· Ended: {_time(task.end_time)}'
-    )
-    if task.display_status == 'stale':
-        st.warning('The recorded PID is no longer alive. The system watchdog has not reconciled this task yet.')
-    if task.exit_message:
-        st.info(task.exit_message)
-    if task.exit_error:
-        st.error(task.exit_error)
-
-    _render_task_output(task, style)
+    st.subheader(Path(task.script).name)
+    with st.expander('Task details'):
+        st.write(task.script)
+        st.caption(f'Task ID: {task.task_id} · Status: {task.display_status.upper()}')
+        st.caption(f'PID {task.pid or "—"} · Started {_time(task.effective_start)} · {_duration(task)}')
+        st.caption(f'Source: {task.source or "unknown"} · Ended: {_time(task.end_time)}')
+        st.code(task.cmd, language='shell')
+        if task.display_status == 'stale':
+            st.warning('The recorded PID is no longer alive. Waiting for watchdog reconciliation.')
+        if task.exit_message:
+            st.info(task.exit_message)
+        if task.exit_error:
+            st.error(task.exit_error)
+        source = _select_output_source(task)
+    _render_task_output(task, style, source=source)
 
 
-def _render_task_output(task: TaskSnapshot, style: OutputStyle) -> None:
+def _select_output_source(task: TaskSnapshot) -> Path | None:
     candidates = _output_candidates(task)
     if not candidates:
-        st.info('No output file is recorded for this task.')
-        return
+        return None
+    if len(candidates) == 1:
+        st.caption(f'Output file: {candidates[0]}')
+        return candidates[0]
     labels = [f'{path.name} — {path}' for path in candidates]
     selected_label = st.selectbox('Output file', labels, key=f'output-source-{"running" if task.is_active else "finished"}-{task.task_id}')
-    source = candidates[labels.index(selected_label)]
-    st.subheader('Output')
+    return candidates[labels.index(selected_label)]
+
+
+def _render_task_output(task: TaskSnapshot, style: OutputStyle, *, source: Path | None = None) -> None:
+    if source is None:
+        st.info('No output file is recorded for this task.')
+        return
 
     if task.is_active:
         content = parse_live_output(source, style)
         if content:
             _live_output(data={"content": content, "style": style}, key=f"live-{task.task_id}-{source}")
-            try:
-                st.caption(f'Live tail · updated {_time(source.stat().st_mtime)} · no disk cache')
-            except OSError:
-                st.caption('Output file is no longer available.')
         else:
             st.info('No live output is available yet.')
         return
@@ -205,15 +203,14 @@ def _reset_paging_if_filters_changed(signature: tuple[object, ...]) -> None:
 
 
 def _render_finished() -> None:
-    _render_header()
+    style_label = _render_header('finished-style')
     with st.expander('Filters & results', expanded=False):
-        filter_columns = st.columns((2, 1, 1))
+        filter_columns = st.columns((2, 1))
         st.session_state.setdefault('finished-statuses', list(STATUS_OPTIONS))
         selected_statuses = filter_columns[0].multiselect(
             'Status', STATUS_OPTIONS, key='finished-statuses',
         )
         window_label = filter_columns[1].selectbox('Start time', list(WINDOW_LABELS), index=0, key='finished-window')
-        style_label = filter_columns[2].radio('Output style', list(STYLE_LABELS), index=0, key='finished-style')
         statuses = set(selected_statuses)
         window = WINDOW_LABELS[window_label]
         style = STYLE_LABELS[style_label]
@@ -328,9 +325,12 @@ def _resource_row(label: str, value: str) -> None:
     value_column.write(value)
 
 
-def _render_header() -> None:
-    title, system = st.columns((5, 1), vertical_alignment='center')
-    title.title('Learndl Monitor')
+def _render_header(style_key: str = 'running-style') -> str:
+    st.markdown('<style>.block-container{padding-top:4rem;padding-bottom:1rem}h1{padding-top:0!important;font-size:2rem!important}</style>', unsafe_allow_html=True)
+    title, settings, system = st.columns((6, 1, 1), vertical_alignment='center')
+    title.title('Task Center')
+    with settings.popover('Settings', icon=':material/settings:', width='stretch'):
+        style_label = st.radio('Output style', list(STYLE_LABELS), key=style_key)
     with system.popover('System', icon=':material/device_thermostat:', width='stretch'):
         snapshot = _resources()
         st.caption(f'Host resources · sampled {_time(snapshot.sampled_at)}')
@@ -345,6 +345,7 @@ def _render_header() -> None:
             _resource_row('GPU compute utilization', _percent(gpu.utilization))
         for error in snapshot.errors:
             st.caption(error)
+    return style_label
 
 
 def _auto_refresh(interval: int, key: str) -> None:
@@ -424,7 +425,7 @@ def _running_tasks(repository: TaskMonitorRepository) -> list[TaskSnapshot]:
 
 
 def _render_running() -> None:
-    _render_header()
+    style_label = _render_header()
     if result := st.session_state.pop('monitor-action-result', None):
         level, message = result
         getattr(st, level)(message)
@@ -462,14 +463,11 @@ def _render_running() -> None:
                     if reason:
                         st.caption(reason)
     with right:
-        style_label = st.radio('Output style', list(STYLE_LABELS), horizontal=True, key='running-style')
-        st.caption('Pinned task' if pinned else 'Following latest task')
         task = repository.get_task(selected) if selected else None
         if task is not None and task.is_active:
             st.subheader(Path(task.script).name)
-            st.caption(f'PID {task.pid or "—"} · Started {_time(task.effective_start)} · {_duration(task)}')
-            _render_task_output(task, STYLE_LABELS[style_label])
             with st.expander('Task details'):
+                st.caption(f'PID {task.pid or "—"} · Started {_time(task.effective_start)} · {_duration(task)}')
                 st.write(task.script)
                 st.caption(f'Task ID: {task.task_id} · Source: {task.source or "unknown"}')
                 st.code(task.cmd, language='shell')
@@ -479,6 +477,8 @@ def _render_running() -> None:
                         st.info(task.exit_message)
                 if task.display_status == 'stale':
                     st.warning('The recorded PID has exited; waiting for watchdog reconciliation.')
+                source = _select_output_source(task)
+            _render_task_output(task, STYLE_LABELS[style_label], source=source)
         elif selected:
             st.info('This task has just finished. The next refresh will select another running task.')
         else:
@@ -504,5 +504,5 @@ def _render_dashboard() -> None:
 
 
 if __name__ == '__main__':
-    st.set_page_config(page_title='Learndl Monitor', layout='wide')
+    st.set_page_config(page_title='Task Center', layout='wide')
     _render_dashboard()

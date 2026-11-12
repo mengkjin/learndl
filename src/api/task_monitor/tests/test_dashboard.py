@@ -66,6 +66,18 @@ class MonitorDashboardTest(unittest.TestCase):
         self.assertEqual(self.repository.list_tasks.call_args.kwargs['window'], 'history')
         self.refresh.assert_called_with(interval=3000, key='running-refresh')
 
+    def test_output_settings_and_details_keep_output_compact(self):
+        app = self.app()
+        self.assertIn('Task Center', [item.value for item in app.title])
+        self.assertNotIn('Output', [item.value for item in app.subheader])
+        details = next(item for item in app.expander if item.label == 'Task details')
+        self.assertTrue(any('PID' in item.value for item in details.caption))
+        self.assertTrue(details.code)
+        app.radio(key='running-style').set_value('Text only').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(self.live_output.call_args.kwargs['data']['style'], 'text')
+        self.assertIn('visible live output', self.live_output.call_args.kwargs['data']['content'])
+
     def test_pin_follow_and_finished_selection(self):
         app = self.app()
         app.button(key='view-old@100').click().run()

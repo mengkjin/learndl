@@ -43,12 +43,18 @@ class ProjectStorageReport(DirectCall):
                 output = root / output
         if output.exists():
             raise FileExistsError(f'Report already exists: {output}')
-        Logger.stdout(f'Scanning project storage: {root}')
-        scan, report = generate_report(root, output, progress=Logger.stdout)
-        Logger.stdout(f'Storage report saved: {report}')
+        def progress(message):
+            Logger.stdout(message)
+            if callback := self.kwargs.get('progress'):
+                callback(message)
+
+        progress(f'Scanning project storage: {root}')
+        scan, report = generate_report(root, output, progress=progress)
+        progress(f'Storage report saved: {report}')
         sent = None
         if self.kwargs.get('email', True):
             from src.proj.util.web.emailer import Email
+            progress('Sending report email…')
             body = (f'Root: {root}\nAllocated space: {format_size(scan.node.size)}\n'
                     f'Status: {"complete" if scan.node.complete else "INCOMPLETE"}\n'
                     f'Errors: {scan.error_count}\nScan: {scan.started} — {scan.finished}\n'
@@ -63,7 +69,7 @@ class ProjectStorageReport(DirectCall):
                 sent = False
                 Logger.error(f'Report saved, but email failed: {exc}')
             if sent:
-                Logger.stdout('Storage report email sent successfully.')
+                progress('Storage report email sent successfully.')
             else:
                 Logger.alert1('Report saved locally; email was not sent. Check email logs for retry or configuration status.')
         if open_local:

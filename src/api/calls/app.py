@@ -5,11 +5,27 @@ from __future__ import annotations
 import os
 import psutil
 import subprocess
+import sys
 
 from src.proj import MACHINE
 from src.api.util.direct_call import DirectCall
 
-__all__ = ['LaunchApp' , 'LaunchTaskMonitor' , 'ManageTaskSchedules' , 'KillAndRebootApp']
+__all__ = ['LaunchLearndlMonitor', 'LaunchApp' , 'LaunchTaskMonitor' , 'ManageTaskSchedules' , 'KillAndRebootApp']
+
+class LaunchLearndlMonitor(DirectCall):
+    """Open or reuse the background console without starting any child services."""
+
+    category = 'App'
+
+    def run(self) -> None:
+        from src.proj import PATH, Logger
+
+        try:
+            subprocess.run([sys.executable, '-m', 'src.api.learndl_monitor'],
+                           cwd=PATH.main, check=True)
+        except (OSError, subprocess.CalledProcessError) as exc:
+            Logger.error(f'Learndl Monitor could not be opened: {exc}')
+
 
 class LaunchApp(DirectCall):
     """Launch the streamlit app."""

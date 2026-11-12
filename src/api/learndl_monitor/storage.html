@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Storage Insights</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#10161e;color:#dce8ee;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:1px solid #293748}h1{font-size:22px;margin:0;font-weight:550}.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,select{border:1px solid #344355;border-radius:7px;background:#202c3a;color:#dce8ee;padding:9px 13px;cursor:pointer}button:first-child{background:#27564f;border-color:#33776b}button:disabled{opacity:.4;cursor:default}label{font-size:13px;color:#a6b6c8}input{accent-color:#55ccb9}
+#activity{margin:0;padding:12px 24px;background:#17212c}summary{cursor:pointer;color:#9bb8c8}pre{font:12px/1.8 monospace;white-space:pre-wrap;max-height:200px;overflow:auto;margin:12px 0 0}#error{color:#ffb6a6;padding:0 24px;white-space:pre-wrap}#error:empty{display:none}iframe{border:0;width:100%;height:calc(100vh - 135px);background:white;display:block}iframe[hidden]{display:none}
+</style>
+<header><h1 id="title"></h1><div class="actions"><button id="scan"></button><label><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label><button id="email"></button><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div></header>
+<details id="activity"><summary id="summary"></summary><pre id="progress" role="log" aria-live="polite"></pre></details><p id="error" role="alert"></p>
+<iframe id="report" title="Storage snapshot" hidden></iframe>
+<script>
+const base='__SERVICE_BASE__';
+let lang=localStorage.getItem('learndl-language')||'zh',revision=-1;
+if(!['zh','en'].includes(lang))lang='zh';
+const words={zh:{title:'存储洞察',scan:'重新扫描',email:'发送当前报告',emailLabel:'扫描后发送邮件',busy:'正在处理',idle:'扫描进度',empty:'尚无快照，请重新扫描',confirm:'将发送当前报告邮件，是否继续？'},en:{title:'Storage Insights',scan:'Rescan',email:'Email current report',emailLabel:'Email after scan',busy:'Working',idle:'Scan progress',empty:'No snapshot yet. Start a scan.',confirm:'Send the current report by email?'}};
+const el=id=>document.getElementById(id),t=key=>words[lang][key];
+function renderLabels(){for(const key of ['title','scan','email','emailLabel'])el(key).textContent=t(key);document.documentElement.lang=lang;}
+async function refresh(){
+ try{
+  const response=await fetch(base+'/status');if(!response.ok)throw Error(await response.text());
+  const status=await response.json();
+  el('scan').disabled=status.busy;el('email').disabled=status.busy||!status.snapshot;el('emailAfter').disabled=status.busy;
+  el('summary').textContent=(status.busy?t('busy'):t('idle'))+(status.snapshot?' · '+status.snapshot:'');
+  const progress=el('progress'),atBottom=progress.scrollHeight-progress.scrollTop-progress.clientHeight<30;
+  progress.textContent=(status.progress||[]).join('\n')||(!status.snapshot?t('empty'):'');
+  if(atBottom)progress.scrollTop=progress.scrollHeight;
+  if(status.busy)el('activity').open=true;
+  el('error').textContent=status.error;
+  if(status.snapshot&&revision!==status.revision){revision=status.revision;el('report').hidden=false;el('report').src=base+'/snapshot/';}
+ }catch(error){el('error').textContent=error.message;}
+}
+async function submit(action){
+ if(action==='email'&&!confirm(t('confirm')))return;
+ el('scan').disabled=true;el('email').disabled=true;el('activity').open=true;
+ try{const response=await fetch(base+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:el('emailAfter').checked})});if(!response.ok)throw Error(await response.text());await refresh();}
+ catch(error){el('error').textContent=error.message;}
+}
+el('scan').onclick=()=>submit('scan');el('email').onclick=()=>submit('email');
+el('language').value=lang;el('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);renderLabels();refresh();};
+renderLabels();refresh();setInterval(refresh,1000);
+</script>
+</html>

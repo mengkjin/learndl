@@ -167,6 +167,7 @@ class StorageReportTest(unittest.TestCase):
                 else:
                     send.return_value = outcome
                 result = ProjectStorageReport.go(root=self.root)
+                assert result is not None
                 self.assertTrue(result['report'].is_file())
                 self.assertTrue(result['report'].with_suffix('.sqlite3').is_file())
                 self.assertEqual(result['email_sent'], outcome is True)
@@ -178,25 +179,24 @@ class StorageReportTest(unittest.TestCase):
         from src.proj.util.web.emailer import Email
         with patch.object(Email, 'send', return_value=True) as send:
             result = ProjectStorageReport.go(root=self.root, output='offline.html', email=False)
+            assert result is not None
             send.assert_not_called()
             self.assertIsNone(result['email_sent'])
             ProjectStorageReport.go(root=self.root, recipient='test@example.invalid')
             self.assertEqual(send.call_args.kwargs['recipient'], 'test@example.invalid')
 
-    def test_interactive_defaults_and_menu(self):
+    def test_interactive_defaults(self):
         from src.api.calls import computer
-        from src.api.calls.launcher import DirectCallHub
         from types import SimpleNamespace
         with patch.object(computer, 'PATH', SimpleNamespace(production=self.root)), \
              patch('sys.stdin.isatty', return_value=True), patch('sys.stdout.isatty', return_value=True), \
              patch('src.proj.util.cli.prompts.prompt_text') as path_prompt, \
              patch('src.proj.util.cli.prompts.prompt_confirm', return_value=False) as confirm:
             result = ProjectStorageReport.go(email=False)
+            assert result is not None
         confirm.assert_called_once()
         path_prompt.assert_not_called()
         self.assertEqual(result['scan'].root, self.root.resolve())
-        self.assertIn(('Project Storage Report', ProjectStorageReport),
-                      [(label, call) for label, call, _ in DirectCallHub._source_code_entries()])
 
     def snapshot(self):
         self.file('models/nn/gru/archive/0/2025/a')
@@ -342,7 +342,7 @@ class StorageReportTest(unittest.TestCase):
         with StorageReportServer(report) as server, patch.object(_ReportHandler, 'setup', ready):
             thread = threading.Thread(target=server.serve_forever, daemon=True)
             thread.start()
-            idle = socket.create_connection(server.server_address, timeout=2)
+            idle = socket.create_connection(('127.0.0.1', server.server_port), timeout=2)
             try:
                 self.assertTrue(accepted.wait(2))
                 with urllib.request.urlopen(server.url + 'children?id=1', timeout=2) as response:
@@ -366,13 +366,11 @@ class StorageReportTest(unittest.TestCase):
         self.assertNotIn('AbortSignal.timeout', page)
 
     def test_browse_cli_stops_and_closes_service(self):
-        from src.api.calls.launcher import DirectCallHub
         _, report = self.snapshot()
         with patch.object(StorageReportServer, 'serve_forever', side_effect=KeyboardInterrupt), \
              patch('webbrowser.open_new_tab', return_value=True) as opened:
             ProjectStorageReport._open_local_report(report)
         self.assertTrue(opened.call_args.args[0].startswith('http://127.0.0.1:'))
-        self.assertNotIn('Browse Storage Report', [label for label, _, _ in DirectCallHub._source_code_entries()])
 
     def test_interactive_prompt_before_scan_and_open_after_email(self):
         from src.proj.util.web.emailer import Email
@@ -387,6 +385,7 @@ class StorageReportTest(unittest.TestCase):
              patch('src.proj.util.cli.prompts.prompt_confirm', side_effect=lambda *a, **kw: events.append('prompt') or True), \
              patch.object(ProjectStorageReport, '_open_local_report', side_effect=lambda p: events.append('open')):
             result = ProjectStorageReport.go(root=self.root)
+            assert result is not None
         self.assertEqual(events, ['prompt', 'scan', 'email', 'open'])
         self.assertTrue(result['report'].is_file())
         with patch('src.proj.util.cli.prompts.prompt_confirm') as confirm, \
