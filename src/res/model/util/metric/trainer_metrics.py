@@ -263,3 +263,5 @@ class TrainerMetrics(TrainerPipeline):
 
     def on_validation_epoch_end(self):
         self.collect_fit_epoch()
+        for submodel in getattr(self.model, "submodels", {}).values():
+            submodel.assess(self.status, self)

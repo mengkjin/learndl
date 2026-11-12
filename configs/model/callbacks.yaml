@@ -7,3 +7,5 @@ SummaryWriter:      {}
 DetailedAlphaAnalysis:  {'t50_backend': 'auto', 'analysis_snapshot': 'auto'} # array T50 when supported; legacy is the reference path
 MemoryOptimization: {'batch_interval' : 20}
 ActivationCheckpointing: {'enabled': false}
+
+SpecificCB_Global2Top: {min_top_epochs: 20, transition_epochs: 10, verify_recall: true, gradient_diagnostics: false}

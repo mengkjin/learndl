@@ -76,7 +76,16 @@ class NNPredictor(PredictorModel):
     def load_state_dict(self , state_dict : dict):
         self.persist_net().load_state_dict(state_dict['net'])
         self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
-        self.optimizer.scheduler.load_state_dict(state_dict['scheduler'])
+        from src.res.model.util.trainer.phase_transition import PhaseCyclicLR
+        saved = state_dict['scheduler']
+        if 'floors' in saved:
+            self.optimizer.scheduler = PhaseCyclicLR(self.optimizer.optimizer, saved['floors'],
+                saved['peaks'], saved['starts'], saved['up'], saved['down'], saved['warmup'])
+            self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
+        elif isinstance(self.optimizer.scheduler, PhaseCyclicLR):
+            self.optimizer.scheduler = self.optimizer.load_scheduler(self.optimizer.optimizer, self.optimizer.shd_param)
+            self.optimizer.optimizer.load_state_dict(state_dict['optimizer'])
+        self.optimizer.scheduler.load_state_dict(saved)
         return self
     
     def forward(self , batch_input : BatchInput | torch.Tensor , *args , **kwargs) -> Any: 
@@ -116,8 +125,6 @@ class NNPredictor(PredictorModel):
     
     def on_validation_epoch_end(self):
         self.checkpoint.auto_save(self.ckpt_state_dict())
-        for submodel in self.submodels.values():  
-            submodel.assess(self.status , self.metrics)
 
     def on_test_model_start(self):
         set_grad_enabled(False)

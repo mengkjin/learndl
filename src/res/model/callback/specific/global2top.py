@@ -4,6 +4,8 @@ Callback specifically for Global2Top module
 from __future__ import annotations
 import pandas as pd
 import numpy as np
+import torch
+from src.res.model.util.trainer.phase_transition import validate_recalled_model, capture_cycle, PhaseCyclicLR
 
 from typing import Literal , TypeAlias
 from collections.abc import Callable
@@ -70,16 +72,23 @@ def aggregator_factory(phase : G2TPhase , glb_climax : float | None = None , glb
 
 class SpecificCB_Global2Top(BaseCallBack):
     """Fitting Control of Global2Top"""
-    CB_KEY_PARAMS = ['protect' , 'plateau_patience' , 'converge_patience' , 'top_converge_alpha']
+    CB_KEY_PARAMS = ['protect' , 'plateau_patience' , 'converge_patience' , 'top_converge_alpha', 'min_top_epochs', 'transition_epochs', 'verify_recall']
     OverrideCallbacks = ['EarlyStoppage']
     ConflictModuleTypes = ['factor']
     def __init__(self , trainer , 
         protect : int = 10 , 
         plateau_patience : int = 20 , 
         converge_patience : int = 10 ,
-        top_converge_alpha : float = 0.6 ,**kwargs) -> None:
+        top_converge_alpha : float = 0.6, min_top_epochs: int = 20,
+        transition_epochs: int = 10, verify_recall: bool = True, gradient_diagnostics: bool = False, **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         assert 0 <= top_converge_alpha <= 1 , f'top_converge_alpha must be between 0 and 1 and is {top_converge_alpha}'
+        if min_top_epochs < 1 or transition_epochs < 2 or converge_patience < 1:
+            raise ValueError("Invalid Global2Top phase lengths")
+        self.min_top_epochs = min_top_epochs
+        self.transition_epochs = transition_epochs
+        self.verify_recall = verify_recall
+        self.gradient_diagnostics = gradient_diagnostics
         self.protect = protect
         self.plateau_patience = plateau_patience
         self.converge_patience = converge_patience
@@ -111,21 +120,17 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.loss_weights_set = False
         self.accuracy_computer_set = False
         self.fitting_phase : G2TPhase = 'global'
+        self.top_epochs = 0
+        self.top_alpha = 0.
+        self.top_best = -np.inf
+        self.top_stale = 0
+        self.top_low = 0
+        self.pinned_epochs = []
+        self.diagnostics = {}
 
     def collect_accuracies(self):
         accuracies = pd.concat(self.metrics.attempt_metrics.tables['valid_epoch_accuracies'])
-        phases = accuracies.index.get_level_values('phase').unique()
-        if len(phases) > 1:
-            phase_accu_list : list[pd.DataFrame] = []
-            max_epoch = accuracies.index.get_level_values('epoch').max()
-            for phase in phases[::-1]:
-                phase_accu = accuracies.query(f'phase == {phase} & epoch <= {max_epoch}')
-                if not phase_accu.empty:
-                    max_epoch = phase_accu.index.get_level_values('epoch').min() - 1
-                    phase_accu_list.append(phase_accu)
-            self.valid_accuracies = pd.concat(phase_accu_list).sort_index()
-        else:
-            self.valid_accuracies = accuracies
+        self.valid_accuracies = accuracies
         self.glb_accus = [col for col in self.valid_accuracies.columns if col.startswith('global.')]
         self.top_accus = [col for col in self.valid_accuracies.columns if col.startswith('top.')]
         
@@ -146,28 +151,80 @@ class SpecificCB_Global2Top(BaseCallBack):
             assert best_epoch , f'best epoch is not found for {self.metrics.attempt_metrics}'
             self.global_climax_epoch = best_epoch.epoch
             self.global_climax_level = sum([accu for name , accu in best_epoch.valid_accuracies.items() if name.startswith('global.')])
-            self.global_support_level = max(0 , min(self.global_climax_level * 0.9 , self.global_climax_level - 0.01))
+            self.global_support_level = min(0.1, max(0 , min(self.global_climax_level * 0.9 , self.global_climax_level - 0.01)))
 
     def check_top_converge(self):
-        if self.fitting_phase == 'global' or len(self.valid_accuracies) <= self.converge_patience + self.global_climax_epoch:
+        if self.fitting_phase != 'top':
             return
-        overall_accuracies = synthetic_accuracy(self.global_accuracies , self.top_accuracies , glb_climax = self.global_climax_level or 0.)
-        if arr_plateau(overall_accuracies , n = self.converge_patience) or all(self.global_accuracies[-self.converge_patience:] < self.global_support_level):
-            start_len = len(overall_accuracies) - self.converge_patience - 1
-            self.metric_best_epoch = overall_accuracies[start_len:].argmax().item() + start_len
-            self.metric_best_level = self.valid_accuracies.iloc[self.metric_best_epoch].to_dict()
+        phase1 = self.valid_accuracies.query('phase == 1')
+        if phase1.empty:
+            return
+        self.top_epochs = len(phase1)
+        glb = phase1[self.glb_accus].sum(axis=1).to_numpy()
+        top = phase1[self.top_accus].sum(axis=1).to_numpy()
+        scores = synthetic_accuracy(glb, top, glb_climax=self.global_climax_level)
+        best = int(np.argmax(scores))
+        self.top_best = float(scores[best])
+        self.top_stale = len(scores) - best - 1
+        self.top_low = 0
+        for value in glb[::-1]:
+            if value >= self.global_support_level:
+                break
+            self.top_low += 1
+        if self.top_epochs < self.min_top_epochs:
+            return
+        if self.top_stale >= self.converge_patience or self.top_low >= self.converge_patience:
+            scores_all = synthetic_accuracy(self.global_accuracies, self.top_accuracies,
+                                            glb_climax=self.global_climax_level)
+            phase, epoch = self.valid_accuracies.index[int(np.argmax(scores_all))]
             self.status.add_epoch_event(
-                FittingEventType.END_ATTEMPT , 'EarlyStop' , epoch = self.metric_best_epoch , 
-                message = f'Global2Top combined accuracy converged at {epoch_key(self.metric_best_epoch, 1)}, recognized at {self.status.epoch_key}'
-            )
+                FittingEventType.END_ATTEMPT, 'EarlyStop', epoch=int(epoch),
+                message=f'Global2Top converged after {self.top_epochs} phase1 epochs; '
+                        f'best {epoch_key(int(epoch), int(phase))}, recognized at {self.status.epoch_key}')
 
     def recall_global_climax(self):
         if self.fitting_phase == 'global' and self.global_plateaued:
+            cycle = capture_cycle(self.model.optimizer)
+            expected = self.metrics.attempt_metrics.best_epoch()
             self.trainer.recall_ckpt(
                 self.global_climax_epoch , 0 , 
                 message = f'Global2Top global accuracy plateaued at {epoch_key(self.global_climax_epoch, 0)} , recall ckpt at {self.status.epoch_key}'
             )
+            if self.verify_recall:
+                actual_acc, actual_loss = validate_recalled_model(self.trainer)
+                if expected is None:
+                    self.logger.warning('Global2Top recall baseline unverified: missing saved metrics')
+                else:
+                    for kind, actual, reference in (
+                        ('accuracy', actual_acc, expected.valid_accuracies),
+                        ('loss', actual_loss, expected.valid_losses),
+                    ):
+                        if actual.keys() != reference.keys() or any(
+                            not np.isclose(actual[k], reference[k], atol=1e-4, rtol=1e-3)
+                            for k in reference
+                        ):
+                            raise RuntimeError(f'Global2Top recall baseline mismatch ({kind}): '
+                                               f'expected={reference}, actual={actual}')
+                    self.logger.note(f'Global2Top recall baseline verified: {actual_acc}; losses={actual_loss}')
+            if cycle is not None:
+                self.model.optimizer.scheduler = PhaseCyclicLR(
+                    self.model.optimizer.optimizer, **cycle, warmup=self.transition_epochs)
             self.fitting_phase = 'top'
+            # Reassess preserved phase0 candidates using exactly the phase1 score.
+            aggregator = aggregator_factory('top', glb_climax=self.global_climax_level)
+            self.metrics.aggregator.inject('accuracy', aggregator)
+            submodel = getattr(self.model, 'submodels', {}).get('best')
+            records = self.metrics.attempt_metrics.epoch_metric_results
+            if submodel is not None and records:
+                best = max(records, key=lambda row: aggregator(row.valid_accuracies))
+                old = submodel.best_epoch
+                self.checkpoint.join(submodel, best.epoch, best.phase)
+                submodel.best_epoch = best
+                if old is not None and (old.epoch, old.phase) != (best.epoch, best.phase):
+                    self.checkpoint.disjoin(submodel, old.epoch, old.phase)
+            for ep, ph in self.pinned_epochs:
+                self.checkpoint.disjoin(self, ep, ph)
+            self.pinned_epochs.clear()
     
     def set_loss_weights(self):
         # before plateau, set the weights of the top loss to 0
@@ -178,9 +235,10 @@ class SpecificCB_Global2Top(BaseCallBack):
         assert top_names , f'top losses should exist: {losses}'
 
         if self.global_plateaued:
-            top_alpha = sigmoid_curve(self.status.epoch - self.global_climax_epoch , midpoint=10.0)
+            top_alpha = (1 - np.cos(np.pi * min(self.top_epochs / (self.transition_epochs - 1), 1.))) / 2
         else:
             top_alpha = 0.
+        self.top_alpha = float(top_alpha)
         weights : dict[str,float] = {name:top_alpha for name in top_names}
         self.metrics.set_loss_weights(weights)
         self.loss_weights_set = True
@@ -212,11 +270,31 @@ class SpecificCB_Global2Top(BaseCallBack):
         self.set_loss_weights()
         self.set_accuracy_aggregator()
 
+    def on_batch_backward_before(self):
+        if (not self.gradient_diagnostics or self.fitting_phase != 'top'
+                or self.top_epochs >= self.transition_epochs or self.trainer.batch_idx != 0):
+            return
+        losses = self.metrics.batch_metrics.losses
+        parameters = [p for p in self.model.net.parameters() if p.requires_grad]
+        groups = []
+        for prefix in ('global.', 'top.'):
+            loss = torch.stack([value.sum() for key, value in losses.items() if key.startswith(prefix)]).sum()
+            grads = torch.autograd.grad(loss, parameters, retain_graph=True, allow_unused=True)
+            groups.append([torch.zeros_like(p) if g is None else g for p, g in zip(parameters, grads)])
+        norms = [torch.stack([g.square().sum() for g in group]).sum().sqrt() for group in groups]
+        dot = torch.stack([(g * h).sum() for g, h in zip(*groups)]).sum()
+        self.diagnostics = {'GlobalGradNorm': norms[0].item(), 'TopGradNorm': norms[1].item(),
+                            'GradCosine': (dot / (norms[0] * norms[1]).clamp_min(1e-12)).item()}
+
     def on_fit_epoch_start(self):
+        self.diagnostics = {}
         self.loss_weights_set = False
         self.accuracy_computer_set = False
 
     def on_validation_epoch_end(self):
+        if self.fitting_phase == 'global':
+            self.checkpoint.join(self, self.status.epoch, 0)
+            self.pinned_epochs.append((self.status.epoch, 0))
         self.collect_accuracies()
         self.check_global_plateau()
         self.check_top_converge()

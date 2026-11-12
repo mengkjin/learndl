@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from types import SimpleNamespace
+from typing import cast
 from unittest import TestCase, main
 from unittest.mock import patch
 
@@ -173,7 +174,7 @@ class FastpathTest(TestCase):
                     torch.tensor(0.1),
                 )
                 _ = b.total_loss
-                ep.append(b)
+                cast(EpochMetrics, ep).append(b)
                 b.close()
             attempt = AttemptMetrics(agg)
             attempt.new()
@@ -216,14 +217,19 @@ class FastpathTest(TestCase):
                 rankic = (
                     RankICFunction().rankic(current)
                     if idx == 0
-                    else accuracy_fn.last_rankic
+                    else cast(ReusingAccuracyFunction, accuracy_fn).last_rankic
                 )
                 metrics = cls(MetricAggregator())
                 metrics.new(step)
+                assert rankic is not None
                 metrics.set_values(losses, accuracies, rankic)
                 opt.zero_grad()
                 metrics.total_loss.backward()
-                grad_records.append([p.grad.clone() for p in model.parameters()])
+                gradients = []
+                for parameter in model.parameters():
+                    assert parameter.grad is not None
+                    gradients.append(parameter.grad.clone())
+                grad_records.append(gradients)
                 torch.nn.utils.clip_grad_value_(model.parameters(), 10.0)
                 opt.step()
                 values.append((metrics.total_loss_item, accuracies, rankic.item()))
@@ -248,7 +254,7 @@ class FastpathTest(TestCase):
                 batch = batch_cls(agg)
                 batch.new(0)
                 batch.set_values({}, {}, torch.tensor(0.1))
-                epoch.append(batch)
+                cast(EpochMetrics, epoch).append(batch)
                 batch.close()
                 epoch.collect()
                 epochs.append(epoch)
@@ -274,9 +280,10 @@ class FastpathTest(TestCase):
                 hidden_rankics=[],
                 hidden_correlations=[],
             )
-            SummaryWriter.append_batch_hidden_summary(callback)
+            SummaryWriter.append_batch_hidden_summary(cast(SummaryWriter, callback))
             records.append(callback.hidden_correlations[0])
-        self.assertTrue(records[0].requires_grad)
+        # Diagnostic tensors must never retain the training graph in either path.
+        self.assertFalse(records[0].requires_grad)
         self.assertFalse(records[1].requires_grad)
         self.assertTrue(data.output.hidden.requires_grad)
         torch.testing.assert_close(records[0], records[1], rtol=0, atol=0)

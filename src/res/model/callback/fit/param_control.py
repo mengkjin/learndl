@@ -31,6 +31,9 @@ class LearnRateReset(BaseCallBack):
     def halved_param(self , param : dict):
         return {k:((v // 2) if k in self.reset_speedup_param_list else v) for k,v in param.items()}
     def on_train_epoch_end(self):
+        from src.res.model.util.trainer.phase_transition import PhaseCyclicLR
+        if isinstance(self.optimizer.scheduler, PhaseCyclicLR):
+            return
         if not self.reset_epoch: 
             return
 

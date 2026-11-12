@@ -273,14 +273,67 @@ class SoftTopKLoss(BaseLoss):
         temperature = std * (self.target_ratio * 10) 
         
         weights = F.softmax(pred / temperature, dim=0)
+        self.last_weight_diagnostics = {
+            "MaxWeight": weights.detach().amax(),
+            "EffectiveStocks": weights.detach().square().sum(dim=0).reciprocal().mean(),
+        }
         weighted_return = torch.sum(weights * label)
         return -weighted_return
+
+class CappedSoftTopKLoss(BaseLoss):
+    """Entropy weights on the capped simplex; no stock exceeds 1 / K.
+
+    The active set is discrete, but normalization on its free set stays in the
+    autograd graph, giving the implicit gradient away from cap boundaries.
+    """
+    key = 'capped_soft_topk'
+
+    def __init__(self, target_ratio: float = .05):
+        super().__init__()
+        if not 0 < target_ratio <= 1:
+            raise ValueError('target_ratio must be in (0, 1]')
+        self.target_ratio = target_ratio
+
+    def weights(self, pred: torch.Tensor) -> torch.Tensor:
+        import math
+        n = pred.shape[0]
+        if n == 0:
+            raise ValueError('Capped top-k requires a nonempty cross-section')
+        k = max(1, math.ceil(n * self.target_ratio))
+        if k == n:
+            return pred * 0 + 1 / n
+        std = pred.std(dim=0, keepdim=True, correction=0).clamp_min(1e-8)
+        z = (pred - pred.amax(dim=0, keepdim=True)) / (std * (self.target_ratio * 10))
+        # Find the active set using a log-domain normalizer. Recompute the
+        # free normalization with gradients below; never detach that denominator.
+        with torch.no_grad():
+            lo = z.amax(dim=0, keepdim=True) - 1000.
+            hi = torch.logsumexp(z, dim=0, keepdim=True) + 10.
+            for _ in range(64):
+                mid = (lo + hi) / 2
+                mass = (z - mid).clamp_max(-math.log(k)).exp().sum(dim=0, keepdim=True)
+                lo = torch.where(mass > 1, mid, lo)
+                hi = torch.where(mass > 1, hi, mid)
+            capped = z - (lo + hi) / 2 >= -math.log(k)
+        free_logits = z.masked_fill(capped, -torch.inf)
+        mass = 1 - capped.sum(dim=0, keepdim=True) / k
+        free = torch.softmax(free_logits, dim=0) * mass
+        return torch.where(capped, torch.full_like(pred, 1 / k), free)
+
+    def forward(self, pred: torch.Tensor, label: torch.Tensor, **kwargs) -> torch.Tensor:
+        weights = self.weights(pred)
+        self.last_weight_diagnostics = {
+            "MaxWeight": weights.detach().amax(),
+            "EffectiveStocks": weights.detach().square().sum(dim=0).reciprocal().mean(),
+        }
+        return -(weights * label).sum()
+
 
 class ProgressiveGlobal2Top(BaseLoss):
     """Progressive Global to Top-K loss."""
     key = 'global2top'
     GlobalOptionType : TypeAlias = Literal['pearson', 'ccc' , 'mse']
-    TopOptionType : TypeAlias = Literal['soft_topk']
+    TopOptionType : TypeAlias = Literal['soft_topk', 'capped_soft_topk']
     def __init__(self, 
         global_option : GlobalOptionType = 'ccc', 
         top_option : TopOptionType = 'soft_topk', 
@@ -307,6 +360,8 @@ class ProgressiveGlobal2Top(BaseLoss):
         match top_option:
             case 'soft_topk':
                 self.top_loss = SoftTopKLoss(**(top_kwargs or {}))
+            case 'capped_soft_topk':
+                self.top_loss = CappedSoftTopKLoss(**(top_kwargs or {}))
             case _:
                 raise ValueError(f'Invalid top option: {top_option}')
         self.base_top_lambda = base_top_lambda

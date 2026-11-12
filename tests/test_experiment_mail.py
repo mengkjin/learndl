@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from src.api.learndl_monitor.experiment_mail import send_experiment
+from src.api.learndl_monitor.experiment_archives import unpack_experiment
 from src.api.learndl_monitor.experiments import Instances
 
 __all__ = []
@@ -36,6 +37,7 @@ class ExperimentMailTest(unittest.TestCase):
         def deliver(*args, **kwargs):
             self.assertFalse(kwargs['project_attachments'])
             archives.extend(kwargs['attachments'])
+            self.assertRegex(archives[0].name, r'^tensorboard-\d{8}-\d{6}\.zip$')
             with zipfile.ZipFile(archives[0]) as archive:
                 self.assertEqual(archive.namelist(), ['tensorboard/run/events.tfevents'])
                 self.assertEqual(archive.read(archive.namelist()[0]), b'event data')
@@ -55,6 +57,9 @@ class ExperimentMailTest(unittest.TestCase):
         connection.commit()
 
         def deliver(*args, **kwargs):
+            imported = unpack_experiment('optuna', kwargs['attachments'][0], self.root / 'cache')
+            with sqlite3.connect(imported) as database:
+                self.assertEqual(database.execute('SELECT value FROM trial').fetchall(), [(42,)])
             with zipfile.ZipFile(kwargs['attachments'][0]) as archive:
                 self.assertEqual(archive.namelist(), ['study.sqlite3'])
                 exported = self.root / 'export.sqlite3'

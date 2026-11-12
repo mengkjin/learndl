@@ -139,3 +139,5 @@ train.factor_sequence.valid_dates: []
 train.factor_sequence.folds: [] # Optional frozen splits for ordinary rolling schedule training
 
 input.factor_sequence.view: full
+
+callbacks.SpecificCB_Global2Top: {min_top_epochs: 20, transition_epochs: 10, verify_recall: true, gradient_diagnostics: false}

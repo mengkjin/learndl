@@ -5,10 +5,22 @@ import sqlite3
 import tempfile
 import time
 import zipfile
+import re
+from datetime import datetime
 from contextlib import closing
 from pathlib import Path
 
-__all__ = ['send_experiment']
+__all__ = ['send_experiment', 'experiment_name']
+
+
+def experiment_name(kind: str, source: Path) -> str:
+    """Recover the full model name without importing the training stack."""
+    if kind == 'optuna':
+        return re.sub(r'@\d{14}$', '', source.stem)
+    model = source.parent.parent if source.parent.name == 'snapshot' else source
+    if model.parent.name in ('nn', 'boost', 'linear', 'factor', 'st'):
+        return f'{model.parent.name}@{model.name}'
+    return re.sub(r'\.\d{14}$', '', model.name)
 
 
 def send_experiment(kind: str, source: Path) -> bool:
@@ -21,7 +33,8 @@ def send_experiment(kind: str, source: Path) -> bool:
     source = source.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix='learndl-experiment-') as directory:
         work = Path(directory)
-        archive = work / f'{kind}-{source.name}.zip'
+        name = experiment_name(kind, source)
+        archive = work / f'{name}-{datetime.now().astimezone():%Y%m%d-%H%M%S}.zip'
         with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as package:
             if kind == 'tensorboard':
                 if not source.is_dir():
@@ -52,7 +65,7 @@ def send_experiment(kind: str, source: Path) -> bool:
             else:
                 raise ValueError('Unknown dashboard type')
         return Email.send(
-            f'{"TensorBoard" if kind == "tensorboard" else "Optuna"} experiment: {source.name}',
+            f'{"TensorBoard" if kind == "tensorboard" else "Optuna"} experiment: {name}',
             f'Experiment data: {source.name}\nThe ZIP contains only the TensorBoard logs or Optuna SQLite snapshot.',
             attachments=[archive], project_attachments=False,
         )

@@ -1,7 +1,7 @@
 """Global2Top retries must learn their own global phase before optimizing top."""
 from types import SimpleNamespace
 from unittest import TestCase, main
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pandas as pd
 import torch
@@ -18,6 +18,8 @@ def make_callback(**kwargs):
     trainer.status = SimpleNamespace(
         epoch=0, epoch_key='Ph0 Ep0', status={}, add_epoch_event=Mock(),
     )
+    trainer.model.submodels = {}
+    trainer.metrics.attempt_metrics.epoch_metric_results = []
     trainer.metrics.batch_metrics.losses = {
         'global.ccc': torch.tensor(1.), 'top.soft_topk': torch.tensor(1.),
     }
@@ -81,7 +83,7 @@ class Global2TopRetryTest(TestCase):
                 trainer.status.add_epoch_event.assert_not_called()
 
     def test_retry_can_reach_its_own_global_plateau_and_then_converge_in_top(self):
-        trainer, callback = make_callback(protect=2, plateau_patience=2, converge_patience=2)
+        trainer, callback = make_callback(protect=2, plateau_patience=2, converge_patience=2, min_top_epochs=3, verify_recall=False)
         callback.fitting_phase = 'top'
         callback.global_plateaued = True
         callback.global_climax_epoch = 48
@@ -95,7 +97,7 @@ class Global2TopRetryTest(TestCase):
         self.assertEqual(callback.fitting_phase, 'top')
         self.assertEqual(callback.global_climax_epoch, 0)
         self.assertEqual(callback.global_climax_level, .2)
-        self.assertAlmostEqual(callback.global_support_level, .18)
+        self.assertAlmostEqual(callback.global_support_level, .1)
         self.assertEqual(trainer.recall_ckpt.call_args.args, (0, 0))
         trainer.status.add_epoch_event.assert_not_called()
 
@@ -105,7 +107,7 @@ class Global2TopRetryTest(TestCase):
         trainer.status.epoch_key = 'Ph1 Ep3'
         callback.on_fit_epoch_start()
         callback.on_batch_metrics_after()
-        self.assertGreater(trainer.metrics.set_loss_weights.call_args.args[0]['top.soft_topk'], 0.)
+        self.assertEqual(trainer.metrics.set_loss_weights.call_args.args[0]['top.soft_topk'], 0.)
         aggregator = trainer.metrics.set_accuracy_aggregator.call_args.args[0]
         self.assertAlmostEqual(aggregator({'global.spearman': .2, 'top.long_avg': .3}), .3)
         frame = pd.DataFrame(
@@ -120,3 +122,39 @@ class Global2TopRetryTest(TestCase):
 
 if __name__ == '__main__':
     main()
+
+class PhaseStoppingTest(TestCase):
+    def test_minimum_and_improvement_do_not_compete_with_phase0(self):
+        trainer, callback = make_callback(min_top_epochs=20, converge_patience=10, verify_recall=False)
+        callback.fitting_phase = 'top'
+        callback.global_climax_level = .3
+        callback.global_support_level = .1
+        def history(values):
+            frame = pd.DataFrame({'global.spearman': [.3] + [.15] * len(values),
+                                  'top.long_avg': [.5] + values},
+                index=pd.MultiIndex.from_tuples([(0, 5)] + [(1, 6+i) for i in range(len(values))],
+                                               names=['phase', 'epoch']))
+            trainer.metrics.attempt_metrics.tables = {'valid_epoch_accuracies': [frame]}
+            callback.collect_accuracies()
+            callback.check_top_converge()
+        history([.1] * 19)
+        trainer.status.add_epoch_event.assert_not_called()
+        history([.1 + .001*i for i in range(25)])
+        trainer.status.add_epoch_event.assert_not_called()
+        history([.1] * 20)
+        trainer.status.add_epoch_event.assert_called_once()
+        self.assertIn('Ph0 Ep5', trainer.status.add_epoch_event.call_args.kwargs['message'])
+
+    @patch('src.res.model.callback.specific.global2top.validate_recalled_model')
+    def test_baseline_mismatch_stops_before_scheduler_restart(self, validate):
+        trainer, callback = make_callback()
+        callback.global_plateaued = True
+        callback.global_climax_epoch = 0
+        trainer.metrics.attempt_metrics.best_epoch.return_value = SimpleNamespace(
+            valid_accuracies={'global.ic': .2}, valid_losses={'global.ccc': .3})
+        validate.return_value = ({'global.ic': .05}, {'global.ccc': .3})
+        old_scheduler = trainer.model.optimizer.scheduler
+        with self.assertRaisesRegex(RuntimeError, 'baseline mismatch'):
+            callback.recall_global_climax()
+        self.assertIs(trainer.model.optimizer.scheduler, old_scheduler)
+        self.assertEqual(callback.fitting_phase, 'global')

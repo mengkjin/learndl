@@ -7,7 +7,6 @@ import torch
 import shutil
 
 from datetime import datetime
-from functools import cached_property
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter as TsboardWriter
 from typing import Any
@@ -58,9 +57,9 @@ class SummaryWriter(BaseCallBack):
     def __init__(self , trainer , **kwargs) -> None:
         super().__init__(trainer , **kwargs)
         self.init_time = datetime.now()
-        if self.HIDDEN_FEATURE_MODE:
-            self.hidden_rankics : list[torch.Tensor] = []
-            self.hidden_correlations : list[torch.Tensor] = []
+        self._batch_step = 0
+        self.hidden_rankics : list[torch.Tensor] = []
+        self.hidden_correlations : list[torch.Tensor] = []
         
     def __repr__(self):
         return f'{self.__class__.__name__}(trainer={self.trainer})'
@@ -85,13 +84,17 @@ class SummaryWriter(BaseCallBack):
     def batch_idx(self) -> int:
         return self.trainer.batch_idx
 
-    @cached_property
+    @property
     def writer(self):
         model_key = f'{self.config.base_path.model_clean_name}.{self.model_num}.{self.model_date}.{self.status.attempt_key}'
         restart = getattr(self.trainer, 'fit_model_restart_count', 0) if self.status.stage == 'fit' else 0
         if restart:
             model_key += f'.ac_restart{restart}'
-        return TsboardWriter(self.base_path.snapshot('tensorboard' , model_key))
+        if self.__dict__.get('_writer_key') != model_key:
+            self.reset_writer()
+            self._writer = TsboardWriter(self.base_path.snapshot('tensorboard', model_key))
+            self._writer_key = model_key
+        return self._writer
 
     @property
     def step_epoch(self) -> int:
@@ -99,7 +102,7 @@ class SummaryWriter(BaseCallBack):
 
     @property
     def step_batch(self) -> int:
-        return self.epoch * self.trainer.batch_num + self.batch_idx
+        return self._batch_step
 
     def named_parameters(self) -> list[tuple[str,nn.Parameter]]:
         net = self.model.net
@@ -108,18 +111,21 @@ class SummaryWriter(BaseCallBack):
         return [(name , param) for name , param in net.named_parameters()]
 
     def reset_writer(self):
-        if 'writer' in self.__dict__:
-            self.writer.close()
-            del self.writer
+        writer = self.__dict__.get('_writer')
+        for name in ('_writer', '_writer_key'):
+            if name in self.__dict__:
+                delattr(self, name)
+        if writer is not None:
+            writer.close()
 
     def on_fit_model_restart(self):
-        if 'writer' in self.__dict__:
-            self.writer.add_text('Discarded', 'All attempts of this model were discarded after CUDA OOM; '
-                                 'training restarts from epoch 0 with activation checkpointing.')
+        writer = self.__dict__.get('_writer')
+        if writer is not None:
+            writer.add_text('Discarded', 'All attempts of this model were discarded after CUDA OOM; '
+                            'training restarts from epoch 0 with activation checkpointing.')
         self.reset_writer()
-        if self.HIDDEN_FEATURE_MODE:
-            self.hidden_rankics.clear()
-            self.hidden_correlations.clear()
+        self.hidden_rankics.clear()
+        self.hidden_correlations.clear()
 
     def add_metrics(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
@@ -134,14 +140,36 @@ class SummaryWriter(BaseCallBack):
             losses = {f'Phase{self.status.phase}.{key}':value for key,value in losses.items()}
         self.writer.add_scalars(f'{prefix}/Accuracy/{self.status.dataset.title()}' , accuracies , self.step_epoch)
         self.writer.add_scalars(f'{prefix}/Loss/{self.status.dataset.title()}' , losses , self.step_epoch)
+        for component in self.metrics.loss_function.components.values():
+            top_loss = getattr(component.calculator, 'top_loss', None)
+            for key, value in getattr(top_loss, 'last_weight_diagnostics', {}).items():
+                self.writer.add_scalar(f'{prefix}/TopWeightsLastBatch/{self.status.dataset.title()}/{key}',
+                                       value.item(), self.step_epoch)
 
     def add_total_metric(self):
         prefix = self.TSBOARD_PREFIXIS['metrics']
         def get_metric(ds , metric):
-            return self.metrics.attempt_metrics.latest(ds , metric)
+            epoch = self.metrics.epoch_train_metrics if ds == 'train' else self.metrics.epoch_valid_metrics
+            return getattr(epoch, 'rankic' if metric == 'rankic' else f'total_{metric}')
         for metric in ['accuracy' , 'loss' , 'rankic']:
             data = {'train':get_metric('train' , metric), 'valid':get_metric('valid' , metric)}
             self.writer.add_scalars(f'{prefix}/Total{metric.title()}' , data , self.step_epoch)
+
+    def add_phase_diagnostics(self):
+        from src.res.model.callback.specific.global2top import SpecificCB_Global2Top, split_accuracies, synthetic_accuracy
+        for callback in self.trainer.callback.callbacks:
+            if not isinstance(callback, SpecificCB_Global2Top):
+                continue
+            prefix = '03.HyperParameter/Global2Top'
+            self.writer.add_scalar(f'{prefix}/TopAlpha', callback.top_alpha, self.step_epoch)
+            for key, value in callback.diagnostics.items():
+                self.writer.add_scalar(f'{prefix}/{key}', value, self.step_epoch)
+            for ds, epoch in (('Train', self.metrics.epoch_train_metrics), ('Valid', self.metrics.epoch_valid_metrics)):
+                glb, top = split_accuracies(epoch.accuracies_dict)
+                # Stable across both phases; separate from the phase-local stop score.
+                score = synthetic_accuracy(glb, top, glb_climax=None)
+                self.writer.add_scalar(f'00.Metrics/FixedScore/{ds}', score, self.step_epoch)
+                self.writer.add_scalar(f'00.Metrics/FixedLoss/{ds}', sum(epoch.losses_dict.values()), self.step_epoch)
 
     def add_epoch_events(self):
         prefix = self.TSBOARD_PREFIXIS['events']
@@ -213,14 +241,11 @@ class SummaryWriter(BaseCallBack):
         shutil.rmtree(run_folder , ignore_errors=True)
         shutil.copytree(ts_folder, run_folder)
 
+    @torch.no_grad()
     def append_batch_hidden_summary(self):
         if self.HIDDEN_FEATURE_MODE and 'hidden' in self.batch_data.output.other:
-            self.hidden_rankics.append(self.metrics.rankic_function.hidden_rankic(self.batch_data))
-            if self.config['train.experimental_metrics_fastpath']:
-                with torch.no_grad():
-                    self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.detach().T))
-            else:
-                self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.T))
+            self.hidden_rankics.append(self.metrics.rankic_function.hidden_rankic(self.batch_data).detach())
+            self.hidden_correlations.append(torch.corrcoef(self.batch_data.output.hidden.detach().T))
 
     def add_hidden_summaries(self):
         if self.HIDDEN_FEATURE_MODE:
@@ -235,7 +260,9 @@ class SummaryWriter(BaseCallBack):
                 self.add_hidden_correlation(hidden_correlations)
 
     def on_new_attempt(self):
-        self.reset_writer()
+        # Identity changes on the next epoch, after the old attempt's final logs.
+        self.hidden_rankics.clear()
+        self.hidden_correlations.clear()
 
     def on_before_clip_gradients(self):
         if Proj.debug and self.batch_idx % self.DEBUG_STEP == 0:
@@ -243,6 +270,9 @@ class SummaryWriter(BaseCallBack):
             self.add_batch_grad_histogram()
             self.add_batch_weight_norm()
             self.add_batch_grad_norm()
+
+    def on_train_batch_start(self):
+        self._batch_step += 1
 
     def on_train_epoch_start(self):
         self.add_lr()
@@ -267,13 +297,19 @@ class SummaryWriter(BaseCallBack):
 
     def on_fit_epoch_end(self):
         self.add_total_metric()
+        self.add_phase_diagnostics()
         self.add_epoch_events()
+        for name in ('attempt', 'redo', 'phase', 'epoch', 'model_epoch'):
+            self.writer.add_scalar(f'01.FittingEvents/State/{name}', getattr(self.status, name), self.step_epoch)
+        self.writer.flush()
 
     def on_fit_model_end(self):
         if self.texts.model_summary:
             self.writer.add_text('Model Info' , self.texts.model_summary)
+        self.reset_writer()
 
     def on_fit_end_after(self):
+        self.reset_writer()
         self.sync_latest_tensorboard()
 
     def on_summarize_model(self):

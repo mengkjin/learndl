@@ -465,7 +465,7 @@ class CallbackTests(unittest.TestCase):
         old_refs = []
         failures = []
         closed_writer = Mock()
-        vars(summary)['writer'] = closed_writer
+        vars(summary)['_writer'] = closed_writer
 
         def factory(_):
             torch.manual_seed(17)

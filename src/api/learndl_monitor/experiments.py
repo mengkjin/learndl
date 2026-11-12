@@ -80,8 +80,10 @@ class Instances:
                 record_path = self.state / f'{process.pid}.json'
                 record = json.loads(record_path.read_text()) if record_path.exists() else {}
                 owned = record.get('created') == process.info['create_time']
+                display = record.get('archive_source') if owned else None
+                display = display or source
                 rows.append(dict(pid=process.pid, created=process.info['create_time'], kind=kind, source=source,
-                                 port=port, display_source=str(Path(source).relative_to(ROOT)) if source and Path(source).is_relative_to(ROOT) else source, url=url if healthy else '', status='running' if healthy else 'not ready',
+                                 port=port, display_source=str(Path(display).relative_to(ROOT)) if display and Path(display).is_relative_to(ROOT) else display, url=url if healthy else '', status='running' if healthy else 'not ready',
                                  origin='managed' if owned else 'external', controllable=True,
                                  error=record.get('error', '') if owned else '',
                                  ssh=f'ssh -L {port}:127.0.0.1:{port} <host>'))
@@ -157,6 +159,12 @@ class Instances:
         if action != 'start':
             raise ValueError('Unknown operation')
         source = Path(data['source']).expanduser().resolve(strict=True)
+        archive_source = ''
+        if source.suffix.lower() == '.zip':
+            from src.api.learndl_monitor.experiment_archives import unpack_experiment
+
+            archive_source = str(source)
+            source = unpack_experiment(kind, source, self.state / 'imports')
         if (kind == 'tensorboard' and not source.is_dir()) or (kind == 'optuna' and not source.is_file()):
             raise ValueError('Select a log directory or SQLite file')
         if kind == 'optuna':
@@ -189,6 +197,7 @@ class Instances:
                                      creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
         self.children = [c for c in self.children if c.poll() is None] + [child]
         record = dict(pid=child.pid, created=psutil.Process(child.pid).create_time(), kind=kind, source=str(source), port=port, log=str(log))
+        record['archive_source'] = archive_source
         path = self.state / f'{child.pid}.json'
         path.write_text(json.dumps(record))
         path.chmod(0o600)
@@ -234,16 +243,24 @@ class Instances:
                   for stamp, p in dated[:1]]
         archived = archived_tensorboard_index(PATH.model_archive)
         databases = sorted(PATH.optuna.rglob('*.sqlite3'), key=lambda p: p.stat().st_mtime, reverse=True)
+        def downloaded(kind):
+            folder = ROOT / 'results' / 'model_experiments' / kind
+            packages = sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.zip'),
+                              key=lambda p: (-p.stat().st_mtime, str(p)))
+            return {'zh': '下载的实验压缩包', 'en': 'Downloaded experiment ZIPs',
+                    'items': [option(p, str(p.relative_to(folder))) for p in packages]}
         return {
             'tensorboard': [
                 {'zh': '最近训练', 'en': 'Latest training', 'items': recent},
                 {'zh': '已训练模型', 'en': 'Trained models', 'items': [option(p, str(p.parent.parent.relative_to(PATH.model))) for p in sorted(trained)]},
                 {'zh': '归档模型', 'en': 'Archived models', 'items': [option(p / 'snapshot/tensorboard', f'{module} / {name} / {p.name}')
                     for module, names in archived.items() for name, paths in names.items() for p in paths]},
+                downloaded('tensorboard'),
             ],
             'optuna': [
                 {'zh': '最近实验', 'en': 'Latest study', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases[:1]]},
                 {'zh': '已保存实验', 'en': 'Saved studies', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases]},
+                downloaded('optuna'),
             ],
         }
 
