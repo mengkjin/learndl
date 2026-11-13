@@ -9,7 +9,7 @@ from copy import copy, deepcopy
 import numpy as np
 import torch
 
-__all__ = [‘PhaseCyclicLR’]
+__all__ = ['PhaseCyclicLR']
 
 def validate_recalled_model(trainer):
     """Evaluate raw metrics without training hooks, histories, or scheduler steps."""
