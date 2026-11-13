@@ -633,7 +633,7 @@ no systemd timer or watchdog reinstall is required.
 ### Persistent Git operation blockers
 
 The updater observes `index.lock` and unfinished merge/rebase/cherry-pick/revert
-markers before fetch. After 15 minutes of continuously observed blockage it queues
+markers before fetch. After one hour of continuously observed blockage it queues
 one English `Watchdog Git Update Blocked` email through the existing mail worker.
 The notice includes marker paths, sizes, modification times, first observation,
 elapsed wait and the last updater timeout evidence when available. Marker age is
@@ -658,3 +658,14 @@ operations to finish and verify processes/open files. Preserve `.git/index` and
 unfinished-operation markers. A code pull activates this policy for new workers;
 no timer reinstall is required. An already blocked server must first resolve its
 existing blocker to receive this update automatically.
+
+
+Git admission waits, operation-marker blockers and dirty-checkout blockers all use
+a one-hour delay-notice threshold, with one notice per persistent request/episode.
+Dirty-checkout alerts start timing at first observation, not at a file's modification
+time. Existing delivered/queued legacy notices remain suppressed. Git never enters
+an admission cooldown, including when upgrading an existing cooldown record.
+The installed Git timer uses `OnUnitInactiveSec=60s`: it polls roughly 60 seconds
+after the previous worker exits, not at a fixed minute boundary or immediately on
+a task exit. Each poll attempts an eligible fast-forward as soon as all required
+leases and repository checks permit it. No timer reinstall is needed for this fix.

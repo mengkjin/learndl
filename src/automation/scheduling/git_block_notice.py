@@ -7,7 +7,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-WAIT_SECONDS = 900
+WAIT_SECONDS = 3600
 MARKERS = ('MERGE_HEAD', 'REBASE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD',
            'rebase-merge', 'rebase-apply', 'sequencer', 'index.lock')
 

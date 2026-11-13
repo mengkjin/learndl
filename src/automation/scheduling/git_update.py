@@ -60,24 +60,37 @@ def _record_repository_status(root: Path, status: str) -> None:
         db.execute('CREATE TABLE IF NOT EXISTS git_repository_notice '
                    '(repository TEXT PRIMARY KEY, notice_id TEXT NOT NULL)')
         db.execute('BEGIN IMMEDIATE')
+        # Nullable first_seen keeps already-notified legacy records suppressed.
+        columns = {row[1] for row in db.execute('PRAGMA table_info(git_repository_notice)')}
+        if 'first_seen' not in columns:
+            db.execute('ALTER TABLE git_repository_notice ADD COLUMN first_seen REAL')
         if not status:
             db.execute('DELETE FROM git_repository_notice WHERE repository=?', (repository,))
             return
-        if db.execute('SELECT 1 FROM git_repository_notice WHERE repository=?', (repository,)).fetchone():
+        now = time.time()
+        db.execute("INSERT OR IGNORE INTO git_repository_notice(repository,notice_id,first_seen) VALUES (?,'',?)",
+                   (repository, now))
+        old_notice, first_seen = db.execute(
+            'SELECT notice_id,first_seen FROM git_repository_notice WHERE repository=?', (repository,)).fetchone()
+        from .git_block_notice import WAIT_SECONDS
+        if old_notice or now - first_seen < WAIT_SECONDS:
             return
         notice_id = 'dirty-' + uuid.uuid4().hex
         lines = status.splitlines()
         data = dict(kind='dirty_repository', host=MACHINE.name, repository=repository,
                     observed_at=datetime.now(timezone.utc).isoformat(),
-                    file_status=lines[:100], entry_count=len(lines))
+                    first_seen=datetime.fromtimestamp(first_seen, timezone.utc).isoformat(),
+                    waited_seconds=int(now-first_seen), file_status=lines[:100], entry_count=len(lines))
         db.execute('INSERT INTO git_update_mail(id,data) VALUES (?,?)', (notice_id, json.dumps(data)))
-        db.execute('INSERT INTO git_repository_notice VALUES (?,?)', (repository, notice_id))
+        db.execute('UPDATE git_repository_notice SET notice_id=? WHERE repository=?', (notice_id, repository))
 
 
 def _repository_notice_body(data: dict) -> str:
     return (f'Host: {data["host"]}\nRepository: {data["repository"]}\n'
             f'Operation: Automatic Git update (origin/master)\n'
             f'Evidence captured: {data["observed_at"]}\n'
+            f'First observed blocked: {data.get("first_seen", "not recorded")}\n'
+            f'Observed wait: {data.get("waited_seconds", "not recorded")} seconds\n'
             'Reason: Local changes or untracked files; automatic update is paused.\n'
             'Remote availability has not been checked at this stage.\n'
             f'Git status entries ({data["entry_count"]}; first 100 shown):\n' +

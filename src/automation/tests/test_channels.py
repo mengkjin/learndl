@@ -90,6 +90,8 @@ class ChannelsTest(unittest.TestCase):
         with patch('src.automation.scheduling.auxiliary.control_error') as notice, \
                 patch('src.automation.scheduling.maintenance_notice.capture', return_value={}):
             channels.reserve(self.store, 'git', channels.GROUPS, start)
+            self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3599))
+            notice.assert_not_called()
             self.assertTrue(channels.reserve(self.store, 'git', channels.GROUPS, start + 3600))
             notice.assert_called_once()
             reopened = Store(self.control)

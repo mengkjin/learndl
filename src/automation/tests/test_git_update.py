@@ -123,10 +123,16 @@ class GitUpdateTest(unittest.TestCase):
         import time
         log = self.checkout / 'manual.log'
         log.write_text('private log contents')
-        self.assertEqual(self.update()['reason'], 'local changes or untracked files')
+        with patch.object(updater.time, 'time', return_value=1000):
+            self.assertEqual(self.update()['reason'], 'local changes or untracked files')
         log.write_text('more private log contents')
-        self.update()
         sender = Mock(side_effect=[False, True, True])
+        with patch.object(updater.time, 'time', return_value=4599):
+            self.update()
+        updater.deliver_update_emails(sender)
+        sender.assert_not_called()
+        with patch.object(updater.time, 'time', return_value=4600):
+            self.update()
         self.assertFalse(updater.deliver_update_emails(sender))
         first = sender.call_args
         self.assertTrue(updater.deliver_update_emails(sender))
@@ -142,10 +148,27 @@ class GitUpdateTest(unittest.TestCase):
         log.unlink()
         self.assertIsNone(updater.repository_blocker(self.checkout, time.monotonic() + 10))
         log.write_text('new episode')
-        self.update()
+        with patch.object(updater.time, 'time', return_value=100000):
+            self.update()
+        with patch.object(updater.time, 'time', return_value=103600):
+            self.update()
         updater.deliver_update_emails(sender)
         self.assertEqual(sender.call_count, 3)
         self.assertNotEqual(first.kwargs['delivery_id'], sender.call_args.kwargs['delivery_id'])
+
+    def test_legacy_dirty_notice_is_not_repeated_after_schema_upgrade(self):
+        store = updater._mail_store()
+        with store.connect() as db:
+            db.execute('CREATE TABLE git_repository_notice '
+                       '(repository TEXT PRIMARY KEY, notice_id TEXT NOT NULL)')
+            db.execute('INSERT INTO git_repository_notice VALUES (?,?)',
+                       (str(self.checkout.resolve()), 'already-notified'))
+        updater._record_repository_status(self.checkout, '?? manual.log')
+        sender = Mock()
+        updater.deliver_update_emails(sender)
+        sender.assert_not_called()
+        with store.connect() as db:
+            self.assertIn('first_seen', [row[1] for row in db.execute('PRAGMA table_info(git_repository_notice)')])
 
     def test_ignored_logs_do_not_block_or_notify(self):
         import time
@@ -231,14 +254,14 @@ class GitUpdateTest(unittest.TestCase):
         lock = self.checkout / '.git' / 'index.lock'
         lock.touch()
         sender = Mock(side_effect=[False, True, True])
-        for now in (1000, 1899):
+        for now in (1000, 4599):
             with patch.object(notices.time, 'time', return_value=now):
                 blocker = updater.repository_blocker(self.checkout, time.monotonic()+10)
                 assert blocker is not None
                 self.assertIn('index.lock', blocker)
         updater.deliver_update_emails(sender)
         sender.assert_not_called()
-        for now in (1900, 100000):
+        for now in (4600, 100000):
             with patch.object(notices.time, 'time', return_value=now):
                 updater.repository_blocker(self.checkout, time.monotonic()+10)
         self.assertFalse(updater.deliver_update_emails(sender))
@@ -253,7 +276,7 @@ class GitUpdateTest(unittest.TestCase):
         updater.repository_blocker(self.checkout, time.monotonic()+10)
         # Unfinished operations share the same conservative notification policy.
         (self.checkout / '.git' / 'MERGE_HEAD').write_text(self.after)
-        for now in (101000, 101900):
+        for now in (101000, 104600):
             with patch.object(notices.time, 'time', return_value=now):
                 updater.repository_blocker(self.checkout, time.monotonic()+10)
         updater.deliver_update_emails(sender)
