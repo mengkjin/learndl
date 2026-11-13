@@ -119,10 +119,6 @@ class Global2TopRetryTest(TestCase):
         self.assertEqual(trainer.status.add_epoch_event.call_args.args[0], FittingEventType.END_ATTEMPT)
         trainer.recall_ckpt.assert_called_once()
 
-
-if __name__ == '__main__':
-    main()
-
 class PhaseStoppingTest(TestCase):
     def test_minimum_and_improvement_do_not_compete_with_phase0(self):
         trainer, callback = make_callback(min_top_epochs=20, converge_patience=10, verify_recall=False)
@@ -158,3 +154,56 @@ class PhaseStoppingTest(TestCase):
             callback.recall_global_climax()
         self.assertIs(trainer.model.optimizer.scheduler, old_scheduler)
         self.assertEqual(callback.fitting_phase, 'global')
+
+class ProductionMetricIndexTest(TestCase):
+    def test_stopping_reads_named_levels_from_real_metric_tables(self):
+        from src.res.model.util.metric.aggregator import MetricAggregator
+        from src.res.model.util.metric.stage_metrics import BatchMetrics, EpochMetrics, AttemptMetrics
+
+        for best_phase in (0, 1):
+            for reordered in (False, True):
+                with self.subTest(best_phase=best_phase, reordered=reordered):
+                    trainer, callback = make_callback(min_top_epochs=20, converge_patience=10)
+                    callback.fitting_phase = 'top'
+                    callback.global_climax_level = .2
+                    callback.global_support_level = .1
+                    aggregator = MetricAggregator()
+                    attempt = AttemptMetrics(aggregator)
+                    attempt.new(attempt=1, redo=0)
+                    # Recall Ph0 Ep16; first phase1 epoch is 17. The best point
+                    # may be in either phase, independent of its row position.
+                    records = [(0, 16, .2, .3 if best_phase == 0 else .1)]
+                    records += [(1, epoch, .2, .2 if epoch == 17 else .05)
+                                for epoch in range(17, 37)]
+                    for phase, epoch, glb, top in records:
+                        epochs = []
+                        for dataset in ('train', 'valid'):
+                            metrics = EpochMetrics(aggregator)
+                            metrics.new(dataset, epoch=epoch, phase=phase)
+                            batch = BatchMetrics(aggregator)
+                            batch.new(0)
+                            batch.set_values({'global.ccc': torch.tensor(.5)},
+                                             {'global.spearman': glb, 'top.long_avg': top},
+                                             torch.tensor(glb))
+                            _ = batch.total_loss
+                            metrics.append(batch)
+                            batch.close()
+                            epochs.append(metrics)
+                        attempt.append(*epochs)
+                    if reordered:
+                        attempt.tables['valid_epoch_accuracies'] = [
+                            frame.reorder_levels(['phase', 'dataset', 'epoch'])
+                            for frame in attempt.tables['valid_epoch_accuracies']]
+                    trainer.metrics.attempt_metrics = attempt
+                    callback.collect_accuracies()
+                    self.assertEqual(callback.valid_accuracies.index.nlevels, 3)
+                    callback.check_top_converge()
+                    event = trainer.status.add_epoch_event.call_args
+                    self.assertEqual(event.args[0], FittingEventType.END_ATTEMPT)
+                    expected_epoch = 16 if best_phase == 0 else 17
+                    self.assertEqual(event.kwargs['epoch'], expected_epoch)
+                    self.assertIn(f'best Ph{best_phase} Ep{expected_epoch}', event.kwargs['message'])
+
+
+if __name__ == '__main__':
+    main()

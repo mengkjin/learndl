@@ -176,7 +176,10 @@ class SpecificCB_Global2Top(BaseCallBack):
         if self.top_stale >= self.converge_patience or self.top_low >= self.converge_patience:
             scores_all = synthetic_accuracy(self.global_accuracies, self.top_accuracies,
                                             glb_climax=self.global_climax_level)
-            phase, epoch = self.valid_accuracies.index[int(np.argmax(scores_all))]
+            best_position = int(np.argmax(scores_all))
+            index = self.valid_accuracies.index
+            phase = int(index.get_level_values('phase')[best_position])
+            epoch = int(index.get_level_values('epoch')[best_position])
             self.status.add_epoch_event(
                 FittingEventType.END_ATTEMPT, 'EarlyStop', epoch=int(epoch),
                 message=f'Global2Top converged after {self.top_epochs} phase1 epochs; '
