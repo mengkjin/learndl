@@ -149,6 +149,7 @@ class AutoRunTask(BoundLogger):
         
         self._artifacts = []
         self._artifact_results = []
+        self._artifact_delivery = None
         self.status = 'Starting'
         self.func_return : Any | None = None
         
@@ -167,6 +168,7 @@ class AutoRunTask(BoundLogger):
         from src.automation.artifact_exchange.research import CURRENT_TASK
         self._artifacts = []
         self._artifact_results = []
+        self._artifact_delivery = None
         from src.proj.util.script.task_record import TaskRecorder
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.already_done = self.task_recorder.is_finished()
@@ -220,6 +222,14 @@ class AutoRunTask(BoundLogger):
             self.logger.conclude(
                 f'AutoRunTask aborted: {exc_type.__name__}: {exc_value}' , level = 'error')
 
+        if not self.should_forfeit:
+            from src.automation.artifact_exchange.research import finalize_task_artifacts
+            try:
+                finalize_task_artifacts(self, artifact_saves_complete)
+            except Exception as e:
+                # Delivery is auxiliary: keep the research outcome and original attachments.
+                self.logger.warning(f'[artifacts] finalization failed: {e}', vb_level=0)
+
         try:
             self.error_messages.extend(self.logger.get_conclusions('error'))
             self.exit_message = self.logger.draw_conclusions()
@@ -236,10 +246,6 @@ class AutoRunTask(BoundLogger):
         self.exit_files = [p for p in Proj.exit_files.pop_all()]
 
         if not self.should_forfeit:
-            from src.automation.artifact_exchange.research import publish_safe
-            from uuid import uuid4
-            self._artifact_results += publish_safe(self.task_name,
-                f'{self.init_time.isoformat()}-{uuid4().hex}', self._artifacts, self.execution_status) if self._artifacts and artifact_saves_complete else []
             from src.automation.artifact_exchange.research import delivered_report_paths
             excluded = delivered_report_paths(self._artifact_results)
             if excluded:
@@ -248,6 +254,8 @@ class AutoRunTask(BoundLogger):
                 for p in retained:
                     Proj.email_attachments.append(p.path, filename=p.filename)
             try:
+                from src.automation.artifact_exchange.research import run_deferred_mail
+                run_deferred_mail(self)
                 self.send_email()
             except Exception as e:
                 # Email sending failures should not break the rest of cleanup.

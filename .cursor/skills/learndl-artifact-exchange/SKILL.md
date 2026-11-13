@@ -25,8 +25,14 @@ Implementation: `src/automation/artifact_exchange/`; panel discovery: `src/api/l
   `research.publish_safe(...)` for independent scripts and completed failure diagnostics.
   Flush asynchronous saves and close writers before publication. Never infer completion from file age.
 - Model trainers already use `research.model_run` inside their lifecycle lock. Extend that
-  collector rather than publishing again from each report callback. It snapshots the complete
-  model `rslt()` directory and co-locates captured Optuna/TensorBoard artifacts.
+  collector rather than publishing again from each report callback. It freezes the complete
+  model `rslt()` directory and captured Optuna/TensorBoard artifacts while the model lock is held.
+  Inside AutoRunTask, these are prepared private snapshots, not yet shared packages.
+- AutoRunTask publishes all prepared/registered batches before HTML/Markdown catchers close,
+  logs per-package outcomes through its logger, then sends mail. Internal research mail must
+  use `research.defer_mail` and select attachments only after publication; do not send early.
+  Standalone scripts without a task retain immediate delivery. Never defer source copying
+  when a later model invocation may overwrite the same directory.
 - Preserve original research errors and SMTP behavior when delivery fails. Successful package
   handoff removes only the associated analysis attachments, retaining logs/execution reports.
   Do not rewrite historical mail queues. In autofix contexts skip external delivery entirely.

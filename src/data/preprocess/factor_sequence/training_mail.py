@@ -38,7 +38,7 @@ def capture_log(path):
             yield
 
 
-def send_training_result(folder, result, recipient=None, fallback_log=None, delivery_root=None):
+def send_training_result(folder, result, recipient=None, fallback_log=None, delivery_root=None, *, _transfers=None):
     """Mail errors are recorded, never replace a training exception or abort later models."""
     from src.proj import MACHINE
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
@@ -54,8 +54,14 @@ def send_training_result(folder, result, recipient=None, fallback_log=None, deli
         snapshot = destination/'training_result.json'
         if not snapshot.exists():
             snapshot.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str))
-        transfers = publish_safe('factor_sequence', str(destination),
-            [ArtifactSpec(snapshot, category='factor_sequence', experiment=snapshot.parent.name)], result['status'])
+        transfers = (_transfers if _transfers is not None else publish_safe('factor_sequence', str(destination),
+            [ArtifactSpec(snapshot, category='factor_sequence', experiment=snapshot.parent.name)], result['status']))
+        from src.automation.artifact_exchange.research import defer_mail
+        queued = defer_mail(lambda: send_training_result(folder, dict(result), recipient, fallback_log, delivery_root, _transfers=transfers))
+        if queued is not None:
+            queued['receipt'] = str(destination/'delivery.json')
+            write_json(destination/'status.json', queued)
+            return queued
         if not MACHINE.emailable:
             state = {'status': 'skipped', 'reason': 'Email disabled on this machine'}
         elif (destination/'delivery.json').exists():

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import uuid
 from typing import Any
 import json
+import logging
 from pathlib import Path
 from .core import ArtifactSpec, Config, publish_artifacts, sandboxed
 
@@ -16,12 +17,127 @@ ANALYSIS_SUFFIXES = {'.pdf', '.xlsx', '.json', '.csv', '.html', '.md', '.txt', '
 EXCLUDED_DIRS = {'models', 'model', 'checkpoints', 'checkpoint', 'snapshots', 'data', 'dataset', 'prepared', 'mail', 'training_mail', 'bundles', 'tensorboard', 'recovery'}
 
 
+class TaskDelivery:
+    def __init__(self):
+        self.pending = []
+        self.hooks = []
+        self.bundles = {}
+        self.mail = []
+        self.flushing = False
+        self.mailing = False
+
+
+def task_delivery(owner=None):
+    owner = owner if owner is not None else CURRENT_TASK.get()
+    if owner is None:
+        return None
+    if getattr(owner, '_artifact_delivery', None) is None:
+        owner._artifact_delivery = TaskDelivery()
+    return owner._artifact_delivery
+
+
+def delivery_log(message, *, failed=False, owner=None):
+    owner = owner if owner is not None else CURRENT_TASK.get()
+    logger = getattr(owner, 'logger', None)
+    if logger is not None:
+        (logger.warning if failed else logger.note)('[artifacts] ' + message, vb_level=0)
+    else:
+        logger = logging.getLogger(__name__)
+        (logger.warning if failed else logger.info)('[artifacts] ' + message)
+
+
+def log_results(records, owner=None):
+    for record in records:
+        manifest = record.get('manifest', {})
+        text = f"{record.get('status', 'unknown')} id={record.get('id', '-')}"
+        if manifest:
+            text += f" experiment={manifest.get('category')}/{manifest.get('experiment')} run={manifest.get('run_id')}"
+        if record.get('route'):
+            text += f" destination=artifact_exchange/{record['route']}/{record['filename']}"
+        if record.get('error') or record.get('reason'):
+            text += ' reason=' + str(record.get('error') or record.get('reason'))
+        delivery_log(text, failed=record.get('status') == 'failed', owner=owner)
+
+
 def publish_safe(task, run_id, artifacts, status='success'):
+    owner = CURRENT_TASK.get()
+    queue = task_delivery(owner)
+    config = None
     try:
-        return publish_artifacts(task, run_id, artifacts, status)
+        if sandboxed():
+            records = [{'status': 'skipped', 'reason': 'autofix'}]
+        else:
+            config = Config.load()
+            records = publish_artifacts(task, run_id, artifacts, status, config=config,
+                                        prepare_only=queue is not None and not queue.flushing)
     except Exception as exc:
-        print(f'[artifacts] delivery failed: {exc}', flush=True)
-        return [{'status': 'failed', 'error': str(exc)}]
+        records = [{'status': 'failed', 'error': str(exc)}]
+    fresh = records
+    if owner is not None:
+        known = {r['id']: r for r in owner._artifact_results if r.get('id')}
+        fresh = [r for r in records if not r.get('id') or r['id'] not in known]
+        records = [known.get(r.get('id'), r) for r in records]
+        owner._artifact_results.extend(fresh)
+    if queue is not None and not queue.flushing:
+        if fresh:
+            queue.pending.append((config, fresh))
+    else:
+        log_results(fresh, owner)
+    return records
+
+
+def finalize_task_artifacts(owner, saves_complete=True):
+    """Run while the task's HTML/Markdown capture is still open, before any mail."""
+    from .core import send_prepared
+    queue = task_delivery(owner)
+    assert queue is not None
+    queue.flushing = True
+    delivery_log('开始投递研究结果', owner=owner)
+    if owner._artifacts:
+        if saves_complete:
+            publish_safe(owner.task_name, owner.init_time.isoformat(), owner._artifacts, owner.execution_status)
+        else:
+            record = {'status': 'skipped', 'reason': 'asynchronous saves incomplete'}
+            owner._artifact_results.append(record)
+            log_results([record], owner)
+    for config, records in queue.pending:
+        try:
+            if config is not None:
+                send_prepared(records, config)
+        except Exception as exc:
+            for record in records:
+                if record.get('status') == 'prepared':
+                    record.update(status='failed', error=str(exc))
+        log_results(records, owner)
+    for hook in queue.hooks:
+        try:
+            hook()
+        except Exception as exc:
+            delivery_log(f'attachment handoff failed: {exc}', failed=True, owner=owner)
+    delivery_log('投递阶段结束；published 表示已放入本机共享目录，不代表远端已归档', owner=owner)
+
+
+def defer_mail(callback):
+    queue = task_delivery()
+    if queue is None or queue.mailing:
+        return None
+    state = {'status': 'queued', 'reason': 'waiting for task artifact delivery'}
+    queue.mail.append((callback, state))
+    return state
+
+
+def run_deferred_mail(owner):
+    queue = task_delivery(owner)
+    assert queue is not None
+    queue.mailing = True
+    for callback, state in queue.mail:
+        try:
+            result = callback()
+            state.clear()
+            state.update(result)
+        except Exception as exc:
+            state.update(status='failed', error=str(exc))
+            delivery_log(f'deferred mail failed: {exc}', failed=True, owner=owner)
 
 
 def register(spec, task, run_id, status='success'):
@@ -74,12 +190,9 @@ def publish_analysis(folder, category, status='success'):
                 fingerprint.update(str(path.relative_to(folder)).encode())
                 fingerprint.update(digest(path).encode())
         records = publish_safe(category, folder.name + '__' + status + '__' + fingerprint.hexdigest()[:16], specs, status)
-        owner = CURRENT_TASK.get()
-        if owner is not None:
-            owner._artifact_results.extend(records)
         return records
     except Exception as exc:
-        print(f'[artifacts] analysis delivery failed: {exc}', flush=True)
+        delivery_log(f'analysis preparation failed: {exc}', failed=True)
         return [{'status': 'failed', 'error': str(exc)}]
 
 
@@ -94,19 +207,46 @@ def notice(records):
 def handoff_bundle(metadata, folder, category, status='success'):
     try:
         records = publish_analysis(folder, category, status)
-        if delivered(records):
+        def finish():
+            if not delivered(records):
+                return
             from .core import atomic_json
             logs = [str(p) for p in Path(folder).glob('*.log') if p.is_file()]
             atomic_json(Path(metadata).with_suffix('.artifacts.json'), {'records': records, 'logs': logs})
+            if CURRENT_TASK.get() is not None:
+                from src.proj import Proj
+                from src.res.rl_experimental.bundle import _parts, bundle_attachments
+                _, parts = _parts(Path(metadata))
+                old = {p.resolve() for p in [Path(metadata), *parts]}
+                for files in (Proj.email_attachments, Proj.exit_files):
+                    original = files.pop_all()
+                    matched = any(Path(p).resolve() in old for p in original)
+                    for p in original:
+                        if Path(p).resolve() not in old:
+                            files.append(p.path, filename=p.filename)
+                    if matched:
+                        for p in bundle_attachments(metadata):
+                            files.append(p)
+        queue = task_delivery()
+        if queue is not None and not queue.flushing:
+            queue.bundles[str(Path(metadata).resolve())] = records
+            queue.hooks.append(finish)
+        else:
+            finish()
         return records
     except Exception as exc:
-        print(f'[artifacts] bundle handoff failed: {exc}', flush=True)
+        delivery_log(f'bundle handoff failed: {exc}', failed=True)
         return [{'status': 'failed', 'error': str(exc)}]
 
 
 def bundle_delivery(metadata):
     if sandboxed():
         return None
+    queue = task_delivery()
+    if queue is not None:
+        pending = queue.bundles.get(str(Path(metadata).resolve()))
+        if pending is not None and not delivered(pending):
+            return None
     sidecar = Path(metadata).with_suffix('.artifacts.json')
     if sidecar.exists():
         return json.loads(sidecar.read_text())
@@ -124,7 +264,7 @@ def register_report(source, run_id):
             Save.async_wait_all(caller_name='artifact_exchange')
         register(spec, 'model_training', run_id)
     except Exception as exc:
-        print(f'[artifacts] report registration failed: {exc}', flush=True)
+        delivery_log(f'report registration failed: {exc}', failed=True)
 
 
 @contextmanager
@@ -161,13 +301,10 @@ def model_run(trainer):
                 specs = [replace(s, category='model_training', experiment=base.full_name, run_id=run_id) for s in specs]
                 # Studies may be registered once per date; one final SQLite snapshot suffices.
                 specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
-                owner = CURRENT_TASK.get()
                 if specs:
-                    records = publish_safe('model_training', run_id, specs, status)
-                    if owner is not None:
-                        owner._artifact_results.extend(records)
+                    publish_safe('model_training', run_id, specs, status)
         except Exception as exc:
-            print(f'[artifacts] model delivery failed: {exc}', flush=True)
+            delivery_log(f'model preparation failed: {exc}', failed=True)
 
 
 def delivered_report_paths(records):

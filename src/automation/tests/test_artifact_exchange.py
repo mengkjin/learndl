@@ -283,7 +283,7 @@ class ExchangeTest(unittest.TestCase):
         trainer = SimpleNamespace(callback=SimpleNamespace(callbacks=[SimpleNamespace(reset_writer=close)]),
             config=SimpleNamespace(base_path=SimpleNamespace(full_name='nn@modelAAA',
                 rslt=lambda: reports, snapshot=lambda name: events)))
-        owner = SimpleNamespace(_artifact_results=[], _artifact_handoffs=[])
+        owner = SimpleNamespace(_artifact_results=[], _artifacts=[])
         token = CURRENT_TASK.set(owner)
         try:
             with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
@@ -293,8 +293,13 @@ class ExchangeTest(unittest.TestCase):
                 wait.assert_called_once()
             self.assertEqual(calls, ['closed'])
             self.assertEqual(len(owner._artifact_results), 1)
+            self.assertEqual(owner._artifact_results[0]['status'], 'prepared')
+            self.assertEqual(receive(self.rec), [])
+            (reports/'complete.binary').write_bytes(b'next model overwrote this file')
+            from src.automation.artifact_exchange.research import finalize_task_artifacts
+            finalize_task_artifacts(owner)
             received = receive(self.rec)[0]
-            self.assertTrue((Path(received['target'])/'results/complete.binary').exists())
+            self.assertEqual((Path(received['target'])/'results/complete.binary').read_bytes(), b'all files')
             with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
                     patch('src.proj.Save.async_wait_all', side_effect=OSError('pending saves')):
                 with self.assertRaisesRegex(RuntimeError, 'research failed'):
@@ -348,6 +353,161 @@ class ExchangeTest(unittest.TestCase):
         (self.source/'comparison.pdf').write_text('new untransferred report')
         self.assertEqual(delivered_report_paths(records), {str(self.source/'comparison.xlsx')})
         self.assertEqual(delivered_report_paths([dict(records[0], status='failed')]), set())
+
+    def test_queued_delivery_deduplicates_and_retries_frozen_snapshot(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.automation.artifact_exchange.research import CURRENT_TASK, publish_safe, finalize_task_artifacts
+        owner = SimpleNamespace(_artifacts=[], _artifact_results=[], logger=Mock())
+        token = CURRENT_TASK.set(owner)
+        try:
+            with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub):
+                first = publish_safe('test', 'frozen', [ArtifactSpec(self.source)])
+                again = publish_safe('test', 'frozen', [ArtifactSpec(self.source)])
+            self.assertIs(first[0], again[0])
+            self.assertEqual(len(owner._artifact_results), 1)
+            (self.source/'comparison.pdf').write_bytes(b'new result')
+            (self.pub.shared_root/'.stfolder').rmdir()
+            finalize_task_artifacts(owner)
+            self.assertEqual(first[0]['status'], 'failed')
+            self.assertTrue(owner.logger.warning.called)
+            (self.pub.shared_root/'.stfolder').mkdir()
+            self.assertEqual(retry(self.pub)[0]['status'], 'published')
+            target = Path(receive(self.rec)[0]['target'])
+            self.assertEqual((target/'results/comparison.pdf').read_bytes(), b'%PDF sample')
+        finally:
+            CURRENT_TASK.reset(token)
+
+    def test_task_delivery_disabled_and_autofix_are_logged_without_snapshots(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.automation.artifact_exchange.research import CURRENT_TASK, publish_safe, finalize_task_artifacts
+        for autofix in (False, True):
+            owner = SimpleNamespace(_artifacts=[], _artifact_results=[], logger=Mock())
+            token = CURRENT_TASK.set(owner)
+            self.pub.enabled = False
+            try:
+                with patch.dict(os.environ, {'LEARNDL_AUTOFIX_ID': 'test' if autofix else ''}), \
+                        patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub) as load, \
+                        patch('src.automation.artifact_exchange.core._snapshot') as snapshot:
+                    rows = publish_safe('test', 'disabled', [ArtifactSpec(self.source)])
+                    finalize_task_artifacts(owner)
+                    self.assertEqual(rows[0]['status'], 'skipped')
+                    snapshot.assert_not_called()
+                    self.assertTrue(owner.logger.note.called)
+                    if autofix:
+                        load.assert_not_called()
+            finally:
+                CURRENT_TASK.reset(token)
+
+    def test_task_logs_delivery_before_capture_close_and_mail(self):
+        from datetime import datetime
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.proj.util.script.autorun import AutoRunTask
+        from src.proj.env.variable.files import UniqueFileList
+        from src.automation.artifact_exchange.research import CURRENT_TASK, defer_mail
+        import src.proj.util.script.autorun as autorun
+        for fail in (False, True):
+            with self.subTest(fail=fail):
+                events = []
+                captured = []
+                capture_open = [True]
+                def log(message, **kwargs):
+                    self.assertTrue(capture_open[0], 'Delivery status must be captured')
+                    captured.append(message)
+                    events.append('log')
+                def close(*args):
+                    events.append('close')
+                    capture_open[0] = False
+                owner = SimpleNamespace(_artifact_results=[], _artifacts=[ArtifactSpec(self.source)],
+                    task_name='order-test', init_time=datetime.now(), execution_status='Success',
+                    should_forfeit=False, func_return=None, error_messages=[], execution_success=True,
+                    source='test', task_recorder=Mock(), status='Success',
+                    catchers=SimpleNamespace(exit=close),
+                    logger=SimpleNamespace(note=log, warning=log, error=log,
+                        get_conclusions=lambda level: [], draw_conclusions=lambda: 'summary'))
+                def mail():
+                    events.append('mail')
+                    self.assertFalse(capture_open[0])
+                    self.assertTrue(any(('failed' if fail else 'published') in m for m in captured))
+                    self.assertEqual(owner.execution_status, 'Success')
+                owner.send_email = mail
+                files = UniqueFileList('test_order_exit_'+str(fail))
+                files.append(self.source/'comparison.pdf')
+                fake_proj = SimpleNamespace(exit_files=files, email_attachments=UniqueFileList('test_order_mail_'+str(fail)))
+                if fail:
+                    (self.pub.shared_root/'.stfolder').rmdir()
+                token = CURRENT_TASK.set(owner)
+                try:
+                    defer_mail(lambda: events.append('deferred_mail') or {'status': 'sent'})
+                    with patch.object(autorun, 'Proj', fake_proj), patch.object(autorun.Save, 'async_wait_all'), \
+                            patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub):
+                        AutoRunTask._finish_task(cast(AutoRunTask, owner), None, None, None)
+                    self.assertLess(events.index('log'), events.index('close'))
+                    self.assertLess(events.index('close'), events.index('deferred_mail'))
+                    self.assertLess(events.index('deferred_mail'), events.index('mail'))
+                    self.assertEqual(bool(owner.exit_files), fail)
+                finally:
+                    CURRENT_TASK.reset(token)
+                    (self.pub.shared_root/'.stfolder').mkdir(exist_ok=True)
+
+    def test_training_mail_waits_for_task_publication(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.automation.artifact_exchange.research import CURRENT_TASK, finalize_task_artifacts, run_deferred_mail
+        from src.data.preprocess.factor_sequence.training_mail import send_training_result
+        owner = SimpleNamespace(_artifact_results=[], _artifacts=[], logger=Mock())
+        token = CURRENT_TASK.set(owner)
+        try:
+            result = dict(name='attempt', model='test-model', seed=1, status='passed')
+            log = self.source/'attempt.log'
+            log.write_text('training output')
+            with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
+                    patch('src.proj.MACHINE', SimpleNamespace(emailable=True)), \
+                    patch('src.proj.util.web.task_mail.TaskResultMail') as sender:
+                sender.return_value.return_value = True
+                state = send_training_result(self.source, result)
+                self.assertEqual(state['status'], 'queued')
+                sender.assert_not_called()
+                self.assertFalse(list(self.pub.inbox.rglob('*.transfer.zip')))
+                finalize_task_artifacts(owner)
+                sender.assert_not_called()
+                self.assertEqual(owner._artifact_results[0]['status'], 'published')
+                run_deferred_mail(owner)
+                self.assertEqual(state['status'], 'sent')
+                attachments = sender.return_value.call_args.kwargs['attachments']
+                self.assertEqual(attachments, [log])
+                self.assertIn('published', sender.return_value.call_args.args[1])
+        finally:
+            CURRENT_TASK.reset(token)
+
+    def test_task_bundle_replaces_queued_parts_only_after_success(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.proj.env.variable.files import UniqueFileList
+        from src.res.rl_experimental.bundle import create_bundle, bundle_attachments
+        from src.automation.artifact_exchange.research import CURRENT_TASK, finalize_task_artifacts, handoff_bundle
+        metadata = create_bundle(self.source, self.root/'bundles')
+        originals = bundle_attachments(metadata)
+        files = UniqueFileList('test_bundle_queued')
+        for p in originals:
+            files.append(p)
+        owner = SimpleNamespace(_artifact_results=[], _artifacts=[], logger=Mock())
+        token = CURRENT_TASK.set(owner)
+        try:
+            with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
+                    patch('src.proj.Proj', SimpleNamespace(email_attachments=files, exit_files=UniqueFileList('test_bundle_exit'))):
+                records = handoff_bundle(metadata, self.source, 'rl')
+                self.assertEqual(records[0]['status'], 'prepared')
+                self.assertEqual(bundle_attachments(metadata), originals)
+                finalize_task_artifacts(owner)
+                self.assertEqual(records[0]['status'], 'published')
+                attachments = [Path(p) for p in files.pop_all()]
+                self.assertFalse(any(p in originals for p in attachments))
+                self.assertIn(metadata.with_suffix('.artifacts.json'), attachments)
+        finally:
+            CURRENT_TASK.reset(token)
 
     def test_analysis_selection_and_service_plan(self):
         (self.source/'weights.pt').write_bytes(b'weights')

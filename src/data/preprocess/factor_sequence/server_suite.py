@@ -274,13 +274,18 @@ def report_package(folder):
     return target
 
 
-def send_result(folder, recipient=None):
+def send_result(folder, recipient=None, *, _transfers=None):
     from src.proj import MACHINE
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     folder=Path(folder)
     report=json.loads((folder/'suite.json').read_text())
     from src.automation.artifact_exchange.research import publish_analysis, delivered, notice
-    transfers = publish_analysis(folder, 'factor_sequence', report['status'])
+    transfers = publish_analysis(folder, 'factor_sequence', report['status']) if _transfers is None else _transfers
+    from src.automation.artifact_exchange.research import defer_mail
+    queued = defer_mail(lambda: send_result(folder, recipient, _transfers=transfers))
+    if queued is not None:
+        write_json(folder/'mail_status.json', queued)
+        return queued
     if not MACHINE.emailable:
         state={'status':'skipped','reason':'Email is disabled on this machine'}
         write_json(folder/'mail_status.json',state)

@@ -184,6 +184,10 @@ def send_bundle(
     only_failed: bool = False,
     transport: Callable[[str, str, str | None, list[Path]], bool] | None = None,
 ) -> dict[str, Any]:
+    from src.automation.artifact_exchange.research import defer_mail
+    queued = defer_mail(lambda: send_bundle(metadata_path, recipient, only_failed=only_failed, transport=transport))
+    if queued is not None:
+        return queued
     metadata = Path(metadata_path).resolve()
     definition, parts = _parts(metadata)
     delivery_path = metadata.with_name(f"{definition['run_id']}.delivery.json")

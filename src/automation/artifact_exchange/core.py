@@ -250,7 +250,7 @@ def _snapshot(spec, payload, config):
                     z.write(p, 'tensorboard/' + p.relative_to(work).as_posix())
 
 
-def publish_artifacts(task, run_id, artifacts, status='success', *, config=None) -> list[dict[str, Any]]:
+def publish_artifacts(task, run_id, artifacts, status='success', *, config=None, prepare_only=False) -> list[dict[str, Any]]:
     if sandboxed():
         return [{'status': 'skipped', 'reason': 'autofix'}]
     config = config or Config.load()
@@ -264,7 +264,7 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None)
         atomic_json(config.state / 'source_host.json', {'source_host': config.source_host})
         for (category, experiment, group_run), specs in groups.items():
             try:
-                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category, experiment))
+                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category, experiment, prepare_only))
             except Exception as exc:
                 failure = {'status': 'failed', 'sources': [str(s.source) for s in specs], 'error': str(exc)}
                 atomic_json(config.state / 'failures' / (uuid.uuid4().hex + '.json'), failure)
@@ -272,12 +272,14 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None)
     return outcomes
 
 
-def _prepare(task, run_id, specs, status, config, category, experiment) -> dict[str, Any]:
+def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False) -> dict[str, Any]:
     declaration = [asdict(s) | {'source': str(s.source)} for s in specs]
     key = hashlib.sha256(json.dumps([2, config.source_host, task, run_id, category, experiment, declaration], sort_keys=True).encode()).hexdigest()
     ledger = config.state / 'outbox' / key / 'delivery.json'
     if ledger.exists():
-        return _send(json.loads(ledger.read_text()), ledger, config)
+        record = json.loads(ledger.read_text())
+        record['outbox_key'] = key
+        return record if prepare_only else _send(record, ledger, config)
     ledger.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=ledger.parent) as tmp:
         work = Path(tmp)
@@ -329,11 +331,36 @@ def _prepare(task, run_id, specs, status, config, category, experiment) -> dict[
         os.replace(work / 'package.zip', archive)
         with archive.open('rb') as f:
             os.fsync(f.fileno())
-        record = {'id': package_id, 'status': 'prepared', 'filename': filename,
+        record = {'id': package_id, 'status': 'prepared', 'filename': filename, 'outbox_key': key,
                   'route': (Path(category) / component(experiment)).as_posix(), 'sha256': digest(archive),
                   'sources': [str(s.source) for s in specs], 'source_files': source_files, 'manifest': manifest}
         atomic_json(ledger, record)
-    return _send(record, ledger, config)
+    return record if prepare_only else _send(record, ledger, config)
+
+
+def send_prepared(records, config):
+    """Publish only this task's frozen batches, updating references held by mail callbacks."""
+    if sandboxed() or not config.enabled or config.role != 'publisher':
+        for record in records:
+            if record.get('status') == 'prepared':
+                record.update(status='skipped', reason='publisher disabled or autofix')
+        return records
+    with locked(config, 'publish'):
+        for record in records:
+            if record.get('status') != 'prepared':
+                continue
+            try:
+                key = record['outbox_key']
+                if not re.fullmatch('[0-9a-f]{64}', key):
+                    raise ValueError('Invalid outbox identity')
+                ledger = config.state / 'outbox' / key / 'delivery.json'
+                frozen = json.loads(ledger.read_text())
+                if frozen['id'] != record['id']:
+                    raise ValueError('Outbox identity changed')
+                record.update(_send(frozen, ledger, config))
+            except Exception as exc:
+                record.update(status='failed', error=str(exc))
+    return records
 
 
 def _send(record, ledger, config) -> dict[str, Any]:
