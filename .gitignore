@@ -20,7 +20,8 @@ __old_version__/
 /.agents
 /data
 /models
-/results
+/results/*
+!/results/README.md
 
 # temporary created files
 /src/interactive/main/pages/_*.py

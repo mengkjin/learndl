@@ -44,27 +44,35 @@ def send_training_result(folder, result, recipient=None, fallback_log=None, deli
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     folder = Path(folder)
     destination = Path(delivery_root or folder/'training_mail') / result['name']
+    from src.automation.artifact_exchange.research import publish_safe, notice, delivered
+    from src.automation.artifact_exchange import ArtifactSpec
+    # Persist a completed per-training summary even when SMTP is disabled.
+    transfers = []
+
     try:
         destination.mkdir(parents=True, exist_ok=True)
+        snapshot = destination/'training_result.json'
+        if not snapshot.exists():
+            snapshot.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+        transfers = publish_safe('factor_sequence', str(destination),
+            [ArtifactSpec(snapshot, category='factor_sequence', experiment=snapshot.parent.name)], result['status'])
         if not MACHINE.emailable:
             state = {'status': 'skipped', 'reason': 'Email disabled on this machine'}
         elif (destination/'delivery.json').exists():
             state = {'status': 'sent' if retry_delivery(destination) else 'failed'}
         else:
-            snapshot = destination/'training_result.json'
-            snapshot.write_text(json.dumps(result, ensure_ascii=False, indent=2, default=str))
             log = folder/f"{result['name']}.log"
             shared = not log.exists()
             if shared and fallback_log:
                 log = Path(fallback_log)
-            attachments = [snapshot] + ([log] if log.is_file() else [])
+            attachments = ([] if delivered(transfers) else [snapshot]) + ([log] if log.is_file() else [])
             body = (f"Training: {result['name']}\nStatus: {result['status']}\n"
                     f"Model: {result['model']}; seed: {result['seed']}\n"
                     f"Results: {folder}\n"
                     + ('Legacy attempt: only shared fold log available.\n' if shared else 'Individual training console log attached.\n')
                     + str(result.get('error', '')))
             ok = TaskResultMail(destination)(f"Factor training [{result['status']}] {result['name']}",
-                body, recipient=recipient, attachments=attachments)
+                body + notice(transfers), recipient=recipient, attachments=attachments)
             state = {'status': 'sent' if ok else 'failed'}
     except Exception:
         state = {'status': 'failed', 'error': traceback.format_exc()}

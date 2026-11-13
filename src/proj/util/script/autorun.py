@@ -147,6 +147,8 @@ class AutoRunTask(BoundLogger):
         self.exit_files : list[strPath | EmailAttachment] = []
         self.error_messages : list[str] = []
         
+        self._artifacts = []
+        self._artifact_results = []
         self.status = 'Starting'
         self.func_return : Any | None = None
         
@@ -157,7 +159,14 @@ class AutoRunTask(BoundLogger):
     def __repr__(self):
         return f'AutoRunTask(task_name={self.task_name},task_key={self.task_key},email={self.email},source={self.source},time={self.time_str})'
 
+    def register_artifact(self, spec):
+        if spec not in self._artifacts:
+            self._artifacts.append(spec)
+
     def __enter__(self):
+        from src.automation.artifact_exchange.research import CURRENT_TASK
+        self._artifacts = []
+        self._artifact_results = []
         from src.proj.util.script.task_record import TaskRecorder
         self.task_recorder = TaskRecorder('autorun' , self.task_name , self.task_key or '')
         self.already_done = self.task_recorder.is_finished()
@@ -178,12 +187,22 @@ class AutoRunTask(BoundLogger):
             if not marker.exists():
                 script_event('started', email=self.email)
                 self._autofix_primary = True
+        self._artifact_token = CURRENT_TASK.set(self)
         return self
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        from src.automation.artifact_exchange.research import CURRENT_TASK
+        try:
+            return self._finish_task(exc_type, exc_value, exc_traceback)
+        finally:
+            CURRENT_TASK.reset(self._artifact_token)
+
+    def _finish_task(self, exc_type, exc_value, exc_traceback):
+        artifact_saves_complete = True
         try:
             Save.async_wait_all(caller_name = self.__class__.__name__)
         except Exception as e:
+            artifact_saves_complete = False
             self.logger.error(f'AutoRunTask async wait failed: {e}')
             if os.environ.get('LEARNDL_AUTOFIX_ID'):
                 self.status = 'Error'
@@ -217,6 +236,17 @@ class AutoRunTask(BoundLogger):
         self.exit_files = [p for p in Proj.exit_files.pop_all()]
 
         if not self.should_forfeit:
+            from src.automation.artifact_exchange.research import publish_safe
+            from uuid import uuid4
+            self._artifact_results += publish_safe(self.task_name,
+                f'{self.init_time.isoformat()}-{uuid4().hex}', self._artifacts, self.execution_status) if self._artifacts and artifact_saves_complete else []
+            from src.automation.artifact_exchange.research import delivered_report_paths
+            excluded = delivered_report_paths(self._artifact_results)
+            if excluded:
+                self.exit_files = [p for p in self.exit_files if str(Path(p).resolve()) not in excluded]
+                retained = [p for p in Proj.email_attachments.pop_all() if str(Path(p).resolve()) not in excluded]
+                for p in retained:
+                    Proj.email_attachments.append(p.path, filename=p.filename)
             try:
                 self.send_email()
             except Exception as e:
@@ -397,6 +427,8 @@ class AutoRunTask(BoundLogger):
                 f'Final Messages : ' + '-' * 20 ,
                 self.exit_message ,
             ]
+            from src.automation.artifact_exchange.research import notice
+            bodies.append(notice(getattr(self, '_artifact_results', [])))
             from src.proj.util.web.emailer import Email
             # Optional task-owned delivery (e.g. size-bounded RL result parts).
             # It runs after HtmlCatcher closes and must return True only when all

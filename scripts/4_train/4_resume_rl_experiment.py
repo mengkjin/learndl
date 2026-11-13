@@ -47,6 +47,8 @@ def main(request_path: str, **kwargs):
             raise ValueError('Resumed results failed final audit: ' + '; '.join(audit['errors'][:5]))
         if metadata is None:
             raise ValueError('Recovered suite did not produce bundle metadata')
+        from src.automation.artifact_exchange.research import handoff_bundle
+        handoff_bundle(metadata, run, 'rl')
         for attachment in bundle_attachments(metadata):
             Proj.email_attachments.append(attachment)
         return {'status': 'success', 'original_run': str(run), 'bundle': str(metadata)}
@@ -54,6 +56,8 @@ def main(request_path: str, **kwargs):
         attempt.mkdir(parents=True, exist_ok=True)
         save_json(attempt/'final_audit.json', audit_suite(run, project_root=PATH.main))
         Proj.email_attachments.append(attempt/'final_audit.json')
+        from src.automation.artifact_exchange import ArtifactSpec
+        task.register_artifact(ArtifactSpec(attempt/'final_audit.json', category='rl', experiment=run.name, destination='recovery'))
 
 
 if __name__ == '__main__':

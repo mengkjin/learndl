@@ -206,6 +206,8 @@ def run_experiment(
     progress('bundle', f'Packaging {status["status"]} run: {run}')
     metadata = create_bundle(run, root / "bundles", int(float(config["bundle_max_mb"]) * 1024 * 1024))
     status["bundle_metadata"] = str(metadata)
+    from src.automation.artifact_exchange.research import handoff_bundle
+    handoff_bundle(metadata, run, 'rl', status['status'])
     if not no_email:
         progress('email', 'Sending experiment bundle')
         status["delivery"] = send_bundle(metadata, recipient or config.get("recipient"))

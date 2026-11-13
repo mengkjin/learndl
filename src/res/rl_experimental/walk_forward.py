@@ -548,6 +548,8 @@ def _run_walk_forward(config_path, *, dry_run=False, stage='all', bundle_ready=N
             if (output/name).exists():
                 shutil.copy2(output/name, summary_dir/name)
         metadata = create_bundle(summary_dir, output/'bundles', int(c['bundle_max_mb']*1024**2))
+        from src.automation.artifact_exchange.research import handoff_bundle
+        handoff_bundle(metadata, output, 'rl', json.loads((output/'status.json').read_text())['status'])
         if bundle_ready:
             bundle_ready(metadata)
     return {'output': str(output), 'bundle_metadata': str(metadata), 'status': 'success', 'stage': stage}

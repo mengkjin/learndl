@@ -32,6 +32,50 @@ def argument(args, name, default=''):
     return default
 
 
+def synced_sources(results):
+    """Only committed v2 manifests can advertise synchronized experiment ZIPs."""
+    from src.automation.artifact_exchange.core import (
+        Config, _target, category_root, experiment_members, real_tree, safe_path, valid_category,
+    )
+    result = {'tensorboard': [], 'optuna': []}
+    seen = set()
+    results = results.resolve()
+    config = Config(results=results)
+    if not results.exists():
+        return result
+    for category in sorted(results.iterdir()):
+        if not valid_category(category.name):
+            continue
+        try:
+            root = category_root(results, category.name)
+        except ValueError:
+            continue
+        for source in root.glob('*/*/source.json'):
+            try:
+                real_tree(source)
+                manifest = json.loads(source.read_text())
+                if manifest.get('schema_version') != 2 or manifest['category'] != category.name:
+                    continue
+                if _target(manifest, config) != source.parent:
+                    continue
+                members = experiment_members(manifest)
+                stamp = manifest['created_at']
+                date = datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ').strftime('%Y-%m-%d %H:%M:%S UTC')
+                label = ' · '.join([manifest['host'], manifest['category'], manifest['experiment'], date, manifest['status']])
+                for name, kind in members.items():
+                    path = real_tree(source.parent / safe_path(name))
+                    if path.is_file() and str(path) not in seen:
+                        seen.add(str(path))
+                        result[kind].append({'path': str(path), 'label': label + ' · ' + name, '_stamp': stamp})
+            except (ValueError, KeyError, TypeError, OSError):
+                continue
+    for items in result.values():
+        items.sort(key=lambda item: (item['_stamp'], item['path']), reverse=True)
+        for item in items:
+            item.pop('_stamp')
+    return result
+
+
 class Instances:
     """All mutations are serialized across requests and manager restarts."""
 
@@ -243,26 +287,56 @@ class Instances:
                   for stamp, p in dated[:1]]
         archived = archived_tensorboard_index(PATH.model_archive)
         databases = sorted(PATH.optuna.rglob('*.sqlite3'), key=lambda p: p.stat().st_mtime, reverse=True)
+        synchronized = synced_sources(ROOT / 'results')
+        def synced(kind):
+            return {'zh': '同步研究实验', 'en': 'Synchronized research experiments', 'items': synchronized[kind]}
+
+        def legacy_label(path, folder):
+            host = '来源未知'
+            try:
+                manifest = json.loads((path.parent / 'source.json').read_text())
+                if isinstance(manifest.get('host'), str) and manifest['host']:
+                    host = manifest['host']
+            except (ValueError, OSError, AttributeError):
+                pass
+            return host + ' · ' + str(path.relative_to(folder))
+
         def downloaded(kind):
             folder = ROOT / 'results' / 'model_experiments' / kind
             packages = sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.zip'),
                               key=lambda p: (-p.stat().st_mtime, str(p)))
             return {'zh': '下载的实验压缩包', 'en': 'Downloaded experiment ZIPs',
-                    'items': [option(p, str(p.relative_to(folder))) for p in packages]}
-        return {
+                    'items': [option(p, legacy_label(p, folder)) for p in packages]}
+        groups = {
             'tensorboard': [
                 {'zh': '最近训练', 'en': 'Latest training', 'items': recent},
                 {'zh': '已训练模型', 'en': 'Trained models', 'items': [option(p, str(p.parent.parent.relative_to(PATH.model))) for p in sorted(trained)]},
                 {'zh': '归档模型', 'en': 'Archived models', 'items': [option(p / 'snapshot/tensorboard', f'{module} / {name} / {p.name}')
                     for module, names in archived.items() for name, paths in names.items() for p in paths]},
+                synced('tensorboard'),
                 downloaded('tensorboard'),
             ],
             'optuna': [
                 {'zh': '最近实验', 'en': 'Latest study', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases[:1]]},
                 {'zh': '已保存实验', 'en': 'Saved studies', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases]},
+                synced('optuna'),
                 downloaded('optuna'),
             ],
         }
+
+        for sections in groups.values():
+            seen = set()
+            for section in sections:
+                if section['en'] not in ('Synchronized research experiments', 'Downloaded experiment ZIPs'):
+                    continue
+                items = []
+                for item in section['items']:
+                    canonical = str(Path(item['path']).resolve())
+                    if canonical not in seen:
+                        items.append(item)
+                        seen.add(canonical)
+                section['items'] = items
+        return groups
 
 
 def main():

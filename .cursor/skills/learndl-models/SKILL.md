@@ -93,3 +93,9 @@ A YAML assertion that `enabled: true` exists, or Mock callback kwargs alone, doe
 > Use $learndl-models to diagnose and resolve the specified model's training CUDA OOM while preserving modeling semantics and old-weight compatibility. Evaluate ActivationCheckpointing as one recovery mechanism; if selected, integrate pure regions and verify effective configuration, Callback registration and activation after OOM for both fresh and legacy-resume paths. Test outputs, gradients, weight loading and recovery lifecycle. Validate the previously failing workload and memory peak on CUDA, or explicitly report pending acceptance. Respect the requested experiment scope; do not treat enabling the mechanism as resolving the OOM or introduce unrequested changes to chunking, precision, dimensions or server execution.
 
 The versioned source is `.cursor/skills/learndl-models/`; the local Codex discovery copy is `.agents/skills/learndl-models/`. Synchronize them after edits.
+
+## Research artifact delivery
+
+When adding or changing research result outputs, use
+[learndl-artifact-exchange](../learndl-artifact-exchange/SKILL.md) for batch identity,
+completed snapshots, Syncthing publication and experiment-panel archival.

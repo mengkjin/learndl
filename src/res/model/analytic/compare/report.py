@@ -268,3 +268,8 @@ def export_report(result, output_dir=None):
         **result.metadata,
     }, ensure_ascii=False, indent=2, default=str) + '\n', encoding='utf-8')
     result.output_paths = {'xlsx': excel, 'pdf': pdf, 'parameters': parameters}
+
+    from src.automation.artifact_exchange import ArtifactSpec
+    from src.automation.artifact_exchange.research import register
+    register(ArtifactSpec(directory, category='model_compare', experiment=directory.name, members=tuple(p.name for p in result.output_paths.values())),
+             'model_compare', str(directory))

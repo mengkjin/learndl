@@ -75,3 +75,9 @@ production ledger as a repair shortcut. Keep rollback and old snapshot validatio
 This tracked skill is maintained in `.cursor/skills`; synchronize the local
 `.agents/skills` discovery copy when editing it. Source and operator documentation
 remain authoritative for current options rather than duplicating their schemas here.
+
+## Research artifact delivery
+
+When adding or changing research result outputs, use
+[learndl-artifact-exchange](../learndl-artifact-exchange/SKILL.md) for batch identity,
+completed snapshots, Syncthing publication and experiment-panel archival.

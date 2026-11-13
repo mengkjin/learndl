@@ -300,9 +300,10 @@ class BaseTrainer(BasePipeline):
         self.stage_setup()
 
         from src.proj.util.memory_tracker import ProcessMemoryTracker
+        from src.automation.artifact_exchange.research import model_run
         tracker_label = self.config.model_name or self.config.full_module_name
         from src.res.model.util.lifecycle import ModelLifecycle
-        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker:
+        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
             self.data.memory_tracker = self.memory_tracker
             self.memory_tracker.mark('trainer_setup_complete')
 

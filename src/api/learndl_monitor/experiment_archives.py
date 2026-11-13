@@ -28,9 +28,8 @@ def unpack_experiment(kind: str, archive: Path, cache: Path) -> Path:
         logs = work / name / 'snapshot' / 'tensorboard'
         logs.mkdir(parents=True)
         with zipfile.ZipFile(archive) as package:
-            entries = package.infolist()
-            if len(entries) > 50000 or sum(item.file_size for item in entries) > 4 * 1024**3:
-                raise ValueError('Experiment ZIP exceeds import limits (50000 files / 4 GiB)')
+            from src.automation.artifact_exchange.core import Config, checked_entries
+            entries = checked_entries(package, Config.load())
             for item in entries:
                 path = PurePosixPath(item.filename)
                 mode = item.external_attr >> 16

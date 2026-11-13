@@ -169,6 +169,10 @@ def analyze_bundle(source: str | Path, output_dir: str | Path) -> Path:
 def bundle_attachments(metadata_path: str | Path) -> list[Path]:
     """Verified archive parts and their manifest for a host task's email."""
     metadata = Path(metadata_path).resolve()
+    from src.automation.artifact_exchange.research import bundle_delivery
+    transfer = bundle_delivery(metadata)
+    if transfer:
+        return [Path(p) for p in transfer['logs'] if Path(p).is_file()] + [metadata.with_suffix('.artifacts.json')]
     _, parts = _parts(metadata)
     return [*parts, metadata]
 
@@ -194,6 +198,18 @@ def send_bundle(
                                            delivery_id=f"rl-bundle:{metadata}:{attachments[0].name}")
 
         transport = default_transport
+
+    from src.automation.artifact_exchange.research import bundle_delivery, notice
+    transfer = bundle_delivery(metadata)
+    if transfer and not delivery_path.exists():
+        from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
+        directory = metadata.parent / (metadata.stem + '.analysis_mail')
+        if (directory / 'delivery.json').exists():
+            ok = retry_delivery(directory)
+        else:
+            ok = TaskResultMail(directory)(f"RL experiment {definition['run_id']}",
+                notice(transfer['records']), recipient=recipient, attachments=bundle_attachments(metadata))
+        return {'status': 'sent' if ok else 'failed', 'artifact_delivery': transfer['records']}
 
     states = dict(previous.get("parts", {}))
     total = len(parts)

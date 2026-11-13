@@ -240,6 +240,8 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
         report['training_mail_failed']=sum(s['status']=='failed' for s in mail_states)
         report['finished_at']=datetime.now(timezone.utc).isoformat()
         write_json(folder/'suite.json',report)
+        from src.automation.artifact_exchange.research import publish_analysis
+        publish_analysis(folder, 'factor_sequence', report['status'])
         print(f'[factor-sequence] results: {folder}',flush=True)
     return folder,report
 
@@ -277,6 +279,8 @@ def send_result(folder, recipient=None):
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     folder=Path(folder)
     report=json.loads((folder/'suite.json').read_text())
+    from src.automation.artifact_exchange.research import publish_analysis, delivered, notice
+    transfers = publish_analysis(folder, 'factor_sequence', report['status'])
     if not MACHINE.emailable:
         state={'status':'skipped','reason':'Email is disabled on this machine'}
         write_json(folder/'mail_status.json',state)
@@ -301,7 +305,7 @@ def send_result(folder, recipient=None):
               f"{report['interpretation']}\nAttached: summaries, actual configs and diagnostics. "
               "Checkpoints and stock-level predictions remain on the server.\n")
         ok=TaskResultMail(folder/'mail')(f"Factor sequence [{report['status']}] {report['run_id']}",
-            body,recipient=recipient,attachments=[folder/'suite.json',package])
+            body + notice(transfers),recipient=recipient,attachments=(list(folder.glob('*.log')) if delivered(transfers) else [folder/'suite.json',package]))
         state={'status':'sent' if ok else 'failed','receipt':str(folder/'mail/delivery.json')}
     except Exception:
         state={'status':'failed','error':traceback.format_exc()}

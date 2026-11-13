@@ -159,6 +159,12 @@ class OptunaBoostModel(GeneralBoostModel):
 
         with OptunaSilent(silent = not Proj.vb.is_max_level):
             self.study.optimize(self.study_objective, n_trials = n_trials , show_progress_bar = Proj.vb.is_max_level)
+        if self.OPTUNA_SAVE_STUDIES and self.study_db_path.exists():
+            from src.automation.artifact_exchange import ArtifactSpec
+            from src.automation.artifact_exchange.research import register
+            register(ArtifactSpec(self.study_db_path, kind='optuna', category='model_training', name=self.given_name, experiment=self.given_name),
+                     'optuna', self.sub_name)
+
             
         return self
 
