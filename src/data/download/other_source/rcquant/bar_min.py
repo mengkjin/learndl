@@ -13,7 +13,8 @@ Start date behaviour (daily update):
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
 
 Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
-back to 20110101, independent of ``src_start_date``. Daily update triggers a
+back to 20090101, independent of ``src_start_date``. Stops before saving a day
+with fewer than five stocks with valid prices on either SH or SZ. Daily update triggers a
 limited backfill (default ``max_days=5``) only after the latest sec 1-min bar
 was freshly downloaded in the same run.
 """
@@ -38,8 +39,39 @@ from .storage import locked_day, atomic_frame, sample_size
 __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
-SEC_BACKFILL_FLOOR = 20110101
+SEC_BACKFILL_FLOOR = 20090101
 SEC_BACKFILL_MAX_DAYS_DEFAULT = 5
+SEC_BACKFILL_MIN_STOCKS = 5
+
+
+class SecBackfillQualityError(ValueError):
+    """Insufficient equity coverage to continue backfilling older dates."""
+
+
+def check_sec_backfill_quality(
+    data : pd.DataFrame | None , instrument_list : pd.DataFrame , date : int ,
+) -> None:
+    """Count distinct listed stocks with at least one finite, positive close per market.
+
+    Match against the day's CS instrument list, not code prefixes (which can also
+    identify indices/funds). Accept both provider and locally cached code suffixes.
+    Zero volume is allowed; all-null/invalid price placeholders do not count.
+    """
+    def normalize(codes : pd.Series) -> pd.Series:
+        return codes.astype(str).str.replace('.XSHG', '.SH', regex=False).str.replace('.XSHE', '.SZ', regex=False)
+
+    counts = {'SH': 0, 'SZ': 0}
+    if isinstance(data, pd.DataFrame) and not data.empty and {'code', 'close'}.issubset(data.columns):
+        close = pd.to_numeric(data['close'], errors='coerce')
+        codes = normalize(data.loc[np.isfinite(close) & (close > 0), 'code'])
+        stocks = normalize(instrument_list['code'])
+        codes = codes[codes.isin(stocks)].drop_duplicates()
+        counts = {market: int(codes.str.endswith(f'.{market}').sum()) for market in counts}
+    if any(count < SEC_BACKFILL_MIN_STOCKS for count in counts.values()):
+        raise SecBackfillQualityError(
+            f'{date}: SH={counts["SH"]}, SZ={counts["SZ"]}; '
+            f'each exchange requires at least {SEC_BACKFILL_MIN_STOCKS} stocks with valid minute prices'
+        )
 
 def src_start_date(data_type : MinDataType) -> int:
     never = 20401231
@@ -151,7 +183,7 @@ def x_mins_to_update(date : int , data_type : MinDataType) -> list[int]:
     return x_mins
 
 def backfill_sec_dates() -> Dates:
-    """Trading days in [20110101, last td before daily src_start) missing from trade_ts/min."""
+    """Trading days in [20090101, last td before daily src_start) missing from trade_ts/min."""
     ceiling = src_start_date(MinDataType.SEC)
     if ceiling >= 20400101:
         return Dates()
@@ -358,7 +390,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
     @locked_day
     def rcquant_bar_min(
         self , date : int , data_type : MinDataType , first_n : int = -1 ,
-        * , raise_on_quota : bool = False ,
+        * , raise_on_quota : bool = False , check_sec_quality : bool = False ,
     ) -> bool:    
         def code_map(x : str):
             if data_type != 'sec': 
@@ -373,6 +405,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             return y
 
         if (sec_min := load_min(date , data_type)) is not None: 
+            if check_sec_quality and data_type == MinDataType.SEC:
+                check_sec_backfill_quality(sec_min, rcquant_instrument_list(date, data_type), date)
             df = self.rcquant_min_to_normal_min(sec_min , data_type)
             _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
             return True
@@ -388,6 +422,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         data = rq_get_price(code_list , date , raise_on_quota = raise_on_quota)
         if isinstance(data , pd.DataFrame) and not data.empty:
             data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
+            if check_sec_quality and data_type == MinDataType.SEC:
+                check_sec_backfill_quality(data, instrument_list, date)
             data['code'] = data['code'].map(code_map)
             data['time'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%H%M%S')).str.slice(0,4)
             data['date'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%Y%m%d'))
@@ -398,6 +434,8 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
             return True
         else:
+            if check_sec_quality and data_type == MinDataType.SEC:
+                check_sec_backfill_quality(None, instrument_list, date)
             return False
 
     def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : MinDataType) -> pd.DataFrame:
@@ -421,10 +459,12 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         max_days : int | str | None = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
         **kwargs
     ) -> Base.UpdateFlag:
-        """Fill missing equity 1-min bars from the day before daily start back to 20110101.
+        """Fill missing equity 1-min bars from the day before daily start back to 20090101.
 
         Runs newest-missing first, at most ``max_days`` dates per call (default 5).
         None, empty text, "none", and "null" mean unlimited.
+        Full downloads stop before saving if either SH or SZ has fewer than five
+        stocks with valid minute prices. Sample runs (``first_n > 0``) are exempt.
         Stops immediately on quota exhaustion. ``force`` skips the hour window and
         daily_update gate (used by the daily-update hook).
         """
@@ -495,7 +535,14 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 conclude_filled(msg , level = 'warning')
                 return Base.UpdateFlag.SUCCESS if filled else Base.UpdateFlag.SKIPPED
             try:
-                mark = self.rcquant_bar_min(dt , data_type , first_n , raise_on_quota = True)
+                mark = self.rcquant_bar_min(
+                    dt , data_type , first_n , raise_on_quota = True , check_sec_quality = first_n <= 0 ,
+                )
+            except SecBackfillQualityError as e:
+                msg = f'RcQuant sec backfill stopped by quality check: {e}; no earlier dates attempted'
+                self.logger.alert1(msg)
+                conclude_filled(msg , level = 'warning')
+                return Base.UpdateFlag.SUCCESS if filled else Base.UpdateFlag.SKIPPED
             except QuotaExceeded as e:
                 msg = f'RcQuant quota exceeded after {len(filled)} dates at {dt}: {e}'
                 self.logger.alert1(msg)
