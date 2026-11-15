@@ -114,7 +114,18 @@ def finalize_task_artifacts(owner, saves_complete=True):
             hook()
         except Exception as exc:
             delivery_log(f'attachment handoff failed: {exc}', failed=True, owner=owner)
-    delivery_log('投递阶段结束；published 表示已放入本机共享目录，不代表远端已归档', owner=owner)
+    records = owner._artifact_results
+    counts = {status: sum(r.get('status') == status for r in records)
+              for status in ('prepared', 'published', 'skipped', 'failed')}
+    counts['unregistered'] = int(not records and not owner._artifacts)
+    owner._artifact_delivery_summary = counts
+    reasons = [str(r.get('reason') or r.get('error')) for r in records
+               if r.get('reason') or r.get('error')]
+    delivery_log('投递汇总: ' + json.dumps(counts, ensure_ascii=False)
+                 + ('; reasons=' + '; '.join(reasons) if reasons else '')
+                 + ('; 没有已发布包，不能视为投递成功' if not counts['published'] else
+                    '; published 仅代表本机共享目录发布成功，不代表远端归档'),
+                 failed=bool(counts['failed']), owner=owner)
 
 
 def defer_mail(callback):
@@ -303,8 +314,21 @@ def model_run(trainer):
                 specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
                 if specs:
                     publish_safe('model_training', run_id, specs, status)
+                else:
+                    delivery_log('model results unregistered: no completed result files', failed=True)
+            else:
+                reason = 'autofix' if config is None else f'publisher inactive: enabled={config.enabled}, role={config.role}'
+                record = {'status': 'skipped', 'reason': reason}
+                owner = CURRENT_TASK.get()
+                if owner is not None:
+                    owner._artifact_results.append(record)
+                log_results([record], owner)
         except Exception as exc:
-            delivery_log(f'model preparation failed: {exc}', failed=True)
+            record = {'status': 'failed', 'error': f'model preparation failed: {exc}'}
+            owner = CURRENT_TASK.get()
+            if owner is not None:
+                owner._artifact_results.append(record)
+            log_results([record], owner)
 
 
 def delivered_report_paths(records):

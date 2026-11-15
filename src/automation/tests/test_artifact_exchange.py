@@ -306,7 +306,12 @@ class ExchangeTest(unittest.TestCase):
                     with model_run(trainer):
                         register(ArtifactSpec(reports), 'test', 'run')
                         raise RuntimeError('research failed')
-            self.assertEqual(len(owner._artifact_results), 1)
+            # Preparation failures are now counted, without replacing the original
+            # research exception or erasing the earlier successful publication.
+            self.assertEqual(len(owner._artifact_results), 2)
+            self.assertEqual(owner._artifact_results[0]['status'], 'published')
+            self.assertEqual(owner._artifact_results[1]['status'], 'failed')
+            self.assertIn('pending saves', owner._artifact_results[1]['error'])
         finally:
             CURRENT_TASK.reset(token)
 

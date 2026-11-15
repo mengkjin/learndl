@@ -5,7 +5,6 @@ import json
 import resource
 import sys
 import time
-import numpy as np
 import pandas as pd
 import torch
 from src.res.model.util import BaseCallBack
@@ -14,9 +13,10 @@ __all__ = ["FactorResidualDiagnostics"]
 
 
 class FactorResidualDiagnostics(BaseCallBack):
-    def __init__(self, trainer, **kwargs):
+    def __init__(self, trainer, comparison_roots=None, **kwargs):
         super().__init__(trainer, **kwargs)
         self.started = time.monotonic()
+        self.comparison_roots = comparison_roots
 
     @property
     def folder(self):
@@ -80,64 +80,10 @@ class FactorResidualDiagnostics(BaseCallBack):
         self.logger.stdout(
             f"Factor residual diagnostics: {self.folder}; resources: {report}"
         )
-        from src.proj import PATH
-
-        comparisons = []
-        for base, candidate in [("snapshot", "temporal"), ("temporal", "contextual")]:
-            left = (
-                PATH.model_nn
-                / f"factorseq_residual@factorseq_v2_{base}"
-                / "results"
-                / "factor_residual"
-            )
-            right = (
-                PATH.model_nn
-                / f"factorseq_residual@factorseq_v2_{candidate}"
-                / "results"
-                / "factor_residual"
-            )
-            left_files = {p.name: p for p in left.glob("*.feather")}
-            right_files = {p.name: p for p in right.glob("*.feather")}
-            if not left_files or left_files.keys() != right_files.keys():
-                continue
-            for name in sorted(left_files):
-                a = pd.read_feather(left_files[name])
-                b = pd.read_feather(right_files[name])
-                joined = a.merge(
-                    b,
-                    on="secid",
-                    suffixes=("_base", "_candidate"),
-                    validate="one_to_one",
-                )
-                if (
-                    len(joined) != len(a)
-                    or len(joined) != len(b)
-                    or not np.allclose(
-                        joined.label_base, joined.label_candidate, equal_nan=True
-                    )
-                ):
-                    raise ValueError("Residual comparison samples/labels differ")
-                ia = joined.pred_base.corr(joined.label_base, method="spearman")
-                ib = joined.pred_candidate.corr(
-                    joined.label_candidate, method="spearman"
-                )
-                comparisons.append(
-                    dict(
-                        pair=f"{candidate}-{base}",
-                        date=int(name.split(".")[0]),
-                        delta_ic=ib - ia,
-                        prediction_corr=joined.pred_base.corr(
-                            joined.pred_candidate, method="spearman"
-                        ),
-                    )
-                )
-        if comparisons:
-            daily = pd.DataFrame(comparisons)
-            daily.to_csv(self.folder / "paired_daily.csv", index=False)
-            annual = (
-                daily.assign(year=daily.date // 10000)
-                .groupby(["pair", "year"])[["delta_ic", "prediction_corr"]]
-                .mean()
-            )
-            annual.to_csv(self.folder / "paired_annual.csv")
-            self.logger.stdout(f"Paired residual comparisons:\n{annual.to_string()}")
+        # Do not silently resolve an unnumbered sibling when this run is @2.
+        # Historical pairing belongs to the explicit-root audit, not root guessing.
+        if self.comparison_roots:
+            from src.data.preprocess.factor_sequence.context_diagnostics import diagnose_roots
+            diagnose_roots(self.comparison_roots, self.folder / "comparison")
+        else:
+            self.logger.stdout("Paired comparison not run: explicit comparison_roots required; use factor_sequence_coverage audit")
