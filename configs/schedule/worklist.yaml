@@ -6,12 +6,16 @@ fit:
     mode: sparse
   - name: resnet_gru_new_15m_conv2
     mode: sparse
-  - name: factorseq_v2_snapshot
+  - name: resnet_gru_new_15m_transition_soft_topk
     mode: sparse
-  - name: factorseq_v2_temporal
+  - name: resnet_gru_new_15m_transition_capped_soft_topk
     mode: sparse
-  - name: factorseq_v2_contextual
-    mode: sparse
+  # - name: factorseq_v2_snapshot
+  #   mode: sparse
+  # - name: factorseq_v2_temporal
+  #   mode: sparse
+  # - name: factorseq_v2_contextual
+  #   mode: sparse
 
 resume: False
 force: False

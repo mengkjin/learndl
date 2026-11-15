@@ -568,9 +568,9 @@ def deliver(folder, recipient=None):
                     recipient=recipient,
                     attachments=[folder / "summary.json", package],
                 )
-                result: dict[str, Any] = dict(status="sent" if ok else "failed")
+                result = dict(status="sent" if ok else "failed")
             except Exception:
-                result: dict[str, Any] = dict(
+                result = dict(
                     status="failed", error=traceback.format_exc()
                 )
         write_json(folder / "mail_status.json", result)
