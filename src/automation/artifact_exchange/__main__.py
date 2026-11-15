@@ -10,6 +10,10 @@ from pathlib import Path
 from .core import ArtifactSpec, Config, DEFAULT_CONFIG, atomic_json, publish_artifacts, receive, retry, sandboxed
 from .management import migration, service
 
+__all__ = [
+    'main',
+]
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)

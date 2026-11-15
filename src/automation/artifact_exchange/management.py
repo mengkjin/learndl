@@ -12,6 +12,14 @@ from typing import Any
 from pathlib import Path
 from .core import ROOT, atomic_json, digest, locked, real_tree, fsync_dir
 
+__all__ = [
+    'LABEL',
+    'MIGRATIONS',
+    'service',
+    'inventory',
+    'migration',
+]
+
 LABEL = 'com.learndl.artifact-exchange'
 MIGRATIONS = {'model': 'model_training', 'gru_day_rtn': 'model_training',
               'model_compare': 'model_compare', 'storage_reports': 'storage', 'coverage_diag': 'data_quality'}

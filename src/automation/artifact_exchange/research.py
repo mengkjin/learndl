@@ -11,6 +11,29 @@ import logging
 from pathlib import Path
 from .core import ArtifactSpec, Config, publish_artifacts, sandboxed
 
+__all__ = [
+    'ANALYSIS_SUFFIXES',
+    'EXCLUDED_DIRS',
+    'TaskDelivery',
+    'task_delivery',
+    'delivery_log',
+    'log_results',
+    'publish_safe',
+    'finalize_task_artifacts',
+    'defer_mail',
+    'run_deferred_mail',
+    'register',
+    'analysis_specs',
+    'publish_analysis',
+    'delivered',
+    'notice',
+    'handoff_bundle',
+    'bundle_delivery',
+    'register_report',
+    'model_run',
+    'delivered_report_paths',
+]
+
 MODEL_ARTIFACTS: contextvars.ContextVar[list[ArtifactSpec] | None] = contextvars.ContextVar('artifact_model', default=None)
 CURRENT_TASK: contextvars.ContextVar[Any] = contextvars.ContextVar('artifact_task', default=None)
 ANALYSIS_SUFFIXES = {'.pdf', '.xlsx', '.json', '.csv', '.html', '.md', '.txt', '.log'}

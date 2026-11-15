@@ -1,4 +1,5 @@
 """Delivery failures must never remove the only received copy."""
+from __future__ import annotations
 import os
 import sqlite3
 import tempfile
@@ -12,6 +13,10 @@ from src.automation.artifact_exchange.core import checked_entries, retry, locked
 from src.automation.artifact_exchange.management import migration, service
 from src.automation.artifact_exchange.research import analysis_specs
 from src.api.learndl_monitor.experiment_archives import unpack_experiment
+
+__all__ = [
+    'ExchangeTest',
+]
 
 
 class ExchangeTest(unittest.TestCase):
