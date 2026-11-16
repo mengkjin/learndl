@@ -13,7 +13,7 @@ from src.data.update.custom.market_daily_risk import (
     MarketDailyRiskUpdater,
 )
 
-rebuild_script = importlib.import_module("scripts.2_data.5_rebuild_market_daily_risk")
+rebuild_script = importlib.import_module("scripts.8_fixes.5_rebuild_market_daily_risk")
 validate_day = rebuild_script.validate_day
 digest = rebuild_script.digest
 replace_checked = rebuild_script.replace_checked

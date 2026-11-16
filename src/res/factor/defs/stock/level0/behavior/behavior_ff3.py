@@ -3,6 +3,7 @@ Fama-French 3-Factor Model factors for stock level0
 """
 from __future__ import annotations
 import pandas as pd
+import numpy as np
 
 from collections import defaultdict
 from dataclasses import dataclass , field
@@ -11,7 +12,7 @@ from threading import Lock
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
-from src.func.transform import time_weight , apply_ols
+from src.func.transform import time_weight
 
 __all__ = [
     'ff_mom_1m' , 'ff_mom_2m' , 'ff_mom_3m' , 'ff_mom_6m' , 'ff_mom_12m' , 
@@ -44,15 +45,44 @@ class FF3_Model:
         ff3_x['intercept'] = 1.
         self.ff3_x = ff3_x.loc[:,['intercept' , 'mkt' , 'hml' , 'smb']]
 
-        self.coef = apply_ols(self.ff3_x , self.stk , intercept=False)
-        self.pred = self.ff3_x.values @ self.coef
-        self.resid = self.stk - self.pred
-        self.r2    = 1 - (self.resid ** 2).sum() / (self.stk ** 2).sum()
+        self.stk = self.stk.reindex(self.ff3_x.index)
+        x = self.ff3_x.to_numpy(dtype=float)
+        y = self.stk.to_numpy(dtype=float)
+        self.coef = np.full((x.shape[1], y.shape[1]), np.nan)
+        residual = np.full_like(y, np.nan)
+        scores = np.full(y.shape[1], np.nan)
+        observations = np.zeros(y.shape[1], dtype=int)
+        reasons = []
+        for col in range(y.shape[1]):
+            valid = np.isfinite(x).all(axis=1) & np.isfinite(y[:, col])
+            observations[col] = valid.sum()
+            xx, yy = x[valid], y[valid, col]
+            if len(yy) < x.shape[1] + 1:
+                reasons.append('insufficient_observations')
+                continue
+            if np.linalg.matrix_rank(xx) != x.shape[1]:
+                reasons.append('rank_deficient')
+                continue
+            denominator = float(yy @ yy)
+            if denominator <= 0:
+                reasons.append('zero_denominator')
+                continue
+            coef = np.linalg.lstsq(xx, yy, rcond=None)[0]
+            resid = yy - xx @ coef
+            self.coef[:, col] = coef
+            residual[valid, col] = resid
+            scores[col] = 1 - float(resid @ resid) / denominator
+            reasons.append('valid')
+        self.pred = x @ self.coef
+        self.resid = pd.DataFrame(residual, index=self.stk.index, columns=self.stk.columns)
+        self.r2 = pd.Series(scores, index=self.stk.columns)
+        self.fit_observations = pd.Series(observations, index=self.stk.columns)
+        self.fit_reason = pd.Series(reasons, index=self.stk.columns)
         return self
 
     def resid_mom(self , half_life_ratio = 0.5):
         with self.lock:
-            return (self.resid * time_weight(len(self.resid) , int(half_life_ratio * len(self.resid)))[:,None]).sum()
+            return (self.resid * time_weight(len(self.resid) , int(half_life_ratio * len(self.resid)))[:,None]).sum(min_count=1)
 
     def alpha(self):
         with self.lock:

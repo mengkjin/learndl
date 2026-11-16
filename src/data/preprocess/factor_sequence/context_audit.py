@@ -27,7 +27,7 @@ __all__ = [
     'event_summary',
 ]
 
-VERSION = "context-audit-1"
+VERSION = "context-audit-2-masked"
 RISK_NAMES = tuple(
     "market_day_" + n
     for n in (
@@ -57,7 +57,7 @@ def dictionary() -> dict[str, Any]:
                 units="rank correlation"
                 if name.endswith("__ic")
                 else "percentage points",
-                rule="previous trading day directed raw factor, today realized return; min 50; 10 groups",
+                rule="previous trading day directed raw factor, today realized return; min 50; up to 10 tie-preserving groups; minimum ceil(N/50) per group",
             )
         )
     for name in MARKET_NAMES:
@@ -74,7 +74,8 @@ def dictionary() -> dict[str, Any]:
         factors=list(FACTORS),
         features=features,
         training_enabled=False,
-        missing="NaN; validity remains in audit",
+        missing="NaN in audit; paired __valid channels in repaired input; pack zeros only at model boundary",
+        masked_input_channels={"factorperf":132,"factormarket":30},
         availability="end-of-day only; historical source revisions not reconstructed",
     )
     result["fingerprint"] = hashlib.sha256(

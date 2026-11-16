@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # description: Rebuild all historical market daily risk with pandas/Polars verification
-# email: false
+# email: true
 # mode: shell
 # parameters:
 #   start:

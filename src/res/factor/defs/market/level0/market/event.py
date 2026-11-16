@@ -3,6 +3,7 @@ Market event factors for the project
 """
 from __future__ import annotations
 import pandas as pd
+import numpy as np
 
 from src.proj import DB
 from src.data import DATAVENDOR
@@ -36,33 +37,80 @@ class high_level_switch(MarketEventFactor):
 
     @classmethod
     def _high_level_switch(cls , start : int | None = None , end : int | None = None) -> pd.DataFrame:
-        level1_codes = DB.load('information_ts' , 'zx_industry')['l1_code'].unique()
+        from src.proj import CALENDAR
+        codes = DB.load('information_ts', 'zx_industry')['l1_code'].dropna().unique()
+        quote = DB.load('index_daily_ts', '000985.CSI')
+        if quote.empty or not len(codes):
+            raise ValueError('high_level_switch: missing index/industry master')
+        end = int(end if end is not None else quote.trade_date.max())
+        dates = np.asarray(CALENDAR.range(int(quote.trade_date.min()), end, 'td'))
+        industries = {code: DB.load('index_daily_ts', code) for code in codes}
+        result = cls.from_quotes(quote, industries, dates)
+        return result if start is None else result.loc[result.date >= start].reset_index(drop=True)
 
-        index_quotes = {
-            ts_code : DB.load('index_daily_ts' , ts_code).reset_index(drop = True) for ts_code in level1_codes
-        }
+    @staticmethod
+    def from_quotes(quote, industries, dates):
+        """Compute on full prehistory; missing source days never become false events."""
+        def align(frame, required):
+            if frame.empty:
+                return pd.DataFrame(index=dates, columns=required, dtype=float)
+            if not {'trade_date', *required} <= set(frame):
+                raise ValueError('Malformed market event source')
+            frame = frame.drop_duplicates().copy()
+            if frame.trade_date.isna().any() or frame.trade_date.duplicated().any():
+                raise ValueError('Conflicting/invalid market event dates')
+            return frame.set_index('trade_date').sort_index().reindex(dates)[required].replace([np.inf, -np.inf], np.nan)
+        q = align(quote, ['high', 'low', 'close', 'pct_chg'])
+        peaked, peaking, required, available = [], [], [], []
+        for frame in industries.values():
+            c = align(frame, ['close']).close
+            # Historical industry membership is unavailable. An industry enters the
+            # required universe after its first 244 calendar observations; this is causal.
+            first = np.flatnonzero(c.notna().to_numpy())
+            active = pd.Series(False, index=dates)
+            if len(first):
+                active.iloc[int(first[0]) + 243:] = True
+            else:
+                active[:] = True  # missing entire industry source is not zero contribution
+            high = c.rolling(243, min_periods=243).max()
+            valid = c.notna() & c.shift(1).notna() & high.shift(1).notna()
+            peaked.append((c.shift(1) >= high.shift(1)).astype(float).where(valid))
+            peaking.append((c >= high.shift(1)).astype(float).where(valid))
+            required.append(active)
+            available.append(valid & active)
+        if not peaked:
+            raise ValueError('No industry sources')
+        req = pd.concat(required, axis=1).sum(axis=1)
+        count = pd.concat(available, axis=1).sum(axis=1)
+        q['peaked'] = pd.concat(peaked, axis=1).sum(axis=1, min_count=1)
+        q['peaking'] = pd.concat(peaking, axis=1).sum(axis=1, min_count=1)
+        prev = q.close.shift(1)
+        parts = pd.concat([q.high-q.low, (q.high-prev).abs(), (q.low-prev).abs()], axis=1)
+        q['tr'] = (parts.max(axis=1) / prev).where(parts.notna().all(axis=1) & (prev > 0))
+        q['atr'] = q.tr.rolling(60, min_periods=60).mean()
+        market_valid = q.atr.notna() & q.pct_chg.notna()
+        q['market_selloff'] = (q.pct_chg / 100 < -q.atr).astype(float).where(market_valid)
+        valid = market_valid & (req > 0) & (count == req)
+        q['high_level_switch'] = ((q.peaked-q.peaking >= 3) & (q.market_selloff == 1)).astype(float).where(valid)
+        q['source_valid'] = valid.astype(float)
+        q['industry_required'] = req
+        q['industry_available'] = count
+        q['source_reason'] = np.where(~market_valid, 'market_missing_or_warmup',
+                                     np.where(req == 0, 'industry_warmup',
+                                              np.where(count != req, 'industry_missing', 'valid')))
+        return q.rename_axis('date').reset_index()[['date', 'high_level_switch', 'peaked', 'peaking',
+                    'market_selloff', 'tr', 'atr', 'source_valid', 'source_reason',
+                    'industry_required', 'industry_available']]
 
-        for index , df in index_quotes.items():
-            df = slice_quote(df , start , end)
-            df['52week_high'] = df['close'].rolling(243).max()
-            df['peaked'] = 1 * (df['close'] >= df['52week_high']).shift(1)
-            df['peaking'] = 1 * (df['close'] >= df['52week_high'].shift(1))
-            index_quotes[index] = df.filter(items = ['trade_date' , 'peaked' , 'peaking'])
-
-        l1_index_stat = pd.concat(index_quotes.values()).groupby('trade_date').sum().reset_index()
-
-        quote = DB.load('index_daily_ts' , '000985.CSI')
-        quote = slice_quote(quote , start , end)
-
-        quote['tr'] = pd.concat([quote['high'] - quote['low'] , (quote['high'] - quote['close'].shift(1)).abs() , (quote['low'] - quote['close'].shift(1)).abs()] , axis = 1).max(axis = 1) / quote['close'].shift(1)
-        quote['atr'] = quote['tr'].rolling(60).mean()
-        quote['market_selloff'] = 1 * (quote['pct_chg'] / 100 < -quote['atr'])
-
-        quote = quote.merge(l1_index_stat , on = 'trade_date')
-
-        quote['high_level_switch'] = 1 * (quote['peaked'] - quote['peaking'] >= 3) * (quote['market_selloff'] == 1)
-        quote = quote.rename(columns = {'trade_date' : 'date'}).filter(items = ['date' , cls.factor_name , *cls.singal_columns]).reset_index(drop = True)
-        return quote
+    def validate_value(self, df, date, strict=False):
+        valid = df.source_valid.eq(1)
+        if not df.source_valid.isin([0, 1]).all() or not df.loc[valid, self.factor_name].isin([0, 1]).all():
+            raise ValueError('Invalid high_level_switch source mask/label')
+        if df.loc[~valid, self.factor_name].notna().any():
+            raise ValueError('Unknown event must remain NaN')
+        if df.date.duplicated().any():
+            raise ValueError('Duplicate event dates')
+        return df
 
     def calc_history(self , date : int) -> pd.DataFrame:
         df = self._high_level_switch(end = date)

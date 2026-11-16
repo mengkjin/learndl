@@ -176,7 +176,8 @@ def _calc_factor_wrapper(calc_factor : Callable[[FactorCalculator,int],pd.Series
             df = df.drop_duplicates(subset = ['date'] , keep = 'first').sort_values('date')
         elif instance.meta_type in ['stock' , 'affiliate' , 'pooling']:
             assert 'secid' in df.columns , f'secid not found in calc_factor result for stock factor: {df.columns}'
-            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').loc[:, ['secid' , instance.factor_name]]
+            metadata = [c for c in df if str(c).startswith(instance.factor_name + '__source_')]
+            df = df.drop_duplicates(subset = ['secid'] , keep = 'first').loc[:, ['secid' , instance.factor_name, *metadata]]
             df = df.set_index('secid').reindex(DATAVENDOR.secid(date)).reset_index(drop = False)
         else:
             raise ValueError(f'undefined meta type: {instance.meta_type}')
@@ -377,7 +378,9 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
             return
         
         old_df = DB.load(f'factor_stats_{stats_type}' , self.db_key , vb_level = 'never')
+        from src.func.factor_groups import GROUPING_VERSION
         new_df = getattr(self.Factor(dates) , f'{stats_type}_stats')()
+        new_df['grouping_version'] = GROUPING_VERSION
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
         DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
@@ -876,7 +879,7 @@ class MarketFactorCalculator(FactorCalculator):
             return False
         df = self(date)
         df = self.validate_value(df , date , strict = strict_validation)
-        df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'first').\
+        df = pd.concat([old_df , df]).drop_duplicates(subset = ['date'] , keep = 'last' if overwrite else 'first').\
             sort_values('date').reset_index(drop = True)
 
         return DB.save(df , self.db_src , self.db_key , indent = self.indent + 1 , vb_level = 'max')

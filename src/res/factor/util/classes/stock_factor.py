@@ -24,6 +24,7 @@ from typing import Any , Literal  , TypeAlias
 
 from src.proj import DB , CALENDAR , Logger , Base , Save , Load
 from src.func.transform import standard_normal , winsorize
+from src.func.factor_groups import GROUPING_VERSION, factor_groups
 from src.data import DataBlock , DATAVENDOR
 
 from .alpha_model import AlphaModel
@@ -228,10 +229,16 @@ def eval_grp_avg(
     
     rtn = list()
     for col in x_cols:
-        y['group'] = series_grouping(x[col], group_num, direction=direction, strict_sparse_grouping=strict_sparse_grouping)
+        valid = np.isfinite(x[col]) & np.isfinite(x[y_name])
+        y = x.loc[valid, [y_name]].copy()
+        if as_rank:
+            y[y_name] = y[y_name].rank(pct=True)
+        y['group'] = factor_groups(x.loc[valid, col], group_num, direction)
         if excess and not as_rank: 
             y[y_name] -= y[y_name].mean()
         grp_avg_ret = y.groupby('group' , observed = True)[y_name].mean().rename(col)
+        if len(grp_avg_ret) < 2:
+            grp_avg_ret[:] = np.nan
         rtn.append(grp_avg_ret)
     rtn = pd.concat(rtn, axis=1, sort=True)
     return rtn
@@ -1094,7 +1101,7 @@ class StockFactor:
         """
         evaluate the group performance of the factor
         """
-        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type}
+        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type, 'grouping_version': GROUPING_VERSION}
         if as_rank:
             params['rank'] = True
         needed = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date

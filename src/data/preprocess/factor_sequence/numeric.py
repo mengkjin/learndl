@@ -14,6 +14,7 @@ __all__ = [
 import numpy as np
 import pandas as pd
 from .schema import EVENTS, STOCK_CHANNELS
+from src.func.factor_groups import factor_groups
 
 
 def clean(x):
@@ -58,7 +59,7 @@ def cross_section(raw, eligible, cfg):
     return out, degenerate
 
 
-def stock_block(raw, eligible, cfg):
+def stock_block(raw, eligible, cfg, state=None):
     x = clean(raw)
     directions = np.array([-1 if f.startswith('-') else 1 for f in cfg.factors])
     x *= directions
@@ -67,16 +68,21 @@ def stock_block(raw, eligible, cfg):
     observed = np.isfinite(x)
     last = np.full((len(x), x.shape[2]), -1, dtype=int)
     previous = np.full_like(last, np.nan, dtype=float)
+    offset = 0
+    if state is not None and state:
+        last, previous, offset = state['last'], state['previous'], state['offset']
     gap, never, delta = np.zeros_like(x), np.zeros_like(x), np.full_like(x, np.nan)
     for t in range(x.shape[1]):
         ok = observed[:, t]
         # Gap is time since previous valid daily observation, including at reappearance.
         seen = last >= 0
-        gap[:, t] = np.where(seen, age_scale(t-last, cfg), 0)
+        gap[:, t] = np.where(seen, age_scale(t+offset-last, cfg), 0)
         never[:, t] = ~seen & ~ok
         delta[:, t] = np.where(ok & seen, x[:, t]-previous, np.nan)
         previous = np.where(ok, x[:, t], previous)
-        last = np.where(ok, t, last)
+        last = np.where(ok, t+offset, last)
+    if state is not None:
+        state.update(last=last, previous=previous, offset=offset+x.shape[1])
     dz, _ = cross_section(delta, eligible, cfg)
     channels = (np.nan_to_num(z), np.isfinite(z), observed, gap, never,
                 np.nan_to_num(dz), np.isfinite(dz), np.zeros_like(x),
@@ -94,10 +100,10 @@ def group_metrics(factor, returns, minimum):
     f, r = factor[ok], returns[ok]
     if np.ptp(f) <= 1e-12:
         return np.full(4, np.nan)
-    rank = pd.Series(f).rank(method='average').to_numpy()
-    # Ties are never split by stock identifier; an absent extreme group is invalid.
-    group = np.minimum(9, np.floor((rank-.5) * 10 / len(rank))).astype(int)
-    top, bot = r[group == 9], r[group == 0]
+    group = factor_groups(f)
+    top, bot = r[group == group.max()], r[group == group.min()]
+    if group.max() == group.min():
+        top = bot = np.array([])
     ic = pd.Series(f).corr(pd.Series(r), method='spearman') if np.ptp(r) > 1e-12 else np.nan
     if not len(top) or not len(bot):
         return np.array([ic, np.nan, np.nan, np.nan])
@@ -176,7 +182,9 @@ def market_block(market, cfg):
             last = None
             age = np.full(len(s), np.nan)
             for t, value in enumerate(s):
-                if value == 1:
+                if pd.isna(value):
+                    last = None
+                elif value == 1:
                     last = t
                 if last is not None:
                     age[t] = age_scale(t-last, cfg)

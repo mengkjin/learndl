@@ -15,7 +15,7 @@ Polars 独立计算分钟收益、市场加权收益、样本标准差（ddof=1�
 在服务器项目根目录手动运行全历史重算：
 
 ```bash
-.venv/bin/python scripts/2_data/5_rebuild_market_daily_risk.py
+.venv/bin/python scripts/8_fixes/5_rebuild_market_daily_risk.py
 ```
 
 默认从最早支持的分钟日期（或更早的已有风险记录）开始，到最新已确认且有分钟源数据的日期。
@@ -26,7 +26,7 @@ Polars 独立计算分钟收益、市场加权收益、样本标准差（ddof=1�
 只验证并生成候选，不替换数据库：
 
 ```bash
-.venv/bin/python scripts/2_data/5_rebuild_market_daily_risk.py --validate-only
+.venv/bin/python scripts/8_fixes/5_rebuild_market_daily_risk.py --validate-only
 ```
 
 ScriptTool 任务名为 `rebuild_market_daily_risk`，也可从 Run Scripts 选择。

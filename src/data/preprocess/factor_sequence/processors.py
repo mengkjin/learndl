@@ -20,28 +20,46 @@ def load_block(dataset, key, dates=None, secid=None, view="full"):
     if not dataset:
         raise ValueError('input.factor_sequence.dataset must identify an immutable bundle')
     manifest = load_manifest(dataset)
+    repaired = manifest.get('format') == 'factor-sequence-repair-2'
     if key not in KEYS:
         raise KeyError(key)
-    b = np.load(Path(dataset)/f'{key}.npz',allow_pickle=False)
+    if repaired:
+        b = dict(values=np.load(Path(dataset)/f'{key}.npy', mmap_mode='r'),
+                 dates=np.load(Path(dataset)/'dates.npy'),
+                 secids=np.load(Path(dataset)/'secids.npy') if key == 'factorseq' else np.array([0]),
+                 features=np.array(manifest['blocks'][key]['features']))
+    else:
+        b = np.load(Path(dataset)/f'{key}.npz',allow_pickle=False)
     if list(b['features']) != manifest['blocks'][key]['features']:
         raise ValueError('Feature order does not match manifest')
     names=list(b['features'])
     selected=names
-    if view == 'compact':
+    if view == 'compact' or (repaired and view == 'slim'):
         factors=manifest['config']['factors']
         if key == 'factorseq':
             selected=[f'{c}__{f}' for c in ('value','valid','gap','never') for f in factors]
-        elif key == 'factorperf':
+        elif key == 'factorperf' and not repaired:
             selected=[f'{f}__{m}{suffix}' for f in factors for m in ('ic','spread','ic_mean20','ic_mean60','spread_mean20','spread_mean60') for suffix in ('','__valid')]
     elif view != 'full':
         raise ValueError('Unknown factor input view')
     indices=[names.index(n) for n in selected]  # missing features fail, never silently fill
     values=b['values']
+    if repaired:
+        if dates is not None:
+            keep = np.isin(b['dates'], dates)
+            values = values[:,keep]
+            b['dates'] = b['dates'][keep]
+        if key not in SHARED_KEYS and secid is not None:
+            keep = np.isin(b['secids'], secid)
+            values = values[keep]
+            b['secids'] = b['secids'][keep]
+        values = np.array(values, copy=True)
     if selected != names:
         values=values[...,indices].copy()
     block = DataBlock(values=torch.from_numpy(values),date=b['dates'],
                       secid=b['secids'],feature=np.asarray(selected))
-    b.close()
+    if not isinstance(b, dict):
+        b.close()
     if dates is not None:
         block = block.align_date(np.asarray(dates))
     if key not in SHARED_KEYS and secid is not None:
@@ -50,7 +68,7 @@ def load_block(dataset, key, dates=None, secid=None, view="full"):
     block.values.nan_to_num_(nan=0.,posinf=0.,neginf=0.)
     if key == 'factorseq':
         k = len(manifest['config']['factors'])
-        never = 3 if view == 'compact' else STOCK_CHANNELS.index('never')
+        never = 3 if view in ('compact','slim') else STOCK_CHANNELS.index('never')
         block.values[...,never*k:(never+1)*k] = torch.where(
             holes[...,None],1.,block.values[...,never*k:(never+1)*k])
     return block

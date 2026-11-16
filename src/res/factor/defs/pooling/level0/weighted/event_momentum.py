@@ -211,7 +211,7 @@ class EventFactorWeight:
         weights = event_date_weight.rename(columns = {'event_date' : 'date'})
 
         weight_table = weights.pivot_table(index = 'date' , columns = 'factor_name' , values = 'weight').fillna(0)
-        self.weights = weight_table.loc[:,self.factor_names]
+        self.weights = weight_table.reindex(columns=self.factor_names, fill_value=0.)
         trailing_full_dates = np.concatenate([CALENDAR.trailing(self.full_dates[0] , 21 , 'td')[:-1] , self.full_dates])
         self.full_weights = weight_table.reindex(trailing_full_dates).ffill(limit = 20).\
             fillna(1 / weight_table.shape[1]).reindex(self.full_dates.dates)
@@ -220,12 +220,16 @@ class EventFactorWeight:
 
     @classmethod
     def event_date_metric(cls , x : pd.DataFrame , **kwargs) -> float:
+        x = x.dropna(subset=['group_ret']).sort_values('group')
+        if len(x) < 2:
+            return np.nan
         top = x.iloc[-1]['group_ret']
-        bot = 0 if cls.momentum_type == 'top' else x.iloc[1]['group_ret']
+        bot = 0 if cls.momentum_type == 'top' else x.iloc[0]['group_ret']
         return top - bot
 
     @staticmethod
     def scale_weights(weights : pd.Series , **kwargs) -> pd.Series:
+        weights = weights.fillna(0.)
         if weights.sum() <= 0:
             y = (weights * 0 + 1) / len(weights)
         else:

@@ -18,10 +18,11 @@ from src.data.preprocess.factor_sequence.numeric import (
 from src.data.preprocess.factor_sequence.bundle import build, load, audit
 from src.data.preprocess.factor_sequence.processors import load_block
 from src.res.algo.nn.model.factor_sequence import MODELS as ALL_MODELS
-MODELS = {k:v for k,v in ALL_MODELS.items() if k != "factorseq_residual"}
 from src.res.model.util.data.operations import DataOperator
 from src.res.model.util.data.module_data import ModuleData
 from src.res.model.util.data.data_module import DataModule
+
+MODELS = {k:v for k,v in ALL_MODELS.items() if k != "factorseq_residual"}
 
 
 def fixture(t=150):

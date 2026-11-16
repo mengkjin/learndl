@@ -255,11 +255,18 @@ def calc_group_year(
 ) -> pd.DataFrame:
     factor = factor.within(benchmark)
     grp_perf = factor.eval_group_perf(nday , lag , group_num , True , ret_type).drop(columns=['start' , 'end'])
-    top_group = grp_perf.groupby(['group', 'factor_name'] , observed=True)['group_ret'].sum().\
-        loc[[grp_perf['group'].min(), grp_perf['group'].max()]].reset_index(drop=False).\
-        sort_values(['factor_name', 'group_ret']).drop_duplicates(['factor_name'], keep='last')
-
-    top_perf = pd.merge(top_group[['factor_name', 'group']], grp_perf, how='left', on=['factor_name', 'group'])
+    if grp_perf.empty:
+        return pd.DataFrame()
+    # Compare daily extreme sides, not a global numeric group label: ties make
+    # the number of groups vary by date. Preserve the existing ex-post side choice.
+    ordered = grp_perf.dropna(subset=['group_ret']).sort_values('group')
+    keys = ['date', 'factor_name']
+    extremes = pd.concat([ordered.groupby(keys).head(1).assign(side='bottom'),
+                          ordered.groupby(keys).tail(1).assign(side='top')])
+    best = extremes.groupby(['factor_name','side'])['group_ret'].sum().reset_index().sort_values('group_ret').drop_duplicates('factor_name',keep='last')
+    top_perf = extremes.merge(best[['factor_name','side']],on=['factor_name','side'])
+    if top_perf.empty:
+        return pd.DataFrame()
     top_perf = top_perf.set_index(['date', 'factor_name'])['group_ret'].unstack()
 
     scd, ecd = str(top_perf.index[0]), str(top_perf.index[-1])
@@ -280,7 +287,8 @@ def calc_group_year(
     rtn['year_ret'] = rtn['avg'] * 243 / nday
     rtn['std'] = rtn['std'] * np.sqrt(243 / nday)
     rtn['ir'] = rtn['ir'] * np.sqrt(243 / nday)
-    rtn = pd.merge(rtn, top_group[['factor_name', 'group']], on=['factor_name'], how='left')
+    best['group'] = best.side.map({'bottom':1, 'top':group_num})
+    rtn = pd.merge(rtn, best[['factor_name', 'group', 'side']], on=['factor_name'], how='left')
     rtn = rtn.set_index(['factor_name', 'year', 'group' , 'range']).sort_index().reset_index()
     return rtn
 

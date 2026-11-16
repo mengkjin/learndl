@@ -157,14 +157,11 @@ class dtop(ValueFactor):
     description = '滚动分红率'
     
     def calc_factor(self, date: int):
-        # some date this column is erronous
-        dv_ttm = DATAVENDOR.TRADE.get_val(date).set_index(['secid'])['dv_ttm'] / 100
-        if dv_ttm.notna().sum() <= 100:
-            start , end = DATAVENDOR.CALENDAR.td_start_end(date , 1 , 'y')
-            dv_ttm = DATAVENDOR.TRADE.get_val_data(start , end , 'dv_ttm' , prev=False , pivot=False)
-            dv_ttm = dv_ttm.dropna().groupby('secid')['dv_ttm'].last() / 100
-        return calc_valuation(dv_ttm , 1 , pct = False)
+        from src.data.preprocess.factor_sequence.dividend import dividend_values
+        source = DATAVENDOR.TRADE.get_val(date)
+        return dividend_values(source, DATAVENDOR.secid(date))
     
+
 class dtop_rank1y(ValueFactor):
     init_date = 20110101
     description = '股东分红率,1年分位数'
