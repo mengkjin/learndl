@@ -81,3 +81,31 @@ factorperf、常规分组 stats 和事件合成共用此规则；固定十组／
 .venv/bin/python -m unittest discover -s tests -p 'test_factor_sequence*.py' -q
 .venv/bin/python -m unittest discover -s tests -p test_market_daily_risk.py -q
 ```
+
+## All-history missing-date backfill (script 8)
+
+```sh
+.venv/bin/python scripts/8_fixes/8_backfill_all_factor_history.py --dry-run
+.venv/bin/python scripts/8_fixes/8_backfill_all_factor_history.py
+```
+
+This manual script scans all updatable registered factors from the configured history
+start through the latest confirmed trading date. Optional `--start`, `--end`, and
+`--batch-size` (default 32) narrow the range or statistics batch size. It preserves
+each calculator's configured update frequency; it does not expand five-day factors
+to daily history. Affiliate values remain owned by their upstream data sources.
+Daily/weekly statistics cover missing eligible dates of all existing factor files.
+
+It processes dependencies by level, completes each factor's values and statistics,
+and logs factor names and every target date before calculation, followed by completion
+or failure. Project `parallel()` calls, including nested loads and process requests,
+execute serially only inside this script's context. Third-party native math library
+threads are not changed. Ordinary updates retain their configured concurrency.
+Daily automatic factor/statistics discovery remains restricted to the latest two years.
+
+The script uses the existing `update_factors` lock, bypasses daily empty-job TTL caches,
+and never requests overwrite. Successful output is retained; rerunning scans remaining
+gaps. A missing result after calculation raises an error and stops dependent work.
+Dry run performs no updates; statistics gaps created by future value writes will only
+appear during the actual run. This repairs missing dates, not stale definitions,
+corrupt files, or missing upstream source data; use scripts 6/7 for semantic rebuilds.

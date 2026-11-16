@@ -6,11 +6,12 @@ from datetime import datetime , timedelta
 from typing import Any , Literal  , TypeVar , TypeAlias
 from collections.abc import Callable, Mapping, Iterable
 from uuid import uuid4
-from threading import local
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from src.proj import MACHINE , Logger
 
-__all__ = ['parallel' , 'is_main_process']
+__all__ = ['parallel' , 'is_main_process', 'serial_execution']
 
 T = TypeVar('T')
 FuncCallInput : TypeAlias = (
@@ -21,16 +22,17 @@ FuncCallInputs : TypeAlias = Mapping[Any, FuncCallInput[T]] | Iterable[FuncCallI
 ParallelMethodType : TypeAlias = Literal['forloop' , 'thread' , 'process']
 
 MAX_WORKERS : int = min(40 , MACHINE.cpu_count)
-_thread_context = local()
+_serial_execution = ContextVar('serial_execution', default=False)
 
 
-def _thread_call(func_call):
-    previous = getattr(_thread_context, 'active', False)
-    _thread_context.active = True
+@contextmanager
+def serial_execution():
+    """Opt-in serial execution of project parallel() calls in this context only."""
+    token = _serial_execution.set(True)
     try:
-        return func_call()
+        yield
     finally:
-        _thread_context.active = previous
+        _serial_execution.reset(token)
 
 
 def is_main_process() -> bool:
@@ -59,8 +61,7 @@ def parallel(
     """
     result , func_calls = _FuncCall.from_func_calls(inputs , ignore_error = ignore_error , **kwargs)
     method = _get_method(method if len(func_calls) > 1 else 0 , max_workers)
-    # Nested pools multiply file descriptors and threads across factor/date jobs.
-    if method == 1 and getattr(_thread_context, 'active', False):
+    if _serial_execution.get():
         method = 0
     
     if method == 0:
@@ -72,7 +73,7 @@ def parallel(
                 break
     elif method == 1:
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [(func_call , pool.submit(_thread_call, func_call)) for func_call in func_calls]
+            futures = [(func_call , pool.submit(func_call)) for func_call in func_calls]
             for func_call , future in futures:
                 # Thread pool: child can mutate parent ``result_dict``; use Future return value.
                 returned = future.result()
