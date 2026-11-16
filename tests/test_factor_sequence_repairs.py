@@ -419,6 +419,28 @@ class RepairTests(unittest.TestCase):
             },
         )
 
+    def test_fix_scripts_cli_parameter_schema(self):
+        from src.proj.util.script.param_schema import ScriptParamSchema
+
+        root = Path(__file__).resolve().parents[1] / "scripts" / "8_fixes"
+        for path in sorted(root.glob("*.py")):
+            with self.subTest(script=path.name):
+                # Exercise the same source-only parser as RunPipelineScript;
+                # discovery alone does not validate required parameter metadata.
+                schema = ScriptParamSchema.from_source(path)
+                self.assertIsNotNone(schema)
+                assert schema is not None
+                self.assertTrue(all(p.desc.strip() for p in schema.params))
+                self.assertEqual(
+                    {p.name: p.default for p in schema.params},
+                    schema.signature_defaults,
+                )
+                if path.name.startswith(("6_", "7_")):
+                    self.assertEqual(
+                        {p.name for p in schema.params},
+                        {"start", "end", "run_id", "dry_run", "batch_size"},
+                    )
+
     def test_repaired_masked_loader(self):
         from src.data.preprocess.factor_sequence.rebuild_data import REPAIR_VERSION
         from src.data.preprocess.factor_sequence.processors import load_block

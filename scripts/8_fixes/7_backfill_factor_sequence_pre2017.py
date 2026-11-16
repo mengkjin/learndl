@@ -4,18 +4,23 @@
 # mode: shell
 # parameters:
 #   start:
+#     desc: First repair trading date (YYYYMMDD)
 #     type: int
 #     default: 20110101
 #   end:
+#     desc: Backfill end date; defaults to 20161230. Downstream refresh extends to latest confirmed date
 #     type: int
 #     default: null
 #   run_id:
+#     desc: Reuse the same run ID to resume; leave blank to create a new run
 #     type: str
 #     default: null
 #   dry_run:
+#     desc: Write the execution plan without recalculating factors or data blocks
 #     type: bool
 #     default: false
 #   batch_size:
+#     desc: Number of trading dates per data construction batch
 #     type: int
 #     default: 32
 """Manual repair; no training, worklist edits or historical audit workflow."""
