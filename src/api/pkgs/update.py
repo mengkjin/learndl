@@ -3,6 +3,7 @@ API for periodic update operations of this project.
 """
 
 from __future__ import annotations
+import pandas as pd
 from src.proj import Logger , MACHINE , CALENDAR , Proj
 from src.proj.util.filesys.ttl_cache import DiskTTLCache
 
@@ -49,14 +50,15 @@ class UpdateAPI:
         if not DataAPI.is_updated():
             Logger.conclude('Data is not updated to the latest date, skip model update' , level = 'error')
             return
-        FactorAPI.update_market_factors()
-        FactorAPI.update_stock_factors(timeout = 3)
-        FactorAPI.update_affiliate_factors()
+        factor_start = int((pd.Timestamp(str(CALENDAR.update_to())) - pd.DateOffset(years=2)).strftime('%Y%m%d'))
+        FactorAPI.update_market_factors(missing_since=factor_start)
+        FactorAPI.update_stock_factors(timeout = 3, missing_since=factor_start)
+        FactorAPI.update_affiliate_factors(missing_since=factor_start)
         from src.res.model.util.lifecycle import ModelLifecycle
         ModelLifecycle.inspect_registered()
         ModelAPI.update()
-        FactorAPI.update_pooling_factors(timeout = 3)
-        FactorAPI.update_factor_stats()
+        FactorAPI.update_pooling_factors(timeout = 3, missing_since=factor_start)
+        FactorAPI.update_factor_stats(missing_since=factor_start)
         FactorAPI.export_factor_table()
         ModelAPI.resume_testing(force_resume = True , daily_update_component = True)
         TradingAPI.update()

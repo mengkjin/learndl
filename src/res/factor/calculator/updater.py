@@ -43,8 +43,12 @@ class BaseFactorUpdater(Base.BasicUpdater , metaclass=Base.Singleton):
         return f'{self.name}({n_jobs} jobs)'
 
     @classmethod
-    def parse_update_input(cls , *args , **kwargs) -> dict[str , Any]:
-        return super().parse_update_input(*args , **kwargs) | {'all' : True}
+    def parse_update_input(cls , *args , missing_since : int | None = None, **kwargs) -> dict[str , Any]:
+        parsed = super().parse_update_input(*args , **kwargs) | {'all' : True}
+        # Bound automatic missing-date discovery, including statistics, before jobs are built.
+        if missing_since is not None and not parsed['overwrite']:
+            parsed['start'] = max(parsed['start'], missing_since)
+        return parsed
 
     @classmethod
     def proceed_update(

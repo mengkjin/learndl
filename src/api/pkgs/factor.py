@@ -89,7 +89,7 @@ class FactorAPI:
         return flag
 
     @classmethod
-    def update_stock_factors(cls , timeout : int = -1):
+    def update_stock_factors(cls , timeout : int = -1, *, missing_since : int | None = None):
         """
         Update stock factors via ``FactorUpdaterAPI.Stock``.
 
@@ -104,7 +104,7 @@ class FactorAPI:
           execution_time: short
           memory_usage: medium
         """
-        wrap_update(FactorUpdaterAPI.Stock.update , 'update stock factors' , timeout = timeout)
+        wrap_update(FactorUpdaterAPI.Stock.update , 'update stock factors' , timeout = timeout, missing_since=missing_since)
 
     @classmethod
     def rollback_stock_factors(cls , rollback_date : int , timeout : int = -1):
@@ -125,7 +125,7 @@ class FactorAPI:
         wrap_update(FactorUpdaterAPI.Stock.rollback , 'rollback stock factors' , rollback_date = rollback_date , timeout = timeout)
     
     @classmethod
-    def update_market_factors(cls):
+    def update_market_factors(cls, *, missing_since : int | None = None):
         """
         Update market-wide factors via ``FactorUpdaterAPI.Market``.
 
@@ -140,7 +140,7 @@ class FactorAPI:
           execution_time: short
           memory_usage: medium
         """
-        wrap_update(FactorUpdaterAPI.Market.update , 'update market factors')
+        wrap_update(FactorUpdaterAPI.Market.update , 'update market factors', missing_since=missing_since)
 
     @classmethod
     def rollback_market_factors(cls , rollback_date : int):
@@ -161,7 +161,7 @@ class FactorAPI:
         wrap_update(FactorUpdaterAPI.Market.rollback , 'rollback market factors' , rollback_date = rollback_date)
 
     @classmethod
-    def update_affiliate_factors(cls):
+    def update_affiliate_factors(cls, *, missing_since : int | None = None):
         """
         Update affiliate / external risk factors via ``FactorUpdaterAPI.Affiliate``.
 
@@ -176,7 +176,7 @@ class FactorAPI:
           execution_time: short
           memory_usage: medium
         """
-        wrap_update(FactorUpdaterAPI.Affiliate.update , 'update risk & external factors')
+        wrap_update(FactorUpdaterAPI.Affiliate.update , 'update risk & external factors', missing_since=missing_since)
 
     @classmethod
     def rollback_affiliate_factors(cls , rollback_date : int):
@@ -197,7 +197,7 @@ class FactorAPI:
         wrap_update(FactorUpdaterAPI.Affiliate.rollback , 'rollback risk & external factors' , rollback_date = rollback_date)
 
     @classmethod
-    def update_pooling_factors(cls , timeout : int = -1):
+    def update_pooling_factors(cls , timeout : int = -1, *, missing_since : int | None = None):
         """
         Update pooling-layer factors via ``FactorUpdaterAPI.Pooling``.
 
@@ -212,7 +212,7 @@ class FactorAPI:
           execution_time: short
           memory_usage: medium
         """
-        wrap_update(FactorUpdaterAPI.Pooling.update , 'update pooling factors' , timeout = timeout)
+        wrap_update(FactorUpdaterAPI.Pooling.update , 'update pooling factors' , timeout = timeout, missing_since=missing_since)
 
     @classmethod
     def rollback_pooling_factors(cls , rollback_date : int , timeout : int = -1):
@@ -233,7 +233,7 @@ class FactorAPI:
         wrap_update(FactorUpdaterAPI.Pooling.rollback , 'rollback pooling factors' , rollback_date = rollback_date , timeout = timeout)
 
     @classmethod
-    def update_factor_stats(cls):
+    def update_factor_stats(cls, *, missing_since : int | None = None):
         """
         Update factor statistics tables via ``FactorUpdaterAPI.Stats``.
 
@@ -248,7 +248,7 @@ class FactorAPI:
           execution_time: short
           memory_usage: medium
         """
-        wrap_update(FactorUpdaterAPI.Stats.update , 'update factor stats')
+        wrap_update(FactorUpdaterAPI.Stats.update , 'update factor stats', missing_since=missing_since)
 
     @classmethod
     def rollback_factor_stats(cls , rollback_date : int):
