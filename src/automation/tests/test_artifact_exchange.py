@@ -388,7 +388,7 @@ class ExchangeTest(unittest.TestCase):
         finally:
             CURRENT_TASK.reset(token)
 
-    def test_task_delivery_disabled_and_autofix_are_logged_without_snapshots(self):
+    def test_task_delivery_disabled_and_autofix_are_quiet_without_snapshots(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         from src.automation.artifact_exchange.research import CURRENT_TASK, publish_safe, finalize_task_artifacts
@@ -404,11 +404,36 @@ class ExchangeTest(unittest.TestCase):
                     finalize_task_artifacts(owner)
                     self.assertEqual(rows[0]['status'], 'skipped')
                     snapshot.assert_not_called()
-                    self.assertTrue(owner.logger.note.called)
+                    owner.logger.note.assert_not_called()
+                    owner.logger.warning.assert_not_called()
                     if autofix:
                         load.assert_not_called()
             finally:
                 CURRENT_TASK.reset(token)
+
+    def test_routine_skips_are_quiet_but_blocked_work_is_visible(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.automation.artifact_exchange.research import log_results, notice, finalize_task_artifacts
+        owner = SimpleNamespace(_artifacts=[], _artifact_results=[], logger=Mock())
+        finalize_task_artifacts(owner)
+        owner.logger.note.assert_not_called()
+        owner.logger.warning.assert_not_called()
+        self.assertEqual(owner._artifact_delivery_summary['unregistered'], 1)
+        routine = [{'status': 'skipped', 'reason': reason} for reason in
+                   ('publisher inactive: enabled=False, role=receiver', 'publisher disabled', 'autofix')]
+        log_results(routine, owner)
+        self.assertEqual(notice(routine), '')
+        owner.logger.note.assert_not_called()
+        owner.logger.warning.assert_not_called()
+        actionable = [{'status': 'skipped', 'reason': 'asynchronous saves incomplete'},
+                      {'status': 'skipped', 'id': 'prepared-package', 'reason': 'publisher disabled'},
+                      {'status': 'failed', 'error': 'disk full'}]
+        log_results(actionable, owner)
+        self.assertEqual(owner.logger.warning.call_count, 3)
+        self.assertIn('failed', notice(actionable))
+        log_results([{'status': 'published', 'id': 'success'}], owner)
+        owner.logger.note.assert_called_once()
 
     def test_task_logs_delivery_before_capture_close_and_mail(self):
         from datetime import datetime

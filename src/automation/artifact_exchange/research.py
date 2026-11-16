@@ -69,8 +69,18 @@ def delivery_log(message, *, failed=False, owner=None):
         (logger.warning if failed else logger.info)('[artifacts] ' + message)
 
 
+def _visible_result(record):
+    """Routine opt-out is quiet; failed work and blocked prepared packages remain visible."""
+    reason = str(record.get('reason', ''))
+    return not (record.get('status') == 'skipped' and not record.get('id') and
+                (reason in {'autofix', 'publisher disabled', 'publisher disabled or autofix'} or
+                 reason.startswith('publisher inactive:')))
+
+
 def log_results(records, owner=None):
     for record in records:
+        if not _visible_result(record):
+            continue
         manifest = record.get('manifest', {})
         text = f"{record.get('status', 'unknown')} id={record.get('id', '-')}"
         if manifest:
@@ -79,7 +89,7 @@ def log_results(records, owner=None):
             text += f" destination=artifact_exchange/{record['route']}/{record['filename']}"
         if record.get('error') or record.get('reason'):
             text += ' reason=' + str(record.get('error') or record.get('reason'))
-        delivery_log(text, failed=record.get('status') == 'failed', owner=owner)
+        delivery_log(text, failed=record.get('status') in ('failed', 'skipped'), owner=owner)
 
 
 def publish_safe(task, run_id, artifacts, status='success'):
@@ -115,7 +125,6 @@ def finalize_task_artifacts(owner, saves_complete=True):
     queue = task_delivery(owner)
     assert queue is not None
     queue.flushing = True
-    delivery_log('开始投递研究结果', owner=owner)
     if owner._artifacts:
         if saves_complete:
             publish_safe(owner.task_name, owner.init_time.isoformat(), owner._artifacts, owner.execution_status)
@@ -142,6 +151,8 @@ def finalize_task_artifacts(owner, saves_complete=True):
               for status in ('prepared', 'published', 'skipped', 'failed')}
     counts['unregistered'] = int(not records and not owner._artifacts)
     owner._artifact_delivery_summary = counts
+    if not any(_visible_result(r) for r in records):
+        return
     reasons = [str(r.get('reason') or r.get('error')) for r in records
                if r.get('reason') or r.get('error')]
     delivery_log('投递汇总: ' + json.dumps(counts, ensure_ascii=False)
@@ -235,6 +246,7 @@ def delivered(records):
 
 
 def notice(records):
+    records = [r for r in records if _visible_result(r)]
     return '\nArtifact delivery: ' + json.dumps([{k: r[k] for k in ('id', 'status', 'error') if k in r} for r in records]) if records else ''
 
 
@@ -337,8 +349,6 @@ def model_run(trainer):
                 specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
                 if specs:
                     publish_safe('model_training', run_id, specs, status)
-                else:
-                    delivery_log('model results unregistered: no completed result files', failed=True)
             else:
                 reason = 'autofix' if config is None else f'publisher inactive: enabled={config.enabled}, role={config.role}'
                 record = {'status': 'skipped', 'reason': reason}

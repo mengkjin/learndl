@@ -167,7 +167,7 @@ class ContextAuditTests(unittest.TestCase):
             finalize_task_artifacts(owner)
         self.assertEqual(owner._artifact_delivery_summary["unregistered"], 1)
         self.assertEqual(owner._artifact_delivery_summary["published"], 0)
-        self.assertIn("不能视为投递成功", log.call_args.args[0])
+        log.assert_not_called()
 
 
 class AuditDeliveryTests(unittest.TestCase):
