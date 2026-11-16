@@ -42,19 +42,21 @@ def locked_day(func):
     return wrapped
 
 
-def atomic_frame(frame, path, **kwargs):
-    from src.proj import Save
+def atomic_frame(frame, path, *, prefix=None, indent=1, vb_level=1, **kwargs):
+    from src.proj import Logger, Save
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     # Keep the final extension so the existing serializer chooses the same format.
     temp = path.with_name(f'.{path.stem}-{uuid.uuid4().hex}.tmp{path.suffix}')
     try:
-        result = Save.df(frame, temp, async_save=False, **kwargs)
+        result = Save.df(frame, temp, async_save=False, vb_level='never', **kwargs)
         if result is False or not temp.exists():
             raise OSError(f'RCQuant publication failed: {path}')
         with temp.open('rb') as stream:
             os.fsync(stream.fileno())
+        status = 'Overwritten ' if path.exists() else 'File Created'
         os.replace(temp, path)
     finally:
         temp.unlink(missing_ok=True)
+    Logger.footnote(f'{prefix or ""} {status}: {path}', indent=indent, vb_level=vb_level)
     return True

@@ -1,4 +1,6 @@
 """Concurrent provider calls, partial caches and atomic publication failure."""
+from contextlib import redirect_stdout
+import io
 import multiprocessing
 from pathlib import Path
 import tempfile
@@ -85,3 +87,19 @@ class DownloadLockTest(unittest.TestCase):
             atomic_frame(pd.DataFrame({'a':[1]}), path)
         self.assertEqual(path.read_bytes(), b'previous')
         self.assertEqual(list(self.root.iterdir()), [path])
+
+    def test_atomic_save_logs_only_the_published_path(self):
+        path = self.root / 'data.feather'
+        frame = pd.DataFrame({'a': [1]})
+        output = io.StringIO()
+        with redirect_stdout(output):
+            atomic_frame(frame, path, prefix='RcQuant', vb_level='always')
+            atomic_frame(frame, path, prefix='RcQuant', vb_level='always')
+            with patch('src.data.download.other_source.rcquant.storage.os.fsync',
+                       side_effect=OSError('sync failed')), self.assertRaises(OSError):
+                atomic_frame(frame, path, prefix='RcQuant', vb_level='always')
+        log = output.getvalue()
+        self.assertEqual(log.count(f'RcQuant File Created: {path}'), 1)
+        self.assertEqual(log.count(f'RcQuant Overwritten : {path}'), 1)
+        self.assertNotIn('.tmp', log)
+        pd.testing.assert_frame_equal(pd.read_feather(path), frame)
