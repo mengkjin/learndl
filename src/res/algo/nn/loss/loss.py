@@ -4,7 +4,7 @@ All losses inherit from ``BaseLoss``.  The ``Loss`` class is the factory used
 by the training loop.  Loss values should be minimized (lower is better).
 
 Registry keys: 'mse', 'pearson', 'ccc', 'hidden_corr_deprecated',
-               'hidden_corr', 'quantile', 'ccc_hcorr', 'abcm' , 'global2top'
+               'hidden_corr', 'quantile', 'ccc_hcorr', 'mse_hcorr', 'abcm' , 'global2top'
 ! important: 'lamb' is a special keyword argument for loss functions, cannot be used as a key in the dictionary
 """
 from __future__ import annotations
@@ -191,6 +191,30 @@ class CCCHiddenCorrLoss(BaseLoss):
             'ccc' : ccc ,
             'hidden_corr' : hidden_corr * self.alpha
         }
+
+class MSEHiddenCorrLoss(BaseLoss):
+    """MSE + alpha * existing standardized covariance Frobenius penalty.
+
+    Like ccc_hcorr, sample weights and dim apply only to the prediction loss.
+    HiddenCorr re-standardizes factors and does not divide by factor count K;
+    alpha is NOT the lambda in the paper's ||Z.T Z||_F / (N*K) formula.
+    """
+    key = 'mse_hcorr'
+
+    def __init__(self, alpha: float = 0.01):
+        super().__init__()
+        self.alpha = alpha
+        self.mse_loss = MSE()
+        self.hidden_corr_loss = HiddenCorr()
+
+    def forward(self, pred: torch.Tensor, label: torch.Tensor, hidden: torch.Tensor,
+                weight: torch.Tensor | None = None, dim: int | None = None,
+                **kwargs) -> dict[str, torch.Tensor]:
+        prediction_loss = self.mse_loss(pred, label, weight, dim)
+        hidden_corr = self.hidden_corr_loss(hidden=hidden)
+        assert isinstance(prediction_loss, torch.Tensor) and isinstance(hidden_corr, torch.Tensor)
+        return {'mse': prediction_loss, 'hidden_corr': self.alpha * hidden_corr}
+
 
 class ABCMLoss(BaseLoss):
     """Alpha-Beta Co-Mining (ABCM) composite loss.

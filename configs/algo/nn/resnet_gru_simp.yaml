@@ -1,0 +1,12 @@
+hidden_dim: [64]
+inday_resnet_dim: [128]
+enc_in: [false]
+enc_in_dim: [16]
+resnet_kernel_size: [3]
+act_type: [leaky]
+rnn_type: [gru]
+rnn_layers: [1]
+dropout: [0.1] # Only used between GRU layers; single-layer GRU uses zero.
+hidden_as_factors: [true]
+hidden_mean_pool: [true]
+num_output: [1]

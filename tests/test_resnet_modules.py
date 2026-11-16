@@ -1,5 +1,6 @@
 """ResNet block behavior, configuration propagation and input contracts."""
 from pathlib import Path
+from typing import Any, cast
 import unittest
 
 import torch
@@ -26,16 +27,22 @@ class ResNetTest(unittest.TestCase):
                         y = model(x)
                         self.assertEqual(y.shape, (2, 3, width))
                         y.square().mean().backward()
+                        assert x.grad is not None
                         self.assertTrue(torch.isfinite(x.grad).all())
                         for name, p in model.named_parameters():
-                            self.assertIsNotNone(p.grad, name)
+                            assert p.grad is not None, name
                             self.assertTrue(torch.isfinite(p.grad).all(), name)
                     for block in model.blocks:
-                        self.assertEqual(block.conv[0].out_channels, 7)
+                        assert isinstance(block, (_resnet_block_1d, _resnet_block_2d))
+                        first = block.conv[0]
+                        assert isinstance(first, (nn.Conv1d, nn.Conv2d))
+                        self.assertEqual(first.out_channels, 7)
                         self.assertIsInstance(block.conv[2], nn.GELU)
                         self.assertIsInstance(block.act, nn.GELU)
                     head_width = 8 * width * (5 if factory is mod_resnet_2d else 1)
-                    self.assertEqual(model.fc_out.in_features, head_width)
+                    head = model.fc_out.net if factory is mod_resnet_1d else model.fc_out
+                    assert isinstance(head, nn.Linear)
+                    self.assertEqual(head.in_features, head_width)
 
     def test_dynamic_default_width_and_positional_compatibility(self):
         for factory in (mod_resnet_1d, mod_resnet_2d):
@@ -54,7 +61,10 @@ class ResNetTest(unittest.TestCase):
             with torch.no_grad():
                 for p in block.conv.parameters():
                     p.zero_()
-                block.conv[-1].bias.fill_(-3)
+                last = block.conv[-1]
+                assert isinstance(last, (nn.BatchNorm1d, nn.BatchNorm2d))
+                assert last.bias is not None
+                last.bias.fill_(-3)
             # The negative branch must cancel the positive shortcut before ReLU.
             torch.testing.assert_close(block(torch.full(shape, 2.)), torch.zeros(shape))
             torch.testing.assert_close(block(torch.full(shape, 5.)), torch.full(shape, 2.))
@@ -78,7 +88,7 @@ class ResNetTest(unittest.TestCase):
             for key in ('seq_len', 'feat_len', 'dim_out', 'dim_med', 'resnet_blocks'):
                 for value in (0, -1, 1.5, True, '4'):
                     with self.subTest(factory=factory.__name__, key=key, value=value):
-                        kwargs = dict(seq_len=8, feat_len=5, dim_out=16)
+                        kwargs: dict[str, Any] = dict(seq_len=8, feat_len=5, dim_out=16)
                         kwargs[key] = value
                         with self.assertRaisesRegex(ValueError, key):
                             factory(**kwargs)
@@ -90,7 +100,7 @@ class ResNetTest(unittest.TestCase):
         for factory in (_resnet_block_1d, _resnet_block_2d):
             for key in ('dim_in', 'dim_out', 'dim_med'):
                 with self.assertRaisesRegex(ValueError, key):
-                    factory(**(dict(dim_in=4) | {key: 0}))
+                    factory(**cast(dict[str, Any], dict(dim_in=4) | {key: 0}))
 
     def test_input_contracts_reject_incorrect_axes_and_empty_dimensions(self):
         for factory in (mod_resnet_1d, mod_resnet_2d):
@@ -118,7 +128,7 @@ class ResNetTest(unittest.TestCase):
         for name in ('resnet_gru', 'resnet_mlp', 'resnet_transformer', 'legacy_resnet_gru'):
             with self.subTest(name=name):
                 factory = legacy_resnet_gru if name == 'legacy_resnet_gru' else get_nn_module(name)
-                model = factory(**kwargs)
+                model = cast(Any, factory(**kwargs))
                 encoder = (model.encoder.mod_list[0].fc_enc_in if name == 'legacy_resnet_gru'
                            else model.fc_enc_in)
                 for block in encoder.blocks:

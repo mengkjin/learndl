@@ -8,6 +8,7 @@ from __future__ import annotations
 __all__ = [
     'resnet_gru',
     'resnet_gru_new',
+    'resnet_gru_simp',
     'gru_gru',
     'gru_gru_new',
 ]
@@ -16,7 +17,7 @@ from torch import nn , Tensor, cat
 from .. import layer as Layer
 from ..layer.checkpoint import ActivationCheckpointMixin
 from .Attention import TimeWiseAttention
-from .CNN import mod_resnet_1d
+from .CNN import mod_resnet_1d, _validate_resnet_dims, _validate_resnet_input
 from .RNN import mod_gru
 
 class resnet_gru(nn.Module):
@@ -130,6 +131,83 @@ class resnet_gru_new(nn.Module):
         x = self.fc_enc_att(x) if self.fc_enc_att is not None else x[:, -1]
         hidden, prediction = self.output(x)
         return prediction, {'hidden': hidden}
+
+
+class _IdentityIntradayResidual(nn.Module):
+    """Two same-shape convolutions with a strictly identity skip connection."""
+
+    def __init__(self, channels, kernel_size=3, act_type='leaky'):
+        super().__init__()
+        _validate_resnet_dims(channels=channels, resnet_kernel_size=kernel_size)
+        if kernel_size % 2 != 1:
+            raise ValueError('resnet_kernel_size must be odd')
+        self.channels = channels
+        self.branch = nn.Sequential(
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2,
+                      padding_mode='replicate'),
+            Layer.Act.get_activation_fn(act_type),
+            nn.Conv1d(channels, channels, kernel_size, padding=kernel_size // 2,
+                      padding_mode='replicate'),
+        )
+        self.shortcut = nn.Identity()
+
+    def forward(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, self.channels, None))
+        return self.shortcut(x) + self.branch(x)
+
+
+class resnet_gru_simp(nn.Module):
+    """Shared optional bar projection -> identity residual -> daily Linear -> GRU.
+
+    Both convolutions preserve the projected input space and replicate boundary
+    values. Flatten/Linear occurs AFTER residual addition. The last GRU output
+    feeds a factor head (Linear + BN), then equal weighting + BN by default.
+    Input [stocks, days, bars, features]; output (prediction, {'hidden': factors}).
+    """
+
+    def __init__(self, input_dim, hidden_dim=64, dropout=.1, act_type='leaky',
+                 enc_in: bool | str | None = False, enc_in_dim=16,
+                 inday_resnet_dim=128, rnn_layers=1, rnn_type='gru',
+                 hidden_as_factors=True, hidden_mean_pool=True,
+                 *, inday_dim, resnet_kernel_size=3, **kwargs):
+        super().__init__()
+        if rnn_type != 'gru':
+            raise ValueError('resnet_gru_simp supports only rnn_type=gru')
+        if enc_in is not None and enc_in is not True and enc_in is not False and enc_in != 'linear':
+            raise ValueError("enc_in must be True, 'linear', False or None")
+        _validate_resnet_dims(input_dim=input_dim, hidden_dim=hidden_dim,
+                              inday_dim=inday_dim, inday_resnet_dim=inday_resnet_dim,
+                              rnn_layers=rnn_layers)
+        if rnn_layers > 3:
+            raise ValueError('rnn_layers must be <= 3')
+        if not 0 <= dropout <= 1:
+            raise ValueError('dropout must be between 0 and 1')
+        project = enc_in is True or enc_in == 'linear'
+        if project:
+            _validate_resnet_dims(enc_in_dim=enc_in_dim)
+        channels = enc_in_dim if project else input_dim
+        self.input_dim = input_dim
+        self.inday_dim = inday_dim
+        self.fc_enc_in = (nn.Sequential(nn.Linear(input_dim, channels), nn.Tanh())
+                          if project else nn.Identity())
+        self.inday_resnet = _IdentityIntradayResidual(channels, resnet_kernel_size, act_type)
+        self.daily_projection = nn.Linear(inday_dim * channels, inday_resnet_dim)
+        self.fc_rnn = mod_gru(inday_resnet_dim, hidden_dim, num_layers=rnn_layers,
+                             dropout=dropout if rnn_layers > 1 else 0.)
+        self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
+
+    def encode_intraday(self, x: Tensor) -> Tensor:
+        _validate_resnet_input(x, (None, None, self.inday_dim, self.input_dim))
+        batch, days = x.shape[:2]
+        x = self.fc_enc_in(x)
+        x = x.reshape(batch * days, self.inday_dim, -1).transpose(1, 2)
+        x = self.inday_resnet(x)
+        return self.daily_projection(x.flatten(1)).reshape(batch, days, -1)
+
+    def forward(self, x: Tensor) -> tuple[Tensor, dict]:
+        x = self.fc_rnn(self.encode_intraday(x))[:, -1]
+        factors, prediction = self.output(x)
+        return prediction, {'hidden': factors}
 
 
 class gru_gru(ActivationCheckpointMixin, nn.Module):
