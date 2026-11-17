@@ -93,6 +93,7 @@ def clean_file(path, known, mapper, *, apply=False, backup=None):
 
 
 def main(argv=None):
+    from src.proj import Logger
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--start', type=int, default=20100101)
     parser.add_argument('--end', type=int, default=20991231)
@@ -110,7 +111,7 @@ def main(argv=None):
     output.mkdir(parents=True, exist_ok=False)
     summary = {'apply': args.apply, 'stock_ids': len(known), 'files': 0, 'changed_files': 0,
                'removed_rows': 0, 'errors': 0, 'output': str(output.resolve())}
-    print(f"{'APPLY' if args.apply else 'DRY RUN'}: {output.resolve()}", flush=True)
+    Logger.stdout(f"{'APPLY' if args.apply else 'DRY RUN'}: {output.resolve()}", flush=True)
     with (output / 'files.jsonl').open('w') as journal:
         for key in KEYS:
             for path in sorted(DB.paths('min_chars', key, start=args.start, end=args.end)):
@@ -126,9 +127,9 @@ def main(argv=None):
                 journal.write(json.dumps(result, ensure_ascii=False) + '\n')
                 journal.flush()
                 if summary['files'] % 250 == 0 or result['status'] == 'error':
-                    print(f"files={summary['files']}, removed_rows={summary['removed_rows']}, errors={summary['errors']}", flush=True)
+                    Logger.stdout(f"files={summary['files']}, removed_rows={summary['removed_rows']}, errors={summary['errors']}", flush=True)
     (output / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
-    print(json.dumps(summary, ensure_ascii=False), flush=True)
+    Logger.stdout(json.dumps(summary, ensure_ascii=False), flush=True, vb_level=0)
     return 2 if summary['errors'] else 0
 
 

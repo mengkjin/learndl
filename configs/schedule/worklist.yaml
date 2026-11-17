@@ -1,14 +1,6 @@
 fit:
   
-  - name: resnet_gru_new_15m
-    mode: sparse
-  - name: resnet_gru_new_15m_att
-    mode: sparse
-  - name: resnet_gru_new_15m_conv2
-    mode: sparse
-  - name: resnet_gru_new_15m_transition_soft_topk
-    mode: sparse
-  - name: resnet_gru_new_15m_transition_capped_soft_topk
+  - name: resnet_gru_simp_15m
     mode: sparse
   # - name: factorseq_v2_snapshot
   #   mode: sparse

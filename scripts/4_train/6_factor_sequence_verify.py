@@ -67,6 +67,7 @@ def parse_args(argv=None):
 def main(run_id=None, test_start=20170101, test_end=None,
          data_config='configs/experience/model/factor_sequence/data.json',
          research=False, ablations=False, recipient=None, no_email=False, resume_from=None):
+    from src.proj import Logger
     from src.proj import PATH
     from src.data.preprocess.factor_sequence.server_suite import run_suite, send_result
     from src.data.preprocess.factor_sequence.bundle import write_json
@@ -82,7 +83,7 @@ def main(run_id=None, test_start=20170101, test_end=None,
         write_json(folder/'mail_status.json',mail)
     else:
         mail=send_result(folder,recipient)
-    print(f"Experiment: {report['status']}; mail: {mail['status']}; results: {folder}",flush=True)
+    Logger.stdout(f"Experiment: {report['status']}; mail: {mail['status']}; results: {folder}",flush=True)
     if report['status']!='passed' or mail['status']=='failed' or report.get('training_mail_failed',0):
         raise RuntimeError(f'Factor sequence verification failed; inspect {folder}')
     return 0

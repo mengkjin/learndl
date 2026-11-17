@@ -10,6 +10,8 @@ from pathlib import Path
 from .core import ArtifactSpec, Config, DEFAULT_CONFIG, atomic_json, publish_artifacts, receive, retry, sandboxed
 from .management import migration, service
 
+from src.automation.console import logger as console_logger
+
 __all__ = [
     'main',
 ]
@@ -43,7 +45,7 @@ def main(argv=None):
     s.add_argument('action', choices=['plan', 'install', 'status', 'uninstall'])
     args = parser.parse_args(argv)
     if sandboxed():
-        print(json.dumps({'status': 'skipped', 'reason': 'autofix'}))
+        console_logger.info(json.dumps({'status': 'skipped', 'reason': 'autofix'}))
         return 0
     config = Config.load(args.config)
     if args.command == 'init':
@@ -86,7 +88,7 @@ def main(argv=None):
                   'pending_packages': sum(1 for _ in config.inbox.rglob('*.transfer.zip')) if config.inbox.exists() else 0,
                   'outbox': [json.loads(p.read_text()) for p in (config.state / 'outbox').glob('*/delivery.json')],
                   'last_receive': json.loads((config.state / 'last_receive.json').read_text()) if (config.state / 'last_receive.json').exists() else []}
-    print(json.dumps(output, ensure_ascii=False, indent=2))
+    console_logger.info(json.dumps(output, ensure_ascii=False, indent=2))
     return int(isinstance(output, list) and any(r.get('status') == 'failed' for r in output))
 
 

@@ -129,4 +129,5 @@ class _DiagnosticLog:
     def stdout(message: str, **kwargs: Any) -> None:
         # Explicit diagnostics must survive normal verbosity filtering. The
         # reconstruction's tee still captures this without buffering in memory.
-        print(message, flush=True)
+        from src.proj import Logger
+        Logger.stdout(message, vb_level=0, flush=True)

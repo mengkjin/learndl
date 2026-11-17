@@ -32,6 +32,8 @@ import yaml
 
 from .config import UniqueLoader, installed_config, runtime_dir
 
+from src.automation.console import logger
+
 CONFIG_PATH = 'configs/strategy/rl_experiment.yaml'
 TASK = 'rl_experiment'
 
@@ -202,8 +204,7 @@ def save_state(store, state: dict) -> None:
         row = db.execute('SELECT data FROM rl_status WHERE id=1').fetchone()
         old = json.loads(row[0]) if row else {}
         if any(old.get(k) != state.get(k) for k in ('version', 'status', 'error', 'wait_reason')):
-            print(f'[RL scheduling] {state.get("status")}: {state.get("wait_reason") or state.get("error") or state.get("version", "")}',
-                  flush=True)
+            logger.info(f'[RL scheduling] {state.get("status")}: {state.get("wait_reason") or state.get("error") or state.get("version", "")}')
         db.execute('INSERT OR REPLACE INTO rl_status VALUES (1, ?)', (json.dumps(state),))
 
 

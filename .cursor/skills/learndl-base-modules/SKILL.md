@@ -11,6 +11,24 @@ description: >-
 
 Use this file as a route map only; behavior and APIs live in source and module docstrings.
 
+## Project logging convention
+
+- Do not add direct `print(...)` calls to application code or scripts. For plain
+  console output use `from src.proj import Logger` and `Logger.stdout(...)`.
+  Reuse an existing task/bound Logger when available; use its warning/error or
+  other level methods when the message needs that meaning.
+- Preserve flushing, line endings, output capture and machine-readable output.
+  Use `vb_level=0` for required CLI results, explicit diagnostics and supervised
+  progress that must survive ordinary verbosity filtering. `Logger.stdout(file=...)`
+  takes a path, not an open stream; use output redirection for an existing stream.
+- Keep imports lazy where needed to avoid circular imports or changing bootstrap
+  behavior. Automation code that runs before project initialization/code-lock
+  admission uses the standard-library Logger in `src/automation/console.py`.
+- Direct `print` is appropriate only in tests/fixtures intentionally exercising
+  third-party stdout/stderr capture. File serialization is not console logging.
+- Before finishing Python changes, inspect direct `print` calls in changed files
+  and convert ordinary diagnostics to the appropriate Logger.
+
 ## Router table
 
 | Need | Open first |

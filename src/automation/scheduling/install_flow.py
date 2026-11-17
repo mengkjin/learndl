@@ -42,6 +42,8 @@ from .maintenance_gate import MaintenanceBusy, permit
 from .runtime import boot_id
 from src.automation.paths import config_directory
 
+from src.automation.console import logger
+
 
 def broker_command(argv: list[str]) -> str:
     request: dict = {'argv': argv}
@@ -78,24 +80,24 @@ def baseline(root: Path, config_dir: Path, plan: dict) -> dict:
 
 
 def preview(plan: dict, cron: str) -> None:
-    print(json.dumps({k: v for k, v in plan.items() if k not in {'config', 'cron', 'units', 'desktop_autostart'}}, indent=2))
-    print(''.join(difflib.unified_diff(cron.splitlines(True), plan['cron'].splitlines(True),
+    logger.info(json.dumps({k: v for k, v in plan.items() if k not in {'config', 'cron', 'units', 'desktop_autostart'}}, indent=2))
+    logger.info(''.join(difflib.unified_diff(cron.splitlines(True), plan['cron'].splitlines(True),
                                      fromfile='current crontab', tofile='approved crontab')))
     manifest_path = runtime_dir() / 'manifest.json'
     previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
     for name in sorted(set(plan['units']) | set(previous['units'])):
         path = install.UNIT_DIR / name
         current = path.read_text() if path.exists() else ''
-        print(''.join(difflib.unified_diff(current.splitlines(True), plan['units'].get(name, '').splitlines(True),
+        logger.info(''.join(difflib.unified_diff(current.splitlines(True), plan['units'].get(name, '').splitlines(True),
                                          fromfile='current/' + name, tofile='approved/' + name)))
     desktop = install.desktop_path()
-    print(''.join(difflib.unified_diff((desktop.read_text() if desktop.exists() else '').splitlines(True),
+    logger.info(''.join(difflib.unified_diff((desktop.read_text() if desktop.exists() else '').splitlines(True),
                                      (plan.get('desktop_autostart') or '').splitlines(True),
                                      fromfile=str(desktop), tofile='approved autostart')))
     try:
         check_business_tasks(plan)
     except MaintenanceBusy as exc:
-        print(f'Currently busy: {exc}')
+        logger.info(f'Currently busy: {exc}')
 
 
 def check_business_tasks(plan: dict) -> None:
@@ -238,8 +240,8 @@ def register(approval: dict) -> str:
                     if latest.get('phase') == 'registering':
                         latest['phase'] = 'waiting'
                         requests.save(latest)
-                print(f'Background installation registered: {identifier}\nService: {approval["unit"]}\n'
-                      'You may close this CLI window or disconnect SSH.', flush=True)
+                logger.info(f'Background installation registered: {identifier}\nService: {approval["unit"]}\n'
+                      'You may close this CLI window or disconnect SSH.')
                 return identifier
             if (bundle / 'result.json').exists():
                 raise RuntimeError('Background installer exited during registration')
@@ -259,7 +261,7 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
         raise RuntimeError('Run installation as the ordinary service user on Linux')
     existing = requests.reconcile()
     if existing.get('phase') in requests.ACTIVE:
-        print(json.dumps(existing, indent=2))
+        logger.info(json.dumps(existing, indent=2))
         return 1
     root = PATH.main
     config_dir = config_directory(config_dir, root=root)
@@ -277,8 +279,8 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
     force_targets = targets(plan) if force else []
     preview(plan, cron)
     if force:
-        print('Approved scopes to stop (TERM, then KILL after 30 seconds):')
-        print(json.dumps(force_targets, indent=2))
+        logger.info('Approved scopes to stop (TERM, then KILL after 30 seconds):')
+        logger.info(json.dumps(force_targets, indent=2))
     if plan['conflicts'] or plan['global_conflicts']:
         raise ValueError('Resolve preview conflicts before installation')
     for name, content in plan['units'].items():
@@ -288,7 +290,7 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
     if force:
         notice = 'Authorize stopping the listed managed scopes (TERM then KILL), without automatic retry. '
     if input(notice + 'Apply these changes? [y/N] ').strip().lower() not in {'y', 'yes'}:
-        print('Installation cancelled.')
+        logger.info('Installation cancelled.')
         return 0
     subprocess.run(['sudo', '-v'], check=True)  # Terminal authentication before any admission change.
     control = state_dir()
@@ -336,13 +338,13 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
             else:
                 with requests.lock():
                     requests.finish(row, 'success', 'Approved installation completed')
-        print('Installation completed.')
+        logger.info('Installation completed.')
         return 0
     except MaintenanceBusy as exc:
         if not deferred:
-            print(f'Cannot install now: {exc}')
+            logger.info(f'Cannot install now: {exc}')
             return 1
-        print(f'Cannot install now: {exc}; registering authorized background installation.')
+        logger.info(f'Cannot install now: {exc}; registering authorized background installation.')
     register(approval)
     return 0
 
@@ -415,7 +417,7 @@ def main() -> int:
     parser.add_argument('--config-dir', type=Path)
     args = parser.parse_args()
     if args.action in {'pending', 'cancel'}:
-        print(json.dumps(requests.cancel() if args.action == 'cancel' else requests.reconcile(), indent=2))
+        logger.info(json.dumps(requests.cancel() if args.action == 'cancel' else requests.reconcile(), indent=2))
         return 0
     if args.action == 'worker':
         if args.bundle is None or not os.environ.get('LEARNDL_INSTALL_BROKER'):

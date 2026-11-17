@@ -605,7 +605,7 @@ def main():
         if args.start <= int(d) <= min(args.end, int(CALENDAR.updated()))
     ]
     if args.action == "rebuild":
-        print(json.dumps(build_snapshot(dates, force=True), indent=2))
+        Logger.stdout(json.dumps(build_snapshot(dates, force=True), indent=2), vb_level=0)
     else:
         root = root_path()
         pointer = json.loads((root / "current.json").read_text())
@@ -615,7 +615,7 @@ def main():
             with TrainingAnalysisSnapshot(dates=dates).activate() as snapshot:
                 for kind in ["market", "evaluation", "membership"]:
                     snapshot.table(kind, dates)
-        print(
+        Logger.stdout(
             json.dumps(
                 {
                     "root": str(root),
@@ -631,7 +631,8 @@ def main():
                     },
                 },
                 indent=2,
-            )
+            ),
+            vb_level=0,
         )
 
 

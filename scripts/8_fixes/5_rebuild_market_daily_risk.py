@@ -89,6 +89,7 @@ def replace_checked(target, staged, expected_digest):
 
 
 def rebuild(start=None, end=None, validate_only=False):
+    from src.proj import Logger
     from src.proj import DB, CALENDAR, PATH, Save, Load
     from src.data.update.custom.market_daily_risk import (
         _get_inputs,
@@ -172,7 +173,7 @@ def rebuild(start=None, end=None, validate_only=False):
             report["completed_days"] = len(values)
             report["last_date"] = date
             if len(values) % 50 == 0:
-                print(
+                Logger.stdout(
                     f"[market-risk] verified {len(values)}/{len(dates)} through {date}",
                     flush=True,
                 )
@@ -231,7 +232,7 @@ def rebuild(start=None, end=None, validate_only=False):
             run_id,
             report["status"],
         )
-        print(f"[market-risk] {report['status']}: {reports}", flush=True)
+        Logger.stdout(f"[market-risk] {report['status']}: {reports}", flush=True)
 
 
 @ScriptTool("rebuild_market_daily_risk", markdown_catcher=True)

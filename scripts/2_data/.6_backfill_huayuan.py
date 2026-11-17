@@ -120,6 +120,7 @@ def _normalize_argv(argv: list[str]) -> list[str]:
 
 def backfill(downloader, db, start=None, end=None, batch_dates=20,
              overwrite=False, dry_run=False):
+    from src.proj import Logger
     from sqlalchemy import text
 
     start = max(start or downloader.start_date, downloader.start_date)
@@ -144,7 +145,7 @@ def backfill(downloader, db, start=None, end=None, batch_dates=20,
             raise RuntimeError(f'{table}: no remote data in [{start}, {end}]')
         stored = {int(d) for d in db.dates('sellside', downloader.db_key)}
         pending = dates if overwrite else [d for d in dates if d not in stored]
-        print(f'{downloader.db_key} <- {table}: {len(dates)} remote dates '
+        Logger.stdout(f'{downloader.db_key} <- {table}: {len(dates)} remote dates '
               f'({dates[0]}..{dates[-1]}), {len(pending)} pending, '
               f'overwrite={overwrite}', flush=True)
         if dry_run:
@@ -169,7 +170,7 @@ def backfill(downloader, db, start=None, end=None, batch_dates=20,
                 if not db.save(frame.drop(columns='date').sort_values('secid'),
                                'sellside', downloader.db_key, int(day), overwrite=overwrite):
                     raise RuntimeError(f'{table}: failed to save {day}; rerun to resume')
-            print(f'{downloader.db_key}: saved {offset + len(batch)}/{len(pending)} '
+            Logger.stdout(f'{downloader.db_key}: saved {offset + len(batch)}/{len(pending)} '
                   f'dates, through {batch[-1]}', flush=True)
     finally:
         connection.close()
@@ -186,6 +187,7 @@ def main(
     **kwargs,
 ):
     """Fill missing huayuan sellside dates; overwrite only when explicitly requested."""
+    from src.proj import Logger
     del kwargs
     start_i = _optional_date(start)
     end_i = _optional_date(end)
@@ -201,7 +203,7 @@ def main(
         if downloader.db_key != key:
             raise RuntimeError(f'Local key mismatch: {key} -> {downloader.db_key}')
         backfill(downloader, DB, start_i, end_i, batch, overwrite_i, dry_run_i)
-    print('Dry run complete.' if dry_run_i else 'Backfill complete.', flush=True)
+    Logger.stdout('Dry run complete.' if dry_run_i else 'Backfill complete.', flush=True)
 
 
 if __name__ == '__main__':

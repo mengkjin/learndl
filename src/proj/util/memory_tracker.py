@@ -301,6 +301,7 @@ class ProcessMemoryTracker:
         return PATH.runtime.joinpath("memory_telemetry")
 
     def start(self) -> ProcessMemoryTracker:
+        from src.proj import Logger
         if not self.enabled or self._file is not None:
             return self
         output_dir = self.output_dir or self._default_output_dir()
@@ -324,7 +325,7 @@ class ProcessMemoryTracker:
         if self.register_output:
             from src.proj import Proj
             Proj.exit_files.append(self.path)
-        print(f"Memory telemetry started: {self.path}", flush=True)
+        Logger.stdout(f"Memory telemetry started: {self.path}", flush=True)
         self._thread = threading.Thread(target=self._run, name="memory-telemetry", daemon=True)
         self._thread.start()
         self._maybe_launch_watcher()
@@ -337,6 +338,7 @@ class ProcessMemoryTracker:
         self._sample("mark", details)
 
     def stop(self, outcome: str = "complete") -> None:
+        from src.proj import Logger
         if self._file is None or self.path is None or self.done_path is None:
             return
         self._stop_event.set()
@@ -355,7 +357,7 @@ class ProcessMemoryTracker:
             self._file.close()
             self._file = None
         self.done_path.write_text(json.dumps({"outcome": outcome}), encoding="utf-8")
-        print(f"Memory telemetry finished: {self.path}", flush=True)
+        Logger.stdout(f"Memory telemetry finished: {self.path}", flush=True)
 
     def _write_record(self, record: dict[str, Any]) -> None:
         with self._write_lock:
@@ -374,12 +376,13 @@ class ProcessMemoryTracker:
         self._write_record(sample)
 
     def _run(self) -> None:
+        from src.proj import Logger
         while not self._stop_event.wait(self.interval):
             self._sample("sample")
             now = time.monotonic()
             if self.stdout_interval and now - self._last_stdout >= self.stdout_interval:
                 sample = collect_memory_sample(self.pid)
-                print(
+                Logger.stdout(
                     "[memory] "
                     f"phase={self.phase} rss={_format_bytes(sample.get('process_vmrss_bytes'))} "
                     f"cgroup={_format_bytes(sample.get('cgroup_memory_current_bytes'))} "
@@ -390,6 +393,7 @@ class ProcessMemoryTracker:
                 self._last_stdout = now
 
     def _maybe_launch_watcher(self) -> None:
+        from src.proj import Logger
         if self.path is None or self.done_path is None:
             return
         launch = self.launch_watcher
@@ -416,16 +420,16 @@ class ProcessMemoryTracker:
             result = subprocess.run(args, capture_output=True, text=True, timeout=10, check=False)
             if result.returncode == 0:
                 self._write_record({"event": "watcher_started", "unit": unit})
-                print(f"Memory telemetry kill watcher started: {unit}.service", flush=True)
+                Logger.stdout(f"Memory telemetry kill watcher started: {unit}.service", flush=True)
             else:
                 self._write_record({
                     "event": "watcher_start_failed", "returncode": result.returncode,
                     "stderr": result.stderr.strip(),
                 })
-                print(f"Memory telemetry kill watcher failed: {result.stderr.strip()}", flush=True)
+                Logger.stdout(f"Memory telemetry kill watcher failed: {result.stderr.strip()}", flush=True)
         except (OSError, subprocess.SubprocessError) as exc:
             self._write_record({"event": "watcher_start_failed", "error": repr(exc)})
-            print(f"Memory telemetry kill watcher failed: {exc!r}", flush=True)
+            Logger.stdout(f"Memory telemetry kill watcher failed: {exc!r}", flush=True)
 
 
 def _watch_process(args: argparse.Namespace) -> int:

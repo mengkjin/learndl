@@ -90,6 +90,7 @@ def read_factor(calc, name, date, universe, db, first):
 
 def run_server(folder, start=20110101, end=None, model_roots=None):
     """Always leave partial tables and a non-success summary on failure."""
+    from src.proj import Logger
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = dict(
@@ -411,7 +412,7 @@ def run_server(folder, start=20110101, end=None, model_roots=None):
             if pos % 50 == 0:
                 report["last_completed_date"] = date
                 write_json(folder / "summary.json", report)
-                print(f"[context audit] {date} ({pos + 1}/{len(dates)})", flush=True)
+                Logger.stdout(f"[context audit] {date} ({pos + 1}/{len(dates)})", flush=True)
         perf = pd.DataFrame(perf, columns=["date", *PERF_NAMES]).set_index("date")
         perf.loc[start:end].to_csv(folder / "factorperf_values.csv", index_label="date")
         perf.loc[start:end].replace([np.inf, -np.inf], np.nan).notna().to_csv(

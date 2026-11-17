@@ -392,6 +392,9 @@ def main(argv=None):
         result = run_case(config, args.device)
         save_json(args.worker_config.with_suffix(".result.json"), result)
         return 0
+    sys.path.insert(0, str(ROOT))
+    from src.proj import Logger
+
     dimensions = args.stocks + args.hidden + args.chunks + [args.days, args.bars, args.features,
                                                           args.layers, args.day_hidden]
     if min(dimensions) < 1 or min(args.stocks) < 2 or args.steps < 2:
@@ -409,7 +412,7 @@ def main(argv=None):
     try:
         cases = list(make_cases(args))
         for index, config in enumerate(cases):
-            print(f"[{index + 1}/{len(cases)}] {config}", flush=True)
+            Logger.stdout(f"[{index + 1}/{len(cases)}] {config}", flush=True)
             path = directory / f"case_{index:03d}.json"
             save_json(path, config)
             command = [sys.executable, str(Path(__file__).resolve()), "--worker-config", str(path),
@@ -429,7 +432,7 @@ def main(argv=None):
                                   error=f"Exceeded {args.timeout} seconds; worker killed")
             report["cases"].append(result)
             write_reports(directory, report)
-            print(summarize(result), flush=True)
+            Logger.stdout(summarize(result), flush=True)
         exit_code = int(any(case["status"] in ("error", "timeout") for case in report["cases"]))
         report["status"] = "completed_with_errors" if exit_code else "completed"
     except (Exception, KeyboardInterrupt) as error:
@@ -438,13 +441,13 @@ def main(argv=None):
         exit_code = 1
     finally:
         write_reports(directory, report)
-        print(f"Results: {directory}", flush=True)
+        Logger.stdout(f"Results: {directory}", flush=True)
         if not args.no_email:
             try:
                 send_results(directory, args.recipient)
-                print("Result email accepted by SMTP.", flush=True)
+                Logger.stdout("Result email accepted by SMTP.", flush=True)
             except Exception as error:
-                print(f"Email NOT confirmed: {error}", file=sys.stderr, flush=True)
+                Logger.stderr(f"Email NOT confirmed: {error}", flush=True)
                 exit_code = 1
     return exit_code
 

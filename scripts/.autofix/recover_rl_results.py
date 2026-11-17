@@ -20,7 +20,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from src.proj import PATH, Proj
+from src.proj import PATH, Proj, Logger
 from src.proj.util.script import ScriptTool, AutoRunTask
 
 
@@ -39,10 +39,10 @@ def main(run_id: str = '5d17935c80694717a8df5fbd055791d4',
         raise ValueError(f'Invalid or missing original RL run: {run}')
     logs = list((root/'.local_resources').glob(f'*/runtime/scheduling/idle_worklist/{run_id}.log'))
     log = logs[0] if len(logs) == 1 else None
-    print(f'[RL/recovery] Audit {run_id}; no training, no model loading, no database access.', flush=True)
+    Logger.stdout(f'[RL/recovery] Audit {run_id}; no training, no model loading, no database access.', flush=True)
     if dry_run:
         audit = audit_suite(run, project_root=root, log_path=log)
-        print(audit)
+        Logger.stdout(audit)
         return
     destination = run/'recovery'/('20261028-audit-'+uuid4().hex[:12])
     # The surrounding ScriptTool has already created the active task.
@@ -57,13 +57,13 @@ def main(run_id: str = '5d17935c80694717a8df5fbd055791d4',
         pass
     audit, metadata = recover_suite(run, destination, project_root=root, log_path=log)
     Proj.email_attachments.append(destination/'audit.json')
-    print(f'[RL/recovery] complete={audit["complete"]}; verified training={audit["training_tasks_verified"]}, '
+    Logger.stdout(f'[RL/recovery] complete={audit["complete"]}; verified training={audit["training_tasks_verified"]}, '
           f'test paths={audit["test_paths_verified"]}; audit: {destination}/audit.json', flush=True)
     if metadata is None:
         raise ValueError('Result audit failed; no success bundle or retraining. ' + '; '.join(audit['errors'][:5]))
     for attachment in bundle_attachments(metadata):
         Proj.email_attachments.append(attachment)
-    print(f'[RL/recovery] Result bundle registered for task mail: {metadata}', flush=True)
+    Logger.stdout(f'[RL/recovery] Result bundle registered for task mail: {metadata}', flush=True)
     return {'original_run': run_id, 'tests_verified': True, 'audit': str(destination/'audit.json'),
             'bundle': str(metadata), 'mail_receipt': str(destination/'mail/delivery.json')}
 

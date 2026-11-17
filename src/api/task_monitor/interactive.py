@@ -96,6 +96,7 @@ def start_sampler(directory: Path, process: dict) -> dict:
 @contextmanager
 def reconstruction(processor):
     """Register before computation, keep complete output on disk even after SIGKILL."""
+    from src.proj import Logger
     from src.api.util.backend.recorder import BackendTaskRecorder
     from src.api.util.backend.task import TaskDatabase, TaskItem
     from src.proj import PATH
@@ -124,7 +125,7 @@ def reconstruction(processor):
     with recorder:
         with log.open('a', buffering=1) as output, redirect_stdout(cast(TextIO, Tee(sys.stdout, output))), redirect_stderr(cast(TextIO, Tee(sys.stderr, output))):
             if trace_enabled:
-                print(json.dumps(metadata, ensure_ascii=False))
+                Logger.stdout(json.dumps(metadata, ensure_ascii=False), vb_level=0)
             try:
                 try:
                     metadata['sampling'] = start_sampler(directory, metadata['process'])
@@ -132,7 +133,7 @@ def reconstruction(processor):
                     metadata['sampling'] = {'unavailable': str(exc)}
                 atomic_json(directory / 'run.json', metadata)
                 if trace_enabled:
-                    print('Memory sampler:', metadata['sampling'])
+                    Logger.stdout('Memory sampler:', metadata['sampling'], vb_level=0)
                 yield task.id
             except BaseException:
                 traceback.print_exc()

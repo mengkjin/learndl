@@ -21,6 +21,7 @@ if __package__ in (None, ''):
 
 
 def main(argv=None):
+    from src.proj import Logger
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('models', nargs='*')
     parser.add_argument('--specs', type=Path)
@@ -72,7 +73,7 @@ def main(argv=None):
     config = CompareConfig(**kwargs, custom_periods=custom, analyze_pred=args.pred, analyze_hidden=args.hidden)
     result = compare_models(models, config=config, output_dir=args.output_dir, display=not args.no_display)
     for kind, path in result.output_paths.items():
-        print(f'{kind}: {path}')
+        Logger.stdout(f'{kind}: {path}')
     return result
 
 

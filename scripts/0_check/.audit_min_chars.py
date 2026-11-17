@@ -92,6 +92,7 @@ def sample_paths(paths, sample_size=12, dates=None):
 
 
 def main(argv=None):
+    from src.proj import Logger
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--start', type=int, default=20100101)
     parser.add_argument('--end', type=int, default=20991231)
@@ -117,7 +118,7 @@ def main(argv=None):
                'sample_size': args.sample_size, 'requested_dates': args.dates, 'scope': 'sampled dates only unless --sample-size 0',
                'max_rows': args.max_rows, 'files': 0, 'anomalous_files': 0, 'errors': 0,
                'tables': {}, 'output': str(output.resolve())}
-    print(f'Reports: {output.resolve()}', flush=True)
+    Logger.stdout(f'Reports: {output.resolve()}', flush=True)
     # Only cumulative ID sets and per-year date sets persist between files, never feature frames.
     with (output / 'files.jsonl').open('w') as details, (output / 'first_seen.csv').open('w', newline='') as ids_file, (output / 'mapping.csv').open('w', newline='') as mapping_file:
         ids_writer = csv.writer(ids_file)
@@ -177,21 +178,21 @@ def main(argv=None):
                     if table['first_anomaly'] is None:
                         table['first_anomaly'] = row
                     if summary['anomalous_files'] <= 10:
-                        print(f"ANOMALY {path}: {row['issues']}", flush=True)
+                        Logger.stdout(f"ANOMALY {path}: {row['issues']}", flush=True)
                 details.write(json.dumps(row, ensure_ascii=False) + '\n')
                 details.flush()
                 ids_file.flush()
                 mapping_file.flush()
                 if summary['files'] % 250 == 0:
-                    print(f"Scanned {summary['files']} files, anomalies={summary['anomalous_files']}, last={path}", flush=True)
+                    Logger.stdout(f"Scanned {summary['files']} files, anomalies={summary['anomalous_files']}, last={path}", flush=True)
             table.update(raw_union=len(seen['raw']), mapped_union=len(seen['mapped']),
                          unknown_mapped_union=len(seen['mapped'] - known))
             for year, values in sorted(years.items()):
                 table['years'][str(year)] = {'raw_union': len(values['raw']), 'mapped_union': len(values['mapped']),
                                             'dates': len(values['dates'])}
-            print(f"{key}: files={len(paths)}, raw union={len(seen['raw'])}, mapped union={len(seen['mapped'])}", flush=True)
+            Logger.stdout(f"{key}: files={len(paths)}, raw union={len(seen['raw'])}, mapped union={len(seen['mapped'])}", flush=True)
     (output / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2) + '\n')
-    print(f"Done: files={summary['files']}, anomalies={summary['anomalous_files']}, errors={summary['errors']}. See {output / 'summary.json'}", flush=True)
+    Logger.stdout(f"Done: files={summary['files']}, anomalies={summary['anomalous_files']}, errors={summary['errors']}. See {output / 'summary.json'}", flush=True)
     return 2 if summary['errors'] else 1 if summary['anomalous_files'] else 0
 
 

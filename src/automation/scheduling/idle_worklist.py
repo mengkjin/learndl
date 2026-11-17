@@ -37,6 +37,8 @@ import yaml
 from .config import installed_config, runtime_dir
 from .runtime import RunStore, members, process_cgroup, boot_id
 
+from src.automation.console import logger
+
 OWNER = 'idle_worklist'
 ACTIVE = {'queued', 'starting', 'running', 'terminating', 'finalizing'}
 DEFERRED = 75
@@ -427,7 +429,7 @@ def main() -> int:
     if args.command == 'worker':
         return worker()
     if args.command == 'reset-worklist':
-        print(f'Worklist reset: {reset_worklist()}')
+        logger.info(f'Worklist reset: {reset_worklist()}')
         return 0
     if args.command in {'status', 'rl-status'}:
         from .recovery import evidence
@@ -439,7 +441,7 @@ def main() -> int:
                       'runs': [run for run in runs if run.get('task_kind') == 'rl_experiment']}
         else:
             result = runs  # Preserve the existing status JSON list.
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        logger.info(json.dumps(result, indent=2, ensure_ascii=False))
         return 0
     if not args.schedule_or_run:
         parser.error('schedule/run ID required')

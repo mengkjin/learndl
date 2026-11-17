@@ -14,6 +14,7 @@ from src.proj.util.script import ScriptTool
 
 @ScriptTool('autofix_check_factor_sequence_progress')
 def main(run_id: str = '20261031_factor_sequence_verify_02', **kwargs):
+    from src.proj import Logger
     import json
     from uuid import uuid4
     from src.proj import PATH, Proj
@@ -32,8 +33,8 @@ def main(run_id: str = '20261031_factor_sequence_verify_02', **kwargs):
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2))
     Proj.email_attachments.append(path)
     summary = {key: report[key] for key in ('run_id','assessment','current_stage','completed_stages','mail','notes')}
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
-    print(f'Fold records: {len(report["folds"])}; diagnostics: {path}')
+    Logger.stdout(json.dumps(summary, ensure_ascii=False, indent=2), vb_level=0)
+    Logger.stdout(f'Fold records: {len(report["folds"])}; diagnostics: {path}')
     return summary
 
 

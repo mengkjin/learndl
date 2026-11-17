@@ -8,6 +8,13 @@ description: >-
 
 # Learndl automation control
 
+## Logging
+
+Follow the [project logging convention](../learndl-base-modules/SKILL.md#project-logging-convention):
+use `Logger.stdout` or an existing Logger, never direct `print` for ordinary output.
+Before project initialization/code-lock admission, use the lightweight standard-library
+`logger` from `src.automation.console`; it preserves plain stdout results and stderr errors.
+
 ## Find the implementation
 
 - `src/automation/watchdog.py`: bounded lifecycle inspection and dispatch.

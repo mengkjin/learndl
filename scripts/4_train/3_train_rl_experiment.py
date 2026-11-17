@@ -23,7 +23,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from src.proj import Proj
+from src.proj import Proj, Logger
 from src.proj.util.script import ScriptTool
 
 
@@ -48,7 +48,7 @@ def main(
     config = Path(config_path).expanduser().resolve()
     content = config.read_text()
     launch = parse_config(content, yaml_format=config.suffix.lower() in {'.yaml', '.yml'})
-    print(f'[RL/run] Selected experiment mode: {launch["mode"]}', flush=True)
+    Logger.stdout(f'[RL/run] Selected experiment mode: {launch["mode"]}', flush=True)
     supplied = launch['experiment']
     if no_email or launch['no_email']:
         task.kwargs['email'] = False
@@ -77,7 +77,7 @@ def main(
             status = run_walk_forward(resolved, stage=supplied.get('stage', 'all'), bundle_ready=attach_bundle)
         else:
             status = run_experiment(resolved, no_email=True, bundle_ready=attach_bundle)
-    print(json.dumps(status, ensure_ascii=False, indent=2))
+    Logger.stdout(json.dumps(status, ensure_ascii=False, indent=2), vb_level=0)
     return status
 
 

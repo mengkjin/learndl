@@ -38,10 +38,11 @@ def save_json(path, value):
 
 
 def _skip_disabled() -> bool:
+    from src.proj import Logger
     from src.proj.env import MACHINE
     if MACHINE.emailable:
         return False
-    print('[Task/mail] skipped: email disabled on this machine', flush=True)
+    Logger.stdout('[Task/mail] skipped: email disabled on this machine', flush=True)
     return True
 
 
@@ -94,6 +95,7 @@ def retry_delivery(directory, *, transport=None):
 
 
 def _retry_delivery(directory, *, transport=None):
+    from src.proj import Logger
     directory = Path(directory)
     ledger = directory/'delivery.json'
     state = json.loads(ledger.read_text())
@@ -133,7 +135,7 @@ def _retry_delivery(directory, *, transport=None):
         save_json(ledger, state)
     state['status'] = 'sent' if all(item['sent'] for item in state['messages']) else 'failed'
     save_json(ledger, state)
-    print(f'[Task/mail] {sum(item["sent"] for item in state["messages"])}/{len(state["messages"])} messages accepted; receipt: {ledger}', flush=True)
+    Logger.stdout(f'[Task/mail] {sum(item["sent"] for item in state["messages"])}/{len(state["messages"])} messages accepted; receipt: {ledger}', flush=True)
     return state['status'] == 'sent'
 
 

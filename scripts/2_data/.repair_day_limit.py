@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.proj import DB, PATH, Proj
+from src.proj import DB, PATH, Proj, Logger
 from src.proj.db.io.dataframe import dfIOHandler
 from src.proj.util.script import ScriptTool
 
@@ -109,19 +109,19 @@ def main(start: int = 20170101, end: int = 20251231, dry_run: bool = True, **kwa
                 record = {'date': date, 'path': str(path), 'status': 'failed', 'error': str(exc)}
             records.append(record)
             if record['status'] != 'unchanged':
-                print(json.dumps(record, ensure_ascii=False))
+                Logger.stdout(json.dumps(record, ensure_ascii=False), vb_level=0)
         failures = sum(row['status'] == 'failed' for row in records)
         payload['summary'] = {
             'checked_files': len(records), 'failed_files': failures,
             'changed_files': sum(row['status'] in ('repaired', 'would_repair') for row in records),
             'removed_rows': sum(row.get('removed', 0) for row in records),
         }
-        print(json.dumps(payload['summary'], ensure_ascii=False))
+        Logger.stdout(json.dumps(payload['summary'], ensure_ascii=False), vb_level=0)
         if failures:
             raise RuntimeError(f'{failures} files unresolved; inspect {report}. Conflicting files were not changed.')
     finally:
         report.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
-        print(f'Audit report and original-file backups: {output}')
+        Logger.stdout(f'Audit report and original-file backups: {output}')
     return report
 
 

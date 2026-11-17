@@ -36,6 +36,8 @@ from .autofix_spec import ManifestError, canonical, manifest, redact, validate
 from .autofix_store import ACTIVE, ROOT, Store, state_dir
 from . import autofix_mailbox as mailbox
 
+from src.automation.console import logger
+
 
 def commit(root):
     result = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=10)
@@ -362,7 +364,7 @@ def worker_observation(store, status, reason, *, code=0, **fields):
     if store is not None:
         with store.connect() as db:
             db.execute("INSERT OR REPLACE INTO metadata VALUES ('worker_observation', ?)", (canonical(observation),))
-    print('Autofix worker: ' + canonical(observation), flush=True)
+    logger.info('Autofix worker: ' + canonical(observation))
     return code
 
 
@@ -515,7 +517,7 @@ def main():
         result['history'] = redact(store.rows())
         with store.connect(readonly=True) as db:
             result['scheduled'] = [dict(zip(('id', 'task', 'state'), row)) for row in db.execute('SELECT id,task,state FROM scheduled ORDER BY created')]
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    logger.info(json.dumps(result, ensure_ascii=False, indent=2))
     return int(invalid)
 
 
@@ -523,5 +525,5 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except (ValueError, RuntimeError, OSError) as exc:
-        print(f'Autofix: {type(exc).__name__}: {exc}', file=sys.stderr)
+        logger.error(f'Autofix: {type(exc).__name__}: {exc}')
         raise SystemExit(1) from None

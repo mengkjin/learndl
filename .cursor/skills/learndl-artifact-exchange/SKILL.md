@@ -8,6 +8,10 @@ description: >-
 
 # Research artifacts and local archival
 
+Follow the [project logging convention](../learndl-base-modules/SKILL.md#project-logging-convention):
+use `Logger.stdout` or an existing Logger for script status and diagnostics, never
+direct `print`. Preserve machine-readable CLI results and lightweight bootstrap imports.
+
 Read [operator and API examples](../../../runs/artifact_exchange/README.md) before adding a producer.
 Implementation: `src/automation/artifact_exchange/`; panel discovery: `src/api/learndl_monitor/experiments.py`.
 

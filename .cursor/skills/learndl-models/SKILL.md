@@ -9,6 +9,12 @@ description: >-
 
 # learndl model development and OOM recovery
 
+## Logging
+
+Follow the [project logging convention](../learndl-base-modules/SKILL.md#project-logging-convention):
+use `Logger.stdout` or the existing task/model Logger for diagnostics and progress,
+never direct `print`. Preserve flushing and supervised progress visibility.
+
 ## Objective
 
 Build correct models that can train within the available memory budget while preserving the intended modeling semantics and existing-weight compatibility where required.

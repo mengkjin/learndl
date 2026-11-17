@@ -253,6 +253,7 @@ def _valid_file(cls, date, db):
 def run_repair(
     mode, start=20110101, end=None, run_id=None, dry_run=False, batch_size=32
 ):
+    from src.proj import Logger
     from src.proj import PATH, CALENDAR, DB
     from src.data import DATAVENDOR
     from src.res.factor.calculator import StockFactorHierarchy
@@ -453,7 +454,7 @@ def run_repair(
                 checkpoint.step(f"factor:{name}:{date}", [path], calculate)
             clear(force=(i % batch_size == batch_size - 1))
             if i % 25 == 0:
-                print(
+                Logger.stdout(
                     f"[{mode}] factors {i + 1}/{len(dates)} through {date}", flush=True
                 )
         # Event calculation includes prehistory; explicitly replace all computed rows.
@@ -613,7 +614,7 @@ def run_repair(
             run_id + "_" + status["attempt_id"],
             status["status"],
         )
-        print(f"[{mode}] {status['status']}: {reports}", flush=True)
+        Logger.stdout(f"[{mode}] {status['status']}: {reports}", flush=True)
 
 
 def arguments():

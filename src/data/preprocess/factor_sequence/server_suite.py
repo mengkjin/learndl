@@ -48,6 +48,7 @@ def discover(cfg):
 
 
 def execute(command, log, root):
+    from src.proj import Logger
     env=os.environ.copy()
     env['PYTHONPATH']=str(root)+os.pathsep+env.get('PYTHONPATH','')
     env['PYTHONUNBUFFERED']='1'
@@ -59,7 +60,7 @@ def execute(command, log, root):
                 stream.write(line)
                 stream.flush()
                 # Real child output advances the supervised worker's progress log too.
-                print(line,end='',flush=True)
+                Logger.stdout(line,end='',vb_level=0,flush=True)
             returncode=process.wait()
     if returncode:
         raise RuntimeError(f'Child exited with code {returncode}; inspect {log}')
@@ -111,6 +112,7 @@ def aggregate(fold_directories, output, expected_dates):
 
 def run_suite(root, results_root, run_id, data_config, test_start=20170101, test_end=None,
               research=False, ablations=False, resume_from=None, training_email=True, recipient=None):
+    from src.proj import Logger
     root,results_root=Path(root).resolve(),Path(results_root).resolve()
     if not re.fullmatch('[A-Za-z0-9_-]+',run_id):
         raise ValueError('Invalid run ID')
@@ -125,7 +127,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
         item={'name':name,'status':'running'}
         report['stages'].append(item)
         write_json(folder/'suite.json',report)
-        print(f'[factor-sequence] {name}: starting',flush=True)
+        Logger.stdout(f'[factor-sequence] {name}: starting',flush=True)
         before=time.perf_counter()
         try:
             result=action()
@@ -137,7 +139,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
         finally:
             item['seconds']=time.perf_counter()-before
             write_json(folder/'suite.json',report)
-            print(f'[factor-sequence] {name}: {item["status"]} ({item["seconds"]:.1f}s)',flush=True)
+            Logger.stdout(f'[factor-sequence] {name}: {item["status"]} ({item["seconds"]:.1f}s)',flush=True)
     pipeline=[sys.executable,'-m','src.data.preprocess.factor_sequence.pipeline']
     try:
         config=json.loads(Path(data_config).read_text())
@@ -242,7 +244,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
         write_json(folder/'suite.json',report)
         from src.automation.artifact_exchange.research import publish_analysis
         publish_analysis(folder, 'factor_sequence', report['status'])
-        print(f'[factor-sequence] results: {folder}',flush=True)
+        Logger.stdout(f'[factor-sequence] results: {folder}',flush=True)
     return folder,report
 
 
@@ -275,6 +277,7 @@ def report_package(folder):
 
 
 def send_result(folder, recipient=None, *, _transfers=None):
+    from src.proj import Logger
     from src.proj import MACHINE
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     folder=Path(folder)
@@ -289,7 +292,7 @@ def send_result(folder, recipient=None, *, _transfers=None):
     if not MACHINE.emailable:
         state={'status':'skipped','reason':'Email is disabled on this machine'}
         write_json(folder/'mail_status.json',state)
-        print('[factor-sequence] mail skipped: machine email disabled',flush=True)
+        Logger.stdout('[factor-sequence] mail skipped: machine email disabled',flush=True)
         return state
     try:
         if (folder/'mail/delivery.json').exists():

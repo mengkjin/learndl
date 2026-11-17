@@ -89,37 +89,38 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    from src.proj import Logger
     args = parser().parse_args()
     if args.command == "run-walk-forward":
         from .walk_forward import run_walk_forward
-        print(json.dumps(run_walk_forward(args.config, dry_run=args.dry_run, stage=args.stage), indent=2))
+        Logger.stdout(json.dumps(run_walk_forward(args.config, dry_run=args.dry_run, stage=args.stage), indent=2), vb_level=0)
         return
     if args.command == "profile-env":
         from .profiling import profile_env
-        print(json.dumps(profile_env(PanelData.load_npz(args.data), args.output, args.steps, args.train_steps), indent=2))
+        Logger.stdout(json.dumps(profile_env(PanelData.load_npz(args.data), args.output, args.steps, args.train_steps), indent=2), vb_level=0)
         return
     if args.command == "run-experiment":
         from .experiment import run_experiment
 
-        print(json.dumps(run_experiment(args.config, no_email=args.no_email, recipient=args.recipient), indent=2, ensure_ascii=False))
+        Logger.stdout(json.dumps(run_experiment(args.config, no_email=args.no_email, recipient=args.recipient), indent=2, ensure_ascii=False), vb_level=0)
         return
 
     if args.command == "analyze-bundle":
         from .bundle import analyze_bundle
 
-        print(analyze_bundle(args.bundle, args.output))
+        Logger.stdout(analyze_bundle(args.bundle, args.output), vb_level=0)
         return
 
     if args.command == "resend-bundle":
         from .bundle import send_bundle
 
-        print(json.dumps(send_bundle(args.metadata, args.recipient, only_failed=True), indent=2, ensure_ascii=False))
+        Logger.stdout(json.dumps(send_bundle(args.metadata, args.recipient, only_failed=True), indent=2, ensure_ascii=False), vb_level=0)
         return
 
     if args.command == "generate-report":
         from .report import generate_report
 
-        print(generate_report(args.run, args.output))
+        Logger.stdout(generate_report(args.run, args.output), vb_level=0)
         return
     if args.command == "prepare-real":
         # Kept lazy so this command does not import Gymnasium, SB3, or Torch.
@@ -136,14 +137,14 @@ def main() -> None:
             min_listing_days=args.min_listing_days,
             alpha_sample_status=args.alpha_sample_status,
         )
-        print(json.dumps(prepare_real_data(config, dry_run=args.dry_run), indent=2, ensure_ascii=False))
+        Logger.stdout(json.dumps(prepare_real_data(config, dry_run=args.dry_run), indent=2, ensure_ascii=False), vb_level=0)
         return
 
     if args.command == "evaluate":
         from .training import evaluate_checkpoint
 
         metrics = evaluate_checkpoint(PanelData.load_npz(args.data), args.checkpoint, args.output)
-        print(json.dumps(metrics, indent=2))
+        Logger.stdout(json.dumps(metrics, indent=2), vb_level=0)
         return
 
     if args.command == "replay-baselines":
@@ -159,7 +160,7 @@ def main() -> None:
             write_history(args.output / f"{kind}_history.csv", history)
             metrics[kind] = history_metrics(history)
         (args.output / "baseline_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
-        print(json.dumps(metrics, indent=2))
+        Logger.stdout(json.dumps(metrics, indent=2), vb_level=0)
         return
 
     from .training import ExperimentConfig, train_experiment, train_seed_suite
@@ -185,7 +186,7 @@ def main() -> None:
             "robust_top50_baseline": metrics["robust_top50_baseline"],
             "timing": metrics["timing"],
         }
-    print(json.dumps(printable, indent=2, default=lambda value: value.tolist()))
+    Logger.stdout(json.dumps(printable, indent=2, default=lambda value: value.tolist()), vb_level=0)
 
 
 if __name__ == "__main__":

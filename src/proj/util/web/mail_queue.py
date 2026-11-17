@@ -362,6 +362,7 @@ def inspect_queue(api):
 
 
 def main():
+    from src.proj import Logger
     import argparse
     from .emailer import Email
     parser = argparse.ArgumentParser(description='Inspect mail (default) or explicitly requeue an isolated batch.')
@@ -370,7 +371,7 @@ def main():
     parser.add_argument('--external', action='store_true', help='Reset a caller-owned receipt; never enqueue it')
     args = parser.parse_args()
     if args.action == 'inspect':
-        print(json.dumps(inspect_queue(Email), ensure_ascii=False, indent=2))
+        Logger.stdout(json.dumps(inspect_queue(Email), ensure_ascii=False, indent=2), vb_level=0)
         return
     if not args.batch_id or Path(args.batch_id).name != args.batch_id or args.batch_id.startswith('.'):
         parser.error('retry requires a valid batch ID')
@@ -392,7 +393,7 @@ def main():
         if not args.external:
             source.replace(dest)
         fsync_dir(root)
-        print(f'Requeued {args.batch_id}; no mail sent by this command.')
+        Logger.stdout(f'Requeued {args.batch_id}; no mail sent by this command.')
 
 
 if __name__ == '__main__':

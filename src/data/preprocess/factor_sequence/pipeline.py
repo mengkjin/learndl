@@ -313,6 +313,7 @@ def compare(folder):
 
 
 def main():
+    from src.proj import Logger
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage',choices=['build','audit','smoke','compare','all'])
     parser.add_argument('--run-id',required=True)
@@ -379,7 +380,7 @@ def main():
                     result=compare(folder/'training')
             result.update(stage=stage,seconds=time.perf_counter()-started,invocation=invocation)
             write_json(evidence,result)
-            print(json.dumps(result,ensure_ascii=False))
+            Logger.stdout(json.dumps(result,ensure_ascii=False), vb_level=0)
             if result['status'] != 'passed':
                 raise RuntimeError(f'Stage {stage} did not pass; inspect {evidence}')
         except BaseException:

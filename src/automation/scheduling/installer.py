@@ -51,6 +51,8 @@ import psutil
 from .config import DAYS, ENTRYPOINTS, load_config, runtime_dir, schedule_slots
 from src.automation.paths import ROOT, config_directory
 
+from src.automation.console import logger
+
 BEGIN = '# BEGIN LEARNDL MANAGED'
 END = '# END LEARNDL MANAGED'
 PREFIX = 'learndl-schedule-'
@@ -556,7 +558,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
                 from .channels import read as read_channels
                 read_channels(Store(state_dir()))
     if not recovering and policy_matches and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
-        print('Already up to date')
+        logger.info('Already up to date')
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
@@ -674,7 +676,7 @@ def main() -> int:
         if args.crontab_file or args.server_timezone:
             parser.error('Installation uses live server configuration')
         if args.action in {'pending', 'cancel'}:
-            print(json.dumps(install_request.cancel() if args.action == 'cancel' else install_request.reconcile(), indent=2))
+            logger.info(json.dumps(install_request.cancel() if args.action == 'cancel' else install_request.reconcile(), indent=2))
             return 0
         return run_interactive(deferred=args.action == 'defer', force=args.action == 'force', host=args.host, config_dir=args.config_dir)
     from src.proj import PATH
@@ -691,31 +693,31 @@ def main() -> int:
     else:
         plan = {}
     if args.action in {'plan', 'status'}:
-        print(json.dumps({key: value for key, value in plan.items() if key not in {'config', 'units', 'cron', 'desktop_autostart'}}, indent=2))
+        logger.info(json.dumps({key: value for key, value in plan.items() if key not in {'config', 'units', 'cron', 'desktop_autostart'}}, indent=2))
         desktop = desktop_path()
         actual_desktop = desktop.read_text() if desktop.exists() else None
-        print(json.dumps({'desktop_autostart': str(desktop),
+        logger.info(json.dumps({'desktop_autostart': str(desktop),
                           'desktop_autostart_changes': actual_desktop != plan.get('desktop_autostart')}))
         manifest_path = runtime_dir() / 'manifest.json'
         previous = json.loads(manifest_path.read_text()) if manifest_path.exists() else {'units': {}}
-        print(json.dumps({'add_units': sorted(set(plan['units']) - set(previous['units'])),
+        logger.info(json.dumps({'add_units': sorted(set(plan['units']) - set(previous['units'])),
                           'remove_units': sorted(set(previous['units']) - set(plan['units'])),
                           'update_units': sorted(name for name in set(plan['units']) & set(previous['units']) if plan['units'][name] != previous['units'][name]),
                           'cron_changes': plan['cron'] != cron}, indent=2))
         if args.diff:
-            print(''.join(difflib.unified_diff((actual_desktop or '').splitlines(True),
+            logger.info(''.join(difflib.unified_diff((actual_desktop or '').splitlines(True),
                       (plan.get('desktop_autostart') or '').splitlines(True), fromfile=str(desktop), tofile='planned autostart')))
-            print(''.join(difflib.unified_diff(cron.splitlines(True), plan['cron'].splitlines(True), fromfile='current crontab', tofile='planned crontab')))
+            logger.info(''.join(difflib.unified_diff(cron.splitlines(True), plan['cron'].splitlines(True), fromfile='current crontab', tofile='planned crontab')))
             for name in sorted(set(previous['units']) | set(plan['units'])):
-                print(''.join(difflib.unified_diff(previous['units'].get(name, '').splitlines(True), plan['units'].get(name, '').splitlines(True), fromfile='current/' + name, tofile='planned/' + name)))
+                logger.info(''.join(difflib.unified_diff(previous['units'].get(name, '').splitlines(True), plan['units'].get(name, '').splitlines(True), fromfile='current/' + name, tofile='planned/' + name)))
         if args.action == 'status':
             from .priority import status as priority_status
-            print(json.dumps({'scheduling_priority': priority_status()}, indent=2, ensure_ascii=False))
+            logger.info(json.dumps({'scheduling_priority': priority_status()}, indent=2, ensure_ascii=False))
             from src.automation.cli_recovery import load, state_path
-            print(json.dumps({'cli_recovery': load(state_path())}, indent=2))
+            logger.info(json.dumps({'cli_recovery': load(state_path())}, indent=2))
             directory = runtime_dir()
             manifest = json.loads((directory / 'manifest.json').read_text()) if (directory / 'manifest.json').exists() else {}
-            print(json.dumps({'installed': bool(manifest), 'cron_matches': manifest.get('cron') == cron,
+            logger.info(json.dumps({'installed': bool(manifest), 'cron_matches': manifest.get('cron') == cron,
                               'unit_files_match': all((UNIT_DIR / name).exists() and (UNIT_DIR / name).read_text() == contents for name, contents in manifest.get('units', {}).items()),
                               'timers': {name: timer_state(name) for name in manifest.get('units', {}) if name.endswith('.timer')}}))
         return int(bool(plan['conflicts'] or plan['global_conflicts']))
@@ -742,7 +744,7 @@ def main() -> int:
             with install_request.lock():
                 install_request.finish(pending_installation, 'failed', 'Installation rolled back explicitly; task admission restored')
     if plan['conflicts']:
-        print(json.dumps({'deferred_tasks': plan['conflicts']}, indent=2))
+        logger.info(json.dumps({'deferred_tasks': plan['conflicts']}, indent=2))
         return 1
     return 0
 
@@ -751,5 +753,5 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except (ValueError, RuntimeError, OSError) as exc:
-        print(f'Scheduling installer: {exc}', file=sys.stderr)
+        logger.error(f'Scheduling installer: {exc}')
         raise SystemExit(1) from None

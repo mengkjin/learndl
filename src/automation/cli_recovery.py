@@ -43,6 +43,12 @@ from pathlib import Path
 import portalocker
 import psutil
 
+# The desktop launcher also executes this file directly.
+if __package__:
+    from .console import logger
+else:
+    from console import logger
+
 ENV_KEYS = ('DISPLAY', 'WAYLAND_DISPLAY', 'XAUTHORITY', 'XDG_RUNTIME_DIR',
             'DBUS_SESSION_BUS_ADDRESS', 'XDG_SESSION_ID', 'WEZTERM_UNIX_SOCKET', 'PATH')
 
@@ -309,7 +315,7 @@ def main() -> None:
         launch(path)
         return
     if args.action == 'status':
-        print(json.dumps(load(path), indent=2))
+        logger.info(json.dumps(load(path), indent=2))
         return
     with lock(path):
         state = load(path)
@@ -323,7 +329,7 @@ def main() -> None:
                 state.update({'failure_paused': False, 'failures': 0, 'pending_until': 0, 'next_attempt': 0})
         save(path, state)
     if args.action in {'login', 'resume'}:
-        print(tick(path))
+        logger.info(tick(path))
 
 
 if __name__ == '__main__':

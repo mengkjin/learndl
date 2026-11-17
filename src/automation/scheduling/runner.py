@@ -23,6 +23,8 @@ import psutil
 from .config import ENTRYPOINTS, installed_config
 from .runtime import RunStore, members
 
+from src.automation.console import logger
+
 
 def run(task_id: str, *, deferred: bool = False) -> int:
     from .maintenance_gate import MaintenanceBusy, permit
@@ -137,7 +139,7 @@ def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = Non
     try:
         lock.__enter__()
     except (BlockingIOError, TimeoutError):
-        print(f'SCHEDULER SKIPPED: {task_id}: execution lock unavailable', flush=True)
+        logger.info(f'SCHEDULER SKIPPED: {task_id}: execution lock unavailable')
         return 76 if request_id else 75 if retry_busy else 0
     try:
         store = RunStore()
@@ -150,7 +152,7 @@ def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = Non
                 continue
             while members(older):
                 if task['overlap'] == 'skip' or time.monotonic() - wait_started >= task['wait_timeout_seconds']:
-                    print(f'SCHEDULER SKIPPED: {task_id}: previous supervised session remains active', flush=True)
+                    logger.info(f'SCHEDULER SKIPPED: {task_id}: previous supervised session remains active')
                     return 76 if request_id else 75 if retry_busy else 0
                 time.sleep(1)
         run_id = uuid.uuid4().hex

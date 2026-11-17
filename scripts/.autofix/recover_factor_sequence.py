@@ -18,6 +18,7 @@ from src.proj.util.script import ScriptTool
 
 @ScriptTool('autofix_recover_factor_sequence')
 def main(run_id='20261031_factor_sequence_verify_02', dry_run=False, **kwargs):
+    from src.proj import Logger
     import json
     from uuid import uuid4
     from src.proj import PATH, Proj
@@ -36,10 +37,10 @@ def main(run_id='20261031_factor_sequence_verify_02', dry_run=False, **kwargs):
     path=destination/'progress.json'
     path.write_text(json.dumps(report,ensure_ascii=False,indent=2))
     Proj.email_attachments.append(path)
-    print(f"Original {run_id}: {report['assessment']}; evidence: {path}",flush=True)
+    Logger.stdout(f"Original {run_id}: {report['assessment']}; evidence: {path}",flush=True)
     if not dry_run:
         request=submit(request_id,resume_from=run_id)
-        print(f'Recovery queued: {request}. Host will check original process/children, resend available results, '
+        Logger.stdout(f'Recovery queued: {request}. Host will check original process/children, resend available results, '
               'and resume incomplete folds in the shared training slot. No training in autofix.',flush=True)
 
 

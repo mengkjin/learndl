@@ -49,12 +49,17 @@ def quiet_output(path: Path, heartbeat_seconds: float = 3600):
 
 
 def progress(stage: str, message: str, *, warning: bool = False, milestone: bool = False) -> None:
+    from src.proj import Logger
+
     level = 'WARNING' if warning else 'INFO'
     text = f'[{datetime.now().isoformat(timespec="seconds")}] [RL/{stage}] {level}: {message}'
     if milestone and (context := _console.get()):
         console, log, last = context
-        print(text, file=console, flush=True)
-        print(text, file=log, flush=True)
+        with redirect_stdout(console):
+            Logger.stdout(text, vb_level=0, flush=True)
+        with redirect_stdout(log):
+            Logger.stdout(text, vb_level=0, flush=True)
         last[0] = time.monotonic()
     else:
-        print(text, file=sys.stderr if warning else sys.stdout, flush=True)
+        with redirect_stdout(sys.stderr if warning else sys.stdout):
+            Logger.stdout(text, vb_level=0, flush=True)

@@ -27,6 +27,7 @@ from src.proj.util.script import ScriptTool
 
 @ScriptTool("factor_sequence_coverage", markdown_catcher=True)
 def main(start=20110101, end=None, no_email=False):
+    from src.proj import Logger
     from src.proj import PATH
     from src.data.preprocess.factor_sequence.audit_runner import (
         run_server,
@@ -39,7 +40,7 @@ def main(start=20110101, end=None, no_email=False):
     folder = PATH.result / "factor_sequence" / new_run_id()
     report = run_server(folder, start, end, roots)
     mail = deliver(folder) if not no_email else {"status": "skipped"}
-    print(f"Audit: {report['status']}; mail: {mail['status']}; {folder}", flush=True)
+    Logger.stdout(f"Audit: {report['status']}; mail: {mail['status']}; {folder}", flush=True)
     if report["status"] not in ("completed",):
         raise RuntimeError(f"Audit incomplete; partial results retained: {folder}")
 

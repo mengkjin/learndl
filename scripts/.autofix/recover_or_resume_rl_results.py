@@ -16,7 +16,7 @@
 from pathlib import Path
 from uuid import uuid4
 
-from src.proj import PATH, Proj
+from src.proj import PATH, Proj, Logger
 from src.proj.util.script import ScriptTool, AutoRunTask
 
 
@@ -35,10 +35,10 @@ def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_t
         raise ValueError('Invalid existing RL run directory')
     if dry_run:
         audit = audit_suite(run, project_root=root)
-        print(audit)
+        Logger.stdout(audit)
         if not audit['complete']:
             plan = inspect_resume(run, root)
-            print({'reusable': len(plan['completed']), 'missing': plan['pending'], 'source': plan['source_commit']})
+            Logger.stdout({'reusable': len(plan['completed']), 'missing': plan['pending'], 'source': plan['source_commit']})
         return
     destination = run/'recovery'/('audit-or-resume-'+uuid4().hex)
     task = AutoRunTask._instances[-1]
@@ -50,7 +50,7 @@ def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_t
     if metadata:
         for attachment in bundle_attachments(metadata):
             Proj.email_attachments.append(attachment)
-        print('[RL/recovery] All training/testing verified; result bundle attached, no resume needed.', flush=True)
+        Logger.stdout('[RL/recovery] All training/testing verified; result bundle attached, no resume needed.', flush=True)
         return
     try:
         plan = inspect_resume(run, root)
@@ -63,7 +63,7 @@ def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_t
     context = sandbox_request()
     request_id = context['id'] if context else '20261028_resume_rl_5d17935c_02'
     request = submit(root, request_id, plan)
-    print(f'[RL/recovery] Reusable={len(plan["completed"])}, pending={len(plan["pending"])}. '
+    Logger.stdout(f'[RL/recovery] Reusable={len(plan["completed"])}, pending={len(plan["pending"])}. '
           f'Request queued for shared GPU slot: {request}. No training inside autofix.', flush=True)
     return {'status': 'resume_requested', 'request': str(request), 'tests_complete': False}
 

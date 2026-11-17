@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from src.proj import PATH, Proj
+from src.proj import PATH, Proj, Logger
 from src.proj.util.script import ScriptTool, AutoRunTask
 
 
@@ -41,7 +41,7 @@ def main(request_path: str, **kwargs):
             resume_suite(run, PATH.main, attempt)
         else:
             attempt.mkdir(parents=True)
-            print('[RL/resume] Results already complete; skip all training and testing.', flush=True)
+            Logger.stdout('[RL/resume] Results already complete; skip all training and testing.', flush=True)
         audit, metadata = recover_suite(run, attempt/'verified_results', project_root=PATH.main)
         if not audit['complete']:
             raise ValueError('Resumed results failed final audit: ' + '; '.join(audit['errors'][:5]))

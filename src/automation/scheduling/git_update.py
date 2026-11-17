@@ -28,6 +28,8 @@ import psutil
 from .config import runtime_dir
 from .runtime import RunStore
 
+from src.automation.console import logger
+
 
 def _mail_store() -> RunStore:
     store = RunStore(runtime_dir() / 'runs.sqlite')
@@ -449,7 +451,7 @@ def main():
         result = {'status': 'error', 'reason': f'{type(exc).__name__}: {exc}'}
     # On checkout, do not import project modules after the tree changed.
     atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
-    print(json.dumps(result, ensure_ascii=False), flush=True)
+    logger.info(json.dumps(result, ensure_ascii=False))
     return int(result.get('status') in {'error', 'blocked'})
 
 
