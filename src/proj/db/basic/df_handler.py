@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 import numpy as np
 import pandas as pd
 from typing import Any   , TypeVar , TYPE_CHECKING
@@ -15,7 +18,30 @@ if TYPE_CHECKING:
     import polars as pl
     T = TypeVar('T' , bound = pd.DataFrame | pl.DataFrame)
 
-__all__ = ['dfHandler']
+__all__ = ['dfHandler', 'quiet_empty_stock_factors']
+
+_empty_counts: ContextVar[dict[str, int] | None] = ContextVar('empty_factor_counts', default=None)
+
+
+@contextmanager
+def quiet_empty_stock_factors():
+    """Aggregate only empty stock-factor diagnostics; errors and source warnings remain visible."""
+    counts: dict[str, int] = {}
+    token = _empty_counts.set(counts)
+    try:
+        yield counts
+    finally:
+        _empty_counts.reset(token)
+
+
+def _quiet_empty(syntax):
+    counts = _empty_counts.get()
+    if counts is None or not syntax.startswith('stock_factor.'):
+        return False
+    key = '.'.join(syntax.split('.')[:2])
+    counts[key] = counts.get(key, 0) + 1
+    return True
+
 
 class dfHandler:
     @classmethod
@@ -63,7 +89,8 @@ class dfHandler:
             df[reassign_date_col] = date
 
         if df.empty:
-            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
+            if not _quiet_empty(syntax):
+                Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
         else:
             na_cols : pd.Series | Any = df.isna().all()
             if na_cols.all():
@@ -96,7 +123,8 @@ class dfHandler:
                 df = df.with_columns(pl.lit(date).alias(reassign_date_col))
 
         if len(df) == 0:
-            Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
+            if not _quiet_empty(syntax):
+                Logger.only_once(f'{syntax} is empty' , mark = f'{syntax} empty' , printer = 'alert1' , indent = indent , vb_level = vb_level)
         else:
             def is_all_na_column(col: pl.Series) -> bool:
                 if col.dtype in (pl.Float32, pl.Float64):

@@ -2,28 +2,75 @@
 
 三个入口均可在 CLI 的 Run Scripts → 8 Fixes 中发现。不会修改 worklist、启动模型训练或调用历史覆盖率审计流程。日志、执行差异和失败摘要通过普通 ScriptTool 邮件与 artifact exchange 投递；备份、原始数据及模型权重不投递。
 
-## 运行顺序
+## 从脚本6的 data 阶段失败恢复（新版脚本7）
 
-在项目根目录执行。分钟风险历史尚未按新版重算时先运行 5；已经完成则不必重复。
+新版7改为接续恢复入口，文件名为保持 CLI/历史命令兼容仍叫
+`7_backfill_factor_sequence_pre2017.py`。**不再要求完成7后再跑6。**
+分钟风险历史尚未按新版重算时，先单独完成5；已完成不重复。
 
-```sh
-.venv/bin/python scripts/8_fixes/5_rebuild_market_daily_risk.py
-.venv/bin/python scripts/8_fixes/7_backfill_factor_sequence_pre2017.py --run-id factorseq_backfill_01
-.venv/bin/python scripts/8_fixes/6_rebuild_factor_sequence_dependencies.py --run-id factorseq_repair_01
-```
-
-先查看计划，不修改因子数据：
+本次使用新的恢复 run ID，原始脚本6目录保持不变：
 
 ```sh
-.venv/bin/python scripts/8_fixes/7_backfill_factor_sequence_pre2017.py --dry-run
-.venv/bin/python scripts/8_fixes/6_rebuild_factor_sequence_dependencies.py --dry-run
+.venv/bin/python scripts/8_fixes/7_backfill_factor_sequence_pre2017.py \
+  --source-run rebuild_20261116T064711Z_a33e87ad \
+  --run-id recovery_20261117_01 --dry-run
+
+.venv/bin/python scripts/8_fixes/7_backfill_factor_sequence_pre2017.py \
+  --source-run rebuild_20261116T064711Z_a33e87ad \
+  --run-id recovery_20261117_01
 ```
 
-失败后使用原命令、相同 run ID 续跑。代码、原始数据文件的大小／修改时间或已完成输出的 SHA256 发生变化时拒绝复用旧检查点，应使用新 run ID。第二个脚本可以复用第一个脚本已校验的 dtop、FF3 和事件结果；stats、合成因子及数据块重新按依赖构建。每次邮件／投递使用独立 attempt ID，避免失败后续跑与旧包冲突。
+CLI 的 Run Scripts → 8 Fixes 也提供同样参数。默认 source_run 是本次失败任务；
+其他来源必须显式指定。仅接受数据合同兼容、除 data 外全部步骤通过的 rebuild。
+`dry-run` 校验来源并写执行计划，不扫描完整缺口、不执行计算。
 
-`--start` 默认 20110101；补全的 `--end` 默认 20161230，修复的 `--end` 默认服务器最新确认日。`--batch-size` 默认 32，控制数据块构建批量。两个脚本使用 `update_factors` 锁，不与普通因子更新并发。风险脚本保留原来的安全替换校验。
+### 执行顺序
 
-**范围说明：**补全脚本仅对 2017 年前缺失／损坏的普通因子文件补算，但新版 dtop／FF3 的定义修复必须延续至冻结的最新确认日，才能构建一致的完整新数据版本。因此它还会完成该语义刷新，以及事件、stats、合成因子和数据块刷新。已有正常的其他因子文件不会覆盖。`end` 是本次补缺区间终点，不是滚动状态、事件权重和相关下游修订的截断点。窄范围运行仍要求更早输入已满足新版合同；尤其旧 dtop 文件缺少来源标记时会明确失败，推荐首次使用完整默认区间。
+1. 从旧检查点读取固定截止日（本次 **20261113**），不追随日常更新扩大范围。
+2. 逐个检查旧 dtop/FF3 日文件的完成记录及 SHA256；仍匹配的直接登记复用，
+   不重算、不为未修改的复用文件另做一份备份。文件变更或缺失则重算该项。
+3. 按完整交易日历检查33个原始因子，补算缺失/损坏的日文件；正常文件跳过。
+   默认覆盖2011至固定截止日，包含2017年前五日步长遗留的空位，并检查后续年份。
+   `--end` 可缩小补缺区间，但不改变下游固定截止日；不应通过缩短区间绕过源缺失。
+   Affiliate 因子仍由其底层来源提供，缺少来源时报错，不伪造文件。
+4. 重新生成 high_level_switch、相关 daily/weekly stats、依赖合成权重及合成结果，
+   然后构建三个数据块。不能直接复用补缺前的 stats/合成权重。
+5. 输出独立版本数据、报告、完成/失败邮件。只有最后完整校验通过才记 completed。
+
+源文件存在但个股为 NaN 的分析师等真实缺失仍保留，不把它视为待补文件。
+旧运行的124,292个 passed步骤不是全部直接迁移：只采用验证过的因子日文件，
+下游按新历史刷新。原运行保持 failed，不篡改为成功。
+
+### 与 daily_update 并行和断点续跑
+
+新版7采用持久化 **逐文件首次读取快照**：只复制实际读到的原始数据库文件到
+`results/factor_sequence_fixes/<新run ID>/raw_snapshot/`，保存 SHA256 和采集时间。
+使用真实副本，不使用会被原地写入影响的硬链接。每次复制检查源是否在复制期间变化，
+最多重试三次。后续读取及续跑使用私有副本，底层 pandas/polars 批量读取在该作用域
+关闭线程/lazy加速，避免绕过快照。
+
+因此，日常追加新日期、重写整表或修改无关原始文件不会触发最终 data 的全库指纹检查。
+即使已采集的源之后被历史修订，本次仍明确使用其冻结版本；采用修订应另开运行。
+新接触的源按首次读取时采集，**这不是所有文件在同一时刻的数据库事务快照**。
+旧运行没有原始数据副本，无法重新证明其历史来源一致；此限制和继承来源均进入
+`recovery_source.json` 和数据块 manifest，而不是删除一致性检查后宣称完全追溯。
+
+失败后用同一条命令、相同新 run ID 续跑。不要删除 `checkpoint.sqlite` 或
+`raw_snapshot/`。已完成输出和副本仍校验 SHA256；代码/参数变化、输出损坏或快照丢失
+会明确拒绝续跑。单个阶段失败不抹掉之前完成记录。快照可能占用较多磁盘，磁盘不足
+会报错；不要在恢复期间清理它。原始副本、检查点和备份不会被投递到共享报告包。
+
+仍使用项目 `update_factors` 锁，防止因子更新同时改写因子/stats；原始数据日常采集
+不需要全程停用。此流程不启动历史审计、不训练模型、不修改 worklist。
+
+### 日志
+
+脚本6/7都将 `stock_factor.* is empty` 的逐条提示改为汇总计数，保存到
+`reports/empty_factor_reads.json`。不屏蔽来源错误、损坏、全NaN等其他警告或异常。
+保留按日期批次、stats年段、合成进度和数据块阶段的日志。
+
+脚本6仍是从头语义重建入口，原有全库来源检查保留；本次恢复请使用新版7，
+不要再次用6创建新的全量任务。
 
 ## 修改规则和影响
 
@@ -73,7 +120,12 @@ factorperf、常规分组 stats 和事件合成共用此规则；固定十组／
 
 ## 本地验证
 
-本轮执行并通过：因子时序相关 64 项 unittest、风险重算 6 项 unittest；并列值分组的独立检查；全仓库 Ruff；`src` 与三个修复脚本的 Pyright（指定项目 `.venv/bin/python`，0 errors / 0 warnings）。邮件、投递和重算替换测试使用临时目录／模拟发送，没有执行服务器重算。
+2026-11-17 恢复改造：新增9项测试覆盖 SHA256 复用、损坏拒绝、快照续跑、复制竞争、
+pandas/polars 批量读取隔离、日志作用域，以及补缺→stats/合成→数据块的端到端模拟。
+全仓库 Ruff 通过；本次生产代码与新增测试 Pyright 为0 errors/0 warnings；并行读取相关3项回归通过。
+完整因子时序测试78项中77项通过，唯一未通过的是本地 worklist 已将所有 fit 项注释后，
+旧 schedule 配置测试仍断言三个任务必须启用。本次未重新启用用户队列。
+所有通知均模拟，没有执行服务器历史重算，也不将本地测试当作真实数据验收。
 
 ```sh
 .venv/bin/ruff check .

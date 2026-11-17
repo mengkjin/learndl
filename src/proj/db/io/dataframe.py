@@ -17,6 +17,7 @@ from src.proj.core import strPath , strPaths , lit
 from src.proj.core.literals import PandasAccelerator , PolarsAccelerator
 
 from src.proj.db.basic import DF_SUFFIX , path_date , dfHandler
+from .snapshot import snapshot_read_path, snapshot_active
 
 WriteMode : TypeAlias = Literal['a' , 'w']
 if TYPE_CHECKING:
@@ -42,6 +43,7 @@ class dfIOHandler:
         mapper : PdMapper = None
     ) -> pd.DataFrame:
         """load dataframe from path"""
+        path = snapshot_read_path(path)
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pd.DataFrame()
         try:
@@ -59,6 +61,7 @@ class dfIOHandler:
     def load_polars(cls , path : strPath | io.BytesIO , * , missing_ok = True , mapper : PlMapper = None) -> pl.DataFrame:
         """load dataframe from path"""
         import polars as pl
+        path = snapshot_read_path(path)
         if isinstance(path , strPath) and not Path(path).exists() and missing_ok: 
             return pl.DataFrame()
         if DF_SUFFIX == 'feather':
@@ -126,6 +129,9 @@ class dfIOHandler:
         mapper : PdMapper = None
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
+        if snapshot_active():
+            accelerator = None
+            paths = {d:Path(snapshot_read_path(p)) for d,p in cls.to_path_dict(paths).items()}
         paths = {d:p for d,p in cls.to_path_dict(paths).items() if p.exists()}
         if not paths:
             return {}
@@ -167,6 +173,9 @@ class dfIOHandler:
         def loader(p : strPath) -> pl.DataFrame:
             return cls.load_polars(p , mapper = mapper)
 
+        if snapshot_active():
+            accelerator = None
+            paths = {d:Path(snapshot_read_path(p)) for d,p in cls.to_path_dict(paths).items()}
         paths = {d:p for d,p in cls.to_path_dict(paths).items() if p.exists()}
         if not paths:
             return {}

@@ -45,16 +45,15 @@ def load_block(dataset, key, dates=None, secid=None, view="full"):
     indices=[names.index(n) for n in selected]  # missing features fail, never silently fill
     values=b['values']
     if repaired:
-        if dates is not None:
-            keep = np.isin(b['dates'], dates)
-            values = values[:,keep]
-            b['dates'] = b['dates'][keep]
+        day_indices = np.arange(len(b['dates'])) if dates is None else np.flatnonzero(np.isin(b['dates'], dates))
+        stock_indices = np.arange(len(b['secids']))
         if key not in SHARED_KEYS and secid is not None:
-            keep = np.isin(b['secids'], secid)
-            values = values[keep]
-            b['secids'] = b['secids'][keep]
-        values = np.array(values, copy=True)
-    if selected != names:
+            stock_indices = np.flatnonzero(np.isin(b['secids'], secid))
+        # Select all axes together: do not materialize 332 channels before
+        # reducing to 132, or copy the full historical memory map first.
+        values = values[np.ix_(stock_indices, day_indices, np.arange(values.shape[2]), np.asarray(indices, dtype=np.intp))]
+        b['dates'], b['secids'] = b['dates'][day_indices], b['secids'][stock_indices]
+    elif selected != names:
         values=values[...,indices].copy()
     block = DataBlock(values=torch.from_numpy(values),date=b['dates'],
                       secid=b['secids'],feature=np.asarray(selected))

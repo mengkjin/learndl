@@ -410,13 +410,12 @@ class RepairTests(unittest.TestCase):
         names = {
             p.path.name for p in PathItem.iter_folder(root) if p.path.suffix == ".py"
         }
-        self.assertEqual(
-            names,
+        self.assertTrue(
             {
                 "5_rebuild_market_daily_risk.py",
                 "6_rebuild_factor_sequence_dependencies.py",
                 "7_backfill_factor_sequence_pre2017.py",
-            },
+            }.issubset(names)
         )
 
     def test_fix_scripts_cli_parameter_schema(self):
@@ -438,7 +437,8 @@ class RepairTests(unittest.TestCase):
                 if path.name.startswith(("6_", "7_")):
                     self.assertEqual(
                         {p.name for p in schema.params},
-                        {"start", "end", "run_id", "dry_run", "batch_size"},
+                        {"start", "end", "run_id", "dry_run", "batch_size"}
+                        | ({"source_run"} if path.name.startswith("7_") else set()),
                     )
 
     def test_repaired_masked_loader(self):

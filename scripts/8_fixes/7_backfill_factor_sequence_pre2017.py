@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-# description: Backfill missing pre-2017 daily factors and refresh repaired downstream data
+# description: Recover a completed factor rebuild, backfill daily history and construct data blocks
 # email: true
 # mode: shell
 # parameters:
+#   source_run:
+#     desc: Original rebuild run with only the data stage failed; preserved unchanged
+#     type: str
+#     default: rebuild_20261116T064711Z_a33e87ad
 #   start:
 #     desc: First repair trading date (YYYYMMDD)
 #     type: int
 #     default: 20110101
 #   end:
-#     desc: Backfill end date; defaults to 20161230. Downstream refresh extends to latest confirmed date
+#     desc: Backfill end date; defaults to the original rebuild cutoff, including all pre-2017 gaps
 #     type: int
 #     default: null
 #   run_id:
@@ -31,7 +35,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.proj.util.script import ScriptTool
-from src.data.preprocess.factor_sequence.repair import run_repair, arguments
+from src.data.preprocess.factor_sequence.repair import arguments
+from src.data.preprocess.factor_sequence.recovery import run_recovery
 
 __all__ = ["main"]
 
@@ -41,9 +46,16 @@ __all__ = ["main"]
     lock_name="update_factors",
     markdown_catcher=True,
 )
-def main(start=20110101, end=None, run_id=None, dry_run=False, batch_size=32):
-    return run_repair("backfill", start, end, run_id, dry_run, batch_size)
+def main(
+    start=20110101,
+    end=None,
+    run_id=None,
+    dry_run=False,
+    batch_size=32,
+    source_run="rebuild_20261116T064711Z_a33e87ad",
+):
+    return run_recovery(start, end, run_id, dry_run, batch_size, source_run)
 
 
 if __name__ == "__main__":
-    main(**arguments())
+    main(**arguments(recovery=True))

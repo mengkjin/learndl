@@ -1,0 +1,3 @@
+factor_sequence_source: repaired_20261117
+factor_sequence_mode: temporal
+model.module: factorseq_residual

@@ -14,6 +14,7 @@ from .schema import BuildConfig, FACTORS, EVENTS
 from .numeric import stock_block, group_metrics, pack
 from .context_audit import candidate_market, MARKET_NAMES, RISK_NAMES
 from .bundle import file_digest, write_json
+from src.proj.db.io.snapshot import snapshot_read_path
 
 __all__ = ["REPAIR_VERSION", "build_repaired_data", "load_repaired_manifest"]
 REPAIR_VERSION = "factor-sequence-repair-2"
@@ -31,7 +32,7 @@ def load_repaired_manifest(path, verify=True):
     return manifest
 
 
-def build_repaired_data(root, start, end, batch_size=32):
+def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=None):
     """Read one date at a time; stock features are disk-backed, not a full RAM cube."""
     from src.proj import CALENDAR, DB
     from src.data import DATAVENDOR
@@ -189,7 +190,7 @@ def build_repaired_data(root, start, end, batch_size=32):
             if frame.empty:
                 raise ValueError("Missing risk/index source")
         for source, key in [("market_daily", "risk"), ("index_daily_ts", "000985.CSI")]:
-            source_hash.update(file_digest(DB.path(source, key)).encode())
+            source_hash.update(file_digest(snapshot_read_path(DB.path(source, key))).encode())
         early = min(
             int(dates[0]),
             *(int(s.index.min()) for s in histories.values()),
@@ -235,6 +236,7 @@ def build_repaired_data(root, start, end, batch_size=32):
 
     code = {p.name: file_digest(p) for p in Path(__file__).parent.glob("*.py")}
     identity = dict(
+        recovery=input_provenance() if input_provenance is not None else None,
         grouping=GROUPING_VERSION,
         transform_hashes=code,
         format=REPAIR_VERSION,

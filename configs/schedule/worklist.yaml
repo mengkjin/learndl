@@ -1,12 +1,12 @@
 fit:
   
-  - name: resnet_gru_simp_15m
-    mode: sparse
-  # - name: factorseq_v2_snapshot
+  # - name: resnet_gru_simp_15m
   #   mode: sparse
-  # - name: factorseq_v2_temporal
+  # - name: factorseq_v3_snapshot
   #   mode: sparse
-  # - name: factorseq_v2_contextual
+  # - name: factorseq_v3_temporal
+  #   mode: sparse
+  # - name: factorseq_v3_contextual
   #   mode: sparse
 
 resume: False

@@ -1,7 +1,7 @@
 """Resolve a checked, frozen server dataset when an ordinary schedule starts."""
 from __future__ import annotations
 
-__all__ = ['resolve_schedule']
+__all__ = ['resolve_schedule', 'residual_config']
 
 import json
 import re
@@ -17,6 +17,9 @@ def resolve_schedule(source, model, name, mode=None):
         raise ValueError("Invalid factor sequence source suite")
     if model not in dict(variants(False)) and model != "factorseq_residual":
         raise ValueError("Unsupported factor sequence model")
+    if source.startswith("repaired_"):
+        from .repaired_schedule import resolve_repaired
+        return resolve_repaired(source, model, name, mode)
     suite = PATH.result / "factor_sequence" / source
     report = json.loads((suite / "suite.json").read_text())
     dataset = Path(report["dataset"])
@@ -66,7 +69,13 @@ def resolve_schedule(source, model, name, mode=None):
                 full_window=v - start == 1260,
             )
         )
-    config = schedule_config(dataset, name, model, expanded, research=True, seed=17)
+    return residual_config(dataset, name, model, expanded, mode)
+
+
+def residual_config(dataset, name, model, folds, mode, view="compact"):
+    """Shared ordinary training policy; only the versioned input contract changes."""
+    from .schedule_training import schedule_config
+    config = schedule_config(dataset, name, model, folds, research=True, seed=17)
     keys = (
         ("factorseq", "factorperf", "factormarket")
         if mode == "contextual"
@@ -76,7 +85,7 @@ def resolve_schedule(source, model, name, mode=None):
         {
             "model.window": 1800,
             "input.data.types": "+".join(keys),
-            "input.factor_sequence.view": "compact",
+            "input.factor_sequence.view": view,
             "input.sequence.lens": {
                 k: (1 if mode == "snapshot" else 60) if k == "factorseq" else 120
                 for k in keys

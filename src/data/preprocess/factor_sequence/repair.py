@@ -251,7 +251,51 @@ def _valid_file(cls, date, db):
 
 
 def run_repair(
-    mode, start=20110101, end=None, run_id=None, dry_run=False, batch_size=32
+    mode,
+    start=20110101,
+    end=None,
+    run_id=None,
+    dry_run=False,
+    batch_size=32,
+    *,
+    recovery=None,
+    snapshot=None,
+):
+    from src.proj.db.basic.df_handler import quiet_empty_stock_factors
+    from src.proj.util.functional.parallel import serial_execution
+    from src.proj import Logger
+
+    with serial_execution(), quiet_empty_stock_factors() as empty_counts:
+        try:
+            return _run_repair(
+                mode,
+                start,
+                end,
+                run_id,
+                dry_run,
+                batch_size,
+                recovery=recovery,
+                snapshot=snapshot,
+                empty_counts=empty_counts,
+            )
+        finally:
+            Logger.stdout(
+                f"[{mode}] aggregated empty stock-factor reads: {sum(empty_counts.values())}",
+                flush=True,
+            )
+
+
+def _run_repair(
+    mode,
+    start=20110101,
+    end=None,
+    run_id=None,
+    dry_run=False,
+    batch_size=32,
+    *,
+    recovery=None,
+    snapshot=None,
+    empty_counts=None,
 ):
     from src.proj import Logger
     from src.proj import PATH, CALENDAR, DB
@@ -262,10 +306,19 @@ def run_repair(
     from src.automation.artifact_exchange.core import ArtifactSpec
     from src.automation.artifact_exchange.research import register
 
-    if mode not in ("rebuild", "backfill") or batch_size < 1:
+    if mode not in ("rebuild", "backfill", "recover") or batch_size < 1:
         raise ValueError("Invalid mode/batch size")
+    if mode == "recover" and (recovery is None or (snapshot is None and not dry_run)):
+        raise ValueError(
+            "Recovery requires a source checkpoint and active private input snapshot"
+        )
+    if mode == "recover" and not dry_run:
+        from src.proj.db.io.snapshot import snapshot_active
+
+        if not snapshot_active():
+            raise ValueError("Recovery input snapshot must be active")
     latest = int(CALENDAR.updated())
-    end = int(end or (20161230 if mode == "backfill" else latest))
+    end = int(end or (20161230 if mode in ("backfill", "recover") else latest))
     if start > end or end > latest or (mode == "backfill" and end >= 20170101):
         raise ValueError("Invalid date range")
     run_id = (
@@ -295,10 +348,12 @@ def run_repair(
         )
         changed = sorted(set(base + ff))
         pools = dependency_order(registry, changed)
-        targets = base if mode == "backfill" else ["dtop", *ff]
+        targets = base if mode in ("backfill", "recover") else ["dtop", *ff]
         affected_end = (
             latest  # revisions to event weights and rolling state propagate forward
         )
+        if recovery is not None:
+            affected_end = int(recovery.identity["affected_end"])
         old_summary = reports / "summary.json"
         if old_summary.exists() and run_id:
             prior = json.loads(old_summary.read_text())
@@ -313,6 +368,10 @@ def run_repair(
             for p in sorted(directory.rglob("*.py")):
                 code.update(str(p).encode())
                 code.update(file_digest(p).encode())
+        if recovery is not None:
+            for p in sorted((PATH.srcs / "proj" / "db").rglob("*.py")):
+                code.update(str(p).encode())
+                code.update(file_digest(p).encode())
         identity = dict(
             version=REPAIR_VERSION,
             mode=mode,
@@ -320,7 +379,9 @@ def run_repair(
             end=end,
             affected_end=affected_end,
             code=code.hexdigest(),
-            raw_sources=_inventory(PATH.db, affected_end),
+            raw_sources="private-first-read-snapshot-v1"
+            if recovery
+            else _inventory(PATH.db, affected_end),
             targets=targets,
             pools=pools,
             semantic_rebuild=["dtop", *ff],
@@ -329,18 +390,25 @@ def run_repair(
             )
             if mode == "backfill"
             else None,
-            input_factors=_factor_inventory(
+            input_factors=None
+            if recovery
+            else _factor_inventory(
                 registry,
                 base,
-                base if mode == "backfill" else ["dtop", *ff],
+                base if mode in ("backfill", "recover") else ["dtop", *ff],
                 affected_end,
             ),
         )
+        if recovery is not None:
+            identity["source_identity"] = recovery.identity
         write_json(reports / "plan.json", identity)
         if dry_run:
             status["status"] = "dry_run"
             return folder
-        checkpoint = Checkpoint(folder, identity, folder.parent / "reuse.sqlite")
+        checkpoint = Checkpoint(
+            folder, identity, None if recovery else folder.parent / "reuse.sqlite"
+        )
+        adopted = 0
         dates = [int(d) for d in CALENDAR.range(start, affected_end, "td")]
 
         def clear(force=True):
@@ -364,7 +432,8 @@ def run_repair(
         for i, date in enumerate(dates):
             day_targets = sorted(
                 set(
-                    ["dtop", *ff] + (base if mode == "backfill" and date <= end else [])
+                    ["dtop", *ff]
+                    + (base if mode in ("backfill", "recover") and date <= end else [])
                 )
             )
             for name in day_targets:
@@ -378,8 +447,18 @@ def run_repair(
                         )
                     continue
                 path = DB.path(cls.db_src, cls.db_key, date)
+                key = f"factor:{name}:{date}"
+                if recovery is not None:
+                    done = checkpoint.db.execute(
+                        "select status from steps where key=?", (key,)
+                    ).fetchone()
+                    if done and done[0] == "passed":
+                        continue
+                    if recovery.adopt(key, path, checkpoint):
+                        adopted += 1
+                        continue
                 if (
-                    mode == "backfill"
+                    mode in ("backfill", "recover")
                     and name not in ["dtop", *ff]
                     and _valid_file(cls, date, DB)
                 ):
@@ -457,6 +536,13 @@ def run_repair(
                 Logger.stdout(
                     f"[{mode}] factors {i + 1}/{len(dates)} through {date}", flush=True
                 )
+        status["adopted_factor_steps"] = checkpoint.db.execute(
+            "select count(*) from steps where error='adopted unchanged factor artifact'"
+        ).fetchone()[0]
+        Logger.stdout(
+            f"[{mode}] factors complete; adopted {adopted} unchanged artifacts this attempt",
+            flush=True,
+        )
         # Event calculation includes prehistory; explicitly replace all computed rows.
         event_cls = registry["high_level_switch"]
         event_path = DB.path(event_cls.db_src, event_cls.db_key)
@@ -522,6 +608,7 @@ def run_repair(
                         )
                         DB.save(result, f"factor_stats_{period}", cls.db_key)
 
+                    Logger.stdout(f"[{mode}] stats {name}/{period}/{year}", flush=True)
                     checkpoint.step(f"stats:{name}:{period}:{year}", [path], update)
                     clear()
 
@@ -564,13 +651,31 @@ def run_repair(
 
                 checkpoint.step(f"pool:{name}:{date}", [path], pooled)
                 if pool_index % batch_size == batch_size - 1:
+                    Logger.stdout(
+                        f"[{mode}] pool {name}: {pool_index + 1}/{len(pool_dates)}",
+                        flush=True,
+                    )
                     clear()
             stats(name)
             clear()
         marker = reports / "dataset.json"
 
+        def data_provenance():
+            assert recovery is not None and snapshot is not None
+            return dict(
+                source_run=recovery.parent.name,
+                source_snapshot=snapshot.summary(),
+                inherited_raw_history_unverified=True,
+            )
+
         def data():
-            if _inventory(PATH.db, affected_end) != identity["raw_sources"]:
+            Logger.stdout(
+                f"[{mode}] building data blocks through {affected_end}", flush=True
+            )
+            if (
+                recovery is None
+                and _inventory(PATH.db, affected_end) != identity["raw_sources"]
+            ):
                 raise ValueError(
                     "Raw sources changed during repair; use a new version/run before publishing data"
                 )
@@ -580,6 +685,7 @@ def run_repair(
                 20110101,
                 affected_end,
                 batch_size,
+                input_provenance=data_provenance if recovery else None,
             )
             write_json(marker, dict(dataset=str(target), version=REPAIR_VERSION))
 
@@ -602,6 +708,9 @@ def run_repair(
             checkpoint.db.close()
             if checkpoint.reuse is not None:
                 checkpoint.reuse.close()
+        write_json(reports / "empty_factor_reads.json", empty_counts or {})
+        if snapshot is not None:
+            write_json(reports / "raw_snapshot.json", snapshot.summary())
         write_json(reports / "summary.json", status)
         register(
             ArtifactSpec(
@@ -617,13 +726,17 @@ def run_repair(
         Logger.stdout(f"[{mode}] {status['status']}: {reports}", flush=True)
 
 
-def arguments():
+def arguments(*, recovery=False):
     def boolean(value):
         if str(value).lower() not in ("true", "false"):
             raise argparse.ArgumentTypeError("Expected true or false")
         return str(value).lower() == "true"
 
     p = argparse.ArgumentParser()
+    if recovery:
+        p.add_argument(
+            "--source-run", "--source_run", default="rebuild_20261116T064711Z_a33e87ad"
+        )
     p.add_argument("--start", type=int, default=20110101)
     p.add_argument("--end", type=int)
     p.add_argument("--run-id", "--run_id")

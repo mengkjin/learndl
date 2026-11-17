@@ -1,6 +1,8 @@
 """RCQuant per-day exclusion and atomic publication; no provider calls here."""
 from __future__ import annotations
 
+from typing import Any
+
 __all__ = [
     'sample_size',
     'date_lock',
@@ -42,7 +44,7 @@ def locked_day(func):
     return wrapped
 
 
-def atomic_frame(frame, path, *, prefix=None, indent=1, vb_level=1, **kwargs):
+def atomic_frame(frame, path, *, prefix=None, indent=1, vb_level : Any =1, **kwargs):
     from src.proj import Logger, Save
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
