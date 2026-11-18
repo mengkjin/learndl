@@ -1,0 +1,49 @@
+# Single-factor comparison against resnet_gru_simp_15m; seed 0.
+model:
+  name: resnet_gru_simp_15m_nohistnorm
+  module: resnet_gru_simp
+  submodels: [best]
+  window: 2400
+  labels: [rtn_lag1_10]
+  special:
+    global2top: false # Keep the explicitly configured loss.
+env:
+  random_seed: 0
+input:
+  type: data
+  data.types: 15m
+  data.prenorm.15m: {divlast: false, histnorm: false, channelnorm: false}
+  sequence.lens: {15m: 30}
+  sequence.steps: {15m: 1}
+train:
+  max_epoch: 200
+  label_normalization: standardize
+  criterion.loss:
+    mse_hcorr: {alpha: 0.01}
+  criterion.weight:
+    fit: equal # Also supports polar/top independently of global2top.
+    test: equal
+  criterion.accuracy:
+    spearman: {which_output: [0], which_label: [0]}
+  trainer.learn_rate:
+    base: 0.001
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
+callbacks:
+  LearnRateReset:
+    num_reset: 2
+    trigger: 40
+    recover_level: 0.3
+    speedup2x: true
+algo:
+  resnet_gru_simp:
+    seqlens: [{15m: 30}]
+    hidden_dim: [64]
+    inday_resnet_dim: [128]
+    enc_in: [false]
+    enc_in_dim: [16]
+    resnet_kernel_size: [3]
+    rnn_layers: [1]
+    hidden_as_factors: [true]
+    hidden_mean_pool: [true]

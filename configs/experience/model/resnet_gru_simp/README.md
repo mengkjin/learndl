@@ -2,7 +2,7 @@
 
 配置：`configs/schedule/current/resnet_gru_simp_15m.yaml`。
 模型：`resnet_gru_simp`，独立名称 `resnet_gru_simp_15m`，种子 0。
-本次交付不启动训练，不修改 worklist，不删除历史模型。
+初版新增模型时未启动训练；后续单因素实验的 worklist 安排见文末。
 
 ## 结构与默认值
 
@@ -60,3 +60,26 @@ ModelTrainer.schedule(schedule_name='resnet_gru_simp_15m', resume=0)
 保持默认的标准训练报告与产物发布流程。观察 MSE、相关性正则、验证 RankIC、年度表现、
 训练/验证差距和收敛速度；本次结构更简单不代表泛化效果已经改善。
 种子 1、2 的复核应另存 schedule 并更换 model.name，避免复用已有模型目录。
+
+## 2026-11 单因素对照队列
+
+以已经完成的 `resnet_gru_simp_15m` 为基线，新增五份 schedule，共六个变体，
+按以下顺序加入 `configs/schedule/worklist.yaml`，全部 `mode: sparse`、`resume: false`。
+保留种子 0、30 天窗口、训练窗口 2400、最多 200 epoch、学习率 0.001、
+标准化标签、等权输出及原有 scheduler/callback 配置；Global2Top 始终关闭。
+
+0. `resnet_gru_simp_15m_ccc`：唯一损失改为 `ccc_hcorr: {alpha: 0.01}`。
+1. `resnet_gru_simp_15m_nohistnorm`：仅关闭 15m histnorm；divlast/channelnorm 继续关闭。
+2. `resnet_gru_simp_15m_polar`：仅将训练样本权重改为 polar，测试权重继续 equal。
+3. `resnet_gru_simp_15m_rnn2`：GRU 改为两层；原有 dropout=0.1 因此在层间生效。
+4. `resnet_gru_simp_15m_dim`：并列两个参数索引，model_num=0 为日级向量 64，
+   model_num=1 为 256；GRU hidden_dim 均为 64。不是同时改两项参数，也不做笛卡尔积。
+
+这五份 schedule 使用独立 model.name，基线不重复入队。除 nohistnorm 外都需要原有有效的
+15m fit 历史统计；不在训练中重新拟合。沿用标准报告、TensorBoard 与产物发布流程。
+按基线约 3 小时/变体粗估，六个变体约 18 小时，实际会受宽度、GRU 层数及重试次数影响；
+“并列模型”表示同一 schedule 的两个独立参数配置，并不保证同时占用 GPU 训练。
+
+对比全期及近期 RankIC、Top5/Top50、训练验证差距、峰值 epoch、重试次数与总耗时。
+CCC 与 MSE 的损失尺度不同，固定 alpha 的本轮比较包含正则相对强度变化；
+两层 GRU 对照也包含既定层间 dropout 的启用。队列消费由既有服务器 worklist 流程负责。
