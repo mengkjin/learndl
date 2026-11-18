@@ -220,7 +220,7 @@ def install(replacements, baseline, folder):
         raise
 
 
-def rebuild_microcap(start: int | np.integer = 20100101, end=None, validate_only=False):
+def rebuild_microcap(start: int | np.integer = MicroCap_400.START_DATE, end=None, validate_only=False):
     from src.automation.artifact_exchange.core import ArtifactSpec
     from src.automation.artifact_exchange.research import register
     from src.proj.util.functional.parallel import serial_execution
@@ -229,7 +229,7 @@ def rebuild_microcap(start: int | np.integer = 20100101, end=None, validate_only
     end = int(CALENDAR.updated() if end is None else end)
     if start < MicroCap_400.START_DATE or start > end or end > CALENDAR.updated():
         raise ValueError(
-            "Require 20100101 <= start <= end <= latest confirmed trading date"
+            f"Require {MicroCap_400.START_DATE} <= start <= end <= latest confirmed trading date"
         )
     run_id = "microcap_" + uuid4().hex
     folder = PATH.result / "microcap_repair" / run_id

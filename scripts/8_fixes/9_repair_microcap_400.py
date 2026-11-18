@@ -5,7 +5,7 @@
 # parameters:
 #   start:
 #     type: int
-#     default: 20100101
+#     default: 20050101
 #     desc: First index return date to recompute
 #   end:
 #     type: int
@@ -36,7 +36,7 @@ __all__ = ["main"]
     lock_timeout=1,
     markdown_catcher=True,
 )
-def main(start=20100101, end=None, validate_only=False):
+def main(start=20050101, end=None, validate_only=False):
     return rebuild_microcap(start, end, validate_only)
 
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         return str(value).lower() == "true"
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--start", type=int, default=20100101)
+    parser.add_argument("--start", type=int, default=20050101)
     parser.add_argument("--end", type=int)
     parser.add_argument(
         "--validate-only",

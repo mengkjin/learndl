@@ -175,7 +175,7 @@ corrupt files, or missing upstream source data; use scripts 6/7 for semantic reb
 .venv/bin/python scripts/8_fixes/9_repair_microcap_400.py --start 20261118 --end 20261118
 ```
 
-The default return interval is 20100101 through the latest confirmed trading date,
+The default return interval is 20050101 through the latest confirmed trading date,
 not the date the bug was committed: historical backfills may also have written zero
 returns. The script retains the existing portfolio timing (return at D uses the
 portfolio at D-1, whose stock selection uses D-2 inputs). It validates holdings,
@@ -214,3 +214,12 @@ rollback: keep other jobs stopped, restore the listed targets from backups (remo
 new targets marked `existed: false`), and rerun. Do not mistake an `installing` journal
 for a completed repair. The whole history is recomputed on a rerun; there is no
 per-date resume shortcut that could reuse stale source inputs.
+
+Microcap repair defaults to 2005-01-01 through the latest confirmed trading day.
+The first return uses holdings at 2004-12-31; the existing one-trading-day lag
+for constituent selection therefore also requires 2004-12-30 valuation data.
+The equal-weight constituent count is min(400, floor(listed SSE/SZSE stocks / 2)),
+counting ST names in the market total but excluding them from selection. If fewer
+eligible stocks are available, use all of them; an empty selection fails.
+Run script 9 over the full default range to replace the previous methodology
+and rebuild market inputs; existing model weights are not retrained.

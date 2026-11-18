@@ -7,7 +7,7 @@ computes and stores daily portfolio weights.
 
 Currently registered indices
 ----------------------------
-- ``MicroCap_400``: equal-weight portfolio of the 400 smallest non-ST A-share stocks.
+- ``MicroCap_400``: equal-weight portfolio of up to 400 smallest non-ST A-share stocks.
 """
 from __future__ import annotations
 import pandas as pd
@@ -23,7 +23,7 @@ from src.data.update.custom.basic import BasicCustomUpdater
 
 __all__ = ['CustomIndex' , 'CustomIndexUpdater' , 'MicroCap_400']
 
-START_DATE = 20100101
+START_DATE = 20050101
 DB_SRC = 'index_daily_custom'
 
 class CustomIndexMeta(ABCMeta):
@@ -181,7 +181,11 @@ class CustomIndexUpdater(BasicCustomUpdater):
 
 class MicroCap_400(CustomIndex):
     def rebalance_dates(self) -> Dates:
-        return Dates(self.START_DATE , CALENDAR.updated())
+        # START_DATE is the first return date, so its opening portfolio must
+        # already exist at the preceding trading day's close.
+        first_return = CALENDAR.td(self.START_DATE, backward=False).as_int()
+        first_holdings = CALENDAR.td(first_return, -1).as_int()
+        return Dates(first_holdings, CALENDAR.updated())
 
     def rebalance_portfolio(self , date : int) -> pd.DataFrame:
         prev_date = CALENDAR.td(date , -1)
@@ -189,7 +193,12 @@ class MicroCap_400(CustomIndex):
         df = pd.DataFrame({'secid' : prev_val['secid'] , 'free_cap' : prev_val['free_share'] * prev_val['close']})
         pool = DATAVENDOR.INFO.get_desc(prev_date , exchange = ['SZSE', 'SSE'] , set_index=False)['secid']
         st_stocks = DATAVENDOR.INFO.get_st(prev_date)['secid']
+        # Count the listed SSE/SZSE universe before excluding ST constituents.
+        # Floor odd counts so the index never exceeds half of that universe.
+        count = min(400, pool.nunique() // 2)
         df = df[df['secid'].isin(pool) & ~df['secid'].isin(st_stocks)].sort_values('free_cap' , ascending=True).\
-            head(400).reset_index(drop=True).drop(columns=['free_cap'])
+            head(count).reset_index(drop=True).drop(columns=['free_cap'])
+        if df.empty:
+            raise ValueError(f'Cannot build {self.index_name} holdings at {date}: no eligible constituents')
         df['weight'] = 1 / len(df)
         return df
