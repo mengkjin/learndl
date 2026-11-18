@@ -56,6 +56,7 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
                 valuation = pd.DataFrame({'secid': secids, 'free_share': 1., 'close': secids + 1.})
                 info = custom_index.DATAVENDOR.INFO
                 with (patch.object(custom_index.DATAVENDOR.TRADE, 'get_val', return_value=valuation),
+                      patch.object(custom_index.DATAVENDOR.TRADE, 'get_trd', return_value=valuation.assign(status=1)),
                       patch.object(info, 'get_desc', return_value=pd.DataFrame({'secid': secids})) as description,
                       patch.object(info, 'get_st', return_value=pd.DataFrame({'secid': secids[:st_count]}))):
                     weights = custom_index.MicroCap_400().rebalance_portfolio(20041231)
@@ -66,6 +67,18 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
                 self.assertAlmostEqual(weights.weight.sum(), 1.)
                 self.assertEqual(description.call_args.kwargs['exchange'], ['SZSE', 'SSE'])
                 self.assertEqual(int(description.call_args.args[0]), 20041230)
+
+    def test_microcap_excludes_suspended_unknown_and_absent_holdings_day_quotes(self):
+        secids = np.arange(1, 7)
+        valuation = pd.DataFrame({'secid': secids, 'free_share': 1., 'close': secids.astype(float)})
+        trading = pd.DataFrame({'secid': [1, 2, 4, 5, 6], 'status': [0, np.nan, 1, 1, 1], 'close': 10.})
+        with (patch.object(custom_index.DATAVENDOR.TRADE, 'get_val', return_value=valuation),
+              patch.object(custom_index.DATAVENDOR.TRADE, 'get_trd', return_value=trading) as quotes,
+              patch.object(custom_index.DATAVENDOR.INFO, 'get_desc', return_value=pd.DataFrame({'secid': secids})),
+              patch.object(custom_index.DATAVENDOR.INFO, 'get_st', return_value=pd.DataFrame({'secid': []}))):
+            weights = custom_index.MicroCap_400().rebalance_portfolio(20041231)
+        np.testing.assert_array_equal(weights.secid, [4, 5, 6])
+        quotes.assert_called_once_with(20041231)
 
     def test_microcap_start_and_repair_default_are_2005(self):
         import inspect

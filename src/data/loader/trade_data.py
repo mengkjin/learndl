@@ -110,13 +110,38 @@ class TradeDataAccess(DateDataAccess):
 
         Prefers ``trade_ts/adjprice`` (halt days already carry last adj price).
         Falls back to ``day * adjfactor`` when adjprice is missing for either date.
+        Close returns with d0 <= listing date <= d1 use the listing reference
+        price as the denominator; open/vwap retain their endpoint semantics.
         """
         p0 = self._adj_price_col(int(d0) , price_type)
         p1 = self._adj_price_col(int(d1) , price_type)
         if p0 is not None and p1 is not None:
             ret = (p1.reindex(p0.index) / p0.where(p0 != 0) - 1).rename('ret')
-            return ret.to_frame()
-        return self._period_return_from_day(int(d0) , int(d1) , price_type)
+            result = ret.to_frame()
+        else:
+            result = self._period_return_from_day(int(d0) , int(d1) , price_type)
+        if price_type != 'close' or int(d0) > int(d1):
+            return result
+        from .data_vendor import DATAVENDOR
+        listing = DATAVENDOR.get_list_day_price(int(d0), int(d1))
+        if listing.empty:
+            return result
+        # Unlike a portfolio return, this explicitly includes listing-day
+        # reference-price performance when the query starts on/before the IPO.
+        if result is None:
+            result = pd.DataFrame(columns=['ret'], index=pd.Index([], name='secid'))
+        result = result.reindex(result.index.union(listing.index))
+        if p1 is None:
+            day = self.get_trd(int(d1))
+            if day is not None and {'secid', 'close', 'adjfactor'}.issubset(day.columns):
+                day = day.set_index('secid')
+                p1 = day.close * day.adjfactor.fillna(1.)
+        if p1 is not None:
+            ending = p1.reindex(listing.index)
+            result.loc[listing.index, 'ret'] = (ending.where(ending > 0) / listing.adj_list_price - 1)
+        else:
+            result.loc[listing.index, 'ret'] = float('nan')
+        return result
 
     def _adj_price_col(self , date : int , price_type : str) -> pd.Series | None:
         df = self.get_adjprice(date , ['secid' , price_type])

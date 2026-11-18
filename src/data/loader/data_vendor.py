@@ -80,6 +80,8 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         # Protects ``day_secids`` and lazy ``_block_*`` attrs (parallel factor updates).
         self._lock = threading.Lock()
         self.initiated = False
+        self._list_price_lock = threading.RLock()
+        self._list_day_price: pd.DataFrame | None = None
         self.day_quotes : dict[int,pd.DataFrame] = {}
         self.day_secids : dict[int,np.ndarray] = {}
         self.blocks_cache : dict[str,DataBlock] = {}
@@ -88,6 +90,44 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
     def all_stocks(self) -> pd.DataFrame:
         """get all the stocks"""
         return self.INFO.get_desc(set_index=False , listed = True , exchange = ['SZSE', 'SSE', 'BSE'])
+
+    @property
+    def list_day_price(self) -> pd.DataFrame:
+        """Listing metadata and lazily loaded reference prices, indexed by secid.
+
+        list_price is the listing day's preclose, not its first close/open.
+        adj_list_price uses that day's actual adjustment factor. Unavailable
+        prices stay NaN and are retried on the next relevant request.
+        """
+        with self._list_price_lock:
+            if self._list_day_price is None:
+                self._list_day_price = self.all_stocks[['secid', 'list_dt']].drop_duplicates('secid').set_index('secid').copy()
+                for column in ('list_price', 'adjfactor', 'adj_list_price'):
+                    self._list_day_price[column] = np.nan
+            return self._list_day_price.copy()
+
+    def get_list_day_price(self, start: int, end: int) -> pd.DataFrame:
+        """Load valid listing reference prices only for IPO dates in [start, end]."""
+        with self._list_price_lock:
+            table = self.list_day_price
+            selected = table.loc[table.list_dt.between(int(start), int(end))]
+            pending = selected.loc[selected.adj_list_price.isna()]
+            for date in pending.list_dt.unique():
+                stocks = pending.loc[pending.list_dt == date]
+                day = DB.load('trade_ts', 'day', int(date), vb_level='never')
+                if day is None or day.empty or not {'secid', 'preclose', 'adjfactor'}.issubset(day.columns):
+                    continue
+                day = day.loc[~day.secid.duplicated(keep=False)].set_index('secid').reindex(stocks.index)
+                price = pd.to_numeric(day.preclose, errors='coerce')
+                factor = pd.to_numeric(day.adjfactor, errors='coerce').fillna(1.)
+                adjusted = price * factor
+                valid = np.isfinite(price) & (price > 0) & np.isfinite(factor) & (factor > 0) & np.isfinite(adjusted)
+                ids = price.index[valid]
+                table.loc[ids, 'list_price'] = price.loc[ids]
+                table.loc[ids, 'adjfactor'] = factor.loc[ids]
+                table.loc[ids, 'adj_list_price'] = adjusted.loc[ids]
+            self._list_day_price = table
+            return table.loc[selected.index].copy()
 
     def clear_all(self) -> None:
         """clear all the data in the collection"""
@@ -104,6 +144,8 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         self.EXPO.clear_all()
         self.CUSTOM_DATA.clear()
 
+        with self._list_price_lock:
+            self._list_day_price = None
         self.blocks_cache.clear()
         self.day_quotes.clear()
         self.day_secids.clear()
@@ -252,6 +294,15 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
         extend_td_within = self.td_within(pre_start_dt , end)
         blk = self.get_quotes_block(extend_td_within).align(date = extend_td_within , feature = ['close' , 'vwap']).ffill()
         rtn = torch.nn.functional.pad(blk.values[:,1:] / blk.values[:,:-1] - 1 , (0,0,0,0,1,0) , value = torch.nan)
+        listing = self.get_list_day_price(int(start), int(end))
+        close_index = int(np.flatnonzero(blk.feature == 'close')[0])
+        for secid, row in listing.dropna(subset=['adj_list_price']).iterrows():
+            security = np.flatnonzero(blk.secid == secid)
+            day = np.flatnonzero(blk.date == int(row.list_dt))
+            if len(security) and len(day):
+                i, j = int(security[0]), int(day[0])
+                rtn[i, j, ..., close_index] = blk.values[i, j, ..., close_index] / float(row.adj_list_price) - 1
+
         blk.update(values = torch.where(rtn.isinf() , torch.nan , rtn))
         blk = blk.align_date(blk.date_within(start , end) , inplace = True)
         with self._lock:

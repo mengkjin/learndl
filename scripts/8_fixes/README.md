@@ -219,7 +219,10 @@ Microcap repair defaults to 2005-01-01 through the latest confirmed trading day.
 The first return uses holdings at 2004-12-31; the existing one-trading-day lag
 for constituent selection therefore also requires 2004-12-30 valuation data.
 The equal-weight constituent count is min(400, floor(listed SSE/SZSE stocks / 2)),
-counting ST names in the market total but excluding them from selection. If fewer
+counting ST names in the market total but excluding them from selection. Selection
+also requires a holding-date quote with status=1 and a finite positive close;
+suspended stocks and stocks without confirmed trading quotes are excluded.
+This does not use next-day status and cannot prevent a holding from halting later. If fewer
 eligible stocks are available, use all of them; an empty selection fails.
 Run script 9 over the full default range to replace the previous methodology
 and rebuild market inputs; existing model weights are not retrained.
@@ -231,3 +234,11 @@ adjustment factor, status, volume, adjusted close, missing columns and read erro
 `status=0` is a suspension flag; an absent quote alone does not establish a halt.
 Diagnostics never fill missing returns, remove holdings, or permit installation
 after a failed return validation.
+
+Close-return queries now use DATAVENDOR's lazily cached `list_day_price` table
+when the interval starts on/before a stock's listing date and ends on/after it.
+The reference is listing-day `preclose * adjfactor`, not listing-day close; the
+actual factor is used (missing factors follow the existing fallback of 1).
+`get_returns_block` applies this only to listing-day close returns. Open/VWAP
+retain their previous calculations. Missing references remain NaN and are retried;
+`DATAVENDOR.clear_all()` clears both listing and return caches.
