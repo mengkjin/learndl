@@ -1,6 +1,7 @@
 """Immutable, checked filesystem delivery; importing this module has no project side effects."""
 from __future__ import annotations
 import contextlib
+import errno
 import fcntl
 import hashlib
 import json
@@ -408,7 +409,15 @@ def _send(record, ledger, config) -> dict[str, Any]:
         _copy(archive, staging)
         if target.exists() and digest(target) != record['sha256']:
             raise ValueError('Publication conflict')
-        os.replace(staging, target)
+        for attempt in range(3):
+            try:
+                real_tree(target.parent).mkdir(parents=True, exist_ok=True)
+                os.replace(staging, target)
+                break
+            except FileNotFoundError:
+                # Synced empty-directory deletion may race with publication.
+                if attempt == 2 or not staging.exists():
+                    raise
         fsync_dir(target.parent)
     record['status'] = 'published'
     atomic_json(ledger, record)
@@ -561,6 +570,36 @@ def _receive(archive, config):
     return {'status': 'received', 'id': manifest['id'], 'target': str(target)}
 
 
+def _prune_empty_routes(config):
+    """Remove only empty protocol route directories, never the inbox or share root."""
+    errors = []
+
+    def remove(directory):
+        try:
+            real_tree(directory)
+            directory.rmdir()  # Atomic emptiness check; concurrent arrivals win.
+        except (FileNotFoundError, ValueError):
+            pass
+        except OSError as exc:
+            if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST, errno.ENOTDIR):
+                errors.append({'status': 'cleanup_failed', 'directory': str(directory), 'error': str(exc)})
+
+    for category in sorted(config.inbox.glob('*')):
+        if category.is_symlink() or not category.is_dir():
+            continue
+        if category.name in ('tensorboard', 'optuna'):
+            remove(category)  # Legacy v1 routes have no experiment level.
+        elif category.name == 'reports' or valid_category(category.name):
+            for experiment in sorted(category.glob('*')):
+                if experiment.is_symlink() or not experiment.is_dir():
+                    continue
+                if (experiment.name in CATEGORIES if category.name == 'reports' else
+                        not experiment.name.startswith('.') and component(experiment.name) == experiment.name):
+                    remove(experiment)
+            remove(category)
+    return errors
+
+
 def receive(config):
     if sandboxed() or not config.enabled or config.role != 'receiver':
         return []
@@ -574,5 +613,6 @@ def receive(config):
                 output.append(_receive(p, config))
             except Exception as exc:
                 output.append({'status': 'failed', 'file': str(p), 'error': str(exc)})
+        output.extend(_prune_empty_routes(config))
         atomic_json(config.state / 'last_receive.json', output)
     return output

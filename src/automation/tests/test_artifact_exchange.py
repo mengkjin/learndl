@@ -48,11 +48,69 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual((target/'results/comparison.pdf').read_bytes(), b'%PDF sample')
         self.assertTrue((self.source/'comparison.pdf').exists())
         self.assertFalse(archive.exists())
+        archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(data)
         self.assertEqual(receive(self.rec)[0]['target'], str(target))
         self.assertFalse(archive.exists())
         self.assertEqual(publish_artifacts('research', 'run', [ArtifactSpec(self.source)], config=self.pub)[0]['status'], 'published')
         self.assertFalse(archive.exists())
+
+    def test_receive_removes_empty_routes_and_old_leftovers(self):
+        archive = self.publish()
+        routes = ['model_training/old_model', 'reports/custom', 'tensorboard', 'optuna']
+        for route in routes:
+            (self.rec.inbox/route).mkdir(parents=True, exist_ok=True)
+        result = receive(self.rec)
+        self.assertEqual(result[0]['status'], 'received')
+        self.assertFalse(archive.parent.exists())
+        self.assertEqual(list(self.rec.inbox.iterdir()), [])
+        self.assertTrue((self.rec.shared_root/'.stfolder').is_dir())
+        self.assertEqual(receive(self.rec), [])
+        # A later experiment can recreate a previously pruned route.
+        self.publish(run='next-run')
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+
+    def test_publication_recovers_from_empty_route_deletion(self):
+        original = os.replace
+        removed = []
+        def race(source, target):
+            target = Path(target)
+            if target.name.endswith('.transfer.zip') and not removed:
+                target.parent.rmdir()
+                removed.append(target.parent)
+            return original(source, target)
+        with patch('src.automation.artifact_exchange.core.os.replace', side_effect=race):
+            archive = self.publish()
+        self.assertEqual(len(removed), 1)
+        self.assertTrue(archive.exists())
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+
+    def test_cleanup_preserves_files_links_nested_content_and_arrivals(self):
+        from src.automation.artifact_exchange.core import _prune_empty_routes
+        route = self.rec.inbox/'custom/experiment'
+        route.mkdir(parents=True)
+        (route/'.syncthing-incoming.tmp').write_bytes(b'pending transfer')
+        nested = self.rec.inbox/'custom/manual/nested'
+        nested.mkdir(parents=True)
+        outside = self.rec.shared_root/'other-share-content'
+        outside.mkdir()
+        (self.rec.inbox/'custom/link').symlink_to(outside, target_is_directory=True)
+        (self.rec.inbox/'.stfolder').mkdir()
+        incoming = self.rec.inbox/'model_training/incoming'
+        incoming.mkdir(parents=True)
+        original = Path.rmdir
+        def arrival(path):
+            if path == incoming:
+                (incoming/'new.transfer.zip').write_bytes(b'arrived during cleanup')
+            return original(path)
+        with patch.object(Path, 'rmdir', arrival):
+            self.assertEqual(_prune_empty_routes(self.rec), [])
+        self.assertTrue((route/'.syncthing-incoming.tmp').exists())
+        self.assertTrue(nested.is_dir())
+        self.assertTrue((self.rec.inbox/'custom/link').is_symlink())
+        self.assertTrue(outside.is_dir())
+        self.assertTrue((incoming/'new.transfer.zip').exists())
+        self.assertTrue((self.rec.inbox/'.stfolder').exists())
 
     def test_experiment_round_trip_and_dashboard_import(self):
         events = self.root/'events'
@@ -98,6 +156,7 @@ class ExchangeTest(unittest.TestCase):
         data = archive.read_bytes()
         target = Path(receive(self.rec)[0]['target'])
         (target/'results/comparison.pdf').write_bytes(b'user edit')
+        archive.parent.mkdir(parents=True, exist_ok=True)
         archive.write_bytes(data)
         self.assertEqual(receive(self.rec)[0]['status'], 'failed')
         self.assertTrue(archive.exists())
@@ -105,6 +164,7 @@ class ExchangeTest(unittest.TestCase):
     def test_unsafe_zip_names_and_limits(self):
         for names in [['../evil'], ['/absolute'], ['a', 'A'], ['a', 'a/b'], ['a\\b']]:
             archive = self.root/'invalid.zip'
+            archive.parent.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(archive, 'w') as z:
                 for n in names:
                     z.writestr(n, b'123')
@@ -120,6 +180,7 @@ class ExchangeTest(unittest.TestCase):
         with zipfile.ZipFile(archive) as z:
             members = {i.filename: z.read(i) for i in z.infolist()}
         members['payload/results/comparison.pdf'] = b'bad'
+        archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive, 'w') as z:
             for n, data in members.items():
                 z.writestr(n, data)
@@ -182,6 +243,7 @@ class ExchangeTest(unittest.TestCase):
         manifest = json.loads(items['manifest.json'])
         manifest['status'] = 'changed'
         items['manifest.json'] = json.dumps(manifest).encode()
+        archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive, 'w') as z:
             for name, content in items.items():
                 z.writestr(name, content)
@@ -241,6 +303,7 @@ class ExchangeTest(unittest.TestCase):
                         files=[dict(path='report.txt', size=len(data), sha256=hashlib.sha256(data).hexdigest())])
         archive = self.pub.inbox/'reports/model_compare/legacy.transfer.zip'
         archive.parent.mkdir(parents=True)
+        archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive, 'w') as z:
             z.writestr('manifest.json', json.dumps(manifest))
             z.writestr('payload/report.txt', data)
