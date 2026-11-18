@@ -94,7 +94,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
         if self.current_portfolio is not None and self.current_portfolio.date == date:
             return self.current_portfolio
         reb_dates = self.reb_dates
-        prev_reb_date = 99991231 if (reb_dates or reb_dates.min > date) else reb_dates.slice(end = date).max
+        prev_reb_date = 99991231 if (not reb_dates or reb_dates.min > date) else reb_dates.slice(end = date).max
         if prev_reb_date > date:
             port = Port(pd.DataFrame() , date , self.index_name)
         elif prev_reb_date == date:
@@ -109,6 +109,9 @@ class CustomIndex(metaclass=CustomIndexMeta):
 
     def index_return(self , date : int) -> float:
         """get index return"""
+        day = DB.load('trade_ts', 'day', int(date), vb_level='never')
+        if day is None or day.empty or not {'secid', 'close', 'adjfactor'}.issubset(day.columns):
+            raise ValueError(f'Cannot calculate {self.index_name} at {date}: trade_ts/day is missing, empty or lacks required columns')
         prev_date = CALENDAR.td(date , -1).td
         prev_port = self.index_portfolio(prev_date)
         if prev_port.emtpy:

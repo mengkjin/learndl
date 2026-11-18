@@ -75,21 +75,21 @@ def calc_adjprice(date : int) -> pd.DataFrame:
     - Still-all-NaN rows (e.g. IPO with no trade yet) are dropped.
     """
     date = int(date)
+    day = DB.load('trade_ts' , 'day' , date , vb_level = 'never')
+    required = {'secid', 'adjfactor', *PRICE_COLS}
+    if day is None or day.empty or not required.issubset(day.columns):
+        raise ValueError(f'Cannot calculate adjprice at {date}: trade_ts/day is missing, empty or lacks required columns')
     listed = INFO.get_secid(date)
     cols = ['secid' , *PRICE_COLS]
     if listed.size == 0:
         return pd.DataFrame(columns = cols)
 
-    day = DB.load('trade_ts' , 'day' , date , vb_level = 'never')
-    if day is None or day.empty:
-        traded = pd.DataFrame(columns = PRICE_COLS)
-    else:
-        day = day.copy()
-        adj = day['adjfactor'].fillna(1.0).to_numpy(float)
-        traded = pd.DataFrame({'secid': day['secid'].to_numpy()})
-        for c in PRICE_COLS:
-            traded[c] = day[c].to_numpy(float) * adj
-        traded = traded.set_index('secid')
+    day = day.copy()
+    adj = day['adjfactor'].fillna(1.0).to_numpy(float)
+    traded = pd.DataFrame({'secid': day['secid'].to_numpy()})
+    for c in PRICE_COLS:
+        traded[c] = day[c].to_numpy(float) * adj
+    traded = traded.set_index('secid')
 
     univ = pd.Index(listed , name = 'secid')
     result = traded.reindex(univ)
