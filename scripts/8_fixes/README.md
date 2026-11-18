@@ -223,3 +223,11 @@ counting ST names in the market total but excluding them from selection. If fewe
 eligible stocks are available, use all of them; an empty selection fails.
 Run script 9 over the full default range to replace the previous methodology
 and rebuild market inputs; existing model weights are not retrained.
+
+When a holding has a missing/nonfinite return, script 9 prints both endpoint
+records for that security and saves `reports/missing_returns_<start>_<end>.csv`.
+Evidence includes weights, returned returns, row presence/counts, daily close,
+adjustment factor, status, volume, adjusted close, missing columns and read errors.
+`status=0` is a suspension flag; an absent quote alone does not establish a halt.
+Diagnostics never fill missing returns, remove holdings, or permit installation
+after a failed return validation.

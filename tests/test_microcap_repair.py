@@ -132,6 +132,60 @@ class MicrocapRepairTest(unittest.TestCase):
             repair.checked_return(weights, returns.assign(ret=0.0), 20261118), 0.0
         )
 
+    def test_missing_returns_print_both_endpoints_and_save_evidence(self):
+        weights = pd.DataFrame({"secid": [1, 2, 3], "weight": [1/3]*3})
+        returns = pd.DataFrame({"secid": [1, 2], "ret": [.01, np.nan]}).set_index("secid")
+        day0 = pd.DataFrame({"secid": [1, 2, 3], "close": [10., 20., 30.],
+                             "adjfactor": [1., 2., np.nan], "status": [1, 1, 1], "volume": [1., 1., 1.]})
+        day1 = pd.DataFrame({"secid": [1, 2], "close": [10.1, 20.],
+                             "adjfactor": [1., 2.], "status": [1, 0], "volume": [1., 0.]})
+        with tempfile.TemporaryDirectory() as name:
+            with (patch.object(repair.DB, "load", side_effect=[day0, pd.DataFrame(), day1,
+                      pd.DataFrame({"secid": [2], "close": [40.]})]) as load,
+                  patch.object(repair.Logger, "stdout") as log):
+                with self.assertRaisesRegex(ValueError, "missing/nonfinite holdings returns"):
+                    repair.checked_return(weights, returns, 20050104, previous=20041231, reports=Path(name))
+            evidence = pd.read_csv(Path(name) / 'missing_returns_20041231_20050104.csv')
+            self.assertEqual(len(evidence), 4)
+            self.assertEqual(set(evidence.secid), {2, 3})
+            self.assertEqual(set(evidence.date), {20041231, 20050104})
+            start = evidence.query("secid == 3 and endpoint == 'start'").iloc[0]
+            self.assertEqual(start.raw_adjusted_close, 30.)
+            self.assertTrue(start.adjprice_file_empty)
+            self.assertFalse(start.return_row_present)
+            end = evidence.query("secid == 2 and endpoint == 'end'").iloc[0]
+            self.assertEqual(end.adjprice_close, 40.)
+            self.assertTrue(end.return_row_present)
+            self.assertIn('suspension flag', end.suspension_evidence)
+            absent = evidence.query("secid == 3 and endpoint == 'end'").iloc[0]
+            self.assertEqual(absent.day_row_count, 0)
+            self.assertIn('unknown', absent.suspension_evidence)
+            self.assertEqual(load.call_count, 4)
+            printed = '\n'.join(str(call.args[0]) for call in log.call_args_list)
+            self.assertIn('"secid": 2', printed)
+            self.assertIn('"secid": 3', printed)
+            self.assertIn('"date": 20041231', printed)
+            self.assertIn('"date": 20050104', printed)
+
+    def test_diagnostic_read_errors_do_not_hide_missing_returns(self):
+        weights = pd.DataFrame({"secid": [1], "weight": [1.]})
+        returns = pd.DataFrame(columns=["secid", "ret"]).astype({"ret": float})
+        with tempfile.TemporaryDirectory() as name:
+            with (patch.object(repair.DB, "load", side_effect=OSError('unreadable input')),
+                  patch.object(repair.Logger, "stdout")):
+                with self.assertRaisesRegex(ValueError, "missing/nonfinite holdings returns"):
+                    repair.checked_return(weights, returns, 20050104, previous=20041231, reports=Path(name))
+            evidence = pd.read_csv(Path(name) / 'missing_returns_20041231_20050104.csv')
+            self.assertTrue(evidence.day_read_error.str.contains('unreadable input').all())
+            self.assertTrue(evidence.adjprice_read_error.str.contains('unreadable input').all())
+
+    def test_valid_returns_do_not_read_diagnostic_inputs(self):
+        weights = pd.DataFrame({"secid": [1], "weight": [1.]})
+        returns = pd.DataFrame({"secid": [1], "ret": [.02]})
+        with patch.object(repair.DB, "load") as load:
+            self.assertEqual(repair.checked_return(weights, returns, 20050104, previous=20041231), 2.)
+        load.assert_not_called()
+
     def test_stale_adjprice_rejected(self):
         day = pd.DataFrame({"secid": [1], "close": [11.0], "adjfactor": [2.0]})
         adj = pd.DataFrame({"secid": [1], "close": [20.0]})

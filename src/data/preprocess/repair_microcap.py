@@ -38,7 +38,60 @@ def digest(path):
     return result.hexdigest()
 
 
-def checked_return(weights, returns, date):
+def diagnose_missing_returns(holdings, previous, date, reports=None):
+    """Read-only evidence for failed holdings; absent quotes do not prove a halt."""
+    rows = []
+    for endpoint, price_date in (("start", previous), ("end", date)):
+        frames = {}
+        errors = {}
+        for key in ("day", "adjprice"):
+            try:
+                frames[key] = DB.load("trade_ts", key, int(price_date), vb_level="never")
+                errors[key] = ""
+            except Exception as exc:
+                frames[key] = pd.DataFrame()
+                errors[key] = f"{type(exc).__name__}: {exc}"
+        for holding in holdings.to_dict("records"):
+            row: dict[str, Any] = dict(secid=holding["secid"], weight=holding["weight"],
+                       returned_ret=holding["ret"], return_row_present=holding["return_row_present"],
+                       endpoint=endpoint, date=int(price_date))
+            for key, columns in (("day", ("close", "adjfactor", "status", "volume")),
+                                 ("adjprice", ("close",))):
+                frame = frames[key]
+                matched = (frame.loc[frame.secid == holding["secid"]]
+                           if frame is not None and "secid" in frame.columns else pd.DataFrame())
+                row[f"{key}_row_count"] = len(matched)
+                row[f"{key}_file_empty"] = frame is None or frame.empty
+                row[f"{key}_read_error"] = errors[key]
+                row[f"{key}_missing_columns"] = ",".join(
+                    col for col in ("secid", *columns) if frame is None or col not in frame.columns)
+                for column in columns:
+                    row[f"{key}_{column}"] = (matched.iloc[0][column]
+                        if len(matched) == 1 and column in matched.columns else None)
+            factor = row["day_adjfactor"]
+            row["effective_adjfactor"] = 1.0 if pd.isna(factor) else factor
+            close = row["day_close"]
+            row["raw_adjusted_close"] = (float(close) * float(row["effective_adjfactor"])
+                                         if close is not None else None)
+            status = row["day_status"]
+            row["suspension_evidence"] = ("day.status=0 (suspension flag)"
+                if pd.notna(status) and status == 0 else
+                "day.status=1 (trading flag)" if pd.notna(status) and status == 1 else
+                "unknown; missing quote alone does not establish suspension")
+            rows.append(row)
+    evidence = pd.DataFrame(rows)
+    Logger.stdout(f"[microcap repair] Missing-return diagnostics: {len(holdings)} holdings, "
+                  f"{previous} -> {date}; endpoint rows follow", vb_level=0)
+    for row in rows:
+        Logger.stdout(f"[microcap repair] {json.dumps(row, default=str, ensure_ascii=False)}", vb_level=0)
+    if reports is not None:
+        path = Path(reports) / f"missing_returns_{previous}_{date}.csv"
+        evidence.to_csv(path, index=False)
+        Logger.stdout(f"[microcap repair] Missing-return diagnostics saved: {path}", vb_level=0)
+    return evidence
+
+
+def checked_return(weights, returns, date, *, previous=None, reports=None):
     """Never interpret an empty portfolio or unmatched returns as zero performance."""
     if weights.empty or weights.secid.duplicated().any():
         raise ValueError(f"{date}: empty or duplicate microcap holdings")
@@ -50,9 +103,18 @@ def checked_return(weights, returns, date):
     ):
         raise ValueError(f"{date}: invalid return schema or duplicate securities")
     joined = weights.merge(
-        returns[["secid", "ret"]], on="secid", how="left", validate="one_to_one"
+        returns[["secid", "ret"]].assign(return_row_present=True),
+        on="secid", how="left", validate="one_to_one"
     )
-    if not np.isfinite(joined[["weight", "ret"]].to_numpy()).all():
+    invalid = ~np.isfinite(joined[["weight", "ret"]].to_numpy()).all(axis=1)
+    if invalid.any():
+        if previous is not None:
+            failed = joined.loc[invalid].copy()
+            failed["return_row_present"] = failed["return_row_present"].eq(True)
+            try:
+                diagnose_missing_returns(failed, previous, date, reports)
+            except Exception as exc:
+                Logger.stdout(f"[microcap repair] Diagnostics failed: {type(exc).__name__}: {exc}", vb_level=0)
         raise ValueError(
             f"{date}: missing/nonfinite holdings returns; repair price inputs first"
         )
@@ -285,7 +347,7 @@ def rebuild_microcap(start: int | np.integer = MicroCap_400.START_DATE, end=None
                 index = MicroCap_400()
                 weights = index.rebalance_portfolio(previous)
                 returns = DATAVENDOR.get_quote_ret(previous, date)
-                value = checked_return(weights, returns, date)
+                value = checked_return(weights, returns, date, previous=previous, reports=reports)
                 production = index.index_return(date) * 100
                 if not np.isclose(value, production, rtol=1e-7, atol=1e-7):
                     raise ValueError(
