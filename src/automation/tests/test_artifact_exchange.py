@@ -280,6 +280,13 @@ class ExchangeTest(unittest.TestCase):
         self.assertTrue((first/'results/full.feather').exists())
         self.assertTrue((first/'results/report.zip').exists())
         sources = synced_sources(self.rec.results)
+        dated_sources = synced_sources(self.rec.results, timestamps=True)
+        from datetime import datetime, timezone
+        for kind, items in dated_sources.items():
+            self.assertEqual([item['path'] for item in items], [item['path'] for item in sources[kind]])
+            for item in items:
+                self.assertIn(datetime.fromtimestamp(item['_timestamp'], timezone.utc).strftime(
+                    '%Y-%m-%d %H:%M:%S UTC'), item['label'])
         self.assertEqual(len(sources['tensorboard']), 2)
         self.assertEqual(len(sources['optuna']), 2)
         for kind, items in sources.items():

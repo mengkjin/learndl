@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 import os
 from pathlib import Path
@@ -32,7 +32,7 @@ def argument(args, name, default=''):
     return default
 
 
-def synced_sources(results):
+def synced_sources(results, *, timestamps=False):
     """Only committed v2 manifests can advertise synchronized experiment ZIPs."""
     from src.automation.artifact_exchange.core import (
         Config, _target, category_root, experiment_members, real_tree, safe_path, valid_category,
@@ -72,7 +72,9 @@ def synced_sources(results):
     for items in result.values():
         items.sort(key=lambda item: (item['_stamp'], item['path']), reverse=True)
         for item in items:
-            item.pop('_stamp')
+            stamp = item.pop('_stamp')
+            if timestamps:
+                item['_timestamp'] = datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ').replace(tzinfo=timezone.utc).timestamp()
     return result
 
 
@@ -284,12 +286,30 @@ class Instances:
 
         dated = sorted(((trained_time(p), p) for p in trained), key=lambda item: (-item[0], str(item[1])))
         recent = [option(p, f'{datetime.fromtimestamp(stamp).astimezone():%Y-%m-%d %H:%M:%S %Z} · {p.parent.parent.relative_to(PATH.model)}')
-                  for stamp, p in dated[:1]]
+                  for stamp, p in dated]
         archived = archived_tensorboard_index(PATH.model_archive)
         databases = sorted(PATH.optuna.rglob('*.sqlite3'), key=lambda p: p.stat().st_mtime, reverse=True)
-        synchronized = synced_sources(ROOT / 'results')
+        synchronized = synced_sources(ROOT / 'results', timestamps=True)
+
+        def latest(kind, local):
+            candidates = local + [(item['_timestamp'], option(item['path'], item['label']))
+                                  for item in synchronized[kind]]
+            selected, seen = [], set()
+            for _, item in sorted(candidates, key=lambda entry: (-entry[0], entry[1]['path'])):
+                canonical = str(Path(item['path']).resolve())
+                if canonical not in seen:
+                    selected.append(item)
+                    seen.add(canonical)
+                if len(selected) == 3:
+                    break
+            return selected
+
+        recent = latest('tensorboard', [(stamp, item) for (stamp, _), item in zip(dated, recent)])
+        recent_optuna = latest('optuna', [(p.stat().st_mtime, option(
+            p, f'{datetime.fromtimestamp(p.stat().st_mtime).astimezone():%Y-%m-%d %H:%M:%S %Z} · {p.relative_to(PATH.optuna)}'))
+            for p in databases])
         def synced(kind):
-            return {'zh': '同步研究实验', 'en': 'Synchronized research experiments', 'items': synchronized[kind]}
+            return {'zh': '同步研究实验', 'en': 'Synchronized research experiments', 'items': [option(item['path'], item['label']) for item in synchronized[kind]]}
 
         def legacy_label(path, folder):
             host = '来源未知'
@@ -317,7 +337,7 @@ class Instances:
                 downloaded('tensorboard'),
             ],
             'optuna': [
-                {'zh': '最近实验', 'en': 'Latest study', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases[:1]]},
+                {'zh': '最近实验', 'en': 'Latest study', 'items': recent_optuna},
                 {'zh': '已保存实验', 'en': 'Saved studies', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases]},
                 synced('optuna'),
                 downloaded('optuna'),

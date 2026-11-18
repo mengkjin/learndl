@@ -1,4 +1,6 @@
 """Bootstrap logging stays plain, redirectable and independent of project setup."""
+from __future__ import annotations
+
 import io
 import json
 import subprocess
@@ -7,6 +9,8 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 
 from src.automation.console import logger
+
+__all__ = ['ConsoleTest']
 
 
 class ConsoleTest(unittest.TestCase):

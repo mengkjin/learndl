@@ -30,10 +30,11 @@ class ExperimentsTest(unittest.TestCase):
             event.write_text('')
             os.utime(event, (1800000000 if name == 'older' else 500, 1800000000 if name == 'older' else 500))
         paths = SimpleNamespace(model=model, model_archive=model / 'archive', optuna=self.root / 'optuna')
-        with patch('src.proj.PATH', paths), patch.object(dashboard, '_tensorboard_snapshot_ready', return_value=True):
+        with patch('src.proj.PATH', paths), patch.object(dashboard, '_tensorboard_snapshot_ready', return_value=True), patch(
+                'src.api.learndl_monitor.experiments.ROOT', self.root):
             groups = self.manager.sources()['tensorboard']
         self.assertEqual(groups[0]['en'], 'Latest training')
-        self.assertEqual(len(groups[0]['items']), 1)
+        self.assertEqual(len(groups[0]['items']), 2)
         self.assertIn('/newer/', groups[0]['items'][0]['path'])
         self.assertIn('2023-', groups[0]['items'][0]['label'])
         self.assertEqual(len(groups[1]['items']), 2)
@@ -41,6 +42,35 @@ class ExperimentsTest(unittest.TestCase):
     def test_arguments(self):
         self.assertEqual(argument(['--port=6009'], '--port'), '6009')
         self.assertEqual(argument(['--logdir', '/tmp/a b'], '--logdir'), '/tmp/a b')
+
+    def test_recent_three_merge_local_and_synced_by_experiment_time(self):
+        from src.api.pkgs import dashboard
+
+        model = self.root / 'models'
+        optuna = self.root / 'optuna'
+        optuna.mkdir()
+        local = {}
+        for name, stamp in [('older', 1600000000), ('newer', 1700000000)]:
+            folder = model / name / 'snapshot/tensorboard'
+            folder.mkdir(parents=True)
+            (folder / f'events.out.tfevents.{stamp}.host').touch()
+            database = optuna / f'{name}.sqlite3'
+            database.touch()
+            os.utime(database, (stamp, stamp))
+            local[name] = {'tensorboard': str(folder), 'optuna': str(database)}
+        synchronized = {kind: [
+            {'path': str(self.root / f'{kind}-{name}.zip'), 'label': f'host · {name}', '_timestamp': stamp}
+            for name, stamp in [('latest', 1800000000), ('middle', 1650000000), ('old', 1500000000)]
+        ] for kind in ('tensorboard', 'optuna')}
+        paths = SimpleNamespace(model=model, model_archive=model / 'archive', optuna=optuna)
+        with patch('src.proj.PATH', paths), patch.object(dashboard, '_tensorboard_snapshot_ready', return_value=True), patch(
+                'src.api.learndl_monitor.experiments.synced_sources', return_value=synchronized):
+            groups = self.manager.sources()
+        for kind in ('tensorboard', 'optuna'):
+            recent = groups[kind][0]['items']
+            self.assertEqual([item['path'] for item in recent], [synchronized[kind][0]['path'],
+                             local['newer'][kind], synchronized[kind][1]['path']])
+            self.assertNotIn('_timestamp', recent[0])
 
     def test_limits_persist_and_reject_invalid_values(self):
         self.assertEqual(self.manager.settings(), {'tensorboard': 5, 'optuna': 5})
