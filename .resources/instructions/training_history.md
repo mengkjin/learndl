@@ -1,6 +1,6 @@
 # 训练历史与 worklist 完成记录
 
-`configs/schedule/worklist.yaml` 支持 `fit`、`resume`、`force` 和 `rerun_mark`。
+`configs/schedule/worklists/main.yaml` 支持 `fit`、`resume`、`force` 和 `rerun_mark`。
 `force` 缺省为 `false`；`rerun_mark` 缺省或 null 在邮件中显示为 `none`；`resume`、`force` 必须是 YAML 布尔值。
 
 ```yaml
@@ -149,3 +149,5 @@ CLI Hub → Non-Research Operations → Watchdog / Schedule Management：
 授权绑定预览时的配置、调度代码、crontab、受管理 unit 和桌面启动项；等待期间这些输入变化会取消请求，必须重新预览授权。
 后台特权代理使用 `/run/learndl-install/<请求编号>` 中的 root 所有快照，只允许批准过的 unit 内容及固定 systemctl 操作，不保存管理员密码，也不依赖 sudo 缓存。
 请求历史在项目对应的 `~/.local/state/learndl/<项目标识>/installation/` 保存，后台日志可通过请求中显示的 service 名称用 `journalctl -u` 查看。
+
+Worklist 文件夹内各文件独立判断变更，按 Git 最后修改的 committer 时间升序、同时间按文件名排序。没有 Git 修改记录的文件等待提交；不按 mtime 排序。跨文件重复的 schedule 报错并阻止执行，其他文件仍可调度。

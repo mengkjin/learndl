@@ -123,6 +123,7 @@ class Plotter:
         self.plot_iter.set_args(data , show , title_prefix , 'Percentile Ret & IR' , ['factor_name' , 'benchmark'])
         for df , fig in self.plot_iter.iter():
             df = df.pivot_table('stats_value' , 'group' , 'stats_name',observed=False).\
+                reindex(columns=['grp_ret', 'grp_ir']).\
                 rename(columns={'grp_ret':'RET','grp_ir':'IR'}).reset_index().sort_values('group')
             ax1 , ax2 = get_twin_axes(fig , 111)
 
@@ -132,6 +133,9 @@ class Plotter:
 
             ax2.plot(df['group'], df['IR'], 'r-')
             ax2.legend(['Avg IR'], loc='upper right')
+            if not df['IR'].notna().any():
+                ax2.text(0.98, 0.95, 'IR unavailable', transform=ax2.transAxes,
+                         ha='right', va='top', color='r')
 
             set_xaxis(ax1 , tick_pos='bottom')
             set_yaxis(ax1 , format='pct' , digits=2 , title = 'Average Ret' , title_color='b')

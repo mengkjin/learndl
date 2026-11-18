@@ -56,7 +56,7 @@ class PATH:
     sched          = conf.joinpath('schedule' , 'current')
     sched_linear   = conf.joinpath('schedule', 'linear')
     sched_archive  = conf.joinpath('schedule' , 'archive')
-    sched_worklist = conf.joinpath('schedule' , 'worklist.yaml')
+    sched_worklists = conf.joinpath('schedule' , 'worklists')
     sched_shared   = lc_share.joinpath('schedule_model')
 
     # production paths (in the production environment, i.e. the base path of the project)

@@ -32,7 +32,6 @@ from contextlib import ExitStack
 
 import portalocker
 import psutil
-import yaml
 
 from .config import installed_config, runtime_dir
 from .runtime import RunStore, members, process_cgroup, boot_id
@@ -98,26 +97,29 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
     """Validate every name and durably report missing configs, even while busy."""
     from src.proj import MACHINE, PATH
     from src.api.calls.worklist_state import WorklistState
-    from src.res.model.util.training_history import file_revision
-    worklist_revision = file_revision(PATH.sched_worklist)
-    worklist = yaml.safe_load(worklist_revision['content'])
+    from src.api.calls.worklists import load, revision_for
+    worklist, _, errors = load(automatic=True)
+    for error in errors:
+        key = version({'error': error})
+        store.event({'id': f'worklist-config-{key}', 'owner': OWNER}, 'configuration_error', error)
     entries = WorklistState.entries(worklist)
     rerun_mark = WorklistState.rerun_mark(worklist)
     schedules, missing = {}, []
     for name in dict.fromkeys([*entries, *WorklistState.requested_schedules()]):
+        if name in worklist['_blocked']:
+            continue
         try:
-            revisions = WorklistState.revisions(name)
+            revisions = WorklistState.revisions(name, worklist=worklist)
         except FileNotFoundError:
             missing.append(name)
             continue
-        revisions['worklist'] = worklist_revision
+        revisions['worklist'] = revision_for(worklist, name)
         schedules[name] = revisions
     if missing:
-        key = version({'worklist': worklist_revision, 'missing': sorted(missing)})
-        detail = (f'Host: {MACHINE.name}\nWorklist: {PATH.sched_worklist}\n'
-                  f'Git commit: {worklist_revision["git_commit"]}\n'
-                  f'Worklist SHA256: {worklist_revision["sha256"]}\n'
+        key = version({'missing': sorted(missing), 'sources': {n: revision_for(worklist, n) for n in missing}})
+        detail = (f'Host: {MACHINE.name}\nWorklist: {PATH.sched_worklists}\n'
                   f'Missing schedule configs: {", ".join(missing)}\n'
+                  f'Sources: {json.dumps({n: revision_for(worklist, n) for n in missing}, ensure_ascii=False)}\n'
                   f'Searched directories:\n{PATH.sched}\n{PATH.sched_shared}\n'
                   'Worklist entries must match schedule filenames without .yaml, '
                   'not model modules or input data types.\n'
@@ -174,7 +176,7 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
             resume_request = {field: recovery[field] for field in
                               ('parent_run_id', 'retry_index', 'retry_not_before') if field in recovery}
             return {'task': name, 'version': key, 'revisions': revisions, **resume_request,
-                    'rerun_mark': WorklistState.rerun_mark(worklist)}
+                    'rerun_mark': WorklistState.rerun_mark(worklist.get('_sources', {}).get(name, {}).get('doc', worklist))}
     return None
 
 
@@ -316,8 +318,8 @@ def worker() -> int:
                     from .rl_experiment import observe
                     next_candidate = observe(store)
                 else:
-                    next_candidate = candidate(store, only=request['task'], options=options) if options.get('enabled') else None
-                if (others or idle_reason(options) or not next_candidate or next_candidate['version'] != request['version']
+                    next_candidate = candidate(store, options=options) if options.get('enabled') else None
+                if (others or idle_reason(options) or not next_candidate or next_candidate['task'] != request['task'] or next_candidate['version'] != request['version']
                         or next_candidate.get('parent_run_id') != request.get('parent_run_id')
                         or next_candidate.get('retry_index') != request.get('retry_index')):
                     return 0
@@ -423,15 +425,37 @@ def reset(schedule: str, store: RunStore | None = None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['worker', '_child', 'status', 'rl-status', 'reset', 'reset-worklist'])
+    parser.add_argument('command', choices=['worker', '_child', 'status', 'worklist-status', 'rl-status', 'reset', 'reset-worklist'])
     parser.add_argument('schedule_or_run', nargs='?')
     args = parser.parse_args()
+    if args.command == 'worklist-status':
+        from src.api.calls.worklists import load
+        from src.proj import Logger
+        from src.api.calls.worklist_state import WorklistState
+        worklist, docs, errors = load(automatic=True)
+        files = []
+        for doc in docs:
+            states = {}
+            for name in doc['entries']:
+                saved = WorklistState(name).read()
+                try:
+                    revisions = WorklistState.revisions(name, worklist=worklist)
+                    reason, _ = WorklistState.decision(saved, revisions, force=False, resume=False)
+                    states[name] = {'status': 'completed' if reason == 'completed' else 'pending',
+                                    'reason': reason, 'record': saved}
+                except (ValueError, FileNotFoundError) as exc:
+                    states[name] = {'status': 'blocked', 'reason': str(exc), 'record': saved}
+            files.append(dict(path=doc['path'], git_time=doc['time'],
+                              git_commit=doc['revision']['git_commit'], schedules=states))
+        Logger.stdout(json.dumps({'files': files, 'errors': errors}, default=str,
+                                 ensure_ascii=False, indent=2), vb_level=0)
+        return 0
     if args.command == 'worker':
         return worker()
     if args.command == 'reset-worklist':
         logger.info(f'Worklist reset: {reset_worklist()}')
         return 0
-    if args.command in {'status', 'rl-status'}:
+    if args.command in {'status', 'worklist-status', 'rl-status'}:
         from .recovery import evidence
         store = RunStore()
         runs = [dict(run, evidence=evidence(store, run['id'])) for run in store.owned(OWNER)]

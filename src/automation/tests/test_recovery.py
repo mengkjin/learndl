@@ -47,9 +47,11 @@ class RecoveryTest(unittest.TestCase):
         self.enterContext(patch.object(recovery, 'boot_id', return_value='boot'))
         self.enterContext(patch.object(recovery.psutil, 'virtual_memory', return_value=SimpleNamespace(total=100, available=50)))
         self.enterContext(patch.object(training_history, 'git', return_value='commit'))
-        self.worklist = self.root / 'worklist.yaml'
+        self.worklist = self.root / 'worklists' / 'main.yaml'
+        self.worklist.parent.mkdir()
         self.worklist.write_text('fit: [first, second]\nresume: false\nforce: true\n')
-        self.enterContext(patch.object(PATH, 'sched_worklist', self.worklist))
+        self.enterContext(patch.object(PATH, 'sched_worklists', self.worklist.parent))
+        self.enterContext(patch('src.api.calls.worklists.git_time', return_value=1))
         self.schedule = self.root / 'schedule.yaml'
         self.schedule.write_text('model.module: gru\n')
         self.enterContext(patch.object(ScheduleConfig, 'find_path', return_value=self.schedule))

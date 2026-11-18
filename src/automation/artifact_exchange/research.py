@@ -78,6 +78,11 @@ def _visible_result(record):
 
 
 def log_results(records, owner=None):
+    # Task-owned deliveries are reported once at finalization, inside capture.
+    # Keep package details in the delivery records/outbox rather than every email.
+    owner = owner if owner is not None else CURRENT_TASK.get()
+    if owner is not None:
+        return
     for record in records:
         if not _visible_result(record):
             continue
@@ -153,13 +158,7 @@ def finalize_task_artifacts(owner, saves_complete=True):
     owner._artifact_delivery_summary = counts
     if not any(_visible_result(r) for r in records):
         return
-    reasons = [str(r.get('reason') or r.get('error')) for r in records
-               if r.get('reason') or r.get('error')]
-    delivery_log('投递汇总: ' + json.dumps(counts, ensure_ascii=False)
-                 + ('; reasons=' + '; '.join(reasons) if reasons else '')
-                 + ('; 没有已发布包，不能视为投递成功' if not counts['published'] else
-                    '; published 仅代表本机共享目录发布成功，不代表远端归档'),
-                 failed=bool(counts['failed']), owner=owner)
+    delivery_log(notice(records).strip(), failed=bool(counts['failed'] or counts['skipped']), owner=owner)
 
 
 def defer_mail(callback):
@@ -247,7 +246,18 @@ def delivered(records):
 
 def notice(records):
     records = [r for r in records if _visible_result(r)]
-    return '\nArtifact delivery: ' + json.dumps([{k: r[k] for k in ('id', 'status', 'error') if k in r} for r in records]) if records else ''
+    if not records:
+        return ''
+    counts = {status: sum(r.get('status') == status for r in records)
+              for status in ('prepared', 'published', 'skipped', 'failed')}
+    reasons = list(dict.fromkeys(str(r.get('error') or r.get('reason'))
+                   for r in records if r.get('error') or r.get('reason')))
+    text = f'\nArtifact delivery summary: total={len(records)}; ' + json.dumps(counts)
+    if reasons:
+        text += '; reasons=' + '; '.join(reason[:200] for reason in reasons[:3])
+        if len(reasons) > 3:
+            text += f'; {len(reasons) - 3} additional reasons in delivery records'
+    return text + '; published means local shared-folder handoff, not confirmed remote archival.'
 
 
 def handoff_bundle(metadata, folder, category, status='success'):

@@ -440,6 +440,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                         f'Rerun mark: {run.get("rerun_mark", "none")}\n')
             for name, revision in run.get('revisions', {}).items():
                 if isinstance(revision, dict):
+                    message += f'{name} source: {revision.get("path", "")}\n'
                     message += f'{name} revision: {revision.get("sha256")} git: {revision.get("git_commit")}\n'
                 else:
                     message += f'{name}: {json.dumps(revision, ensure_ascii=False)}\n'

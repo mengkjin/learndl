@@ -500,10 +500,29 @@ class ExchangeTest(unittest.TestCase):
                       {'status': 'skipped', 'id': 'prepared-package', 'reason': 'publisher disabled'},
                       {'status': 'failed', 'error': 'disk full'}]
         log_results(actionable, owner)
-        self.assertEqual(owner.logger.warning.call_count, 3)
+        owner.logger.warning.assert_not_called()
         self.assertIn('failed', notice(actionable))
         log_results([{'status': 'published', 'id': 'success'}], owner)
-        owner.logger.note.assert_called_once()
+        owner.logger.note.assert_not_called()
+
+    def test_many_task_artifacts_emit_one_summary_without_package_ids(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from src.automation.artifact_exchange.research import log_results, notice, finalize_task_artifacts
+        records = [{'status': 'published', 'id': f'package-{i}'} for i in range(30)]
+        records += [{'status': 'failed', 'id': 'failed-package', 'error': 'disk full'}]
+        owner = SimpleNamespace(_artifacts=[], _artifact_results=records, logger=Mock())
+        log_results(records, owner)
+        finalize_task_artifacts(owner)
+        owner.logger.note.assert_not_called()
+        owner.logger.warning.assert_called_once()
+        summary = owner.logger.warning.call_args.args[0]
+        self.assertIn('total=31', summary)
+        self.assertIn('"published": 30', summary)
+        self.assertIn('"failed": 1', summary)
+        self.assertIn('disk full', summary)
+        self.assertNotIn('package-', summary)
+        self.assertNotIn('failed-package', notice(records))
 
     def test_task_logs_delivery_before_capture_close_and_mail(self):
         from datetime import datetime

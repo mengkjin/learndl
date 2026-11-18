@@ -52,11 +52,13 @@ class WorklistExecutionTest(TestCase):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.root = Path(temp.name)
-        self.worklist = self.root / 'worklist.yaml'
+        self.worklist = self.root / 'worklists' / 'main.yaml'
+        self.worklist.parent.mkdir()
         self.schedule = self.root / 'schedule.yaml'
         self.schedule.write_text('model.module: gru\n')
         self.enterContext(patch.object(PATH, 'lc_machine', self.root))
-        self.enterContext(patch.object(PATH, 'sched_worklist', self.worklist))
+        self.enterContext(patch.object(PATH, 'sched_worklists', self.worklist.parent))
+        self.enterContext(patch('src.api.calls.worklists.git_time', return_value=1))
         self.enterContext(patch('src.res.model.util.training_history.git', return_value=None))
         self.enterContext(patch.object(ScheduleConfig, 'find_path', return_value=self.schedule))
         self.enterContext(patch.object(ScheduleConfig, 'check_name_exist', return_value=True))

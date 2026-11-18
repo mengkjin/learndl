@@ -8,6 +8,8 @@ from src.proj import MACHINE , PATH , Logger
 from src.api.util.direct_call import DirectCall
 from src.proj.util.cli.script_session import as_script_main
 
+from .worklists import load as load_worklists, revision_for
+
 __all__ = ['CarryOutScheduleWorkList' , 'ScheduleModel']
 
 class CarryOutScheduleWorkList(DirectCall):
@@ -20,8 +22,9 @@ class CarryOutScheduleWorkList(DirectCall):
         from src.res.model.util.config.config import ScheduleConfig
 
         from src.api.calls.worklist_state import WorklistState
-        ret = list(dict.fromkeys([*WorklistState.entries(PATH.read_yaml(PATH.sched_worklist)),
-                                 *WorklistState.requested_schedules()]))
+        worklist, _, _ = load_worklists()
+        ret = list(dict.fromkeys([*WorklistState.entries(worklist),
+                                 *(n for n in WorklistState.requested_schedules() if n not in worklist['_blocked'])]))
         missing = [name for name in ret if not ScheduleConfig.check_name_exist(name)]
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
@@ -34,7 +37,7 @@ class CarryOutScheduleWorkList(DirectCall):
     @classmethod
     def get_schedule_resume_param(cls) -> bool:
         from src.api.calls.worklist_state import WorklistState
-        return WorklistState.options(PATH.read_yaml(PATH.sched_worklist), '')['resume']
+        return WorklistState.options(load_worklists()[0], '')['resume']
     @classmethod
     def get_description(cls , **kwargs) -> str:
         return 'Carry out training of the configured schedule work list and requested schedules.'
@@ -82,15 +85,14 @@ class CarryOutScheduleWorkList(DirectCall):
         import portalocker
 
         from src.api.calls.worklist_state import AutomaticDeferred, WorklistState
-        from src.res.model.util.training_history import collect_training_runs, file_revision
+        from src.res.model.util.training_history import collect_training_runs
 
-        worklist_revision = file_revision(PATH.sched_worklist)
-        # Parse the exact bytes fingerprinted above, once per invocation.
-        import yaml
-        worklist = yaml.safe_load(worklist_revision['content'])
+        worklist, _, errors = load_worklists(automatic=bool(self.kwargs.get('automatic')))
+        for error in errors:
+            Logger.warning(error)
         entries = WorklistState.entries(worklist)
         from src.res.model.util.config.config import ScheduleConfig
-        schedules = list(dict.fromkeys([*entries, *WorklistState.requested_schedules()]))
+        schedules = list(dict.fromkeys([*entries, *(n for n in WorklistState.requested_schedules() if n not in worklist['_blocked'])]))
         missing = [name for name in schedules if not ScheduleConfig.check_name_exist(name)]
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
@@ -119,8 +121,8 @@ class CarryOutScheduleWorkList(DirectCall):
                     continue
                 try:
                     previous = state.read()
-                    revisions = state.revisions(schedule_name)
-                    revisions['worklist'] = worklist_revision
+                    revisions = state.revisions(schedule_name, worklist=worklist)
+                    revisions['worklist'] = revision_for(worklist, schedule_name)
                     automatic = bool(self.kwargs.get('automatic', False))
                     if automatic and self.kwargs.get('expected_version'):
                         from src.automation.scheduling.idle_worklist import version

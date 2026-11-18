@@ -8,7 +8,6 @@ from typing import Any
 from collections.abc import Mapping
 
 import portalocker
-import yaml
 
 from src.proj import PATH
 from src.res.model.util.training_history import file_revision, now, write_json
@@ -62,6 +61,8 @@ class WorklistState:
         Item settings override global defaults. Identical repeats are deduplicated;
         conflicting duplicate schedules are rejected rather than run ambiguously.
         """
+        if isinstance(worklist, Mapping) and '_sources' in worklist:
+            return {name: source['entries'][name] for name, source in worklist['_sources'].items()}
         if not isinstance(worklist, Mapping) or not isinstance(worklist.get('fit'), list):
             raise ValueError('worklist.fit must be a list of schedule names or mappings')
         defaults: dict[str, Any] = {'resume': False, 'force': False} | cls._options(worklist)
@@ -115,7 +116,8 @@ class WorklistState:
         """
         if not isinstance(request_id, str) or not request_id:
             raise ValueError('A nonempty training request ID is required')
-        worklist = yaml.safe_load(PATH.sched_worklist.read_text())
+        from .worklists import load
+        worklist, _, _ = load()
         if not allow_unlisted and self.schedule_name not in self.entries(worklist):
             raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
         self.revisions(self.schedule_name)  # Verify the schedule config before writing.
@@ -149,12 +151,15 @@ class WorklistState:
         return names
 
     @staticmethod
-    def revisions(schedule_name: str):
+    def revisions(schedule_name: str, *, worklist=None):
         from src.res.model.util.config.config import ScheduleConfig
         path = ScheduleConfig.find_path(name=schedule_name)
         if path is None:
             raise FileNotFoundError(f'Schedule config missing: {schedule_name}')
-        revisions = {'worklist': file_revision(PATH.sched_worklist), 'schedule': file_revision(path)}
+        from .worklists import load, revision_for
+        if worklist is None:
+            worklist, _, _ = load()
+        revisions = {'worklist': revision_for(worklist, schedule_name), 'schedule': file_revision(path)}
         reset_path = PATH.lc_machine / 'schedule_worklist' / 'reset.json'
         if reset_path.exists():
             revisions['reset_generation'] = {'generation': json.loads(reset_path.read_text())['generation']}

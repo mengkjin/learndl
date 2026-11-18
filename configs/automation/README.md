@@ -45,7 +45,7 @@ shared model schedule configurations with `SharedSync.sync()`.
 
 Use the supported entrypoints instead:
 
-- Automatic model training: add schedule names to `configs/schedule/worklist.yaml`;
+- Automatic model training: add schedule names to `configs/schedule/worklists/main.yaml`;
   watchdog's `idle_worklist` job queues eligible training for the independent worker.
 - Manual training: use the existing single schedule model or schedule worklist
   entrypoint (`ScheduleModel` / `CarryOutScheduleWorkList`).
@@ -669,3 +669,9 @@ The installed Git timer uses `OnUnitInactiveSec=60s`: it polls roughly 60 second
 after the previous worker exits, not at a fixed minute boundary or immediately on
 a task exit. Each poll attempts an eligible fast-forward as soon as all required
 leases and repository checks permit it. No timer reinstall is needed for this fix.
+
+### Multiple model worklists
+
+Only `configs/schedule/worklists/*.yaml` is loaded (no legacy file fallback). Files run by last Git committer timestamp ascending, then filename; entries retain their list order. Files without Git history wait in automatic scheduling. Each file owns its defaults and revision; changes do not invalidate other files. Duplicate schedules across files are blocked and reported; malformed files are isolated.
+
+Use `python -m src.automation.scheduling.idle_worklist worklist-status` to inspect loaded files, Git times, records and validation errors. `reset-worklist` resets all lists. Keep the existing safe Git update boundary: finish running training before pulling this source/configuration change. No training-history migration or reset is necessary.

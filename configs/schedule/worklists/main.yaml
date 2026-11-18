@@ -1,0 +1,11 @@
+fit:
+  # - name: factorseq_v3_snapshot
+  #   mode: sparse
+  # - name: factorseq_v3_temporal
+  #   mode: sparse
+  # - name: factorseq_v3_contextual
+  #   mode: sparse
+
+resume: False
+force: False
+rerun_mark: 1
