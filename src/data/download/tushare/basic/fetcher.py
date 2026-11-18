@@ -25,6 +25,7 @@ import shutil
 import time
 import numpy as np
 import pandas as pd
+from requests.exceptions import Timeout as RequestTimeout
 
 from abc import abstractmethod , ABCMeta
 from importlib import import_module
@@ -296,6 +297,8 @@ class TushareIterateFetcher(Base.BoundLogger):
                 raise IterateFetchPageLimit(f'{self} got more than {self.max_fetch_times} dfs')
             try:
                 ret = retry_call(TS.locked(self.tushare_api) , () , self.kwargs | {'offset' : offset , 'limit' : self.limit})
+                if isinstance(ret, pd.DataFrame) and len(ret.columns) == 0:
+                    raise ValueError(f'{self.fetcher_name}: Tushare returned no columns at offset={offset}; download failed')
             except Exception:
                 self.save_breakpoint(dfs , offset)
                 raise
@@ -314,7 +317,7 @@ class TushareIterateFetcher(Base.BoundLogger):
             self.remove_path()
             return all_df
         self.remove_path()
-        return pd.DataFrame()
+        return ret.iloc[:0].copy()
 
 class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
     """base class of TushareFetcher"""
@@ -491,6 +494,9 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             if not overwrite:
                 flags += fetcher.update_missing()
             return flags.summarize()
+        except (RequestTimeout, TimeoutError) as e:
+            cls.logger.error(f'Download failed (timeout): {type(e).__name__}: {e}')
+            return Base.UpdateFlag.FAILED
         except Exception as e:
             cls.logger.error(f'Update failed: {e}' if rollback_date is None else f'Update rollback failed: {e}')
             cls.logger.print_exc(e)
@@ -528,6 +534,9 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             try:
                 new_dates = self.update_dates(dates)
                 updated_dates = np.concatenate([updated_dates , new_dates])
+            except (RequestTimeout, TimeoutError):
+                # Preserve the exception type for the dedicated failure handler.
+                raise
             except Exception as e:
                 if '最多访问' in str(e):
                     if timeout_max_retries <= 0: 
@@ -555,6 +564,8 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
             ret = tushare_api(*args, **kwargs)
         if not isinstance(ret , pd.DataFrame):
             raise TypeError(f'{self} must return a pd.DataFrame, but got {ret}')
+        if len(ret.columns) == 0:
+            raise ValueError(f'{self}: Tushare returned no columns; download failed')
         return ret
 
     def iterate_fetch(self , tushare_api : Callable[..., T] , limit = 2000 , max_fetch_times = -1 , breakpoint : bool = False , **kwargs) -> pd.DataFrame:

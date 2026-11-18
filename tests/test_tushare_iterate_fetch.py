@@ -6,12 +6,15 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pandas as pd
+from requests.exceptions import ReadTimeout, ConnectTimeout
 
 from src.data.download.tushare.basic.fetcher import IterateFetchPageLimit , TushareIterateFetcher
 from src.data.download.tushare.task.t05_mutual_fund import FundPortfolioFetcher
+from src.data.download.tushare.task.t00_info import Calendar
+from src.proj import Base
 
 
 def _pages(n_pages: int , limit: int):
@@ -20,7 +23,7 @@ def _pages(n_pages: int , limit: int):
         offset = int(kwargs['offset'])
         page = offset // limit
         if page >= n_pages:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=["page", "value"])
         return pd.DataFrame({'page': [offset] , 'value': [page]})
     return api
 
@@ -68,6 +71,22 @@ class IterateFetchResumeTest(unittest.TestCase):
         self.assertEqual(result['page'].tolist() , [i * limit for i in range(n_pages)])
         self.assertFalse(fetcher.breakpoint_path.exists())
 
+    def test_no_columns_preserves_partial_pages_and_failed_offset(self):
+        def api(**kwargs):
+            if kwargs['offset'] == 0:
+                return pd.DataFrame({'page': [0]})
+            return pd.DataFrame()
+        fetcher = self._fetcher(api)
+        with self.assertRaisesRegex(ValueError, 'no columns.*offset=10'):
+            fetcher.fetch()
+        self.assertEqual(json.loads(fetcher.metadata_path.read_text())['next_offset'], 10)
+        self.assertTrue(list(fetcher.breakpoint_path.glob('bkpt.*.feather')))
+
+    def test_valid_empty_page_keeps_schema(self):
+        result = self._fetcher(_pages(0, 10)).fetch()
+        self.assertTrue(result.empty)
+        self.assertEqual(list(result.columns), ['page', 'value'])
+
     def test_api_error_retries_the_failed_offset(self):
         limit = 10
 
@@ -76,7 +95,7 @@ class IterateFetchResumeTest(unittest.TestCase):
             if offset == 20 and not api.allow_20:
                 raise RuntimeError('最多访问')
             if offset >= 30:
-                return pd.DataFrame()
+                return pd.DataFrame(columns=["page", "value"])
             return pd.DataFrame({'page': [offset]})
         api.allow_20 = False
 
@@ -101,7 +120,7 @@ class IterateFetchResumeTest(unittest.TestCase):
             offset = int(kwargs['offset'])
             calls.append(offset)
             if offset >= 10:
-                return pd.DataFrame()
+                return pd.DataFrame(columns=["page", "value"])
             return pd.DataFrame({'page': [offset]})
 
         fetcher = self._fetcher(api , limit = 10 , max_fetch_times = 1)
@@ -151,6 +170,23 @@ class FundPortfolioPageCapTest(unittest.TestCase):
         self.assertEqual(inst.iterate_fetch.call_count , 2)
         self.assertIn('secid' , out.columns)
         self.assertFalse(out.empty)
+
+
+class FetchFailureTest(unittest.TestCase):
+    def test_direct_no_columns_rejected_but_empty_schema_allowed(self):
+        fetcher = Calendar(vb_level='never')
+        with self.assertRaisesRegex(ValueError, 'no columns'):
+            fetcher.locked_fetch(lambda: pd.DataFrame())
+        result = fetcher.locked_fetch(lambda: pd.DataFrame(columns=['cal_date']))
+        self.assertEqual(list(result.columns), ['cal_date'])
+
+    def test_timeout_is_failed_and_does_not_continue_missing_update(self):
+        for error in (ReadTimeout('read timed out'), ConnectTimeout('connect timed out'), TimeoutError('timeout')):
+            with self.subTest(error=type(error).__name__), patch.object(Calendar, 'update_with_retries', side_effect=error), patch.object(Calendar, 'update_missing') as missing, patch.object(Calendar, 'logger') as logger:
+                self.assertEqual(Calendar.update(), Base.UpdateFlag.FAILED)
+                missing.assert_not_called()
+                self.assertIn('Download failed (timeout)', logger.error.call_args.args[0])
+                logger.success.assert_not_called()
 
 
 if __name__ == '__main__':
