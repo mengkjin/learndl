@@ -15,7 +15,7 @@ import pandas as pd
 
 from src.proj import CALENDAR, DB, PATH, Logger, Save, Load
 from src.data.loader import DATAVENDOR
-from src.data.util import DataBlock
+from src.data.util import DataBlock, INFO
 from src.data.update.custom.custom_index import MicroCap_400
 from .processors.market import PrePro_market
 
@@ -66,7 +66,12 @@ def check_prices(date):
     required = {"secid", "close", "adjfactor"}
     if day.empty or not required.issubset(day.columns) or day.secid.duplicated().any():
         raise ValueError(f"{date}: missing or malformed daily quotes")
-    raw = day.set_index("secid").close * day.set_index("secid").adjfactor
+    # Match calc_adjprice's listed universe; raw day files can contain names
+    # that the adjusted-price writer intentionally excludes.
+    day = day.loc[day.secid.isin(INFO.get_secid(int(date)))].set_index("secid")
+    if day.empty:
+        raise ValueError(f"{date}: no listed securities in daily quotes")
+    raw = day.close.astype(float) * day.adjfactor.astype(float)
     if not np.isfinite(raw).all() or (raw <= 0).any():
         raise ValueError(f"{date}: nonfinite/nonpositive adjusted close in raw quotes")
     adj = DB.load("trade_ts", "adjprice", date)
@@ -74,9 +79,16 @@ def check_prices(date):
         if not {"secid", "close"}.issubset(adj.columns) or adj.secid.duplicated().any():
             raise ValueError(f"{date}: invalid adjprice schema")
         actual = adj.set_index("secid").close.reindex(raw.index)
-        if not np.allclose(actual, raw, rtol=1e-5, atol=1e-6):
+        mismatch = ~np.isclose(actual, raw, rtol=1e-5, atol=1e-6)
+        if mismatch.any():
+            examples = "; ".join(
+                f"secid={secid}, stored={actual.loc[secid]:.8g}, expected={raw.loc[secid]:.8g}"
+                for secid in raw.index[mismatch][:5]
+            )
             raise ValueError(
-                f"{date}: stale adjprice; rebuild this date from valid daily quotes first"
+                f"{date}: stale adjprice; {int(mismatch.sum())}/{len(raw)} listed quotes differ "
+                f"({int(actual.isna().sum())} missing). {examples}. "
+                "Rebuild this date from valid daily quotes first"
             )
 
 
@@ -208,12 +220,13 @@ def install(replacements, baseline, folder):
         raise
 
 
-def rebuild_microcap(start=20100101, end=None, validate_only=False):
+def rebuild_microcap(start: int | np.integer = 20100101, end=None, validate_only=False):
     from src.automation.artifact_exchange.core import ArtifactSpec
     from src.automation.artifact_exchange.research import register
     from src.proj.util.functional.parallel import serial_execution
 
-    end = CALENDAR.updated() if end is None else int(end)
+    start = int(start)
+    end = int(CALENDAR.updated() if end is None else end)
     if start < MicroCap_400.START_DATE or start > end or end > CALENDAR.updated():
         raise ValueError(
             "Require 20100101 <= start <= end <= latest confirmed trading date"

@@ -135,11 +135,44 @@ class MicrocapRepairTest(unittest.TestCase):
     def test_stale_adjprice_rejected(self):
         day = pd.DataFrame({"secid": [1], "close": [11.0], "adjfactor": [2.0]})
         adj = pd.DataFrame({"secid": [1], "close": [20.0]})
-        with patch.object(repair.DB, "load", side_effect=[day, adj]):
+        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+              patch.object(repair.DB, "load", side_effect=[day, adj])):
             with self.assertRaisesRegex(ValueError, "stale adjprice"):
                 repair.check_prices(20261118)
-        with patch.object(repair.DB, "load", side_effect=[day, adj.assign(close=22.0)]):
+        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+              patch.object(repair.DB, "load", side_effect=[day, adj.assign(close=22.0)])):
             repair.check_prices(20261118)
+
+    def test_price_check_matches_adjusted_price_listed_universe(self):
+        day = pd.DataFrame({"secid": [1, 2], "close": [11.0, 5.0], "adjfactor": [2.0, 1.0]})
+        adj = pd.DataFrame({"secid": [1], "close": [22.0]})
+        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+              patch.object(repair.DB, "load", side_effect=[day, adj])):
+            repair.check_prices(20091231)
+        # A missing *listed* security must still fail, with actionable evidence.
+        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+              patch.object(repair.DB, "load", side_effect=[day, adj])):
+            with self.assertRaisesRegex(ValueError, r"1/2 listed quotes differ.*1 missing.*secid=2"):
+                repair.check_prices(20091231)
+
+    def test_numpy_dates_do_not_mask_original_failure(self):
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            with (patch.object(repair, "PATH", SimpleNamespace(result=root)),
+                  patch.object(repair.CALENDAR, "updated", return_value=np.int64(20261118)),
+                  patch.object(repair.DB, "path", side_effect=ValueError("original price failure")),
+                  patch("src.automation.artifact_exchange.research.register") as register):
+                with self.assertRaisesRegex(ValueError, "original price failure"):
+                    repair.rebuild_microcap(np.int64(20100101))
+            summaries = list(root.rglob("summary.json"))
+            self.assertEqual(len(summaries), 1)
+            report = json.loads(summaries[0].read_text())
+            self.assertEqual(report["status"], "failed")
+            self.assertEqual(report["start"], 20100101)
+            self.assertEqual(report["end"], 20261118)
+            self.assertEqual(report["error"], "ValueError: original price failure")
+            register.assert_called_once()
+            self.assertFalse(list(root.rglob("transaction.json")))
 
     def test_only_market_module_caches_selected(self):
         with tempfile.TemporaryDirectory() as name:
