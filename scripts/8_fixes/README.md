@@ -161,3 +161,56 @@ gaps. A missing result after calculation raises an error and stops dependent wor
 Dry run performs no updates; statistics gaps created by future value writes will only
 appear during the actual run. This repairs missing dates, not stale definitions,
 corrupt files, or missing upstream source data; use scripts 6/7 for semantic rebuilds.
+
+## Microcap 400 historical repair (script 9)
+
+```sh
+# Recompute the complete index history, validate staged outputs, then install.
+.venv/bin/python scripts/8_fixes/9_repair_microcap_400.py
+
+# Perform the same calculations and validation without changing live data.
+.venv/bin/python scripts/8_fixes/9_repair_microcap_400.py --validate-only
+
+# Optional bounded repair; records outside this interval are preserved.
+.venv/bin/python scripts/8_fixes/9_repair_microcap_400.py --start 20261118 --end 20261118
+```
+
+The default return interval is 20100101 through the latest confirmed trading date,
+not the date the bug was committed: historical backfills may also have written zero
+returns. The script retains the existing portfolio timing (return at D uses the
+portfolio at D-1, whose stock selection uses D-2 inputs). It validates holdings,
+weight totals, complete finite security returns, and agreement with the repaired
+production calculation. Genuine zero returns are permitted; missing returns are not.
+
+Run in an idle data-maintenance window, after raw Tushare history has been restored.
+The script shares the `daily_update` script lock, but this does not exclude every
+manual downloader, preprocessing job, or already-running model process. Stop those
+writers/readers before installation. It does not download missing history or repair
+raw prices. Missing daily quotes, incomplete holding returns, or existing AdjPrice
+inconsistent with raw quotes stop the run and identify the date; repair that upstream
+data before rerunning. In particular, rebuild 20261118 AdjPrice if it still contains
+forward-filled whole-market prices from the outage.
+
+All candidates are prepared before installation:
+
+- Full replacement of the selected microcap return dates, preserving other records.
+- Full reconstruction of `market` fit and predict dumps using the candidate index,
+  with the microcap log-return channel and serialized files verified.
+- Invalidation of legacy ModuleData `data.pt` caches whose metadata explicitly
+  includes `market`; other data types, including `factormarket`, are untouched.
+
+`market` is not a HistNormTasks key and has no separate historical norm file to rebuild.
+No model training, checkpoint edits, inference, predictions, trades, or backtest
+recomputation is invoked. Old model results are retained; any process holding market
+inputs in memory must be restarted before later use.
+
+Outputs are under `results/microcap_repair/<run_id>/`. `reports/` contains recomputed
+returns, old/new comparisons, and a summary; only this directory is registered for
+artifact delivery. `staged/` and `backups/` remain local. Output hashes are checked
+before installation. Ordinary installation failures roll back changed files.
+`transaction.json` lists every target and its backup and records installing/complete/
+rolled_back status. A hard kill or power loss during installation cannot execute
+rollback: keep other jobs stopped, restore the listed targets from backups (remove
+new targets marked `existed: false`), and rerun. Do not mistake an `installing` journal
+for a completed repair. The whole history is recomputed on a rerun; there is no
+per-date resume shortcut that could reuse stale source inputs.
