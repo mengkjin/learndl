@@ -155,6 +155,29 @@ class MicrocapRepairTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, r"1/2 listed quotes differ.*1 missing.*secid=2"):
                 repair.check_prices(20091231)
 
+    def test_missing_adjfactor_matches_production_with_and_without_adjprice(self):
+        day = pd.DataFrame({"secid": [1, 2], "close": [11.0, 5.0], "adjfactor": [np.nan, 2.0]})
+        valid = pd.DataFrame({"secid": [1, 2], "close": [11.0, 10.0]})
+        for adj in (valid, pd.DataFrame()):
+            with (self.subTest(adjprice_present=not adj.empty),
+                  patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+                  patch.object(repair.DB, "load", side_effect=[day, adj])):
+                repair.check_prices(20041231)
+        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+              patch.object(repair.DB, "load", side_effect=[day, valid.assign(close=[12., 10.])])):
+            with self.assertRaisesRegex(ValueError, "stale adjprice.*secid=1"):
+                repair.check_prices(20041231)
+
+    def test_invalid_raw_fields_still_fail_with_security_evidence(self):
+        for close, factor in ((np.nan, 1.), (0., 1.), (-1., 1.), (np.inf, 1.),
+                              (10., 0.), (10., -1.), (10., np.inf), (-10., -1.)):
+            day = pd.DataFrame({"secid": [123], "close": [close], "adjfactor": [factor]})
+            with (self.subTest(close=close, factor=factor),
+                  patch.object(repair.INFO, "get_secid", return_value=np.array([123])),
+                  patch.object(repair.DB, "load", return_value=day)):
+                with self.assertRaisesRegex(ValueError, r"20041231:.*1/1 listed quotes invalid.*secid=123, close=.*adjfactor="):
+                    repair.check_prices(20041231)
+
     def test_numpy_dates_do_not_mask_original_failure(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

@@ -71,9 +71,23 @@ def check_prices(date):
     day = day.loc[day.secid.isin(INFO.get_secid(int(date)))].set_index("secid")
     if day.empty:
         raise ValueError(f"{date}: no listed securities in daily quotes")
-    raw = day.close.astype(float) * day.adjfactor.astype(float)
-    if not np.isfinite(raw).all() or (raw <= 0).any():
-        raise ValueError(f"{date}: nonfinite/nonpositive adjusted close in raw quotes")
+    close = day.close.astype(float)
+    # Both calc_adjprice and the raw-quote return fallback use 1 for a missing
+    # adjustment factor. Validate against that same production convention.
+    factor = day.adjfactor.astype(float).fillna(1.0)
+    raw = close * factor
+    invalid = (~np.isfinite(close) | (close <= 0) |
+               ~np.isfinite(factor) | (factor <= 0) | ~np.isfinite(raw) | (raw <= 0))
+    if invalid.any():
+        examples = "; ".join(
+            f"secid={secid}, close={close.loc[secid]:.8g}, "
+            f"adjfactor={day.adjfactor.loc[secid]}, effective_adjfactor={factor.loc[secid]:.8g}"
+            for secid in day.index[invalid][:5]
+        )
+        raise ValueError(
+            f"{date}: nonfinite/nonpositive adjusted close in raw quotes; "
+            f"{int(invalid.sum())}/{len(day)} listed quotes invalid. {examples}"
+        )
     adj = DB.load("trade_ts", "adjprice", date)
     if not adj.empty:
         if not {"secid", "close"}.issubset(adj.columns) or adj.secid.duplicated().any():
