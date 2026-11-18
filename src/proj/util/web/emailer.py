@@ -19,7 +19,7 @@ from typing import Any , Literal , TypeAlias
 import portalocker
 
 from src.proj.env import MACHINE , PATH , Proj
-from src.proj.env.variable.files import EmailAttachment
+from src.proj.env.variable.files import EmailAttachment, validate_attachment_filename
 from src.proj.core import strPath
 from src.proj.bases import BoundLogger , NoInstance
 
@@ -122,16 +122,24 @@ class Email(BoundLogger, metaclass=NoInstance):
 
         body_text = body if body is not None else ''
         for item in attachment_items:
-            path , filename = _resolve_attachment(item)
-            if not path.exists():
-                body_text += f'\nAttachment not found: {path}'
-            else:
-                with open(path, 'rb') as attach_file:
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(attach_file.read())
-                    encoders.encode_base64(part)
-                    part.add_header('Content-Disposition' , 'attachment' , filename = filename)
-                    message.attach(part)
+            try:
+                path , filename = _resolve_attachment(item)
+                validate_attachment_filename(filename)
+                if not path.is_file():
+                    raise ValueError(f'not a regular file or missing: {path}')
+                # Reading can still fail after is_file (permissions, deletion, IO).
+                with path.open('rb') as attach_file:
+                    payload = attach_file.read()
+                part = MIMEBase('application', 'octet-stream')
+                part.set_payload(payload)
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition' , 'attachment' , filename = filename)
+            except (OSError, TypeError, ValueError) as error:
+                warning = f'Attachment skipped: {item!s} ({type(error).__name__}: {error})'
+                cls.logger.warning(warning, vb_level=0)
+                body_text += f'\nWarning: {warning}'
+                continue
+            message.attach(part)
         message.attach(MIMEText(body_text , 'plain' , 'utf-8'))
         return message
 
