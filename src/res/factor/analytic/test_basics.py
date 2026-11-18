@@ -200,13 +200,18 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
             return self.resume_path.joinpath(f'factor_stats')
 
     @classmethod
+    def required_group_stats(cls) -> list[dict[str, Any]] | None:
+        """Exact group cache entries needed by this test's default resume path."""
+        return None
+
+    @classmethod
     def factor_stats_saved_dates(cls , test_path : Base.strPath | None = None) -> np.ndarray:
         if test_path is None:
             return np.array([] , dtype=int)
         else:
             from src.res.factor.util.classes.stock_factor import CacheFactorStats
             stats_path = Path(test_path) / _camel_to_snake(cls.__name__) / 'factor_stats'
-            return CacheFactorStats.saved_dates(stats_path)
+            return CacheFactorStats.saved_dates(stats_path, required_group_params=cls.required_group_stats())
 
     def get_rslts(self) -> dict[str, pd.DataFrame]:
         return {k:v.calc_rslt for k,v in self.tasks.items()}

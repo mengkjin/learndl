@@ -282,6 +282,25 @@ class FactorPerfTest(BaseFactorAnalyticTest):
         # Distrib_Qtile ,
     ]
 
+    @classmethod
+    def required_group_stats(cls) -> list[dict[str, Any]]:
+        """Derive resume requirements from the same calculators and benchmarks."""
+        from src.res.factor.util.classes.stock_factor import FactorStats
+        required = []
+        for task_type in cls.TASK_LIST:
+            if task_type not in (IC_Monotony, Group_Return, Group_Percentile):
+                continue
+            task = task_type()
+            params = task.params
+            for benchmark in task.use_benchmarks():
+                required.append(FactorStats.group_perf_params(
+                    benchmark, nday=params['nday'],
+                    lag=params['lag_init'] if task_type is IC_Monotony else params['lag'],
+                    group_num=params.get('group_num', 100),
+                    excess=task_type is not Group_Percentile,
+                    ret_type=params['ret_type'], as_rank=task_type is Group_Percentile))
+        return required
+
     def calc(self , factor : StockFactor , benchmarks: list[BenchAny] | BenchAny = None , **kwargs):
         factor = factor.filter_dates_between(self.start , self.end)
         if Const.Model.resume_factor_perf:

@@ -378,6 +378,16 @@ class FactorStats:
     def param_to_str(params : dict[str,Any]) -> str:
         return '.'.join([f'{k}={v}' for k , v in params.items()])
 
+    @staticmethod
+    def group_perf_params(benchmark, nday=10, lag=2, group_num=10,
+                          excess=False, ret_type='close', as_rank=False) -> dict[str, Any]:
+        """Use one cache identity for evaluation and resume coverage checks."""
+        params = {'bm': str(benchmark), 'n': nday, 'lag': lag, 'gp': group_num,
+                  'exc': excess, 'ret': ret_type, 'grouping_version': GROUPING_VERSION}
+        if as_rank:
+            params['rank'] = True
+        return params
+
     @classmethod
     def match_params(cls , params1 : dict[str,Any] , params2 : dict[str,Any]) -> bool:
         return cls.param_to_str(params1) == cls.param_to_str(params2)
@@ -474,28 +484,30 @@ class CacheFactorStats:
 
     @classmethod
     def saved_dates(cls , path : Base.strPath , subsets : list[str] = ['ic' , 'ic_indus' , 'group_perf'] , 
-                    exclude_csi2000 : bool = True) -> np.ndarray:
+                    exclude_csi2000 : bool = True,
+                    required_group_params : list[dict[str, Any]] | None = None) -> np.ndarray:
         path = Path(path)
         if not path.exists():
             return np.array([] , dtype=int)
         assert path.is_dir() , f'path {path} is not a directory'
         dates : list[np.ndarray] = []
-        has_group_perf = False
-        has_group_perf_rank = False
         for name in subsets:
-            for file in path.joinpath(name).glob('*.feather'):
-                if exclude_csi2000 and 'bm=csi2000' in file.stem:
-                    continue
-                if name == 'group_perf':
-                    has_group_perf = True
-                    if 'rank=True' in file.stem:
-                        has_group_perf_rank = True
-                dates.append(FactorStats.stat_dates(Load.df(file)))
-        # Group_Percentile uses a separate group_perf key (rank=True). If only the
-        # older excess-return cache exists, treat coverage as incomplete so resume
-        # reloads the full factor history instead of the last date only.
-        if has_group_perf and not has_group_perf_rank:
-            return np.array([] , dtype=int)
+            files = list(path.joinpath(name).glob('*.feather'))
+            if name == 'group_perf':
+                if required_group_params is not None:
+                    files = [path / name / f'{FactorStats.param_to_str(params)}.feather'
+                             for params in required_group_params]
+                else:
+                    # Unversioned and previous-version caches cannot prove coverage.
+                    files = [file for file in files
+                             if f'grouping_version={GROUPING_VERSION}' in file.stem.split('.')]
+                    if not any('rank=True' in file.stem.split('.') for file in files):
+                        return np.array([], dtype=int)
+            files = [file for file in files
+                     if not (exclude_csi2000 and 'bm=csi2000' in file.stem.split('.'))]
+            if not files or any(not file.exists() for file in files):
+                return np.array([], dtype=int)
+            dates.extend(FactorStats.stat_dates(Load.df(file)) for file in files)
         return common_elements(dates)
 
     @property
@@ -1101,9 +1113,8 @@ class StockFactor:
         """
         evaluate the group performance of the factor
         """
-        params = {'bm' : str(self.benchmark) , 'n' : nday , 'lag' : lag , 'gp' : group_num , 'exc' : excess , 'ret' : ret_type, 'grouping_version': GROUPING_VERSION}
-        if as_rank:
-            params['rank'] = True
+        params = FactorStats.group_perf_params(
+            self.benchmark, nday, lag, group_num, excess, ret_type, as_rank)
         needed = self.cache_factor_stats.group_perf.dates_not_in_stat(params , self.date) if use_cache else self.date
         # pseudo_date can outrun loaded data (resume only keeps the last date);
         # never request group stats for dates that are not actually in the frame.
