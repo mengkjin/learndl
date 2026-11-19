@@ -116,7 +116,7 @@ class WorklistState:
         """
         if not isinstance(request_id, str) or not request_id:
             raise ValueError('A nonempty training request ID is required')
-        from .worklists import load
+        from src.res.model.workflow.worklists import load
         worklist, _, _ = load()
         if not allow_unlisted and self.schedule_name not in self.entries(worklist):
             raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
@@ -156,7 +156,7 @@ class WorklistState:
         path = ScheduleConfig.find_path(name=schedule_name)
         if path is None:
             raise FileNotFoundError(f'Schedule config missing: {schedule_name}')
-        from .worklists import load, revision_for
+        from src.res.model.workflow.worklists import load, revision_for
         if worklist is None:
             worklist, _, _ = load()
         revisions = {'worklist': revision_for(worklist, schedule_name), 'schedule': file_revision(path)}

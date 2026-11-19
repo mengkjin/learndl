@@ -6,6 +6,7 @@ __all__ = [
     'analyze_bundle',
     'bundle_attachments',
     'send_bundle',
+    'handoff_result',
 ]
 
 import hashlib
@@ -233,3 +234,11 @@ def send_bundle(
         delivery = {"run_id": definition["run_id"], "recipient": recipient, "parts": states}
         delivery_path.write_text(json.dumps(delivery, ensure_ascii=False, indent=2), encoding="utf-8")
     return json.loads(delivery_path.read_text(encoding="utf-8"))
+
+
+def handoff_result(metadata, folder, category, status='success'):
+    """Describe RL attachments to the generic delivery service."""
+    from src.automation.artifact_exchange.research import handoff_bundle
+    return handoff_bundle(metadata, folder, category, status,
+                          attachment_paths=lambda: [Path(metadata), *_parts(Path(metadata))[1]],
+                          replacement_attachments=lambda: bundle_attachments(metadata))

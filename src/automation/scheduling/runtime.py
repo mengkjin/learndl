@@ -287,7 +287,7 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
         return
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
-        from src.api.calls.worklist_state import WorklistState
+        from src.res.model.workflow.worklist_state import WorklistState
         state = WorklistState(run['task']).read() if run.get('task_kind') not in {'rl_experiment', 'nn_metrics_ab', 'factor_sequence'} else None
         if state and state.get('revisions') == run.get('revisions'):
             run['completion'] = state

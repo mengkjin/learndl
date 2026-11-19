@@ -12,7 +12,7 @@ import yaml
 
 from src.proj import PATH
 from src.api.calls.research import CarryOutScheduleWorkList
-from src.api.calls.worklist_state import AutomaticDeferred, WorklistState
+from src.res.model.workflow.worklist_state import AutomaticDeferred, WorklistState
 from src.automation.scheduling import idle_worklist as idle
 from src.res.model.util.config.config import ScheduleConfig
 
@@ -58,12 +58,12 @@ class WorklistExecutionTest(TestCase):
         self.schedule.write_text('model.module: gru\n')
         self.enterContext(patch.object(PATH, 'lc_machine', self.root))
         self.enterContext(patch.object(PATH, 'sched_worklists', self.worklist.parent))
-        self.enterContext(patch('src.api.calls.worklists.git_time', return_value=1))
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time', return_value=1))
         self.enterContext(patch('src.res.model.util.training_history.git', return_value=None))
         self.enterContext(patch.object(ScheduleConfig, 'find_path', return_value=self.schedule))
         self.enterContext(patch.object(ScheduleConfig, 'check_name_exist', return_value=True))
-        self.enterContext(patch('src.api.calls.research.MACHINE', SimpleNamespace(platform_server=True)))
-        self.enterContext(patch('src.api.calls.research.as_script_main', side_effect=lambda *_: nullcontext()))
+        self.enterContext(patch('src.res.model.workflow.execution.MACHINE', SimpleNamespace(platform_server=True)))
+        self.enterContext(patch('src.res.model.workflow.execution.as_script_main', side_effect=lambda *_: nullcontext()))
         self.enterContext(patch.object(CarryOutScheduleWorkList, '_release_gpu_memory'))
         self.enterContext(patch('src.res.model.util.training_history.collect_training_runs', self.collect))
         self.main = Mock(side_effect=self.train)

@@ -15,7 +15,7 @@ import psutil
 import torch
 
 from src.api.calls.research import CarryOutScheduleWorkList
-from src.api.calls.worklist_state import WorklistState
+from src.res.model.workflow.worklist_state import WorklistState
 from src.proj import PATH
 from src.res.model.util import training_history as history
 from src.res.model.util.config import ModelConfig
@@ -101,12 +101,12 @@ class WorklistTest(unittest.TestCase):
         self.folder.mkdir()
         self.enterContext(patch.object(PATH, 'lc_machine', self.root))
         self.enterContext(patch.object(PATH, 'sched_worklists', self.worklist.parent))
-        self.enterContext(patch('src.api.calls.worklists.git_time', return_value=1))
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time', return_value=1))
         self.enterContext(patch.object(history, 'git', return_value=None))
         self.enterContext(patch('src.res.model.util.config.config.ScheduleConfig.find_path', return_value=self.schedule))
         self.enterContext(patch('src.res.model.util.config.config.ScheduleConfig.check_name_exist', return_value=True))
-        self.enterContext(patch('src.api.calls.research.MACHINE', SimpleNamespace(platform_server=True)))
-        self.enterContext(patch('src.api.calls.research.as_script_main', side_effect=lambda *_: nullcontext()))
+        self.enterContext(patch('src.res.model.workflow.execution.MACHINE', SimpleNamespace(platform_server=True)))
+        self.enterContext(patch('src.res.model.workflow.execution.as_script_main', side_effect=lambda *_: nullcontext()))
         self.enterContext(patch.object(history.Save, 'async_wait_all'))
         self.main = Mock(side_effect=self.train)
         self.enterContext(patch.object(CarryOutScheduleWorkList, '_load_schedule_main', return_value=self.main))
@@ -154,7 +154,7 @@ class WorklistTest(unittest.TestCase):
         self.assertNotIn('base_path', self.main.call_args.kwargs)
 
     def test_automatic_runs_one_schedule_and_force_only_once(self):
-        from src.api.calls.worklist_state import AutomaticDeferred
+        from src.res.model.workflow.worklist_state import AutomaticDeferred
         from src.automation.scheduling.idle_worklist import version
         self.worklist.write_text('fit: [example, second]\nresume: false\nforce: true\n')
         expected = version(self.state.revisions('example'))

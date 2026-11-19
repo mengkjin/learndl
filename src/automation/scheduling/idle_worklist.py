@@ -96,8 +96,8 @@ def idle_reason(options: dict) -> str | None:
 def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
     """Validate every name and durably report missing configs, even while busy."""
     from src.proj import MACHINE, PATH
-    from src.api.calls.worklist_state import WorklistState
-    from src.api.calls.worklists import load, revision_for
+    from src.res.model.workflow.worklist_state import WorklistState
+    from src.res.model.workflow.worklists import load, revision_for
     worklist, _, errors = load(automatic=True)
     for error in errors:
         key = version({'error': error})
@@ -139,7 +139,7 @@ def candidate(store: RunStore, *, only: str | None = None, options: dict | None 
 
 def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None,
                options: dict | None = None) -> dict | None:
-    from src.api.calls.worklist_state import WorklistState
+    from src.res.model.workflow.worklist_state import WorklistState
     from .recovery import recovery_plan, record
     options = settings() if options is None else options
     attempts = store.owned(OWNER)
@@ -368,12 +368,12 @@ def child(run_id: str) -> int:
         except BaseException as exc:
             record(store, run_id, script_outcome='error', error=f'{type(exc).__name__}: {exc}')
             raise
-    from src.api.calls.research import CarryOutScheduleWorkList
-    from src.api.calls.worklist_state import AutomaticDeferred
+    from src.res.model.workflow.execution import ScheduleWorklist
+    from src.res.model.workflow.worklist_state import AutomaticDeferred
     from .recovery import record
-    sys.argv = [str(CarryOutScheduleWorkList.SCHEDULE_SCRIPT)]
+    sys.argv = [str(ScheduleWorklist.SCHEDULE_SCRIPT)]
     try:
-        CarryOutScheduleWorkList(only_schedule=request['task'], automatic=True,
+        ScheduleWorklist(only_schedule=request['task'], automatic=True,
                                  expected_version=request['version'],
                                  recovery_run_id=run_id if request.get('parent_run_id') else None).run()
     except AutomaticDeferred:
@@ -392,7 +392,7 @@ def reset_worklist(store: RunStore | None = None) -> str:
     Refuse queued/active automatic work or a locked worklist schedule.
     """
     from src.proj import PATH
-    from src.api.calls.worklist_state import WorklistState
+    from src.res.model.workflow.worklist_state import WorklistState
     from src.res.model.util.training_history import now, write_json
     store = store or RunStore()
     with queue_lock(), ExitStack() as locks:
@@ -429,9 +429,9 @@ def main() -> int:
     parser.add_argument('schedule_or_run', nargs='?')
     args = parser.parse_args()
     if args.command == 'worklist-status':
-        from src.api.calls.worklists import load
+        from src.res.model.workflow.worklists import load
         from src.proj import Logger
-        from src.api.calls.worklist_state import WorklistState
+        from src.res.model.workflow.worklist_state import WorklistState
         worklist, docs, errors = load(automatic=True)
         files = []
         for doc in docs:

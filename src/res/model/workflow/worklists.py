@@ -15,7 +15,7 @@ def git_time(path):
 
 def load(*, automatic=False):
     import yaml
-    from .worklist_state import WorklistState
+    from src.res.model.workflow.worklist_state import WorklistState
     docs, errors, sources = [], [], {}
     for path in PATH.sched_worklists.glob('*.yaml'):
         if path.name.startswith('.'):

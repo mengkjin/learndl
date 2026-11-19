@@ -3,8 +3,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from src.proj import PATH
-from src.api.calls.worklists import load, revision_for
-from src.api.calls.worklist_state import WorklistState
+from src.res.model.workflow.worklists import load, revision_for
+from src.res.model.workflow.worklist_state import WorklistState
 
 
 class WorklistsTest(unittest.TestCase):
@@ -15,7 +15,7 @@ class WorklistsTest(unittest.TestCase):
         self.enterContext(patch.object(PATH, 'sched_worklists', self.root))
         self.enterContext(patch('src.res.model.util.training_history.git', return_value='commit'))
         self.times = {}
-        self.enterContext(patch('src.api.calls.worklists.git_time', side_effect=lambda p: self.times.get(p.name)))
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time', side_effect=lambda p: self.times.get(p.name)))
 
     def write(self, name, body, timestamp):
         (self.root / name).write_text(body)

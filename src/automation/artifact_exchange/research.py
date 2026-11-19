@@ -1,6 +1,7 @@
 """Explicit research result adapters. Failed delivery never masks research outcomes."""
 from __future__ import annotations
 import contextvars
+from collections.abc import Callable, Iterable
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -260,7 +261,9 @@ def notice(records):
     return text + '; published means local shared-folder handoff, not confirmed remote archival.'
 
 
-def handoff_bundle(metadata, folder, category, status='success'):
+def handoff_bundle(metadata, folder, category, status='success', *,
+                   attachment_paths: Iterable[str | Path] | Callable[[], Iterable[str | Path]] = (),
+                   replacement_attachments: Callable[[], Iterable[str | Path]] | None = None):
     try:
         records = publish_analysis(folder, category, status)
         def finish():
@@ -271,9 +274,8 @@ def handoff_bundle(metadata, folder, category, status='success'):
             atomic_json(Path(metadata).with_suffix('.artifacts.json'), {'records': records, 'logs': logs})
             if CURRENT_TASK.get() is not None:
                 from src.proj import Proj
-                from src.res.rl_experimental.bundle import _parts, bundle_attachments
-                _, parts = _parts(Path(metadata))
-                old = {p.resolve() for p in [Path(metadata), *parts]}
+                described = attachment_paths() if callable(attachment_paths) else attachment_paths
+                old = {Path(p).resolve() for p in described}
                 for files in (Proj.email_attachments, Proj.exit_files):
                     original = files.pop_all()
                     matched = any(Path(p).resolve() in old for p in original)
@@ -281,7 +283,7 @@ def handoff_bundle(metadata, folder, category, status='success'):
                         if Path(p).resolve() not in old:
                             files.append(p.path, filename=p.filename)
                     if matched:
-                        for p in bundle_attachments(metadata):
+                        for p in (replacement_attachments() if replacement_attachments else []):
                             files.append(p)
         queue = task_delivery()
         if queue is not None and not queue.flushing:

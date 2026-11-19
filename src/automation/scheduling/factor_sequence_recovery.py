@@ -43,7 +43,7 @@ def recover(run_id, resume_from, module):
     from .config import runtime_dir
     from .factor_sequence_progress import collect
     from src.data.preprocess.factor_sequence.bundle import write_json
-    from src.data.preprocess.factor_sequence.server_suite import send_result
+    from src.res.model.experiment.factor_sequence.server_suite import send_result
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
     diagnostic = PATH.result/'factor_sequence_diagnostics'/run_id/'host'
     diagnostic.mkdir(parents=True,exist_ok=True)
