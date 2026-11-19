@@ -156,6 +156,28 @@ def verify(ctx):
         self.assertIn('manual retry', self.apply()['reason'])
         self.assertEqual(self.notify.call_args.args[0]['status'], 'interrupted')
 
+    def test_version_local_support_is_verified_and_is_not_an_entrypoint(self):
+        self.release('0.7.2')
+        support = self.patch_file('0.7.2', 'support/helper', 'VALUE = "verified"\n')
+        self.patch_file('0.7.2', '001_use_support', """
+from src.automation.version_autofix import load_patch_support
+
+def apply(ctx):
+    helper = load_patch_support('0.7.2', 'helper', root=ctx.root)
+    (ctx.root / 'proof.txt').write_text(helper.VALUE)
+
+def verify(ctx):
+    return (ctx.root / 'proof.txt').read_text() == 'verified'
+""")
+        self.commit()
+        support.write_text('VALUE = "modified"\n')
+        with self.assertRaisesRegex(version.MigrationError, 'Patch input differs from committed source'):
+            self.apply()
+        self.assertFalse((self.root / 'proof.txt').exists())
+        support.write_text('VALUE = "verified"\n')
+        self.assertEqual(self.apply()['patches'], ['0.7.2/001'])
+        self.assertEqual((self.root / 'proof.txt').read_text(), 'verified')
+
     def test_committed_patch_hidden_by_working_tree_deletion_is_not_skipped(self):
         self.release('0.7.2')
         path = self.patch_file('0.7.2', '001_test', 'def apply(ctx): pass\ndef verify(ctx): return True\n')

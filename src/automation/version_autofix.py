@@ -8,6 +8,7 @@ from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass
 import fcntl
 import hashlib
+from importlib.util import module_from_spec, spec_from_file_location
 import json
 import os
 from pathlib import Path
@@ -36,6 +37,7 @@ __all__ = [
     'apply_pending',
     'code_lease',
     'initialize',
+    'load_patch_support',
     'main',
     'needs_migration',
     'status',
@@ -302,6 +304,47 @@ def git(root: Path, *args: str) -> bytes:
                                    env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'))
 
 
+def _support_paths(folder: Path) -> list[Path]:
+    directory = folder / 'support'
+    if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+        raise MigrationError(f'Expected a regular patch support directory: {directory}')
+    paths = sorted(directory.glob('*.py'))
+    for path in paths:
+        if not path.stem.isidentifier() or path.is_symlink() or not path.is_file():
+            raise MigrationError(f'Invalid patch support file: {path}')
+    return paths
+
+
+def load_patch_support(version: str, name: str, *, root: Path = ROOT) -> types.ModuleType:
+    """Load a version-local helper on demand, outside normal application code."""
+    version_key(version)
+    if not name.isidentifier():
+        raise MigrationError(f'Invalid patch support name: {name!r}')
+    folder = root / PATCH_DIRECTORY / version
+    if any(path.is_symlink() for path in (folder, folder.parent, folder.parent.parent)):
+        raise MigrationError(f'Expected a regular version directory: {folder}')
+    path = folder / 'support' / f'{name}.py'
+    if path not in _support_paths(folder):
+        raise MigrationError(f'Missing patch support file: {path}')
+
+    key = f'_learndl_patch_{version.replace(".", "_")}_{name}'
+    current = sys.modules.get(key)
+    if current is not None and getattr(current, '__file__', None) == str(path):
+        return current
+    spec = spec_from_file_location(key, path)
+    if spec is None:
+        raise MigrationError(f'Cannot load patch support file: {path}')
+    module = module_from_spec(spec)
+    sys.modules[key] = module
+    try:
+        # Use the verified source, even if an older checkout left a bytecode cache.
+        exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    except BaseException:
+        sys.modules.pop(key, None)
+        raise
+    return module
+
+
 def committed_catalog(root: Path, commit: str, target: str) -> None:
     """Do not advance over a patch hidden by a working tree deletion."""
     entries = git(root, 'ls-tree', '-rz', commit, '--', VERSION_FILE, PATCH_DIRECTORY)
@@ -315,9 +358,10 @@ def committed_catalog(root: Path, commit: str, target: str) -> None:
         relative = Path(name)
         if name != VERSION_FILE:
             parts = relative.parts
-            if (len(parts) != 4 or not VERSION.fullmatch(parts[2])
-                    or version_key(parts[2]) > version_key(target)
-                    or not (relative.suffix == '.py' or relative.name == 'timeouts.json')):
+            entrypoint = len(parts) == 4 and (relative.suffix == '.py' or relative.name == 'timeouts.json')
+            support = len(parts) == 5 and parts[3] == 'support' and relative.suffix == '.py'
+            if (not (entrypoint or support) or not VERSION.fullmatch(parts[2])
+                    or version_key(parts[2]) > version_key(target)):
                 continue
         if not info.startswith((b'100644 blob ', b'100755 blob ')) or (root / name).is_symlink():
             raise MigrationError(f'Expected a regular committed file: {name}')
@@ -328,9 +372,13 @@ def committed_catalog(root: Path, commit: str, target: str) -> None:
         expected.add(patch.relative_path)
     base = root / PATCH_DIRECTORY
     if base.is_dir():
-        for manifest in base.glob('*/timeouts.json'):
-            if VERSION.fullmatch(manifest.parent.name) and version_key(manifest.parent.name) <= version_key(target):
+        for folder in base.iterdir():
+            if not VERSION.fullmatch(folder.name) or version_key(folder.name) > version_key(target):
+                continue
+            manifest = folder / 'timeouts.json'
+            if manifest.exists():
                 expected.add(manifest.relative_to(root).as_posix())
+            expected.update(path.relative_to(root).as_posix() for path in _support_paths(folder))
     if tracked != expected:
         raise MigrationError('The migration catalog differs from the committed checkout')
 

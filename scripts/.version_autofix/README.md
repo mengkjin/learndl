@@ -29,8 +29,11 @@ Each script defines `apply(ctx)` and `verify(ctx)`. The context has
 attempt. Include the usual script metadata header. The migration runner owns
 locking, logging, and failure mail for these callbacks. Use the project logger
 for diagnostics. Avoid logging secrets.
-Keep scripts self-contained. Run any subprocesses synchronously in the patch
-process group. Detached processes are outside the migration contract.
+Keep code used only for one release beside its patches. Use
+`<version>/support/<name>.py` for helpers shared with a preflight command or
+migration test. The runner checks these helpers against the committed checkout
+without treating them as patch entrypoints. Run subprocesses synchronously in
+the patch process group. Detached processes are outside the migration contract.
 
 Use atomic replacement for small config files. For directory moves on the same
 filesystem, validate both paths and use rename instead of copying a large
