@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, nullcontext
+from functools import partial
 from pathlib import Path
 import json
 import os
@@ -14,7 +15,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from src.automation import version_patch as version
-from src.automation.scheduling import channels, git_update, priority
+from src.automation.scheduling import autofix, calendar_lanes, channels, git_update, priority, runner
 from src.automation.scheduling.autofix_store import Store, initialize
 from src.automation.scheduling import worker_bootstrap
 from src.automation.scheduling import idle_worklist as idle
@@ -347,7 +348,7 @@ def verify(ctx):
         request = dict(id='queued-model', task='model', version='model-v1', owner=idle.OWNER, phase='queued')
         store.put(request)
         self.enterContext(patch.object(idle, 'runtime_dir', return_value=self.scheduling))
-        self.enterContext(patch.object(idle, 'ROOT', self.root))
+        self.enterContext(patch.object(version, 'business_lease', partial(version.business_lease, root=self.root)))
         self.enterContext(patch.object(idle, 'RunStore', return_value=store))
         self.enterContext(patch.object(ScriptLock, 'LOCK_DIR', self.scheduling / 'script_lock'))
         self.enterContext(patch.object(idle, 'installed_config', return_value={'watchdog': {'jobs': {
@@ -393,6 +394,112 @@ def verify(ctx):
             store.assert_not_called()
         self.assertFalse(version.ledger_path(self.runtime).exists())
 
+    def test_calendar_and_autofix_wait_for_verified_data(self):
+        controls = self.control()
+        runs = RunStore(self.scheduling / 'runs.sqlite')
+        tasks = {'daily_update': 'data', 'weekly_update': 'data', 'rcquant_sec_backfill': 'independent'}
+        config = {'timezone': 'UTC', 'tasks': {name: {'enabled': True, 'lock_group': name, 'channel': group}
+                                              for name, group in tasks.items()}}
+        self.enterContext(patch.object(version, 'business_lease', partial(version.business_lease, root=self.root)))
+        for module in (calendar_lanes, autofix, runner):
+            self.enterContext(patch.object(module, 'runtime_dir', return_value=self.scheduling))
+        for module in (calendar_lanes, autofix):
+            self.enterContext(patch.object(module, 'state_dir', return_value=controls.directory))
+        self.enterContext(patch.object(calendar_lanes, 'require_installed_config', return_value=config))
+        self.enterContext(patch.object(calendar_lanes, 'RunStore', return_value=runs))
+        self.enterContext(patch.object(channels, 'enabled', return_value=True))
+        self.enterContext(patch('src.automation.scheduling.maintenance_gate.configured', return_value=True))
+        self.enterContext(patch('src.automation.scheduling.maintenance_gate.permit', return_value=nullcontext()))
+        self.enterContext(patch('src.automation.scheduling.runtime.process_cgroup', return_value='/learndl-autofix.service'))
+        self.enterContext(patch.object(runner, 'installed_config', return_value=None))
+        launch = self.enterContext(patch.object(runner, '_run', return_value=0))
+        controls.register([{'id': 'test-repair', 'script': 'scripts/test.py'}], 'fixture')
+        self.enterContext(patch.object(autofix, 'discover', return_value=True))
+        repair = self.enterContext(patch.object(autofix, 'execute',
+                                  side_effect=lambda store, root, row: store.update(row['id'], phase='success')))
+        legacy_script = self.enterContext(patch.object(runner.subprocess, 'call', return_value=0))
+
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_check', "def apply(ctx): pass\ndef verify(ctx): return (ctx.root.parent / 'valid').exists()")
+        self.commit()
+        with version.code_lease(self.scheduling), patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '123'}):
+            for task in tasks:
+                runner.run(task)
+        queued = controls.scheduled()
+        self.assertEqual(len(queued), 3)
+
+        def try_workers():
+            for task in tasks:
+                self.assertEqual(calendar_lanes.worker(task), 0)
+            with patch.object(sys, 'platform', 'linux'):
+                self.assertEqual(autofix.worker(), 0)
+
+        def assert_waiting():
+            try_workers()
+            runner.run_deferred(controls)
+            self.assertEqual(runner.legacy('daily_update', []), 75)
+            self.assertEqual(controls.scheduled(), queued)
+            launch.assert_not_called()
+            repair.assert_not_called()
+            legacy_script.assert_not_called()
+
+        assert_waiting()
+        with version.code_lease(self.scheduling):
+            assert_waiting()
+        self.assertEqual(self.apply()['status'], 'blocked')
+        assert_waiting()
+        (self.root.parent / 'valid').touch()
+        self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
+        try_workers()
+        self.assertEqual([call.args[0] for call in launch.call_args_list], list(tasks))
+        self.assertEqual(controls.scheduled(), [])
+        repair.assert_called_once()
+        self.assertEqual(runner.legacy('daily_update', []), 0)
+        legacy_script.assert_called_once()
+
+    def test_calendar_script_holds_patch_lock_across_exec_after_runner_exits(self):
+        from src.proj.util.script.script_lock import ScriptLockMultiple
+
+        script = self.write('fixture.py', """
+from pathlib import Path
+import sys
+
+Path(__file__).with_suffix('.ready').touch()
+sys.stdin.buffer.read()
+""")
+        config = {'tasks': {'daily_update': {'enabled': True, 'entrypoint': 'daily_update', 'args': [],
+                                             'lock_group': 'daily_update', 'overlap': 'skip', 'timeout_seconds': 60}}}
+        store = RunStore(self.scheduling / 'runs.sqlite')
+        self.enterContext(patch.object(runner, 'RunStore', return_value=store))
+        self.enterContext(patch.dict(runner.ENTRYPOINTS, daily_update=str(script)))
+        self.enterContext(patch.object(ScriptLockMultiple, 'LOCK_DIR', self.scheduling / 'script-locks'))
+        popen = subprocess.Popen
+        children = []
+
+        def start_child(command, **kwargs):
+            child = popen(command, **kwargs, stdin=subprocess.PIPE)
+            children.append(child)
+            return Mock(pid=child.pid, wait=Mock(side_effect=SystemExit))
+
+        try:
+            with (self.assertRaises(SystemExit),
+                  version.business_lease(self.scheduling, root=self.root) as fd,
+                  patch.object(runner.subprocess, 'Popen', side_effect=start_child)):
+                runner._run('daily_update', code_fd=fd, config_snapshot=config)
+            child, = children
+            deadline = time.monotonic() + 10
+            while not script.with_suffix('.ready').exists():
+                self.assertIsNone(child.poll())
+                self.assertLess(time.monotonic(), deadline, 'calendar script did not start')
+                time.sleep(.02)
+            with self.assertRaises(version.CodeBusy), version.code_lease(self.scheduling):
+                self.fail('Patch entered while calendar script was alive')
+        finally:
+            for child in children:
+                child.communicate(timeout=10)
+        with version.code_lease(self.scheduling):
+            self.assertEqual(children[0].returncode, 0)
+
     def test_auto_update_defers_patch_to_checkout_verification(self):
         self.apply()
         store = self.control()
@@ -429,6 +536,13 @@ def verify(ctx):
               patch.object(worker_bootstrap.runpy, 'run_module') as load):
             worker_bootstrap.main()
             load.assert_not_called()
+            with patch.object(sys, 'argv', ['bootstrap', 'watchdog']):
+                with version.code_lease(self.scheduling):
+                    worker_bootstrap.main()
+                    load.assert_not_called()
+                worker_bootstrap.main()
+                load.assert_called_once_with('src.automation.watchdog', run_name='__main__')
+                load.reset_mock()
             # The bootstrap releases the lock when it declines the start.
             self.apply()
             worker_bootstrap.main()
@@ -447,6 +561,7 @@ def verify(ctx):
             result = git_update._admitted_update(self.root, {}, migrate=lambda: {'status': 'blocked', 'reason': 'test'})
             self.assertEqual(result['status'], 'blocked')
             self.assertTrue(worker_bootstrap.wait_for_code(control, 'lane'))
+            self.assertFalse(worker_bootstrap.wait_for_code(control, 'watchdog'))
             self.assertFalse(worker_bootstrap.wait_for_code(control, 'email_outbox'))
             result = git_update._admitted_update(self.root, {}, migrate=lambda: {'status': 'ready'})
             self.assertEqual(result['status'], 'verified')

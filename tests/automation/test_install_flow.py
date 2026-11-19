@@ -306,6 +306,8 @@ class InstallationTest(unittest.TestCase):
         from src.automation.scheduling import runner
         requests.save(self.row)
         with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
+             patch.object(runner, 'runtime_dir', return_value=self.root), \
+             patch.object(runner.version_patch, 'admission_reason', return_value=None), \
              patch.object(gate, 'state_dir', return_value=self.control), \
              patch.object(runner, '_run', return_value=0) as execute:
             runner.run('daily_update')

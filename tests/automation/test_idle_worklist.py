@@ -397,7 +397,7 @@ class IdleTest(unittest.TestCase):
             code = ('import os; fd=int(os.environ["LEARNDL_GATE_FD"]); '
                     'assert os.read(fd,1)==b"1"; os.close(fd); print("fit done", flush=True)')
             return popen([sys.executable, '-u', '-c', code], **kwargs)
-        with idle._worklist_lease() as fd, patch.object(idle.subprocess, 'Popen', side_effect=probe):
+        with idle.version_patch.business_lease(self.root) as fd, patch.object(idle.subprocess, 'Popen', side_effect=probe):
             self.assertEqual(idle._launch(request, self.store, fd), 0)
         runtime.inspect_timeouts(self.store)
         self.assertEqual(self.store.get(request['id'])['phase'], 'complete')

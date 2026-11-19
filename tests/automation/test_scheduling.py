@@ -24,6 +24,7 @@ from unittest.mock import MagicMock, patch
 import psutil
 
 from src.automation.scheduling.config import duration, load_config, schedule_slots
+from src.automation import version_patch
 from src.automation.scheduling.installer import apply_plan, build_plan, command, cron_coverage, external_cron, service, validate_unit
 from src.automation.scheduling.maintenance_gate import MaintenanceBusy
 from src.automation.scheduling.runtime import RunStore, inspect_timeouts, members
@@ -377,6 +378,15 @@ class InstallerTransactionTest(unittest.TestCase):
 
 
 class RunnerTest(unittest.TestCase):
+    def scheduling_runtime(self, root):
+        # These runner tests use an isolated, already verified installation.
+        directory = root / 'scheduling'
+        directory.mkdir()
+        with version_patch.code_lease(directory) as fd:
+            version_patch.initialize(root)
+            version_patch.apply_pending(ROOT, root, pass_fds=(fd,), notify=MagicMock(), baseline=version_patch.code_version(ROOT))
+        return patch('src.automation.scheduling.runner.runtime_dir', return_value=directory)
+
     def test_real_runner_registers_and_releases_lock(self):
         from src.automation.scheduling.runner import run
         from src.proj.util.script.script_lock import ScriptLockMultiple
@@ -384,7 +394,8 @@ class RunnerTest(unittest.TestCase):
             root = Path(folder)
             config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
             fixture = str(ROOT / 'tests/automation/fixtures/scheduler_probe.py')
-            with patch('src.automation.scheduling.runner.installed_config', return_value=config), \
+            with self.scheduling_runtime(root), \
+                 patch('src.automation.scheduling.runner.installed_config', return_value=config), \
                  patch('src.automation.scheduling.runtime.runtime_dir', return_value=root), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \
                  patch.dict('src.automation.scheduling.runner.ENTRYPOINTS', {'daily_update': fixture}):
@@ -405,7 +416,8 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
-            with patch('src.automation.scheduling.runner.installed_config', return_value=config), \
+            with self.scheduling_runtime(root), \
+                 patch('src.automation.scheduling.runner.installed_config', return_value=config), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \
                  patch('src.automation.scheduling.runner.subprocess.Popen') as start:
                 with ScriptLockMultiple('daily_update', 1, timeout=1):

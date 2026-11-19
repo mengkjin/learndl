@@ -9,12 +9,13 @@ On each server, publish the updated scheduler and bootstrap with
 `apply --host <host>` in an idle maintenance window. The Git maintenance timer
 applies version patches after checkout verification or detects manual pulls on
 its next tick. It checks for version patches even if Git fetching is disabled.
-Managed workers pause when the local data version lags the code version.
-The idle worklist checks the patch ledger even with an older installed launcher.
-Dispatch and training wait for a verified data version. Queued entries keep their
-place across failed patches and resume on a later tick after successful retry.
-The training worker and its managed child hold a shared code lock, so a patch
-attempt during training defers until they exit.
+Automatic research, Autofix, and daily, weekly and RCQuant updates share the
+same code lock. Each worker takes a read lock and checks the patch ledger before
+starting a script, including when invoked by an older launcher. A patch needs
+exclusive access. Missing, pending or failed migrations keep workers waiting
+between attempts. Calendar timers can still register their slots. After
+verification the next tick uses the existing queue, overlap and expiry rules.
+Watchdog can finalize earlier runs between patch attempts.
 Use an idle window for manual Git operations and stop external processes that
 write the same files before updating.
 

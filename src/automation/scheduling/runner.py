@@ -20,9 +20,10 @@ from pathlib import Path
 
 import psutil
 
-from .config import ENTRYPOINTS, installed_config
+from .config import ENTRYPOINTS, installed_config, runtime_dir
 from .runtime import RunStore, members
 
+from src.automation import version_patch
 from src.automation.console import logger
 
 
@@ -58,47 +59,34 @@ def run(task_id: str, *, deferred: bool = False) -> int:
             except portalocker.LockException:
                 pass
     try:
-        with permit(blocking=False, priority=deferred):
-            return _run(task_id, retry_busy=deferred)
-    except MaintenanceBusy:
+        with permit(blocking=False, priority=deferred), version_patch.business_lease(runtime_dir()) as code_fd:
+            return _run(task_id, code_fd=code_fd, retry_busy=deferred)
+    except (MaintenanceBusy, version_patch.CodeBusy) as exc:
+        logger.info('Calendar task %s waiting: %s', task_id, exc)
         if state_dir().exists() and not deferred:
             # Calendar slots in the existing scheduler have minute precision.
             Store(state_dir()).enqueue(task_id, int(time.time() // 60))
-        return 75 if deferred else 0
+            return 0
+        return 75
 
 
 def run_deferred(store) -> None:
-    from .priority import enabled
-    if enabled():
-        return _run_priority_queue(store)
-    for key, task in store.scheduled():
-        # Persist before starting: a dead launcher must not blindly duplicate it.
-        store.schedule_state(key, 'starting')
-        try:
-            code = run(task, deferred=True)
-        except Exception:
-            store.schedule_state(key, 'unknown')
-            raise
-        store.schedule_state(key, 'queued' if code == 75 else 'finished')
-        if code == 75:
-            break
-
-
-def _run_priority_queue(store):
     from .maintenance_gate import MaintenanceBusy, permit
     for key, task in store.scheduled():
         try:
-            with permit(blocking=False, task_class='calendar'):
+            with (permit(blocking=False, priority=True, task_class='calendar'),
+                  version_patch.business_lease(runtime_dir()) as code_fd):
                 store.schedule_state(key, 'starting')
                 try:
-                    code = _run(task, retry_busy=True)
+                    code = _run(task, code_fd=code_fd, retry_busy=True)
                 except BaseException:
                     store.schedule_state(key, 'unknown')
                     raise
                 store.schedule_state(key, 'queued' if code == 75 else 'finished')
                 if code == 75:
                     break
-        except MaintenanceBusy:
+        except (MaintenanceBusy, version_patch.CodeBusy) as exc:
+            logger.info('Calendar task %s waiting: %s', task, exc)
             break
 
 
@@ -124,7 +112,8 @@ def deferred_worker() -> int:
     return 0
 
 
-def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = None, config_snapshot: dict | None = None) -> int:
+def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: str | None = None,
+         config_snapshot: dict | None = None) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
     config = config_snapshot or installed_config()
@@ -169,7 +158,8 @@ def _run(task_id: str, *, retry_busy: bool = False, request_id: str | None = Non
         command = [sys.executable, '-m', 'src.automation.scheduling.runner', '_child', script, *task['args']]
         from .maintenance_gate import pass_fds, child_env
         env.update(child_env())
-        child = subprocess.Popen(command, cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, lock_fd, *pass_fds()))
+        child = subprocess.Popen(command, cwd=PATH.main, env=env, start_new_session=True,
+                                 pass_fds=(read_fd, lock_fd, code_fd, *pass_fds()))
         os.close(read_fd)
         try:
             from .runtime import process_cgroup
@@ -220,9 +210,13 @@ def legacy(task_id: str, arguments: list[str]) -> int:
     from src.proj import PATH
     config = installed_config()
     if not config or not state_dir().exists():
-        with permit():
-            return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
-                                    '--source=bash', '--email=1', *arguments], pass_fds=pass_fds())
+        try:
+            with permit(), version_patch.business_lease(runtime_dir()) as code_fd:
+                return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
+                                        '--source=bash', '--email=1', *arguments], pass_fds=(code_fd, *pass_fds()))
+        except version_patch.CodeBusy as exc:
+            logger.info('Calendar task %s waiting: %s', task_id, exc)
+            return 75
     normalized = normalize_args(arguments)
     if task_id == 'daily_update' and normalized == ['--forfeit_if_done', 'True']:
         normalized = []

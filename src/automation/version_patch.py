@@ -34,6 +34,7 @@ __all__ = [
     'activation',
     'admission_reason',
     'apply_pending',
+    'business_lease',
     'code_lease',
     'initialize',
     'load_patch_support',
@@ -56,7 +57,7 @@ class MigrationError(RuntimeError):
 
 
 class CodeBusy(MigrationError):
-    """A code reader or another maintenance process holds the lease."""
+    """Code is occupied or the installed data version is not ready for new work."""
 
 
 def version_key(version: str) -> tuple[int, ...]:
@@ -361,6 +362,16 @@ def code_lease(scheduling_runtime: Path, *, shared: bool = False):
         except BlockingIOError:
             raise CodeBusy('Code lease occupied') from None
         yield stream.fileno()
+
+
+@contextmanager
+def business_lease(scheduling_runtime: Path, *, root: Path = ROOT):
+    """Hold the patch read lock from the ledger check through script completion."""
+    scheduling_runtime.mkdir(parents=True, exist_ok=True)
+    with code_lease(scheduling_runtime, shared=True) as fd:
+        if reason := admission_reason(root, scheduling_runtime.parent):
+            raise CodeBusy(reason)
+        yield fd
 
 
 def git(root: Path, *args: str) -> bytes:

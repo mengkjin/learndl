@@ -35,7 +35,9 @@ import psutil
 from .autofix_spec import ManifestError, canonical, manifest, redact, validate
 from .autofix_store import ACTIVE, ROOT, Store, state_dir
 from . import autofix_mailbox as mailbox
+from .config import runtime_dir
 
+from src.automation import version_patch
 from src.automation.console import logger
 
 
@@ -371,7 +373,6 @@ def worker_observation(store, status, reason, *, code=0, **fields):
 def worker():
     from .maintenance_gate import MaintenanceBusy, configured, permit
     from .git_update import training_blocker
-    from src.proj.util.script.code_update_lock import training_code_guard
     if not configured():
         return worker_observation(None, 'disabled', 'Autofix activation is disabled; verify scheduling installation')
     from .runtime import process_cgroup
@@ -395,7 +396,8 @@ def worker():
                 (store.directory / 'pending').unlink(missing_ok=True)
                 return worker_observation(store, 'idle', 'No eligible unattempted IDs; inspect task history for conflicts or terminal outcomes')
             (store.directory / 'pending').touch()
-            with permit(exclusive=True, blocking=False, task_class='autofix'), training_code_guard():
+            with (permit(exclusive=True, blocking=False, task_class='autofix'),
+                  version_patch.business_lease(runtime_dir())):
                 blocker = training_blocker() or recorded_task_blocker()
                 if blocker:
                     return worker_observation(store, 'waiting', blocker)
@@ -410,7 +412,7 @@ def worker():
                     worker_observation(store, 'completed_attempt', outcome.get('error') or outcome['phase'], task_id=outcome['id'], phase=outcome['phase'])
             if not any(r['phase'] == 'queued' for r in store.rows()):
                 (store.directory / 'pending').unlink(missing_ok=True)
-    except (portalocker.LockException, MaintenanceBusy) as exc:
+    except (portalocker.LockException, MaintenanceBusy, version_patch.CodeBusy) as exc:
         return worker_observation(store, 'waiting', f'Worker/maintenance permit occupied: {type(exc).__name__}: {exc}')
     return 0
 
@@ -439,7 +441,7 @@ def _channel_worker(store):
     if groups and not channels.reserve(store, owner, groups):
         return worker_observation(store, 'waiting', 'Maintenance admission occupied or cooling down')
     try:
-        with permit(blocking=False, task_class=owner):
+        with permit(blocking=False, task_class=owner), version_patch.business_lease(runtime_dir()):
             if groups:
                 channels.running(store, owner)
             execute(store, ROOT, row)
@@ -448,6 +450,8 @@ def _channel_worker(store):
                 channels.release(store, owner)
             return worker_observation(store, outcome['phase'], outcome.get('error', ''),
                                       code=int(outcome['phase'] != 'success'), task_id=row['id'])
+    except version_patch.CodeBusy as exc:
+        return worker_observation(store, 'waiting', str(exc), task_id=row['id'])
     except (MaintenanceBusy, portalocker.LockException) as exc:
         from .maintenance_notice import record_failure
         record_failure(store, owner, exc)

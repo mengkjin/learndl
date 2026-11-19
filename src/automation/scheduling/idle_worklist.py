@@ -28,7 +28,7 @@ import subprocess
 import sys
 import time
 import uuid
-from contextlib import ExitStack, contextmanager
+from contextlib import ExitStack
 
 import portalocker
 import psutil
@@ -36,9 +36,8 @@ import psutil
 from .config import installed_config, runtime_dir
 from .runtime import RunStore, members, process_cgroup, boot_id
 
-from src.automation.console import logger
 from src.automation import version_patch
-from src.automation.paths import ROOT
+from src.automation.console import logger
 
 OWNER = 'idle_worklist'
 ACTIVE = {'queued', 'starting', 'running', 'terminating', 'finalizing'}
@@ -189,20 +188,9 @@ def _defer_retired_requests(store: RunStore) -> None:
             store.put(run)
 
 
-@contextmanager
-def _worklist_lease():
-    directory = runtime_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    with version_patch.code_lease(directory, shared=True) as fd:
-        # Old installed launchers may have no version-patch activation flag.
-        if reason := version_patch.admission_reason(ROOT, directory.parent):
-            raise version_patch.CodeBusy(reason)
-        yield fd
-
-
 def dispatch(options: dict, store: RunStore | None = None) -> dict:
     try:
-        with _worklist_lease():
+        with version_patch.business_lease(runtime_dir()):
             return _dispatch(options, store or RunStore())
     except version_patch.CodeBusy as exc:
         return {'idle_worklist': str(exc)}
@@ -301,7 +289,8 @@ def worker() -> int:
     from src.proj.util.script.script_lock import ScriptLock
     from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with _worklist_lease() as code_fd, ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases:
+        with (version_patch.business_lease(runtime_dir()) as code_fd,
+              ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases):
             store = RunStore()
             with queue_lock():
                 _defer_retired_requests(store)

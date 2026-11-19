@@ -592,7 +592,6 @@ class WorkerDiagnosticsTests(Fixture):
     def test_waiting_reason_is_durable_without_consuming_id(self):
         from contextlib import nullcontext
         from src.automation.scheduling import runtime, git_update
-        from src.proj.util.script import code_update_lock
         self.register()
         with patch.object(maintenance_gate, 'configured', return_value=True), \
              patch.object(maintenance_gate, 'permit', return_value=nullcontext()), \
@@ -601,7 +600,8 @@ class WorkerDiagnosticsTests(Fixture):
              patch.object(autofix, 'discover', return_value=True), \
              patch.object(runtime, 'process_cgroup', return_value='/system.slice/learndl-autofix.service'), \
              patch.object(git_update, 'training_blocker', return_value='managed task is active'), \
-             patch.object(code_update_lock, 'training_code_guard', return_value=nullcontext()), \
+             patch.object(autofix, 'runtime_dir', return_value=self.control), \
+             patch.object(autofix.version_patch, 'admission_reason', return_value=None), \
              patch.object(autofix, 'execute') as execute:
             self.assertEqual(autofix.worker(), 0)
             execute.assert_not_called()

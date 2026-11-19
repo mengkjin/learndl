@@ -18,7 +18,10 @@ from zoneinfo import ZoneInfo
 
 import portalocker
 
-from .config import require_installed_config
+from src.automation import version_patch
+from src.automation.console import logger
+
+from .config import require_installed_config, runtime_dir
 from .autofix_store import Store, state_dir
 from .runtime import RunStore, members
 
@@ -111,7 +114,8 @@ def worker(task_id):
     task = config['tasks'][task_id]
     store = Store(state_dir())
     try:
-        with portalocker.Lock(str(store.directory / f'lane-{task_id}.lock'), timeout=0):
+        with (version_patch.business_lease(runtime_dir()) as code_fd,
+              portalocker.Lock(str(store.directory / f'lane-{task_id}.lock'), timeout=0)):
             for key, name in store.scheduled():
                 if name != task_id:
                     continue
@@ -153,7 +157,7 @@ def worker(task_id):
                         observation(store, key, status='starting', started_at=time.time(),
                                     delay_seconds=time.time() - int(key.rsplit(':', 1)[1]) * 60)
                         try:
-                            code = _run(task_id, request_id=key, config_snapshot=config)
+                            code = _run(task_id, code_fd=code_fd, request_id=key, config_snapshot=config)
                         except BaseException:
                             store.schedule_state(key, 'unknown')
                             observation(store, key, status='unknown', reason='launcher outcome requires reconciliation')
@@ -165,6 +169,8 @@ def worker(task_id):
                     observation(store, key, status='waiting', reason=str(exc))
                 # At most one request per worker tick; the next tick re-reads state.
                 break
+    except version_patch.CodeBusy as exc:
+        logger.info('Calendar task %s waiting: %s', task_id, exc)
     except portalocker.LockException:
         pass
     return 0

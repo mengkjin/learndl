@@ -102,6 +102,8 @@ class PriorityTests(unittest.TestCase):
 
     def test_calendar_duplicate_trigger_and_busy_queue(self):
         with patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory), \
+             patch.object(runner, 'runtime_dir', return_value=self.directory), \
+             patch.object(runner.version_patch, 'admission_reason', return_value=None), \
              patch.object(maintenance_gate, 'state_dir', return_value=self.directory), \
              patch.object(runner, '_run', return_value=0) as execute, \
              patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '123'}):

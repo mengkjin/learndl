@@ -10,7 +10,7 @@ from pathlib import Path
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -180,11 +180,13 @@ class ChannelsTest(unittest.TestCase):
                 calendar_lanes.register('weekly_update')
         self.assertEqual(self.store.scheduled(), [('weekly_update:101', 'weekly_update')])
         with patch.object(calendar_lanes, 'eligibility', return_value=('ready', '')), \
+             patch.object(calendar_lanes, 'runtime_dir', return_value=self.base), \
+             patch.object(runner.version_patch, 'admission_reason', return_value=None), \
              patch.object(maintenance_gate, 'state_dir', return_value=self.control), \
              patch.object(runner, '_run', return_value=0) as run:
             calendar_lanes.worker('weekly_update')
             calendar_lanes.worker('weekly_update')
-        run.assert_called_once_with('weekly_update', request_id='weekly_update:101', config_snapshot=self.config)
+        run.assert_called_once_with('weekly_update', code_fd=ANY, request_id='weekly_update:101', config_snapshot=self.config)
 
     def test_rcquant_window_dependency_and_expiry(self):
         def stamp(date: str) -> float:

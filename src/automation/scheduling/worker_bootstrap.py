@@ -62,7 +62,7 @@ def wait_for_code(directory, kind):
             if json.loads(transaction.read_text()).get('phase') != 'complete':
                 return True
         return code_pending(directory, ignore_reservation=kind == 'watchdog',
-                            allow_verified_checkout=kind == 'email_outbox')
+                            allow_verified_checkout=kind in {'watchdog', 'email_outbox'})
     except (OSError, ValueError, sqlite3.Error, RuntimeError):
         # The independent control-failure outbox must survive ledger loss.
         # This exception applies only to mail, still under the physical code
@@ -131,7 +131,9 @@ def main():
         os.chdir(settings['root'])
         sys.path.insert(0, settings['root'])
         config = json.loads((runtime / 'installed.json').read_text())
-        if kind != 'email_outbox' and {'version_patch', 'version_autofix'} & config.keys():
+        # Watchdog must finalize completed runs so a pending patch can acquire
+        # maintenance access. Its business dispatchers have their own read lease.
+        if kind not in {'watchdog', 'email_outbox'} and {'version_patch', 'version_autofix'} & config.keys():
             from src.automation.console import logger
             from src.automation.version_patch import activation, admission_reason
             if activation(config) and (reason := admission_reason(Path(settings['root']), runtime.parent)):
