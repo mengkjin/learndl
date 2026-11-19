@@ -15,7 +15,8 @@ import pandas as pd
 
 from src.proj import CALENDAR, DB, PATH, Logger, Save, Load
 from src.data.loader import DATAVENDOR
-from src.data.util import DataBlock, INFO
+from src.data.util import DataBlock
+from src.data.update.custom.adjprice import exclude_inactive
 from src.data.update.custom.custom_index import MicroCap_400
 from .processors.market import PrePro_market
 
@@ -130,7 +131,7 @@ def check_prices(date):
         raise ValueError(f"{date}: missing or malformed daily quotes")
     # Match calc_adjprice's listed universe; raw day files can contain names
     # that the adjusted-price writer intentionally excludes.
-    day = day.loc[day.secid.isin(INFO.get_secid(int(date)))].set_index("secid")
+    day = exclude_inactive(day, int(date)).set_index("secid")
     if day.empty:
         raise ValueError(f"{date}: no listed securities in daily quotes")
     close = day.close.astype(float)

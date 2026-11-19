@@ -79,8 +79,12 @@ class AdjPriceUpdater(BasicCustomUpdater):
 def exclude_inactive(frame: pd.DataFrame, date: int) -> pd.DataFrame:
     """Unknown metadata is not an exclusion; known IPO/delisting bounds are."""
     desc = INFO.get_desc(set_index=False, listed=False)
-    inactive = desc.loc[((desc.list_dt > 0) & (desc.list_dt > int(date))) |
-                        ((desc.delist_dt > 0) & (desc.delist_dt <= int(date))), 'secid']
+    # A code may have several listing intervals (e.g. 600018). Exclude it
+    # only when every record is inactive, not when any single record is.
+    outside = ((desc.list_dt > 0) & (desc.list_dt > int(date))) | \
+              ((desc.delist_dt > 0) & (desc.delist_dt <= int(date)))
+    active = desc.loc[~outside, 'secid']
+    inactive = desc.loc[~desc.secid.isin(active), 'secid']
     return frame.loc[~frame.secid.isin(inactive)].copy()
 
 

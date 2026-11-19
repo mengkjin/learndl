@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from src.data.preprocess import repair_microcap as repair
+from src.data.update.custom import adjprice
 
 __all__ = ["MicrocapRepairTest"]
 
@@ -189,22 +190,23 @@ class MicrocapRepairTest(unittest.TestCase):
     def test_stale_adjprice_rejected(self):
         day = pd.DataFrame({"secid": [1], "close": [11.0], "adjfactor": [2.0]})
         adj = pd.DataFrame({"secid": [1], "close": [20.0]})
-        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+        with (patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
               patch.object(repair.DB, "load", side_effect=[day, adj])):
             with self.assertRaisesRegex(ValueError, "stale adjprice"):
                 repair.check_prices(20261118)
-        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+        with (patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
               patch.object(repair.DB, "load", side_effect=[day, adj.assign(close=22.0)])):
             repair.check_prices(20261118)
 
     def test_price_check_matches_adjusted_price_listed_universe(self):
         day = pd.DataFrame({"secid": [1, 2], "close": [11.0, 5.0], "adjfactor": [2.0, 1.0]})
         adj = pd.DataFrame({"secid": [1], "close": [22.0]})
-        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1])),
+        desc = pd.DataFrame({"secid": [2], "list_dt": [20100101], "delist_dt": [99991231]})
+        with (patch.object(adjprice.INFO, "get_desc", return_value=desc),
               patch.object(repair.DB, "load", side_effect=[day, adj])):
             repair.check_prices(20091231)
         # A missing *listed* security must still fail, with actionable evidence.
-        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+        with (patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
               patch.object(repair.DB, "load", side_effect=[day, adj])):
             with self.assertRaisesRegex(ValueError, r"1/2 listed quotes differ.*1 missing.*secid=2"):
                 repair.check_prices(20091231)
@@ -214,10 +216,10 @@ class MicrocapRepairTest(unittest.TestCase):
         valid = pd.DataFrame({"secid": [1, 2], "close": [11.0, 10.0]})
         for adj in (valid, pd.DataFrame()):
             with (self.subTest(adjprice_present=not adj.empty),
-                  patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+                  patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
                   patch.object(repair.DB, "load", side_effect=[day, adj])):
                 repair.check_prices(20041231)
-        with (patch.object(repair.INFO, "get_secid", return_value=np.array([1, 2])),
+        with (patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
               patch.object(repair.DB, "load", side_effect=[day, valid.assign(close=[12., 10.])])):
             with self.assertRaisesRegex(ValueError, "stale adjprice.*secid=1"):
                 repair.check_prices(20041231)
@@ -227,7 +229,7 @@ class MicrocapRepairTest(unittest.TestCase):
                               (10., 0.), (10., -1.), (10., np.inf), (-10., -1.)):
             day = pd.DataFrame({"secid": [123], "close": [close], "adjfactor": [factor]})
             with (self.subTest(close=close, factor=factor),
-                  patch.object(repair.INFO, "get_secid", return_value=np.array([123])),
+                  patch.object(adjprice.INFO, "get_desc", return_value=pd.DataFrame(columns=["secid", "list_dt", "delist_dt"])),
                   patch.object(repair.DB, "load", return_value=day)):
                 with self.assertRaisesRegex(ValueError, r"20041231:.*1/1 listed quotes invalid.*secid=123, close=.*adjfactor="):
                     repair.check_prices(20041231)

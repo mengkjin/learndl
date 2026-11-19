@@ -10,12 +10,36 @@ import numpy as np
 import pandas as pd
 from src.data.update.custom import adjprice, custom_index
 from src.data.loader.trade_data import TradeDataAccess
+from src.data.preprocess.repair_microcap import check_prices
 
 __all__ = ['AdjpriceCoverageTest']
 
 class AdjpriceCoverageTest(unittest.TestCase):
     def quotes(self, ids, prices):
         return pd.DataFrame({'secid': ids, 'adjfactor': 2., **{c: prices for c in adjprice.PRICE_COLS}})
+
+    def test_multiple_listing_intervals_writer_coverage_and_repair_agree(self):
+        desc = pd.DataFrame({'secid': [600018, 600018],
+                             'list_dt': [20061026, 20000719],
+                             'delist_dt': [99991231, 20061020]})
+        day = self.quotes([600018, 999999], [7.62, 10.])
+        previous = day.drop(columns='adjfactor')
+        for date, included in ((20000718, False), (20000719, True),
+                               (20041231, True), (20061019, True),
+                               (20061020, False), (20061025, False),
+                               (20061026, True), (20261118, True)):
+            with (self.subTest(date=date),
+                  patch.object(adjprice.INFO, 'get_desc', return_value=desc),
+                  patch.object(adjprice.DB, 'load', return_value=day)):
+                result = adjprice.calc_adjprice(date, previous)
+                self.assertEqual(600018 in result.secid.values, included)
+                self.assertIn(999999, result.secid.values)
+                self.assertTrue(adjprice.covers_day(result, day, date))
+                if included:
+                    np.testing.assert_allclose(result.loc[result.secid.eq(600018), 'close'].to_numpy(dtype=float), [15.24])
+                    self.assertFalse(adjprice.covers_day(result[result.secid != 600018], day, date))
+                with patch.object(adjprice.DB, 'load', side_effect=[day, result]):
+                    check_prices(date)
 
     def test_unknown_quote_and_halted_previous_survive_but_inactive_removed(self):
         day = self.quotes([1, 920306, 3, 4], [10., 9.88, 5., 6.])
