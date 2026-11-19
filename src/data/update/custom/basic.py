@@ -2,7 +2,7 @@
 Base metaclass and abstract base class for all custom data updaters.
 
 ``BasicCustomUpdater`` subclasses are auto-registered in ``BasicCustomUpdaterMeta.registry``
-on class creation.  Concrete subclasses must implement ``update_all(update_type)``.
+on class creation.  Concrete subclasses must implement ``proceed_update(start, end, overwrite)``.
 
 To register a new updater, create a file anywhere under ``update/custom/`` that
 defines a subclass — ``import_updaters()`` will discover and import it automatically.
@@ -22,7 +22,7 @@ class BasicCustomUpdaterMeta(type):
     """
     Metaclass that auto-registers all ``BasicCustomUpdater`` subclasses.
 
-    Each concrete subclass must implement ``update_all``; the metaclass enforces
+    Each concrete subclass must implement ``proceed_update``; the metaclass enforces
     this at class creation time and raises ``AssertionError`` if it is missing.
     """
     registry : dict[str , type[BasicCustomUpdater] | Any] = {}
@@ -45,6 +45,7 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
     _imported : bool = False
     START_DATE : int = 20170101
     UPDATE_ORDER : int = 0
+    DEPENDS_ON : tuple[str, ...] = ()
 
     @classmethod
     def iter_updaters(cls) -> Iterator[type[BasicCustomUpdater]]:
@@ -52,8 +53,21 @@ class BasicCustomUpdater(Base.BasicUpdater , metaclass=BasicCustomUpdaterMeta):
         # Stable on UPDATE_ORDER so default-0 updaters keep import order.
         items = list(cls.registry.items())
         items.sort(key = lambda kv: getattr(kv[1] , 'UPDATE_ORDER' , 0))
-        for _name , updater in items:
-            yield updater
+        pending = dict(items)
+        emitted = set()
+        ordered = []
+        while pending:
+            ready = [(name, updater) for name, updater in pending.items()
+                     if set(updater.DEPENDS_ON).issubset(emitted)]
+            if not ready:
+                raise ValueError(f'Missing or cyclic custom updater dependencies: {list(pending)}')
+            # Reconsider newly available dependencies before lower-priority work.
+            name, updater = ready[0]
+            ordered.append(updater)
+            emitted.add(name)
+            del pending[name]
+        # Reject the entire invalid graph before any updater can run.
+        yield from ordered
 
     @classmethod
     def import_updaters(cls):

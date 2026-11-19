@@ -555,6 +555,9 @@ class TushareFetcher(Base.BoundLogger , metaclass=TushareFetcherMeta):
                 break
             timeout_max_retries -= 1
             dates = self.target_dates()
+        if not len(updated_dates):
+            self.logger.skipping('No new data published')
+            return Base.UpdateFlag.SKIPPED
         self.logger.success(f'Fetched for {Dates(updated_dates)}' , add_prefix = True)
         return Base.UpdateFlag.SUCCESS
 

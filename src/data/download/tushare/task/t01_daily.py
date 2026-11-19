@@ -3,7 +3,7 @@
 from __future__ import annotations
 import numpy as np
 
-from src.proj import DB , Dates , Base
+from src.proj import Dates , Base
 from src.data.download.tushare.basic import DayFetcher , TS
 
 __all__ = ['DailyQuote' , 'DailyValuation' , 'DailyMoneyFlow' , 'DailyLimit']
@@ -17,24 +17,20 @@ class DailyQuote(DayFetcher):
 
     def update_dates(self , dates : Base.intDates , **kwargs) -> Dates:
         """Save day quotes then immediately rebuild ``trade_ts/adjprice`` for each date."""
-        from src.data.update.custom.adjprice import AdjPriceUpdater
-        from src.data.update.custom.listing_price import update_listing_prices
+        from src.data.util.prices.adjusted import publish_day
 
         dates = Dates(dates)
         if self.check_server_down():
-            return dates
-        for date in dates:
-            DB.save(
-                self.get_data(int(date)) ,
-                self.DB_SRC ,
-                self.DB_KEY ,
-                date = int(date) ,
-                indent = self.indent + 1 ,
-                vb_level = self.vb_level + 1 ,
-            )
-            AdjPriceUpdater.update_one(int(date))
-            update_listing_prices(int(date))
-        return dates
+            return Dates()
+        from src.data.loader import TRADE
+        updated = []
+        try:
+            for date in sorted(dates):
+                if publish_day(self.get_data(int(date)), int(date)):
+                    updated.append(int(date))
+        finally:
+            TRADE.clear_all()
+        return Dates(updated)
 
     def get_data(self , date : int):
         date_str = str(date)

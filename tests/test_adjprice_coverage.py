@@ -8,9 +8,10 @@ from unittest.mock import patch, Mock
 from typing import Any
 import numpy as np
 import pandas as pd
-from src.data.update.custom import adjprice, custom_index
+from src.data.util.prices import adjusted as adjprice
+from src.data.update.custom import custom_index
 from src.data.loader.trade_data import TradeDataAccess
-from src.data.preprocess.repair_microcap import check_prices
+from src.data.maintenance.repair_microcap import check_prices
 
 __all__ = ['AdjpriceCoverageTest']
 
@@ -29,7 +30,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
                                (20061020, False), (20061025, False),
                                (20061026, True), (20261118, True)):
             with (self.subTest(date=date),
-                  patch.object(adjprice.INFO, 'get_desc', return_value=desc),
+                  patch.object(adjprice, 'listing_description', return_value=desc),
                   patch.object(adjprice.DB, 'load', return_value=day)):
                 result = adjprice.calc_adjprice(date, previous)
                 self.assertEqual(600018 in result.secid.values, included)
@@ -47,7 +48,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         desc = pd.DataFrame({'secid': [1, 2, 3, 4, 6], 'list_dt': [20000101, 20000101, 20261101, 20000101, 20000101],
                              'delist_dt': [99991231, 99991231, 99991231, 20261029, 20261028]})
         with (patch.object(adjprice.DB, 'load', return_value=day),
-              patch.object(adjprice.INFO, 'get_desc', return_value=desc)):
+              patch.object(adjprice, 'listing_description', return_value=desc)):
             result = adjprice.calc_adjprice(20261029, previous).set_index('secid')
         self.assertEqual(set(result.index), {1, 2, 5, 920306})
         self.assertEqual(result.loc[2, 'close'], 20.)
@@ -57,7 +58,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         day = self.quotes([1, 2], [10., 20.])
         desc = pd.DataFrame({'secid': [2], 'list_dt': [20270101], 'delist_dt': [99991231]})
         good = self.quotes([1], [20.])
-        with patch.object(adjprice.INFO, 'get_desc', return_value=desc):
+        with patch.object(adjprice, 'listing_description', return_value=desc):
             self.assertTrue(adjprice.covers_day(good, day, 20261029))
             self.assertFalse(adjprice.covers_day(good.assign(close=np.nan), day, 20261029))
             self.assertFalse(adjprice.covers_day(pd.DataFrame(), day, 20261029))
@@ -72,12 +73,13 @@ class AdjpriceCoverageTest(unittest.TestCase):
                 state['frame'] = new
             return state['frame'] if field is None else state['frame'][field]
         fake: Any = SimpleNamespace(get=Mock(side_effect=get), get_trd=Mock(return_value=day))
-        with (patch.object(adjprice.INFO, 'get_desc', return_value=pd.DataFrame(columns=['secid', 'list_dt', 'delist_dt'])),
-              patch.object(adjprice.AdjPriceUpdater, 'update_one') as update):
+        with (patch.object(adjprice, 'listing_description', return_value=pd.DataFrame(columns=['secid', 'list_dt', 'delist_dt'])),
+              patch.object(adjprice, 'ensure_adjprice') as update):
             result = TradeDataAccess.get_adjprice(fake, 20261029, ['secid', 'close'])
             TradeDataAccess.get_adjprice(fake, 20261029)
         self.assertEqual(result.close.tolist(), [20., 40.])
-        update.assert_called_once_with(20261029)
+        self.assertEqual(update.call_count, 2)
+        update.assert_called_with(20261029, reason='query')
         self.assertTrue(any(c.kwargs.get('overwrite') for c in fake.get.call_args_list))
 
     def test_writer_replaces_atomically_and_preserves_original_on_failure(self):
@@ -90,11 +92,11 @@ class AdjpriceCoverageTest(unittest.TestCase):
                   patch.object(adjprice, 'calc_adjprice', return_value=new),
                   patch.object(adjprice.os, 'replace', side_effect=OSError('write failed'))):
                 with self.assertRaisesRegex(OSError, 'write failed'):
-                    adjprice.AdjPriceUpdater.update_one(20261029)
+                    adjprice.atomic_frame(new, path)
             pd.testing.assert_frame_equal(pd.read_feather(path), original)
             with (patch.object(adjprice.DB, 'path', return_value=path),
                   patch.object(adjprice, 'calc_adjprice', return_value=new)):
-                adjprice.AdjPriceUpdater.update_one(20261029)
+                adjprice.atomic_frame(new, path)
             pd.testing.assert_frame_equal(pd.read_feather(path), new)
 
     def test_microcap_uses_exchange_filtered_universe(self):

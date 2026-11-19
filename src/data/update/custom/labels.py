@@ -24,6 +24,7 @@ __all__ = ['ClassicLabelsUpdater']
 PriceType : TypeAlias = Literal['open' , 'vwap' , 'close'] | str
 
 class ClassicLabelsUpdater(BasicCustomUpdater):
+    DEPENDS_ON = ('AdjPriceUpdater', 'ListingPriceUpdater')
     """
     Registered updater for forward return labels.
 

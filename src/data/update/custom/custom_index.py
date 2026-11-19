@@ -154,6 +154,7 @@ class CustomIndex(metaclass=CustomIndexMeta):
             yield custom_index_cls()
 
 class CustomIndexUpdater(BasicCustomUpdater):
+    DEPENDS_ON = ('AdjPriceUpdater', 'ListingPriceUpdater')
     START_DATE = START_DATE
 
     @classmethod

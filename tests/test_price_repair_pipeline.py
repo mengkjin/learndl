@@ -4,12 +4,12 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 import numpy as np
 import pandas as pd
 from src.proj import Dates
-from src.data.update.custom import listing_price, adjprice
-from src.data.preprocess import repair_microcap as repair
+from src.data.util.prices import listing as listing_price, adjusted as adjprice
+from src.data.maintenance import repair_microcap as repair
 
 __all__ = ['PriceRepairPipelineTest']
 
@@ -27,7 +27,7 @@ class PriceRepairPipelineTest(unittest.TestCase):
         day = pd.DataFrame({'secid': [1], 'adjfactor': [1.], **{c: [10.] for c in adjprice.PRICE_COLS}})
         previous = pd.DataFrame({'secid': [1, 2], **{c: [9., 20.] for c in adjprice.PRICE_COLS}})
         with (patch.object(adjprice.DB, 'load', return_value=day) as load,
-              patch.object(adjprice.INFO, 'get_desc', return_value=pd.DataFrame({'secid': [1, 2], 'list_dt': [20000101]*2, 'delist_dt': [99991231]*2}))):
+              patch.object(adjprice, 'listing_description', return_value=pd.DataFrame({'secid': [1, 2], 'list_dt': [20000101]*2, 'delist_dt': [99991231]*2}))):
             result = adjprice.calc_adjprice(20041231, previous=previous).set_index('secid')
         self.assertEqual(result.loc[2, 'close'], 20.)
         self.assertEqual(load.call_count, 1)
@@ -57,27 +57,46 @@ class PriceRepairPipelineTest(unittest.TestCase):
     def test_persistent_daily_update_replaces_table(self):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'list_day_price.feather'
-            old = pd.DataFrame({'secid': [1], 'list_price': [9.]})
+            old = pd.DataFrame({'secid': [1], 'list_dt': [20041230], 'list_price': [9.]})
             old.to_feather(path)
-            updated = pd.DataFrame({'secid': [1], 'list_price': [10.]})
+            updated = pd.DataFrame({'secid': [1], 'list_dt': [20041230], 'list_price': [10.]})
             with (patch.object(listing_price.DB, 'path', return_value=path),
                   patch.object(listing_price, 'build_listing_prices', return_value=updated) as build):
                 listing_price.update_listing_prices(20041230)
-            build.assert_called_once_with(refresh_date=20041230)
+            self.assertEqual(build.call_args.kwargs['refresh_date'], 20041230)
             pd.testing.assert_frame_equal(pd.read_feather(path), updated)
-            self.assertEqual(len(list(path.parent.iterdir())), 1)
+            self.assertEqual(len(list(path.parent.glob('*.feather'))), 1)
 
-    def test_daily_quote_hook_order(self):
-        from typing import Any
+    def test_daily_quote_delegates_to_shared_publication_service(self):
         from src.data.download.tushare.task.t01_daily import DailyQuote
-        events = []
-        fake: Any = SimpleNamespace(check_server_down=lambda: False,
-            get_data=lambda date: pd.DataFrame({'secid': [1]}), DB_SRC='trade_ts', DB_KEY='day', indent=0, vb_level=0)
-        with (patch.object(listing_price.DB, 'save', side_effect=lambda *a, **kw: events.append('day')),
-              patch.object(adjprice.AdjPriceUpdater, 'update_one', side_effect=lambda date: events.append('adjprice')),
-              patch.object(listing_price, 'update_listing_prices', side_effect=lambda date: events.append('listing'))):
+        from src.data.loader import TRADE
+        frame = pd.DataFrame({'secid': [1]})
+        fake = SimpleNamespace(check_server_down=lambda: False, get_data=lambda date: frame)
+        with patch.object(adjprice, 'publish_day') as publish, patch.object(TRADE, 'clear_all'):
             DailyQuote.update_dates(fake, [20041230])
-        self.assertEqual(events, ['day', 'adjprice', 'listing'])
+        publish.assert_called_once_with(frame, 20041230)
+
+    def test_unavailable_download_reports_no_updated_dates(self):
+        from src.data.download.tushare.task.t01_daily import DailyQuote
+        fake = SimpleNamespace(check_server_down=lambda: True)
+        with patch.object(adjprice, 'publish_day') as publish:
+            self.assertFalse(DailyQuote.update_dates(fake, [20041230]))
+        publish.assert_not_called()
+
+    def test_unchanged_download_does_not_report_a_new_raw_publication(self):
+        from src.data.download.tushare.task.t01_daily import DailyQuote
+        from src.data.loader import TRADE
+        fake = SimpleNamespace(check_server_down=lambda: False, get_data=lambda date: pd.DataFrame())
+        with patch.object(adjprice, 'publish_day', return_value=False), patch.object(TRADE, 'clear_all'):
+            self.assertFalse(DailyQuote.update_dates(fake, [20041230]))
+
+    def test_empty_updated_dates_are_skipped_by_fetcher_status(self):
+        from src.data.download.tushare.task.t01_daily import DailyQuote
+        from src.proj import Base
+        fake = SimpleNamespace(overwrite=False, target_dates=lambda: Dates([20041230]),
+                               update_dates=lambda dates: Dates(), logger=Mock())
+        self.assertEqual(DailyQuote.update_with_retries(fake), Base.UpdateFlag.SKIPPED)
+        fake.logger.success.assert_not_called()
 
     def test_pipeline_order_and_failure_stops_downstream(self):
         events = []

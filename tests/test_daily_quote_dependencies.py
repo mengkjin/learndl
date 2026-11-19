@@ -8,7 +8,8 @@ from unittest.mock import patch, Mock
 import numpy as np
 import pandas as pd
 
-from src.data.update.custom import adjprice, custom_index
+from src.data.util.prices import adjusted as adjprice
+from src.data.update.custom import custom_index
 from src.proj import Dates
 
 __all__ = ['DailyQuoteDependenciesTest']
@@ -25,7 +26,7 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
         self.assertFalse(portfolio.emtpy)
 
     def test_first_microcap_return_has_previous_close_holdings(self):
-        from src.data.preprocess.repair_microcap import checked_return
+        from src.data.maintenance.repair_microcap import checked_return
 
         day = pd.DataFrame({'secid': [1, 2], 'close': [10.0, 20.0], 'adjfactor': [1.0, 1.0]})
         weights = pd.DataFrame({'secid': [1, 2], 'weight': [0.4, 0.6]})
@@ -82,7 +83,7 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
 
     def test_microcap_start_and_repair_default_are_2005(self):
         import inspect
-        from src.data.preprocess.repair_microcap import rebuild_microcap
+        from src.data.maintenance.repair_microcap import rebuild_microcap
 
         self.assertEqual(custom_index.MicroCap_400.START_DATE, 20050101)
         self.assertEqual(inspect.signature(rebuild_microcap).parameters['start'].default, 20050101)
@@ -91,13 +92,13 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
         for day in (None, pd.DataFrame(), pd.DataFrame({'secid': [1]})):
             with self.subTest(day=repr(day)), patch.object(adjprice.DB, 'load', return_value=day), patch.object(adjprice.DB, 'save') as save:
                 with self.assertRaisesRegex(ValueError, 'adjprice at 20261118'):
-                    adjprice.AdjPriceUpdater.update_one(20261118)
+                    adjprice.ensure_adjprice(20261118)
                 save.assert_not_called()
 
     def test_valid_day_still_fills_individual_halted_stock(self):
         day = pd.DataFrame({'secid': [1], 'adjfactor': [2.0], **{c: [10.0] for c in adjprice.PRICE_COLS}})
         previous = pd.DataFrame({'secid': [1, 2], **{c: [19.0, 30.0] for c in adjprice.PRICE_COLS}})
-        with patch.object(adjprice.DB, 'load', side_effect=[day, previous]), patch.object(adjprice.INFO, 'get_desc', return_value=pd.DataFrame({'secid': [1, 2], 'list_dt': [20000101]*2, 'delist_dt': [99991231]*2})), patch.object(adjprice.CALENDAR, 'td', return_value=SimpleNamespace(as_int=lambda: 20261117)):
+        with patch.object(adjprice.DB, 'load', side_effect=[day, previous]), patch.object(adjprice, 'listing_description', return_value=pd.DataFrame({'secid': [1, 2], 'list_dt': [20000101]*2, 'delist_dt': [99991231]*2})), patch.object(adjprice.CALENDAR, 'td', return_value=SimpleNamespace(as_int=lambda: 20261117)):
             result = adjprice.calc_adjprice(20261118).set_index('secid')
         self.assertEqual(result.loc[1, 'close'], 20.0)
         self.assertEqual(result.loc[2, 'close'], 30.0)
