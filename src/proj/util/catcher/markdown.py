@@ -5,7 +5,7 @@ from functools import cached_property
 from typing import Literal , TypeAlias
 from uuid import uuid4
 
-from src.proj.env import PATH , MACHINE
+from src.proj.env import PATH
 from src.proj.core import Elapsed , Since
 from .basic import OutputCatcher , DeflectorGroup , MarkdownWriter
 from .crash_protector import CrashProtectorCatcher
@@ -16,7 +16,8 @@ ContentSeperatingBy : TypeAlias = Literal['min', 'hour', 'day'] | None
  
 class MarkdownCatcher(OutputCatcher):
     """
-    Archive the local crash log and rename the optional live shared markdown at exit.
+    Archive the local crash log; live shared-folder output is opt-in only.
+    Shared streaming is disabled by default to avoid synchronizing changing files.
     A supplied crash_protector must be active and outlive this catcher; otherwise
     standalone use creates its own local crash protector.
     example:
@@ -33,7 +34,7 @@ class MarkdownCatcher(OutputCatcher):
         category : str = 'miscelaneous',
         init_time: datetime | None = None,
         add_time_to_title: bool = False,
-        to_share_folder: bool = MACHINE.cuda_server ,
+        to_share_folder: bool = False ,
         seperating_by: ContentSeperatingBy = 'min',
         crash_protector: CrashProtectorCatcher | None = None,
         **kwargs

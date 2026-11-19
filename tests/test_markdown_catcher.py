@@ -27,6 +27,28 @@ class MarkdownCatcherTest(unittest.TestCase):
         self.enterContext(redirect_stdout(io.StringIO()))
         self.enterContext(redirect_stderr(io.StringIO()))
 
+    def test_default_catcher_never_touches_shared_folder(self):
+        with MarkdownCatcher('default local') as md:
+            print('default captured locally')
+            self.assertIsNone(md.share_filename)
+            self.assertFalse((self.root / 'share').exists())
+        self.assertIn('default captured locally', md.get_contents())
+        self.assertFalse((self.root / 'share').exists())
+
+    def test_autorun_keeps_local_and_html_without_shared_stream(self):
+        catchers = AutoRunCatchers('local-task', warning_catcher=False)
+        catchers.enter('local-task', 'test', datetime.now())
+        try:
+            print('task captured locally')
+            md = next(c for c in catchers.catchers if isinstance(c, MarkdownCatcher))
+            self.assertIsNone(md.share_filename)
+            self.assertFalse((self.root / 'share').exists())
+        finally:
+            catchers.exit(None, None, None)
+        self.assertIn('task captured locally', md.get_contents())
+        self.assertTrue(list((self.root / 'html').rglob('*.html')))
+        self.assertFalse((self.root / 'share').exists())
+
     def test_shared_log_is_renamed_and_local_archive_uses_crash_log(self):
         with patch('src.proj.util.catcher.crash_protector.shutil.copyfile', wraps=shutil.copyfile) as copy:
             with CrashProtectorCatcher('task') as crash:

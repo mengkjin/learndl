@@ -78,7 +78,7 @@ class AutoRunCatchers:
             self.catchers.append(HtmlCatcher(title , category , init_time))
         if self.markdown_catcher:
             self.catchers.append(MarkdownCatcher(
-                title , category , init_time , add_time_to_title=True , to_share_folder=True,
+                title , category , init_time , add_time_to_title=True , to_share_folder=False,
                 crash_protector=crash_protector,
             ))
         if self.warning_catcher:
