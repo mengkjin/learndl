@@ -19,7 +19,7 @@ from src.proj.util.script import ScriptTool
 def main(**kwargs):
     """Rebuild valid-value stats for every sellside key."""
     from src.data.download.sellside.from_sql import factor_settings
-    from src.data.download.sellside.valid_dates import backfill_valid_values, read_valid_values, valid_values_path
+    from src.data.quality.valid_dates import backfill_valid_values, read_valid_values, valid_values_path
     del kwargs
     for db_key in factor_settings:
         written = backfill_valid_values(db_key , full = True)

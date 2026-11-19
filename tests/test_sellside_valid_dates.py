@@ -9,7 +9,7 @@ import pandas as pd
 
 from src.proj import Dates
 from src.data.download.sellside.from_sql import SellsideSQLDownloader
-from src.data.download.sellside.valid_dates import (
+from src.data.quality.valid_dates import (
     asof_map,
     backfill_valid_values,
     finite_value_count,
@@ -49,7 +49,7 @@ class SellsideValidDatesTest(unittest.TestCase):
                 'scores_v5': [0.4, np.nan, np.nan],
             })
             with patch('src.data.download.sellside.from_sql.DB.save', fake_save), \
-                    patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path):
+                    patch('src.data.quality.valid_dates.valid_values_path', fake_values_path):
                 written = downloader.save_data(frame)
                 indexed = load_valid_dates('huayuan.scores_v5')
                 table = read_valid_values(stats_path)
@@ -85,7 +85,7 @@ class SellsideValidDatesTest(unittest.TestCase):
                     'is_valid': is_valid,
                 }])
 
-            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path):
+            with patch('src.data.quality.valid_dates.valid_values_path', fake_values_path):
                 upsert_valid_values('huayuan.scores_v5', pd.concat([
                     row(20260105, 1, 0, True), row(20260106, 2, 0, True),
                 ], ignore_index=True))
@@ -150,9 +150,9 @@ class SellsideValidDatesTest(unittest.TestCase):
                 del db_key, db_src
                 return stats_path
 
-            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path), \
-                    patch('src.data.download.sellside.valid_dates.DB.dates', return_value=_Stored()), \
-                    patch('src.data.download.sellside.valid_dates.DB.load', fake_load):
+            with patch('src.data.quality.valid_dates.valid_values_path', fake_values_path), \
+                    patch('src.data.quality.valid_dates.DB.dates', return_value=_Stored()), \
+                    patch('src.data.quality.valid_dates.DB.load', fake_load):
                 self.assertEqual(backfill_valid_values('huayuan.scores_v5'), 2)
                 self.assertEqual(loaded, [20260105, 20260106])
                 loaded.clear()
@@ -185,16 +185,16 @@ class SellsideFactorAsofTest(unittest.TestCase):
                 'hy_scores_v5': [0.1, 0.2],
             })
 
-        with patch('src.data.download.sellside.valid_dates.load_valid_dates', fake_valid), \
+        with patch('src.data.quality.valid_dates.load_valid_dates', fake_valid), \
                 patch.object(hy_scores_v5, 'loads_from_db', classmethod(fake_loads)):
             out = hy_scores_v5.Loads([20260106, 20260107, 20260105])
         self.assertEqual(calls, [[20260105]])
         self.assertEqual(sorted(out['date'].unique().tolist()), [20260105, 20260106, 20260107])
         self.assertEqual(len(out), 6)
 
-    def test_missing_valid_values_is_built_then_used_for_asof(self):
+    def test_missing_valid_values_requires_explicit_backfill(self):
         from src.res.factor.defs.affiliate.level0.external.sellside import hy_scores_v5
-        from src.data.download.sellside.valid_dates import load_valid_dates, write_valid_values
+        from src.data.quality.valid_dates import load_valid_dates, write_valid_values
 
         frames = {
             20260105: pd.DataFrame({'secid': [1], 'scores_v5': [0.4]}),
@@ -230,10 +230,14 @@ class SellsideFactorAsofTest(unittest.TestCase):
                 del db_key, db_src
                 return stats_path
 
-            with patch('src.data.download.sellside.valid_dates.valid_values_path', fake_values_path), \
-                    patch('src.data.download.sellside.valid_dates.DB.dates', return_value=_Stored()), \
-                    patch('src.data.download.sellside.valid_dates.DB.load', fake_scan), \
+            with patch('src.data.quality.valid_dates.valid_values_path', fake_values_path), \
+                    patch('src.data.quality.valid_dates.DB.dates', return_value=_Stored()), \
+                    patch('src.data.quality.valid_dates.DB.load', fake_scan), \
                     patch.object(hy_scores_v5, 'loads_from_db', classmethod(fake_loads)):
+                with self.assertRaises(FileNotFoundError):
+                    load_valid_dates('huayuan.scores_v5', required=True)
+                self.assertEqual(scanned, [])
+                backfill_valid_values('huayuan.scores_v5')
                 out = hy_scores_v5.Loads([20260106, 20260107])
                 self.assertEqual(scanned, [20260105, 20260106])
                 valid = load_valid_dates('huayuan.scores_v5', required=True)

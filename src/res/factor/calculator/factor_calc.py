@@ -1098,8 +1098,8 @@ class SellsideFactor(AffiliateFactorCalculator):
 
     @classmethod
     def _valid_indexes(cls) -> list[tuple[dict[Literal['src' , 'key' , 'col'] , str] , np.ndarray]]:
-        """Per-database valid dates. A missing stats file is built before the read."""
-        from src.data.download.sellside.valid_dates import load_valid_dates
+        """Per-database valid dates; missing stats require an explicit update/backfill."""
+        from src.data.quality.valid_dates import load_valid_dates
         indexed : list[tuple[dict[Literal['src' , 'key' , 'col'] , str] , np.ndarray]] = []
         for db in cls.full_dbs():
             valid = load_valid_dates(str(db['key']) , str(db['src']) , required = True)
@@ -1120,7 +1120,7 @@ class SellsideFactor(AffiliateFactorCalculator):
         indexed = cls._valid_indexes()
         if not indexed:
             return super().Loads(dates , closest = closest)
-        from src.data.download.sellside.valid_dates import asof_map , stamp_asof
+        from src.data.quality.valid_dates import asof_map , stamp_asof
         remaining = np.unique(np.asarray(dates.dates , dtype = np.int64))
         frames : list[pd.DataFrame] = []
         for db , valid in indexed:
@@ -1142,8 +1142,8 @@ class SellsideFactor(AffiliateFactorCalculator):
             sort_values(['secid' , 'date']).reset_index(drop = True)
 
     def load_factor(self , date : int , closest = False) -> pd.DataFrame:
-        """Return the as-of cross-section. A missing stats file is built first."""
-        from src.data.download.sellside.valid_dates import asof_map , load_valid_dates
+        """Return the as-of cross-section using explicitly maintained validity stats."""
+        from src.data.quality.valid_dates import asof_map , load_valid_dates
         indexed = False
         for db in self.full_dbs():
             valid = load_valid_dates(str(db['key']) , str(db['src']) , required = True)

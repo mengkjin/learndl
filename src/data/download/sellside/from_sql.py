@@ -16,7 +16,7 @@ from typing import Any , ClassVar , Literal , TypeAlias , overload
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Logger
 from src.proj.util.functional.parallel import parallel
 from src.data.util import secid_adjust , chinese_to_pinyin
-from src.data.download.sellside.valid_dates import (
+from src.data.quality.valid_dates import (
     backfill_valid_values , cross_section_stats , upsert_valid_values ,
 )
 

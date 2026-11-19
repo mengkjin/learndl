@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.proj import DB , Logger
+from src.proj import DB
 from src.proj.db.interface.db_path import DBPath
 
 STATS_DIR = '.data_stats'
@@ -154,14 +154,13 @@ def load_valid_dates(
 ) -> np.ndarray | None:
     """Dates with a usable cross-section.
 
-    None means the stats file was never built. ``required`` builds a missing
-    file from stored days and then always returns an array. An existing file
+    None means the stats file was never built. ``required`` raises for a missing
+    table; updates and maintenance explicitly build the statistics. An existing file
     is used as stored; dates absent from it are not scanned.
     """
     path = valid_values_path(db_key , db_src)
     if required and not path.exists():
-        Logger.stdout(f'{db_src}.{db_key} valid_values is missing; building it from stored dates')
-        backfill_valid_values(db_key , db_src , full = False)
+        raise FileNotFoundError(f'{db_src}.{db_key}: run sellside update or backfill_valid_values before reading')
     frame = read_valid_values(path)
     if frame is None:
         return np.array([] , dtype = np.int64) if required else None
