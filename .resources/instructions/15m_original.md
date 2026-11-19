@@ -29,7 +29,7 @@ fit/predict 均允许目标范围首尾缺源。以已核实快照日期与 min/
 沿用标准训练日志、每期指标快照和 basic_test 输出。明确指定旧运行和新运行，避免误选同名模型的最新目录：
 
 ```sh
-python -m src.res.model.util.original_comparison \
+python -m src.res.model.analytic.original_comparison \
   --baseline-log /path/to/old.html --candidate-log /path/to/new.html \
   --baseline-model /path/to/old_model --candidate-model /path/to/new_model \
   --output /path/to/comparison.json

@@ -369,7 +369,7 @@ def _update(root: Path, options: dict, *, target_snapshot=None) -> dict:
         installed_sources = {'src/automation/scheduling/' + name + '.py'
                              for name in ('installer', 'worker_bootstrap', 'autofix_sandbox', 'install_privileged')}
         if any(path.startswith(('configs/automation/', 'runs/scheduling/', 'runs/systemd/')) or
-               path in installed_sources or path == 'src/api/task_monitor/scheduling/installer.py' for path in changed):
+               path in installed_sources or path == 'src/automation/scheduling/installer.py' for path in changed):
             follow_up.append('scheduling definitions changed; inspect plan/apply separately')
         if any(path in {'configs/automation/autofix.yaml', 'runs/autofix/tasks.yaml'} or path.startswith('scripts/.autofix/') for path in changed):
             follow_up.append('autofix definitions changed; the separate worker validates new enabled IDs; '

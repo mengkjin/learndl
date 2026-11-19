@@ -4,8 +4,10 @@
 
 `src/automation` owns the watchdog, CLI recovery and scheduling control (workers,
 installation, admission, recovery, Git updates and autofix). `src/api/task_monitor`
-owns the monitor UI, queries and output cache. Its former control modules are
-compatibility entrypoints only; add all new control behavior under `src/automation`.
+owns the monitor UI, queries and output cache. Former scheduling forwarding modules
+have been removed; all scheduling commands use `src.automation.scheduling`.
+Publish source and installed entrypoints together in an idle maintenance window.
+Historical service snapshots remain readable for rollback with matching old code.
 General mail, script locks and task database helpers remain in their existing packages.
 
 This directory is the single editable source for non-training automation settings:
@@ -492,11 +494,11 @@ Git 因任务仍运行而等待时保留优先权，辅助工作仍可运行；�
 运行下面的临时夹具验收（不会启动真实训练、修复或部署生产服务）：
 
 ```bash
-LEARNDL_SYSTEMD_ACCEPTANCE=1 .venv/bin/python -m unittest src.automation.tests.test_priority_linux -v
+LEARNDL_SYSTEMD_ACCEPTANCE=1 .venv/bin/python -m unittest tests.automation.test_priority_linux -v
 ```
 
 该测试要求 Linux、可用的 `systemd-run --user` 和 Bubblewrap；创建的临时测试单元自动回收。
-另运行 `python -m unittest src.automation.tests.test_priority -v` 验证优先级、Git 核验和后台通知边界。
+另运行 `python -m unittest tests.automation.test_priority -v` 验证优先级、Git 核验和后台通知边界。
 生产启用后观察训练与独立数据任务并行、阻塞型 autofix 等待和超时释放，以及 Git 等待代码使用者结束的行为，
 不要手工重置账本来制造验收场景。本机 macOS 测试不代表 Linux/systemd 隔离验收已经通过。
 
@@ -589,7 +591,7 @@ bash runs/install_schedules.sh force --host mengkjin-server   # 预览、确认�
 安装前失败恢复准入；事务失败尝试回滚，回滚失败或安装中断进入 `repair_required`，需显式检查和回滚。
 待安装超过一小时发送提醒，同一等待状态每天最多一次；通知失败仍由独立邮件通道重试。
 
-本机验证：`python -m unittest discover -s src/automation/tests`。
+本机验证：`python -m unittest discover -s tests/automation`。
 Linux 验收使用上文 `LEARNDL_SYSTEMD_ACCEPTANCE=1` 命令；本机测试通过不代表已经部署或完成 Linux 隔离验收。
 
 

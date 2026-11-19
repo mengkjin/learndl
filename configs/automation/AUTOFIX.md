@@ -244,13 +244,13 @@ Linux 挂载检查读取 mountinfo，包含同文件系统的 bind mount；无�
 本机契约测试：
 
 ```bash
-python -m unittest src.automation.tests.test_autofix -v
+python -m unittest tests.automation.test_autofix -v
 ```
 
 Linux 隔离验收（只操作测试创建的临时文件，不运行清单中的修复）：
 
 ```bash
-LEARNDL_AUTOFIX_SANDBOX_TESTS=1 python -m unittest src.automation.tests.test_autofix.IsolationTests -v
+LEARNDL_AUTOFIX_SANDBOX_TESTS=1 python -m unittest tests.automation.test_autofix.IsolationTests -v
 ```
 
 还应在服务器用一次性的测试脚本和独立测试项目，验收 systemd cgroup 清理、超时、维护期间定时任务排队、脚本业务失败邮件和启动失败邮件。macOS 上通过的单元测试不能替代 Linux/systemd 验收。

@@ -1,61 +1,40 @@
 # Daily Update Workflow
-**Purpose:** End-to-end daily data refresh: pull new market/fundamental data, recompute factors, update live portfolio tracking.
 
----
+The current entry is `scripts/1_autorun/0_daily_update.py`, calling `UpdateAPI.daily()`.
+Do not use the retired `scripts/1_data` / `scripts/2_factor` examples.
 
-## Overview
+## Data prerequisites
 
-Run after market close each trading day. Scripts must be run in order.
+`DataAPI.update()` runs core downloads, sellside downloads, risk-model updates,
+registered custom updaters, then announcements. Within DailyQuote, validated
+`trade_ts/day` is published before the shared adjusted-price service runs. This
+intentional completion hook does not import or invoke CustomUpdater classes.
 
-```
-scripts/1_data/   → scripts/2_factor/   → scripts/4_trade/
-(data refresh)      (factor refresh)      (portfolio update)
-```
+The later AdjPriceUpdater checks source/output receipts and normally skips.
+Only the first trading date on/after the fixed `START_DATE=19970101` can omit a
+previous price panel. Missing predecessor prices trigger backward discovery and
+chronological construction. Missing raw trading-day history is an explicit error;
+a run's `start` parameter cannot establish a new seed date.
 
----
+Queries retain automatic repair through the same price service and reload the
+persisted result. Source publication and chained writes share a process lock;
+outputs use atomic replacement. The registered ListingPriceUpdater refreshes the
+full listing-reference table after adjusted-price prerequisites. Updater dependency
+ordering is declared explicitly, with cycles and missing dependencies rejected.
 
-## Step-by-step
+## Downstream execution
 
-### 1. Data refresh (`scripts/1_data/`)
-```bash
-python scripts/1_data/0_update_trade.py       # market data (OHLCV, turnover, etc.)
-python scripts/1_data/1_update_financial.py   # financial statements
-python scripts/1_data/2_update_analyst.py     # analyst estimates
-python scripts/1_data/3_update_index.py       # index constituents
-```
+`UpdateAPI.daily()` stops downstream model work when `DataAPI.is_updated()` fails.
+It then orchestrates factor/model/trading and reporting updates through their APIs.
+Standalone factor updates use `scripts/3_factor/0_update_factors.py`; data block
+preparation uses `scripts/2_data/0_train_data.py`. Rollback uses
+`scripts/1_autorun/2_rollback_update.py` and retains the project's recomputation
+semantics rather than restoring a point-in-time database snapshot.
 
-Uses `DATAVENDOR.update_*()` from [[data_pipeline]].
+## Maintenance and release
 
-### 2. Factor refresh (`scripts/2_factor/`)
-```bash
-python scripts/2_factor/0_update_factors.py   # recompute all registered factors for new date
-```
-
-Uses `FactorAPI.update()` from [[factor_engine]]. Only computes incremental dates (checks what's already saved).
-
-### 3. Portfolio update (`scripts/4_trade/`)
-```bash
-python scripts/4_trade/0_update_tracking.py   # update live tracking portfolios
-```
-
-Uses `TradingAPI.update()` from [[trading]]. Generates today's trade suggestions.
-
----
-
-## API Equivalents
-
-```python
-from src.api.pkgs import DataAPI, FactorAPI, TradingAPI
-
-DataAPI.update('trade', start=today, end=today)
-FactorAPI.update('all', start=today, end=today)
-TradingAPI.update()
-```
-
----
-
-## Common Issues
-
-- If market data is missing for a date, factor update will skip that date silently — check logs in `PATH.log/`
-- `DATAVENDOR` connections may require VPN or specific network; check `MACHINE.data_root` config
-- Run `CALENDAR.is_trading_day(today)` before triggering — skip on non-trading days
+Explicit data repairs live under `src/data/maintenance`, with thin entry scripts in
+`scripts/8_fixes`. Do not run production rebuilds as an import or deployment step.
+Quiesce in-flight jobs before updating source and installed module commands together.
+Keep runtime ledgers, locks, request IDs and historical manifests in place; rollback
+requires the matching old source and installation snapshot, not mixed entrypoints.

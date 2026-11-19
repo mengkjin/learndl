@@ -1,6 +1,8 @@
 # 因子时序模型 v1
 
-专用实现位于 `src/data/preprocess/factor_sequence` 和
+数据变换和 bundle 位于 `src/data/preprocess/factor_sequence`，训练与源适配位于
+`src/res/model/experiment/factor_sequence`，诊断位于 `src/res/model/analytic/factor_sequence`，
+显式修复位于 `src/data/maintenance/factor_sequence`，网络定义位于
 `src/res/algo/nn/model/factor_sequence`。模型目录见 `models.json`，冻结数据定义见
 `data.json`，实际模型参数见 `configs/algo/nn/factorseq_*.yaml`。
 M3（历史情境注意力）、M4（快慢分支）、M5（股票图）仅登记，不可运行。
@@ -65,10 +67,10 @@ M3（历史情境注意力）、M4（快慢分支）、M5（股票图）仅登�
 不发送邮件。真实训练沿用现有训练器的设备选择；离线自动测试使用 CPU。
 
 ```bash
-.venv/bin/python -m src.data.preprocess.factor_sequence.pipeline build --run-id fs_v1_001 --data-config configs/experience/model/factor_sequence/data.json
-.venv/bin/python -m src.data.preprocess.factor_sequence.pipeline audit --run-id fs_v1_001
-.venv/bin/python -m src.data.preprocess.factor_sequence.pipeline smoke --run-id fs_v1_001
-.venv/bin/python -m src.data.preprocess.factor_sequence.pipeline compare --run-id fs_v1_001
+.venv/bin/python -m src.res.model.experiment.factor_sequence.pipeline build --run-id fs_v1_001 --data-config configs/experience/model/factor_sequence/data.json
+.venv/bin/python -m src.res.model.experiment.factor_sequence.pipeline audit --run-id fs_v1_001
+.venv/bin/python -m src.res.model.experiment.factor_sequence.pipeline smoke --run-id fs_v1_001
+.venv/bin/python -m src.res.model.experiment.factor_sequence.pipeline compare --run-id fs_v1_001
 ```
 
 也可使用 `all` 顺序执行。每阶段只运行一次，已有状态文件禁止覆盖。

@@ -27,8 +27,10 @@ Before project initialization/code-lock admission, use the lightweight standard-
   `autofix.yaml`. Read `README.md` for operations and `AUTOFIX.md` for repair requests.
 
 Monitor UI, queries and output caching stay under `src/api/task_monitor`.
-Former control modules there only forward to `src/automation`; never add another
-implementation to a compatibility module. Shared mail, logging and script locks
+Scheduling modules under the former monitor namespace have been removed.
+Use `src.automation.scheduling` for all commands and imports. Upgrade installed
+entrypoints in an idle maintenance window; historical installation snapshots
+remain readable for rollback together with their matching source revision. Shared mail, logging and script locks
 remain in `src/proj`; the task database remains in `src/api/util/backend`.
 Training worklists, model schedules and RL configurations are not automation
 configuration files and retain their existing locations.
@@ -69,8 +71,8 @@ and do not authorize the automatic updater to bypass code leases.
 
 ## Validate and deploy
 
-Run relevant tests in `src/automation/tests`; for monitor interactions also run
-`src/api/task_monitor/tests`. Migration coverage is in `test_migration.py`.
+Run relevant tests in `tests/automation`; for monitor interactions also run
+`tests/task_monitor`. Migration coverage is in `test_migration.py`.
 Tests use temporary ledgers and mocked notifications, never real production IDs.
 Linux isolation/service tests are opt-in; macOS passes do not verify systemd/Bubblewrap.
 

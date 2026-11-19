@@ -67,7 +67,7 @@
 
 ```bash
 MPLCONFIGDIR=/tmp/learndl-mpl-fs .venv/bin/python -m unittest discover -s tests -p 'test_factor_sequence*.py' -q
-.venv/bin/python -m unittest discover -s src/automation/tests -p test_artifact_exchange.py -q
+.venv/bin/python -m unittest discover -s tests/automation -p test_artifact_exchange.py -q
 ```
 
 服务器缺少原始数据或真实 `@2` 权重时不能完成生产验收。不得以人工测试数据的成功替代它。

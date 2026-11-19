@@ -202,7 +202,7 @@ RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风�
 运行测试：
 
 ```bash
-MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s src/res/rl_experimental/tests -v
+MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s tests/rl_experimental -v
 ```
 
 ## 观察实验过程的 notebooks

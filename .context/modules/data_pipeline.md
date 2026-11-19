@@ -33,7 +33,7 @@ src/data/
 │   └── loader.py               # BlockLoader, FrameLoader, FactorLoader, FactorCategory1Loader
 ├── preprocess/        # Preprocessing pipeline
 │   ├── core.py                 # PreProcessorMeta, PreProcessorProperty, PreProcessor hierarchy
-│   ├── processors.py           # All PrePro_* concrete subclasses + PrePros accessor
+│   ├── processors/             # PrePro_* concrete subclasses + PrePros accessor
 │   └── task.py                 # PreProcessorTask (CLI entry point)
 ├── update/            # Orchestrated data update pipelines
 │   ├── updater.py              # CoreDataUpdater, SellsideDataUpdater, CustomDataUpdater
@@ -440,3 +440,24 @@ This means adding a short-history block will trim dates from all other blocks. B
 
 ### `FREQUENT_DBS` caching
 `DataBlock.load_raw()` maintains a local `.mmap` dump for `FREQUENT_DBS` (trade_ts.day, trade_ts.day_val, models.tushare_cne5_exp). Reads of 500+ dates use the dump and only fetch missing dates from the DB.
+
+
+## Ownership and price publication (2026-11)
+
+- Shared adjusted/listing price calculations and publication: `src/data/util/prices/`.
+- DailyQuote publishes validated `trade_ts/day` first, then builds adjusted prices under the same cross-process price lock. Download does not import custom updater classes.
+- Day publication reports create/replace/skip explicitly. An unchanged response may still repair missing adjusted prices, but it does not count as newly downloaded raw data; an empty updated-date set reports `SKIPPED`.
+- Only the first trading date on/after the fixed `START_DATE=19970101` may omit a previous adjusted-price panel. A missing predecessor triggers iterative backward discovery followed by chronological construction. A gap in raw trading-day data fails explicitly; a per-run start date never creates a new seed boundary.
+- `AdjPriceUpdater` normally checks source/output receipts and skips unchanged files. Queries retain automatic repair through the same service and reload the resulting panel. Original-day revisions propagate forward through stored adjusted-price dates.
+- `ListingPriceUpdater` is registered, follows AdjPriceUpdater, and refreshes changed listing-day sources. It owns the full `information_ts/list_day_price` table.
+- Custom updater dependencies are validated before execution. Full and selective updates both use dependency order, with `UPDATE_ORDER` breaking ties among ready tasks; selection still limits which updaters run.
+- Derived `.source.json` receipts record input/output file size and nanosecond modification time, not content hashes. They are internal invalidation metadata, not immutable research provenance. Missing receipts require verification/reconstruction; database schemas remain unchanged.
+- Maintenance and rollback journals: `src/data/maintenance/`; quality date statistics: `src/data/quality/`. Reading quality metadata never builds it; run a sellside update or explicit backfill first.
+- Factor-sequence preprocessing retains schema, transforms, bundles and processors. Experiment orchestration/source discovery is under `src/res/model/experiment/factor_sequence`; model diagnostics under `src/res/model/analytic/factor_sequence`; repairs under `src/data/maintenance/factor_sequence`.
+- `preprocess/factor_sequence/repaired_bundle.py` owns streaming construction and legacy repair-manifest validation. The research source adapter passes explicit factor sources and readers; loading a bundle never imports maintenance or research registration modules.
+- Every price check verifies the complete predecessor chain, including older source revisions behind an unchanged immediate predecessor. Batch custom checks share verification within one lock. Invalid replacement sources leave existing derived files intact.
+- Inside an explicit read snapshot, queries validate and consume frozen prices without publishing live data. An incomplete frozen panel fails explicitly; forced price updates are rejected in that scope.
+- Resource headroom/RSS live in `src/proj/util/resource`, with tensor/DataBlock probes in `src/data/util/mem_trace.py`.
+- Software tests live under root `tests/`; callback `test` remains the production model evaluation stage.
+
+Migration requires a coordinated source/entrypoint upgrade; old Python scheduling and factor-sequence command paths are not forwarding aliases. Do not migrate historical manifests, run IDs, ledgers or output directories. Existing manifests retain their recorded hashes; newly built datasets record current code using explicit logical component paths.
