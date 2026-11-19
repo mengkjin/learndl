@@ -218,6 +218,8 @@ def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
         previous = int(CALENDAR.td(cursor, -1).as_int())
         if previous >= cursor or previous < boundary:
             raise ValueError(f'Invalid predecessor for adjprice at {cursor}')
+        if DB.path('trade_ts', 'adjprice', previous).exists():
+            break
         cursor = previous
     changed = False
     for current, was_fresh in reversed(pending):
@@ -242,13 +244,11 @@ def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
         verified.add(current)
         changed = True
         Logger.stdout(f'adjprice date={current} trigger={reason} action={action} inputs={inputs}', vb_level=1)
-    if not changed:
-        Logger.stdout(f'adjprice date={date} trigger={reason} action=skip', vb_level=2)
     return changed
 
 
 def ensure_adjprice(date: int, *, force: bool = False, reason: str = 'query') -> bool:
-    """Backtrack to a verified predecessor, then build forward without recursion."""
+    """Use the previous file as a boundary; backtrack only across missing files."""
     if snapshot_active() and not force:
         # Frozen reads must never certify or replace live files with old inputs.
         day = DB.load('trade_ts', 'day', int(date), vb_level='never')

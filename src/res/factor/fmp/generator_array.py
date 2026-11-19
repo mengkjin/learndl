@@ -140,8 +140,9 @@ def evolve(position: Position, date: int, quotes: Quotes | None) -> Position:
     if quotes is None:
         return Position(position.ids, position.weights, int(date), position.value, position.exists)
     valid, index = matching(position, quotes)
-    weights = position.weights[valid]
-    new = weights * (1. + quotes.returns[index])
+    weights = position.weights
+    new = weights.astype(float, copy=True)
+    new[valid] *= 1. + quotes.returns[index]
     value = position.value * (1. + new.sum() - weights.sum())
     if not np.isfinite(value) or value == 0:
         raise UnsupportedGenerator('nonfinite or zero portfolio value during evolution')
@@ -149,7 +150,7 @@ def evolve(position: Position, date: int, quotes: Quotes | None) -> Position:
     if not np.isfinite(weights).all() or np.any(weights < 0):
         raise UnsupportedGenerator('evolution left the finite long-only domain')
     order = descending_order(weights)
-    return Position(position.ids[valid][order], weights[order], int(date), value, position.exists)
+    return Position(position.ids[order], weights[order], int(date), value, position.exists)
 
 
 def turnover(new: Position, old: Position, decimals: int):
@@ -159,8 +160,7 @@ def turnover(new: Position, old: Position, decimals: int):
     weights = np.zeros(len(ids))
     weights[np.searchsorted(ids, new.ids)] += new.weights
     # Port.__sub__ uses ``another * -1``; __mul__ calls rescale, so the
-    # reference normalizes the OLD position before subtracting it. Missing
-    # quote rows can leave its weight sum below one. Do not "fix" that here.
+    # reference normalizes the OLD position before subtracting it.
     with np.errstate(divide='ignore', invalid='ignore'):
         previous = old.weights / old.weights.sum()
     weights[np.searchsorted(ids, old.ids)] -= np.nan_to_num(previous, nan=0.)
@@ -218,7 +218,7 @@ class Inputs:
                     raise UnsupportedGenerator('nonfinite prepared quote returns')
                 self.quotes[key] = Quotes(ids, values)
                 return self.quotes[key]
-            q = DATAVENDOR.get_quote_ret(date0, date1, 'close', price)
+            q = DATAVENDOR.get_quote_ret(date0, date1, 'close', price, portfolio=True)
             if q is None:
                 raise ValueError(f'Ret Quote (at {date1}) does not exist')
             ids = q['secid'].to_numpy(dtype=np.int64) if 'secid' in q else q.index.to_numpy(dtype=np.int64)
@@ -231,9 +231,25 @@ class Inputs:
             self.quotes[key] = Quotes(ids[order], values[order])
         return self.quotes[key]
 
+    def held_quote(self, position, end=None, price: Literal['close', 'open', 'vwap'] = 'close'):
+        """Repair missing held endpoints once per block, including for prepared inputs."""
+        start = int(DATAVENDOR.td(position.date))
+        end = int(DATAVENDOR.td(start, 1)) if end is None else int(end)
+        quotes = self.quote(start, end, price)
+        valid, _ = matching(position, quotes)
+        if valid.all():
+            return quotes
+        missing = position.ids[~valid]
+        repaired = DATAVENDOR.get_quote_ret(start, end, 'close', price, secid=missing)
+        ids = np.concatenate((quotes.ids, missing))
+        values = np.concatenate((quotes.returns, repaired.ret.reindex(missing).fillna(0).to_numpy(dtype=float)))
+        order = np.argsort(ids)
+        self.quotes[start, end, price] = Quotes(ids[order], values[order])
+        return self.quotes[start, end, price]
+
     def drift(self, state, date):
         old, new = int(DATAVENDOR.td(state.date)), int(DATAVENDOR.td(date))
-        q = None if old == new else self.quote(old, new)
+        q = None if old == new else self.held_quote(state, new)
         return evolve(state, date, q)
 
     def benchmark(self, portfolio, date):
@@ -339,10 +355,10 @@ def account_arrays(group, records, inputs, block_days):
                 old, new = plan['old'], plan['positions'][int(date)]
                 end = int(plan['ends'][i])
                 bench = inputs.benchmark(plan['builder'].benchmark, date)
-                close = inputs.quote(new.date, end)
-                row = account_step(old, new, bench, close, inputs.quote(bench.date, end),
-                                   inputs.quote(old.date, price='open'), inputs.quote(new.date, price='open'),
-                                   inputs.quote(old.date, price='vwap'), inputs.quote(new.date, price='vwap'),
+                close = inputs.held_quote(new, end)
+                row = account_step(old, new, bench, close, inputs.held_quote(bench, end),
+                                   inputs.held_quote(old, price='open'), inputs.held_quote(new, price='open'),
+                                   inputs.held_quote(old, price='vwap'), inputs.held_quote(new, price='vwap'),
                                    Const.Factor.ROUNDING.ret, Const.Factor.ROUNDING.turnover)
                 if not np.isfinite(row).all():
                     raise UnsupportedGenerator('nonfinite account result')

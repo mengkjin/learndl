@@ -23,9 +23,10 @@
 
 ```text
 results/model_training/server__nn@modelAAA/<UTC时间>__<UUID>/
-  results/                 # 模型自身 ModelPath.rslt() 的完整文件树
-  tensorboard/<名称>.zip
-  optuna/<名称>.zip
+  results/                 # 模型分析报告
+    tensorboard/<名称>.zip
+    optuna/<名称>.zip
+  html/<run_id>.html       # 显式训练或测试的运行记录
   source.json
 ```
 
@@ -305,15 +306,19 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 
 ## 10. 0.7.2 目录迁移与历史邮件补投
 
+空环境会以当前代码版本建账并跳过这些历史补丁。迁入旧环境的文件时，先恢复原版本台账。
+如果没有台账，先用 `python -m src.automation.version_patch init --baseline <数据版本>`
+登记已确认的数据版本，再查看迁移计划。
+
 升级前，在将要运行补丁的 checkout 中用项目解释器查看只读预检：
 
 ```bash
-.venv/bin/python -m src.automation.artifact_exchange.result_layout
-.venv/bin/python -m src.automation.artifact_exchange.mail_backfill
-.venv/bin/python -m src.automation.version_autofix plan
+PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.2/support/result_layout.py
+PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.2/support/mail_backfill.py
+.venv/bin/python -m src.automation.version_patch plan
 ```
 
-先更新接收机，再更新服务器。按 [版本补丁说明](../../scripts/.version_autofix/README.md)
+先更新接收机，再更新服务器。按 [版本补丁说明](../../scripts/.version_patch/README.md)
 在空闲窗口运行补丁。迁移前关停正在阅读或写入实验文件的 TensorBoard、Optuna 和其他程序。
 本机接收程序会通过接收锁与迁移互斥。升级后重启控制台和实验面板。
 

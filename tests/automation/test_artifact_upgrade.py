@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 from src.automation.artifact_exchange.core import ArtifactSpec, Config, atomic_json, publish_artifacts, receive, retry
-from src.automation.version_autofix import load_patch_support
+from src.automation.version_patch import load_patch_support
 
 mail_backfill = load_patch_support('0.7.2', 'mail_backfill')
 result_layout = load_patch_support('0.7.2', 'result_layout')

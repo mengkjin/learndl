@@ -14,6 +14,9 @@ from .artifact_library import Library, open_folder
 from .services import SERVICES, STATE
 
 
+__all__ = ['main']
+
+
 def main(kind, *, state=STATE):
     port = SERVICES[kind]['port']
     origin = f'http://127.0.0.1:{port}'

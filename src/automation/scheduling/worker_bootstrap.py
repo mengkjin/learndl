@@ -131,10 +131,10 @@ def main():
         os.chdir(settings['root'])
         sys.path.insert(0, settings['root'])
         config = json.loads((runtime / 'installed.json').read_text())
-        if config.get('version_autofix') and kind != 'email_outbox':
+        if kind != 'email_outbox' and {'version_patch', 'version_autofix'} & config.keys():
             from src.automation.console import logger
-            from src.automation.version_autofix import admission_reason
-            if reason := admission_reason(Path(settings['root']), runtime.parent):
+            from src.automation.version_patch import activation, admission_reason
+            if activation(config) and (reason := admission_reason(Path(settings['root']), runtime.parent)):
                 logger.error('%s', reason)
                 return 0
         sys.argv = [module, *arguments]

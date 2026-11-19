@@ -1,4 +1,8 @@
 fit:
+  - name: resnet_gru_simp_15m_learned_swa
+    mode: sparse
+  - name: resnet_gru_simp_15m_pearson_swa
+    mode: sparse
   - name: resnet_gru_simp_15m_learned
     mode: sparse
   - name: resnet_gru_simp_15m_pearson

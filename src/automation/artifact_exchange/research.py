@@ -330,9 +330,9 @@ def register_report(source, run_id):
 def model_run(trainer, log=None):
     """Collect one model invocation, including standalone and resumed trainers."""
     specs = []
-    token = MODEL_ARTIFACTS.set(specs)
     status = 'success'
     run_id = log.run_id if log is not None else datetime.now(timezone.utc).isoformat() + '__' + uuid.uuid4().hex
+
     def inventory(folder):
         signatures = {}
         for path in folder.rglob('*'):
@@ -348,11 +348,18 @@ def model_run(trainer, log=None):
         return {p: signature for p, signature in inventory(folder).items()
                 if p.relative_to(folder).parts[0] not in ('optuna', 'tensorboard')}
 
-    before_results = before_events = {}
-    if log is not None:
-        base = trainer.config.base_path
-        before_results = reports(base.rslt())
-        before_events = inventory(base.rslt('tensorboard'))
+    before_results, before_events = {}, {}
+    config = None
+    preparation_error = None
+    try:
+        config = None if sandboxed() else Config.load()
+        if log is not None and config is not None and config.enabled and config.role == 'publisher':
+            base = trainer.config.base_path
+            before_results = reports(base.rslt())
+            before_events = inventory(base.rslt('tensorboard'))
+    except Exception as exc:
+        preparation_error = str(exc)
+    token = MODEL_ARTIFACTS.set(specs)
     try:
         yield
     except BaseException:
@@ -361,7 +368,8 @@ def model_run(trainer, log=None):
     finally:
         MODEL_ARTIFACTS.reset(token)
         try:
-            config = None if sandboxed() else Config.load()
+            if preparation_error is not None:
+                raise RuntimeError(preparation_error)
             if config is not None and config.enabled and config.role == 'publisher':
                 # On failure, close still-open writers before considering diagnostics.
                 for callback in trainer.callback.callbacks:

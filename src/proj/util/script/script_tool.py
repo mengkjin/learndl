@@ -146,10 +146,12 @@ class ScriptTool:
                 return inner(*args , **kwargs)
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
             archive = self._mail_sync
+            header = None
             if self.source_mode != 'api' and (header_path := _resolve_script_header_path()) is not None:
                 from src.api.util.backend import ScriptHeader
-                if (header_value := ScriptHeader.read_from_file(header_path).mail_sync) is not None:
-                    archive = header_value
+                header = ScriptHeader.read_from_file(header_path)
+                if header.mail_sync is not None:
+                    archive = header.mail_sync
             elif self.source_mode == 'api' and self.interaction and 'mail_sync' in self.interaction:
                 archive = self.interaction['mail_sync']
             self.autorun_task.kwargs['mail_sync'] = kwargs.get('mail_sync', archive)
@@ -164,10 +166,8 @@ class ScriptTool:
                     self.autorun_task.kwargs['email'] = bool(data['email'])
                 elif 'email' not in self.autorun_task.kwargs:
                     self.autorun_task.kwargs['email'] = False
-            else:
-                if 'email' not in self.autorun_task.kwargs and (caller_path := _resolve_script_header_path()) is not None:
-                    from src.api.util.backend import ScriptHeader
-                    self.autorun_task.kwargs.update({'email' : ScriptHeader.read_from_file(caller_path).email})
+            elif 'email' not in self.autorun_task.kwargs and header is not None:
+                self.autorun_task.kwargs['email'] = header.email
             from src.automation.scheduling.runner import inherited_lock
             task_func = self.autorun_task(inner)
             if not inherited_lock(self.lock_name or self.task_name):

@@ -41,7 +41,7 @@ class Market:
         self.ids = np.arange(1, stocks + 1)
         self.quote_calls = []
 
-    def quote(self, begin, end, price0="close", price1="close", secid=None):
+    def quote(self, begin, end, price0="close", price1="close", secid=None, *, portfolio=False):
         self.quote_calls.append((int(begin), int(end), price1))
         ids = self.ids[(self.ids + begin) % 97 != 0]
         values = np.sin(ids * 0.7 + begin) * 0.01 * (end - begin)
@@ -49,7 +49,8 @@ class Market:
             values += 0.003 if price1 == "open" else -0.002
         values = values.astype(float)
         values[(ids + end) % 89 == 0] = np.nan
-        return pd.DataFrame({"secid": ids, "ret": values}).set_index("secid")
+        quotes = pd.DataFrame({"secid": ids, "ret": values}).set_index("secid")
+        return quotes if secid is None else quotes.reindex(secid).fillna(0.)
 
     def industry(self, date):
         values = np.array([f"i{x % 16}" for x in self.ids], dtype=object)
@@ -226,6 +227,12 @@ class T50ArraysTest(TestCase):
                 expected.turnover(port),
             )
 
+    def test_integer_position_weight_can_drift(self):
+        port = Port(pd.DataFrame({'secid': [1], 'weight': [1]}), 20230102)
+        actual = evolve(from_port(port), 20230103, Quotes(np.array([1]), np.array([.25])))
+        self.assertEqual(actual.value, 1.25)
+        np.testing.assert_array_equal(actual.weights, [1.])
+
     def test_complete_pipeline_multiple_models_blocks_and_no_cache_leakage(self):
         market = Market()
         with ExitStack() as stack:
@@ -314,9 +321,9 @@ class T50ArraysTest(TestCase):
                     patch.object(
                         DATAVENDOR,
                         "get_quote_ret",
-                        return_value=pd.DataFrame(
-                            {"secid": np.empty(0, dtype=int), "ret": np.empty(0)}
-                        ).set_index("secid"),
+                        side_effect=lambda *args, secid=None, **kwargs: pd.DataFrame(
+                            {"ret": 0.}, index=pd.Index([] if secid is None else secid, name="secid")
+                        ),
                     )
                     if case == "empty_quotes"
                     else nullcontext()

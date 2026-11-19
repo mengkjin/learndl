@@ -9,6 +9,9 @@ from uuid import uuid4
 
 from .core import ArtifactSpec, Config, atomic_json, component, publish_artifacts, sandboxed
 
+__all__ = ['DEFAULT_TASKS', 'freeze_task_attachments', 'archive_message', 'publish_archive']
+
+
 DEFAULT_TASKS = {
     'daily_update', 'weekly_update', 'tracking_update', 'rcquant_sec_backfill',
     'train_model', 'train_schedule_model', 'resume_train', 'resume_training',
@@ -17,12 +20,12 @@ DEFAULT_TASKS = {
 
 
 def enabled(owner, override=None):
-    if override is not None:
-        return bool(override)
-    if owner is None:
-        return False
-    explicit = getattr(owner, 'kwargs', {}).get('mail_sync')
-    return bool(explicit) if explicit is not None else owner.task_name in DEFAULT_TASKS
+    explicit = override if override is not None else getattr(owner, 'kwargs', {}).get('mail_sync')
+    if explicit is None:
+        return owner is not None and owner.task_name in DEFAULT_TASKS
+    if isinstance(explicit, str):
+        return explicit.strip().lower() in ('true', 'yes', 'on', '1')
+    return bool(explicit)
 
 
 def publisher(owner, override=None):
@@ -46,7 +49,13 @@ def freeze_task_attachments(owner):
     if config is None:
         yield
         return
-    with TemporaryDirectory(prefix='learndl-mail-original-') as work:
+    try:
+        temporary = TemporaryDirectory(prefix='learndl-mail-original-')
+    except OSError as exc:
+        owner.logger.warning(f'Mail attachment snapshot unavailable: {exc}', vb_level=0)
+        yield
+        return
+    with temporary as work:
         originals = Proj.exit_files.snapshot() + Proj.email_attachments.snapshot()
         for entry in dict.fromkeys(originals):
             try:
@@ -87,8 +96,10 @@ def archive_message(message, *, override=None, main_task=False, notification_id=
         }
         originals = getattr(owner, '_mail_original', ()) if main_task else ()
         records = publish_archive(config, message, metadata, originals=originals)
-        from .research import log_results
-        log_results(records, owner)
+        for record in records:
+            if record.get('status') != 'published':
+                reason = record.get('error') or record.get('reason') or record['status']
+                delivery_log(f'Mail archive {record["status"]}: {reason}', failed=True, owner=owner)
     except Exception as exc:
         delivery_log(f'Mail archive failed: {exc}', failed=True, owner=owner)
 

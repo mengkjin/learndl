@@ -101,16 +101,23 @@ def verify(ctx):
 
 Run from the project checkout with the project's Python environment.
 
-- `python -m src.automation.version_autofix status` shows versions, pending
+- `python -m src.automation.version_patch status` shows versions, pending
   patches, and attempt history. `plan` shows pending work.
-- `python -m src.automation.version_autofix apply` runs pending patches under the
-  same locks as the timer. The default baseline is `0.7.1`. Before the first
-  application, an operator may run `init --baseline <version>` to record a
-  different, confirmed version of the existing data.
+- `python -m src.automation.version_patch apply` runs pending patches under the
+  same locks as the timer. On a fresh installation, the first maintenance tick
+  or `apply` registers the current code version and skips older patches. Empty
+  directory scaffolding and the checkout's `results/README.md` do not count as
+  existing data.
+- Restore the original version ledger and its backups alongside imported data.
+  Before installing or starting tasks on a host with imported files and no
+  ledger, run `python -m src.automation.version_patch init --baseline <data-version>`
+  with the actual version of the files. The system blocks until this is set.
+  The check includes data, models, results, local Optuna and TensorBoard files,
+  and task mail artifacts. File timestamps are not used to infer the version.
 - After a failure, inspect the attempt under
-  `PATH.runtime/version_autofix/attempts/` and check the patch's backup.
+  `PATH.runtime/version_patch/attempts/` and check the patch's backup.
   Correct the cause and run
-  `python -m src.automation.version_autofix retry 0.7.2/001` using the reported
+  `python -m src.automation.version_patch retry 0.7.2/001` using the reported
   patch ID. The command resumes the first unfinished patch and then later
   patches. An interrupted attempt requires the same explicit retry.
 - Retry can use corrected committed code on a clean fast-forward descendant
@@ -121,3 +128,7 @@ Run from the project checkout with the project's Python environment.
   failed attempt and log path. Restore a missing or damaged ledger from backup
   before resuming. Keep the ledger with the host data when recovering a server.
   A code downgrade below the data version requires an operator-managed restore.
+
+Hosts upgraded from the previous name keep using their existing
+`PATH.runtime/version_autofix/` directory. The new CLI reads the same history
+and backups in place. Use the new CLI and catalog path for new work.

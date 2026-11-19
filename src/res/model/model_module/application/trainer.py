@@ -182,7 +182,8 @@ class ModelTrainer(BaseTrainer):
         assert factor_name, 'factor_name is required'
         base_path = ModelPath(f'factor@{factor_name}')
         assert base_path in cls.resumable_factors(start, end), f'factor_name {factor_name} is not available within {start} and {end}'
-        return cls.GO(title = f'Test Factor of Factor {factor_name}' , 
+        kwargs.setdefault("html_catcher", True)
+        return cls.GO(operation="test", title = f'Test Factor of Factor {factor_name}' ,
                       base_path = base_path , short_test = False , stage = stage , resume = resume , 
                       selection = selection, start = start , end = end , **kwargs)
 

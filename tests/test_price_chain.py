@@ -1,4 +1,4 @@
-"""Price publication must respect the complete predecessor chain."""
+"""Price repair fills missing predecessors; publication propagates revisions."""
 import tempfile
 import unittest
 from pathlib import Path
@@ -150,24 +150,28 @@ class PriceChainTest(unittest.TestCase):
             update_listing_prices()
         self.assertEqual(output.read_bytes(), original)
 
-    def test_query_detects_revision_before_unchanged_immediate_predecessor(self):
+    def test_query_does_not_scan_behind_existing_predecessor(self):
         self.raw(20041230, (1, 2), (10., 20.))
         self.raw(20041231)
         self.raw(20050104)
         prices.ensure_adjprice(20050104)
         self.raw(20041230, (1, 2), (10., 35.))
-        prices.ensure_adjprice(20050104)
+        with (patch.object(prices, 'fresh', wraps=prices.fresh) as fresh,
+              patch.object(prices.Logger, 'stdout') as output):
+            prices.ensure_adjprice(20050104)
+            fresh.assert_called_once_with(20050104)
+            output.assert_not_called()
         result = pd.read_feather(self.path('trade_ts', 'adjprice', 20050104)).set_index('secid')
-        self.assertEqual(result.loc[2, 'close'], 35.)
+        self.assertEqual(result.loc[2, 'close'], 20.)
 
-    def test_query_detects_missing_ancestor_behind_valid_immediate_predecessor(self):
+    def test_missing_ancestor_behind_existing_predecessor_is_not_scanned(self):
         self.raw(20041230, (1, 2), (10., 20.))
         self.raw(20041231)
         self.raw(20050104)
         prices.ensure_adjprice(20050104)
         self.path('trade_ts', 'adjprice', 20041230).unlink()
-        self.assertTrue(prices.ensure_adjprice(20050104))
-        self.assertTrue(self.path('trade_ts', 'adjprice', 20041230).exists())
+        self.assertFalse(prices.ensure_adjprice(20050104))
+        self.assertFalse(self.path('trade_ts', 'adjprice', 20041230).exists())
 
     def test_frozen_reads_never_publish_snapshot_inputs_to_live_files(self):
         self.raw(20041230)

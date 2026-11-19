@@ -326,7 +326,7 @@ coverage until repaired. Use a tested master and retain an external way to inspe
 systemd failures. Updating worklist/schedule contents also invalidates completion
 versions and can cause future idle training to run again, per worklist policy.
 
-The Git maintenance timer also reconciles [version patches](../../scripts/.version_autofix/README.md)
+The Git maintenance timer also reconciles [version patches](../../scripts/.version_patch/README.md)
 for local data and models after verified updates and manual pulls. Install the updated
 managed bootstrap to enable migration checks before new business work.
 

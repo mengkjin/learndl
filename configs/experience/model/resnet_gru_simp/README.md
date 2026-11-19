@@ -97,3 +97,35 @@ CCC 与 MSE 的损失尺度不同，固定 alpha 的本轮比较包含正则相�
 其余配置均沿用原始 simp 基线，种子 0、histnorm=true、fit/test 权重 equal，
 单层 GRU、日级宽度 128、Global2Top=false。以 sparse、resume=false 入队，
 不重新加入已经从队列移除的旧实验。新增两项按基线粗估共约 6 小时。
+
+## best / swalast 同轨迹对照（2026-11-19）
+
+新增 `resnet_gru_simp_15m_learned_swa` 与 `resnet_gru_simp_15m_pearson_swa`，
+仅更换模型名称，并将 submodels 改为 `[best, swalast]`。各自保留原实验的全部
+网络、损失、种子、学习率及停止设置。两项在 main worklist 前部以 sparse 入队，
+沿用 resume=false；不改变其他任务或 rerun_mark，不重置服务器台账。
+
+每份 schedule 只训练一条轨迹，两种权重共享训练数据、epoch 序列以及最终选择的
+trial。`dump_model` 对两种 submodel 使用同一个 best_attempt，避免独立选 trial
+造成混淆；分别落盘、预测和生成标准报告，由已有模型产物流程发布。
+新增 BN 校准和第二套测试会增加耗时，但不需要为两种 submodel 分别训练。
+
+当前 SWALast 的含义不是“最后五轮”：默认 interval=3、n_last=5，以本 phase 的
+最佳 epoch 为中心，取之前最多两个按 3 取整采样的 epoch、最佳点、之后的周期采样点，
+截取前五个等权平均参数。例如 best=8，训练到18时，取3/6/8/9/12；靠近边界时
+可能不足五个。之后在训练数据上重新估计 BN 统计量，不平均预测，不使用验证或测试
+数据校准 BN。两份实验 Global2Top 均关闭，不涉及跨 phase 权重平均。
+
+检验主问题：在相同模型日期、参数索引、测试日期下，计算 swalast-best 的年度和全期
+RankIC、Top5%、Top50 收益、回撤及换手差值，并报告胜出年份数。分别在 learned 和
+pearson 内配对，再比较两者改善幅度。特别检查2022、2025及2026不完整年度，避免
+由单一年份贡献主导结论；统一交易成本与回测区间。检查 swa 是否仅降低收益波动，
+还是同时改善排序和头部选择。不能用训练期 best 验证分数代替 swa 的测试成绩。
+
+这些是重新训练的独立实验，不从已归档的单份 best 权重重建 SWA。种子相同不保证
+跨进程、设备或代码版本逐位复现，因此主要对照为每份新实验内部 best vs swalast，
+旧报告仅作参考。此轮是单种子筛选；观察到改善后再安排其他种子复核。
+
+本地合成检查覆盖两种输出头的真实网络：best 权重精确恢复、swalast 所选点及参数
+算术平均、BN 统计重算、原模型不变、输出有限，以及实际 ModelConfig 合并。
+它验证实验链路，不证明样本外收益改善；真实结果需服务器完成训练与测试。

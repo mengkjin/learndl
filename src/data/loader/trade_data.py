@@ -8,7 +8,8 @@ from __future__ import annotations
 import pandas as pd
 from typing import Any , Literal , cast
 
-from src.proj import CALENDAR , DB , Base , Dates
+from src.proj import CALENDAR , DB , Base , Dates , Logger
+from src.proj.db.io.snapshot import snapshot_active
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -97,9 +98,36 @@ class TradeDataAccess(DateDataAccess):
 
     def get_adjprice(self , date , field = None) -> pd.DataFrame:
         """Return halt-filled adjfactor-adjusted OHLC/VWAP for a single ``date``."""
+        if snapshot_active():
+            # A frozen panel must neither come from nor populate the live cache.
+            frame = self.data_loader(int(date), 'adj').assign(date=int(date)).set_index('date')
+            return frame if field is None or frame.empty else frame.loc[:, Base.ensure_name_list(field, [])]
+        return self.get(int(date), 'adj', field)
+
+    def get_adjprice_with_ensure(self, date, secid, field=None) -> pd.DataFrame:
+        """Repair only when requested holdings lack adjusted-price rows."""
         from src.data.util.prices.adjusted import ensure_adjprice
-        ensure_adjprice(int(date), reason='query')
-        return self.get(int(date), 'adj', field, overwrite=True)
+        ids = Base.ensure_secid(secid)
+        if ids is None:
+            raise ValueError('Explicit holdings are required for adjusted-price repair')
+        wanted = pd.Index(ids)
+        frame = self.get_adjprice(date)
+
+        def missing(frame):
+            return wanted.difference(frame.secid if 'secid' in frame else [])
+
+        if len(missing(frame)):
+            try:
+                ensure_adjprice(int(date), force=not snapshot_active(), reason='holdings-query')
+            except (ValueError, OSError) as exc:
+                Logger.warning(f'adjprice date={date} repair unavailable: {exc}')
+            if not snapshot_active():
+                frame = self.get(int(date), 'adj', overwrite=True)
+            unresolved = missing(frame)
+            if len(unresolved):
+                Logger.warning(f'adjprice date={date} missing holdings secid={unresolved.tolist()}; '
+                               'portfolio returns for these securities will be zero')
+        return frame if field is None else frame.reindex(columns=([field] if isinstance(field, str) else field))
 
     def period_return(
         self ,

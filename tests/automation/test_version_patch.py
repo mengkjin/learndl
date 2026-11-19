@@ -11,15 +11,15 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from src.automation import version_autofix as version
+from src.automation import version_patch as version
 from src.automation.scheduling import channels, git_update, priority
 from src.automation.scheduling.autofix_store import Store, initialize
 from src.automation.scheduling import worker_bootstrap
 
-__all__ = ['VersionAutofixTest']
+__all__ = ['VersionPatchTest']
 
 
-class VersionAutofixTest(unittest.TestCase):
+class VersionPatchTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -34,8 +34,14 @@ class VersionAutofixTest(unittest.TestCase):
         self.write('.gitignore', '/models/\n/data/\n')
         self.release('0.7.1')
         self.commit()
-        version.initialize(self.runtime)
         self.notify = Mock()
+        version.initialize(self.runtime)
+        self.apply(baseline='0.7.1')
+
+    def use_fresh_runtime(self):
+        self.runtime = self.root.parent / 'fresh-host' / 'runtime'
+        self.scheduling = self.runtime / 'scheduling'
+        self.scheduling.mkdir(parents=True)
 
     def git(self, *args):
         return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.DEVNULL)
@@ -72,7 +78,7 @@ class VersionAutofixTest(unittest.TestCase):
         return store
 
     def git_worker(self, store):
-        config = {'scheduler_version': 3, 'version_autofix': True}
+        config = {'scheduler_version': 3, 'version_patch': True}
         self.enterContext(patch.object(git_update, 'runtime_dir', return_value=self.scheduling))
         self.enterContext(patch.object(git_update, 'training_blocker', return_value=None))
         self.enterContext(patch('src.automation.scheduling.maintenance_gate.permit', side_effect=lambda **_: nullcontext()))
@@ -160,7 +166,7 @@ def verify(ctx):
         self.release('0.7.2')
         support = self.patch_file('0.7.2', 'support/helper', 'VALUE = "verified"\n')
         self.patch_file('0.7.2', '001_use_support', """
-from src.automation.version_autofix import load_patch_support
+from src.automation.version_patch import load_patch_support
 
 def apply(ctx):
     helper = load_patch_support('0.7.2', 'helper', root=ctx.root)
@@ -188,6 +194,8 @@ def verify(ctx):
         self.assertIsNotNone(version.admission_reason(self.root, self.runtime))
 
     def test_uninitialized_baseline_downgrade_and_missing_ledger(self):
+        self.use_fresh_runtime()
+        version.initialize(self.runtime)
         self.release('0.7.2')
         self.commit()
         self.assertEqual(self.apply(baseline='0.7.2')['status'], 'initialized')
@@ -197,6 +205,111 @@ def verify(ctx):
         self.assertIn('check failed', version.admission_reason(self.root, self.runtime) or '')
         with self.assertRaises(version.sqlite3.Error):
             version.initialize(self.runtime, required=True)
+
+    def test_fresh_server_automatically_skips_historical_patches(self):
+        self.use_fresh_runtime()
+        self.release('0.7.2')
+        self.write('results/README.md', 'Checkout template')
+        (self.root / 'results/.DS_Store').touch()
+        (self.root / 'data/Interim/empty').mkdir(parents=True)
+        (self.root / 'models/nn').mkdir(parents=True)
+        outbox = self.runtime.parent / 'email_outbox'
+        outbox.mkdir()
+        (outbox / '.lock').touch()
+        self.patch_file('0.7.2', '001_historical', 'raise AssertionError("historical patch ran")\n')
+        self.commit()
+
+        preview = version.status(self.root, self.runtime, required=False)
+        self.assertEqual(preview['pending'], [])
+        self.assertIsNone(preview['baseline'])
+        self.assertFalse(version.ledger_path(self.runtime).exists())
+        version.initialize(self.runtime)
+        self.assertIn('awaiting automatic initialization', version.admission_reason(self.root, self.runtime) or '')
+        self.git_worker(self.control())
+        worker = git_update._channel_update(self.root, {'enabled': False})
+        self.assertEqual(worker, {'status': 'ready', 'version': '0.7.2', 'patches': []})
+        state = version.status(self.root, self.runtime)
+        self.assertEqual(state['baseline'], '0.7.2')
+        self.assertEqual(state['records'], [])
+        self.assertIsNone(version.admission_reason(self.root, self.runtime))
+
+        self.release('0.7.3')
+        self.patch_file('0.7.3', '001_next', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        self.assertEqual(self.apply()['patches'], ['0.7.3/001'])
+
+    def test_import_without_ledger_requires_explicit_data_version(self):
+        self.use_fresh_runtime()
+        self.release('0.7.2')
+        data = self.write('models/nn/imported/metadata.json', '{}')
+        self.patch_file('0.7.2', '001_upgrade', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        with self.assertRaisesRegex(version.MigrationError, 'init --baseline'):
+            version.status(self.root, self.runtime, required=False)
+        self.assertFalse(version.ledger_path(self.runtime).exists())
+
+        version.initialize(self.runtime)
+        self.assertIn('init --baseline', version.admission_reason(self.root, self.runtime) or '')
+        with self.assertRaisesRegex(version.MigrationError, 'init --baseline'):
+            self.apply()
+        with closing(version.connect(self.runtime, readonly=True)) as db:
+            self.assertEqual(version.read_state(db), (None, None))
+        self.assertTrue(data.exists())
+        self.assertEqual(self.apply(baseline='0.7.1')['status'], 'initialized')
+        self.assertEqual(self.apply()['patches'], ['0.7.2/001'])
+
+    def test_imported_host_artifacts_also_block_baseline_inference(self):
+        self.use_fresh_runtime()
+        for relative in ('optuna/imported.sqlite', 'email_outbox/.archive/imported.eml'):
+            path = self.runtime.parent / relative
+            path.parent.mkdir(parents=True)
+            path.touch()
+            with self.assertRaisesRegex(version.MigrationError, 'init --baseline'):
+                version.status(self.root, self.runtime, required=False)
+            path.unlink()
+
+    def test_rename_reuses_legacy_history_and_preserves_successful_patch_identity(self):
+        self.release('0.7.2')
+        path = self.patch_file('0.7.2', '001_test', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        self.assertEqual(self.apply()['patches'], ['0.7.2/001'])
+        legacy = self.runtime / 'version_autofix'
+        recorded_path = 'scripts/.version_autofix/0.7.2/001_test.py'
+        with closing(version.connect(self.runtime)) as db, db:
+            db.execute('UPDATE attempts SET path=?', (recorded_path,))
+        version.ledger_path(self.runtime).parent.rename(legacy)
+        self.write('models/imported/metadata.json', '{}')
+
+        self.assertTrue(version.activation({'version_autofix': True}))
+        version.initialize(self.runtime, required=True)
+        self.assertIsNone(version.admission_reason(self.root, self.runtime))
+        self.assertEqual(self.apply()['patches'], [])
+        self.assertEqual(version.status(self.root, self.runtime)['records'][0]['path'], recorded_path)
+        self.assertFalse((self.runtime / 'version_patch').exists())
+        path.write_text('def verify(ctx): return True\n')
+        self.assertIn('Successful patch changed', version.admission_reason(self.root, self.runtime) or '')
+
+        (self.runtime / 'version_patch').mkdir()
+        with self.assertRaisesRegex(version.MigrationError, 'Both version patch state directories'):
+            version.initialize(self.runtime, required=True)
+
+    def test_shipped_072_scripts_match_successful_legacy_ledger(self):
+        self.release('0.7.2')
+        scripts = version.discover(version.ROOT, '0.7.2')
+        digests = {
+            '0.7.2/001': 'bb533144fb66d283df8c4489b59634b7b6b2ac7d4e61847ad69103e0b979a0a4',
+            '0.7.2/002': '81807ea1151ed09c553718566bc200aa5a32f8e237c660fb6412838049775762',
+        }
+        with closing(version.connect(self.runtime)) as db, db:
+            db.execute("UPDATE state SET applied='0.7.2'")
+            for key, digest in digests.items():
+                current = scripts[key].relative_path
+                self.write(current, (version.ROOT / current).read_text())
+                old = current.replace('.version_patch/', '.version_autofix/')
+                db.execute("""INSERT INTO attempts
+                    (id, patch, path, digest, commit_hash, host, attempt, started, status, log_path)
+                    VALUES (?, ?, ?, ?, 'legacy', 'test', 1, 0, 'success', '')""", (key, key, old, digest))
+        self.assertTrue(version.status(self.root, self.runtime)['ready'])
 
     def test_manual_upgrade_runs_when_fetch_disabled_and_defers_on_code_lock(self):
         self.git_worker(self.control())
@@ -233,7 +346,7 @@ def verify(ctx):
     def test_bootstrap_holds_new_business_before_import_after_manual_pull(self):
         control = self.control().directory
         (control / 'worker-settings.json').write_text(json.dumps({'root': str(self.root), 'runtime': str(self.scheduling)}))
-        (self.scheduling / 'installed.json').write_text('{"scheduler_version": 3, "version_autofix": true}')
+        (self.scheduling / 'installed.json').write_text('{"scheduler_version": 3, "version_patch": true}')
         self.release('0.7.2')
         self.commit()
         self.addCleanup(os.chdir, Path.cwd())

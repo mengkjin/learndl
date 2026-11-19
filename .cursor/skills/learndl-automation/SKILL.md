@@ -56,18 +56,34 @@ configuration files and retain their existing locations.
 ## Version patches for local project files
 
 When a release changes Git-ignored data, model configs, or directory layouts,
-ship the migration with the version bump in `scripts/.version_autofix/<version>/`.
+ship the migration with the version bump in `scripts/.version_patch/<version>/`.
 Use ordered numbered scripts with explicit verification. Scope writes to the
 affected files, back up before changing them, and handle already migrated files
 and partial attempts safely. Preserve successful patch IDs, paths, and bytes.
 Put later corrections in a higher version.
+
+Keep one-off migration, historical backfill, and version-specific helper code
+with the patch under `scripts/.version_patch/<version>/`. Put Python helpers in
+`support/` and load them through the shared patch runner. Keep reusable runtime
+services and generic patch orchestration in `src/`. Existing released patch
+imports may retain a thin compatibility entry point in `src/` to preserve
+the original script bytes and success records. Keep the implementation with
+the patch even in that case.
+
+Initialize a new, empty installation at its current code version so it skips
+historical migrations. Ignore empty scaffolding when checking for existing data.
+Carry the original ledger with restored or imported data. If data is already
+present without a registered baseline, require the operator to declare its
+version with `version_patch init --baseline` before allowing business work.
+Use ledger state and explicit baselines for migration decisions. File times do
+not establish the data version.
 
 Version patches are part of server code upgrades, including manual pulls. Use
 the shared maintenance and code leases. Keep new business work blocked until
 verification succeeds. Keep the failure record and backups, notify by email,
 and require operator retry after a failure or interruption. Use the existing
 Autofix request workflow for one-off operational repairs. Follow the
-[version patch guide](../../../scripts/.version_autofix/README.md) for the
+[version patch guide](../../../scripts/.version_patch/README.md) for the
 script interface and runbook.
 
 ## Installation and publication

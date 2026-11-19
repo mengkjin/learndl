@@ -92,7 +92,7 @@ def market_frame(dates):
         frame = ind.reset_index().rename(columns={"index": "secid"})
         for price in ("close", "open", "vwap"):
             q = DATAVENDOR.get_quote_ret(
-                d, int(DATAVENDOR.td(d, 1)), "close", price
+                d, int(DATAVENDOR.td(d, 1)), "close", price, portfolio=True
             ).reset_index()
             name = f"close_to_next_{price}"
             q = q.rename(columns={"ret": name, "index": "secid"})

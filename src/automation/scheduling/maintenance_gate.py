@@ -141,7 +141,7 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                             raise MaintenanceBusy(reason)
                         if modern and task_class not in {'git', 'installation'}:
                             from .config import installed_config, runtime_dir
-                            from src.automation.version_autofix import activation, admission_reason
+                            from src.automation.version_patch import activation, admission_reason
                             if activation(installed_config()):
                                 if reason := admission_reason(ROOT, runtime_dir().parent):
                                     raise MaintenanceBusy(reason)

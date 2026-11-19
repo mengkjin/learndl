@@ -188,6 +188,15 @@ class ExchangeTest(unittest.TestCase):
         self.assertTrue(library.manage('restore', [trashed['id']])[0]['ok'])
         self.assertEqual(library.listing()[0]['label'], 'Daily run')
 
+    def test_disabled_mail_override_keeps_archive_private(self):
+        from types import SimpleNamespace
+        from src.automation.artifact_exchange.mail_archive import publisher
+
+        owner = SimpleNamespace(task_name='daily_update', kwargs={'mail_sync': 'false'})
+        with patch('src.automation.artifact_exchange.mail_archive.Config.load', return_value=self.pub):
+            self.assertIsNone(publisher(owner))
+            self.assertIs(publisher(owner, override=True), self.pub)
+
     def test_receive_removes_empty_routes_and_old_leftovers(self):
         archive = self.publish()
         routes = ['model_training/old_model', 'reports/custom', 'tensorboard', 'optuna']

@@ -325,21 +325,33 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
     def get_quote_ret(
         self , date0 : Base.intDate , date1 : Base.intDate , 
         price0 : Base.lit.TradePrice = 'close' , price1 : Base.lit.TradePrice = 'close' ,
-        secid : Base.alias.SecidType = None) -> pd.DataFrame:
+        secid : Base.alias.SecidType = None, *, portfolio: bool = False) -> pd.DataFrame:
         """
         get ret of single date0 and date1
         using DataFrame method is much faster than DataBlock method
         slicing of smaller df is much faster than slicing of larger array
 
-        When ``price0 == price1``, uses ``TRADE.period_return`` (adjprice-first).
+        Explicit holdings use adjusted endpoints and receive zero for missing prices.
+        Portfolio precomputation returns securities present at both endpoints.
+        Other whole-market queries at the same price type use ``TRADE.period_return``.
         """
+        secid = Base.ensure_secid(secid)
+        if portfolio or secid is not None:
+            def endpoint(date, price):
+                fields = ['secid', price]
+                frame = (self.TRADE.get_adjprice(int(date), fields) if secid is None else
+                         self.TRADE.get_adjprice_with_ensure(int(date), secid, fields))
+                return frame.reindex(columns=fields).set_index('secid')[price]
+
+            start, end = endpoint(date0, price0), endpoint(date1, price1)
+            ids = start.index.intersection(end.index) if secid is None else secid
+            start, end = start.reindex(ids), end.reindex(ids)
+            ret = (end / start.where(start > 0) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+            return ret.rename('ret').to_frame()
         if price0 == price1:
             q = self.TRADE.period_return(int(date0) , int(date1) , price0)
             if q is None:
                 return pd.DataFrame(columns = ['secid' , 'ret']).set_index('secid')
-            secid = Base.ensure_secid(secid)
-            if secid is not None:
-                q = q.reindex(secid).fillna(0)
             return q
         q0 = self.day_quote(date0 , price0)
         q1 = self.day_quote(date1 , price1)
@@ -347,11 +359,7 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             return pd.DataFrame(columns = ['secid' , 'ret']).set_index('secid')
         q = q0[q0['price'] != 0].merge(q1 , on = 'secid')
         q['ret'] = q['price_y'] / q['price_x'] - 1
-        q = q[['secid' , 'ret']].set_index('secid')
-        secid = Base.ensure_secid(secid)
-        if secid is not None:
-            q = q.reindex(secid).fillna(0)
-        return q
+        return q[['secid' , 'ret']].set_index('secid')
 
     def get_quote_ret_new(
         self , date0 : Base.intDate , date1 : Base.intDate , 

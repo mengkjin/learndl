@@ -33,7 +33,7 @@ from .runtime import RunStore
 from src.automation.console import logger
 
 if TYPE_CHECKING:
-    from src.automation.version_autofix import AttemptRecord
+    from src.automation.version_patch import AttemptRecord
 
 
 def _mail_store() -> RunStore:
@@ -136,7 +136,7 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
             body = (f'Patch: {data["patch"]}\nCommit: {data["commit_hash"]}\n'
                     f'Attempt: {data["attempt"]} ({data["status"]})\nLog: {data["log_path"]}\n'
                     'New business tasks are paused. Inspect the log and backups, then run '
-                    f'python -m src.automation.version_autofix retry {data["patch"]}.')
+                    f'python -m src.automation.version_patch retry {data["patch"]}.')
         elif data.get('kind') == 'git_operation':
             subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
             body = data['body']
@@ -419,7 +419,7 @@ def _channel_update(root, options):
     from .autofix_store import Store, state_dir
     from .maintenance_gate import permit, MaintenanceBusy, pass_fds
     from .config import installed_config
-    from src.automation import version_autofix as version
+    from src.automation import version_patch as version
     from src.proj.util.web.mail_package import atomic_json
     store = Store(state_dir())
     result = {}

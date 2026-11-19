@@ -8,7 +8,8 @@ from pathlib import Path
 from src.proj import PATH , Logger , Base
 from src.proj.util.cli import AskFor
 
-__all__ = ['DashboardAPI' , 'OptunaDBAPI' , 'TSBoardAPI']
+__all__ = ['DashboardAPI', 'OptunaDBAPI', 'TSBoardAPI', 'archived_tensorboard_index',
+           'model_tensorboard', 'saved_optuna_databases']
 
 def get_free_port(start_port=8080):
     """Finds an available TCP port starting from start_port."""
@@ -123,15 +124,14 @@ class OptunaDBAPI:
         if not candidates:
             Logger.alert1("No available Optuna Dashboard databases found")
             return
-        flag = AskFor.Options([
-            cand.relative_to(PATH.main) for cand in candidates] ,
+        flag = AskFor.Options(candidates,
             confirm=False , multiple=False , 
             title = f'Choose from available Optuna Dashboard databases:',
             help_description='SQLite studies under model results and the standalone study directory; sorted by modification time elsewhere.',
         )
         if flag.result is None:
             return
-        cls.call_optuna_dashboard(PATH.main / flag.result , open_browser = open_browser)
+        cls.call_optuna_dashboard(flag.result , open_browser = open_browser)
 
     @classmethod
     def choose_to_delete_optuna_record(cls , **kwargs):
@@ -144,14 +144,14 @@ class OptunaDBAPI:
                 Logger.alert1("No available Optuna Dashboard databases found")
                 return
             flag = AskFor.Options(
-                [db_path.relative_to(PATH.main) for db_path in candidates] ,
+                candidates,
                 multiple=True , confirm=True ,
                 title = f'Choose from available Optuna Dashboard databases to delete:',
-                help_description='Permanently removes selected .sqlite3 study files from PATH.optuna.',
+                help_description='Permanently removes the selected SQLite study files.',
             )
             if loop.set_flag(flag):
                 for db_path in flag.results:
-                    PATH.main.joinpath(db_path).resolve().unlink()
+                    Path(db_path).unlink()
                 Logger.success(f"Deleted {len(flag.results)} Optuna Dashboard databases")
 
     @classmethod

@@ -21,7 +21,7 @@ class SummaryLifecycleTest(TestCase):
         trainer.fit_model_restart_count = 0
         trainer.config = Mock(spec=ModelConfig)
         trainer.config.base_path.model_clean_name = 'model'
-        trainer.base_path.snapshot.side_effect = lambda *args: '/'.join(args)
+        trainer.base_path.rslt.side_effect = lambda *args: '/'.join(('results', *args))
         return trainer, SummaryWriter(trainer)
 
     @patch('src.res.model.callback.monitor.summary.TsboardWriter')

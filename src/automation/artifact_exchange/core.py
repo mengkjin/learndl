@@ -46,6 +46,7 @@ __all__ = [
     'retry',
     'category_root',
     'experiment_members',
+    'received_member',
     'receive',
 ]
 
@@ -555,7 +556,7 @@ def _receive(archive, config):
         previous = json.loads(receipt.read_text()) if receipt.exists() else None
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
-        if previous and manifest.get('category') in ('model_training', 'mail_archive'):
+        if previous and manifest['schema_version'] == 2 and manifest.get('category') in ('model_training', 'mail_archive'):
             return _finish_receive(archive, archive_hash, manifest, target)
         target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=target.parent, prefix='.receive-') as tmp:
@@ -595,7 +596,7 @@ def _receive(archive, config):
 
 
 def _finish_receive(archive, archive_hash, manifest, target):
-    if manifest.get('category') == 'model_training':
+    if manifest['schema_version'] == 2 and manifest.get('category') == 'model_training':
         fragments = {'run-log/train.md', 'run-log/test.md'}
         members = {item['path'] for item in manifest['files']}
         for name in members & fragments:

@@ -19,6 +19,9 @@ from .experiments import Instances
 from .services import ROOT, STATE
 
 
+__all__ = ['Library', 'open_folder']
+
+
 def read_json(path):
     return json.loads(real_tree(path).read_text())
 
@@ -245,9 +248,9 @@ class Library:
             if action != 'restore':
                 raise ValueError('Choose restore or permanently delete')
             original = real_tree(row['original'])
-            if original.exists():
-                raise ValueError('A newer file already occupies the original path')
             with self._write_guards(row):
+                if original.exists():
+                    raise ValueError('A newer file already occupies the original path')
                 original.parent.mkdir(parents=True, exist_ok=True)
                 path.rename(original)
                 shutil.rmtree(path.parent)

@@ -22,7 +22,7 @@ from src.proj import DB, Const
 
 
 def default_contract():
-    return {'creator': Const.Factor.FMP.creator, 'price_semantics': 'get_quote_ret-v1',
+    return {'creator': Const.Factor.FMP.creator, 'price_semantics': 'portfolio-adjprice-v2',
             'rounding': [Const.Factor.ROUNDING.ret, Const.Factor.ROUNDING.turnover],
             'version': 1}
 
@@ -53,7 +53,7 @@ def prepare_market(root, dates):
         arrays[f'{date}_industry_ids'] = ind.index.to_numpy(dtype=np.int64)
         arrays[f'{date}_industry'] = ind.indus.fillna('unknown').to_numpy(dtype=str)
         for price in ('close', 'open', 'vwap'):
-            q = DATAVENDOR.get_quote_ret(date, int(DATAVENDOR.td(date, 1)), 'close', price)
+            q = DATAVENDOR.get_quote_ret(date, int(DATAVENDOR.td(date, 1)), 'close', price, portfolio=True)
             if q is None:
                 raise ValueError(f'missing quote {date}/{price}')
             ids = q['secid'].to_numpy(dtype=np.int64) if 'secid' in q else q.index.to_numpy(dtype=np.int64)

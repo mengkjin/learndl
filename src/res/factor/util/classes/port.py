@@ -104,7 +104,7 @@ class Port:
 
         long , short , value = rslt.long_position , rslt.short_position , rslt.value
 
-        q = DATAVENDOR.get_quote_ret(old_date , new_date)
+        q = DATAVENDOR.get_quote_ret(old_date , new_date, secid=rslt.port.secid.to_numpy())
         assert q is not None, f'Ret Quote (at {new_date}) is does not exists'
 
         # port = rslt.port.assign(ret = q['ret'].values)
@@ -127,7 +127,7 @@ class Port:
         old_date = DATAVENDOR.td(self.date)
         if new_date is None: 
             new_date = DATAVENDOR.td(old_date , 1)
-        q = DATAVENDOR.get_quote_ret(old_date , new_date , price0 , price1)
+        q = DATAVENDOR.get_quote_ret(old_date , new_date , price0 , price1, secid=self.port.secid.to_numpy())
         assert q is not None, f'Ret Quote (at {new_date}) is does not exists' 
         # return (self.port['weight'] * q['ret'].values).sum()       
         port = self.port.merge(q , on = 'secid').fillna(0)
