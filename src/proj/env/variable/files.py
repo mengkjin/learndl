@@ -89,6 +89,10 @@ class UniqueFileList:
     def _alias_map(self) -> dict[Path , str]:
         return self._aliases[self.name]
 
+    def snapshot(self) -> list[EmailAttachment]:
+        with self.lock:
+            return [EmailAttachment(path, self._alias_map().get(path)) for path in self.file_list]
+
     def pop_all(self) -> list[EmailAttachment]:
         """Remove and return queued files; clears paths and mail names under lock."""
         with self.lock:

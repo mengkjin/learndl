@@ -5,8 +5,7 @@ from __future__ import annotations
 from contextlib import nullcontext
 from typing import Literal , TypeAlias
 
-from src.proj import MACHINE , Proj , PATH , Base , Save
-from src.proj.util.catcher import HtmlCatcher
+from src.proj import MACHINE , Proj , PATH , Base
 from src.res.model.util import BaseTrainer , ModelPath , PredictorPath
 from src.res.factor.calculator import StockFactorHierarchy , FactorCalculator
 
@@ -16,6 +15,9 @@ ModelLogOperation : TypeAlias = Literal['update_models' , 'resume_testing']
 
 class ModelTrainer(BaseTrainer):
     """run through the whole process of training"""
+    model_html_title: str | None = None
+    run_operation: str = 'internal'
+
     @classmethod
     def initialize(
         cls , base_path = None , * ,
@@ -38,7 +40,7 @@ class ModelTrainer(BaseTrainer):
         
     @classmethod
     def GO(cls , * , base_path : ModelPath | Base.strPath | None = None , title : str | None = None , 
-           paragraph : bool = False , html_catcher : bool = True, 
+           paragraph : bool = False , html_catcher : bool = False, operation: str = "internal",
            check_operation : ModelLogOperation | None = None , 
            log_operation : ModelLogOperation | None = None , 
            use_data : Base.lit.DataBlockTimeFrames = 'fit' ,
@@ -52,7 +54,12 @@ class ModelTrainer(BaseTrainer):
         if base_path and check_operation:
             last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
             if skip:
-                trainer.logger.skipping(f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago.')
+                from src.automation.artifact_exchange.model_logs import record_skipped
+
+                reason = f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago.'
+                trainer.logger.skipping(reason)
+                phases = ('test',) if check_operation == 'resume_testing' else ('train', 'test')
+                record_skipped(base_path, check_operation, phases, reason)
                 return trainer
             elif last_time:
                 trainer.logger.alert1(f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')
@@ -60,14 +67,12 @@ class ModelTrainer(BaseTrainer):
                 trainer.logger.stdout(f'{title} log not found, run for the first time.' , vb_level = 'max')
     
         Paragraph = cls.logger.paragraph(title.title() , 1 , enter_vb_level = 2) if title and paragraph else nullcontext()
-        Catcher = HtmlCatcher(title = title.title()) if title and html_catcher else nullcontext()
+        trainer.model_html_title = (title or 'Model run') if html_catcher else None
+        trainer.run_operation = log_operation or operation
 
-        with Paragraph, Catcher:
+        with Paragraph:
             trainer.go()
             base_path.log_operation(log_operation)
-            if isinstance(Catcher , HtmlCatcher):
-                Catcher.set_export_files(trainer.html_catcher_export_path)
-            Save.async_wait_all(caller_name = cls.__name__)
         return trainer
 
     @classmethod
@@ -130,7 +135,8 @@ class ModelTrainer(BaseTrainer):
     def train(cls , module : str | None = None , short_test : bool | None = None , 
               start : int | None = None , end : int | None = None , **kwargs):
         title = f'Train Model of Module {module}' if module else 'Train Model'
-        return cls.GO(title = title , module = module , 
+        kwargs.setdefault("html_catcher", True)
+        return cls.GO(operation="train", title = title , module = module ,
                       short_test = short_test , start = start , end = end , **kwargs)
     
     @classmethod
@@ -139,7 +145,8 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         base_path = ModelPath(model_name)
         assert base_path.base.exists() , f'model_name {model_name} not found'
-        return cls.GO(title = f'Resume Model of Model {model_name}' , 
+        kwargs.setdefault("html_catcher", True)
+        return cls.GO(operation="resume_train", title = f'Resume Model of Model {model_name}' ,
                       base_path = base_path , stage = stage , resume = resume , 
                       selection = selection , start = start , end = end , **kwargs)
     
@@ -151,7 +158,8 @@ class ModelTrainer(BaseTrainer):
         assert model_name, 'model_name is required'
         base_path = ModelPath(model_name)
         assert base_path.base.exists() , f'model_name {model_name} not found'
-        return cls.GO(title = f'Test Model of Model {model_name}' , 
+        kwargs.setdefault("html_catcher", True)
+        return cls.GO(operation="test", title = f'Test Model of Model {model_name}' ,
                       base_path = base_path , stage = stage , resume = resume , 
                       selection = selection, start = start , end = end , **kwargs)
     
@@ -161,7 +169,8 @@ class ModelTrainer(BaseTrainer):
         stage = 0 , resume = 0 , selection = 0 , start : int | None = None , end : int | None = None , **kwargs
     ):
         assert schedule_name, 'schedule_name is required'
-        return cls.GO(title = f'Schedule Model of Schedule {schedule_name}' , 
+        kwargs.setdefault("html_catcher", True)
+        return cls.GO(operation="schedule", title = f'Schedule Model of Schedule {schedule_name}' ,
                       schedule_name = schedule_name , short_test = short_test , stage = stage , resume = resume , 
                       selection = selection , start = start , end = end , **kwargs)
 

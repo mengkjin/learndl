@@ -60,7 +60,7 @@ class TaskResultMail:
         self.transport = transport
 
     def __call__(self, title, body, recipient=None, *, attachments=None,
-                 project_attachments=False, confirmation_message=''):
+                 project_attachments=False, confirmation_message='', mail_sync=None):
         if _skip_disabled():
             return True
         if self.email_api is None:
@@ -77,6 +77,9 @@ class TaskResultMail:
             from src.proj import Proj
             paths.extend(Proj.email_attachments.pop_all())
         message = api.message(title, body, api.recipient(recipient), attachments=paths)
+        from src.automation.artifact_exchange.mail_archive import archive_message
+        archive_message(message, override=mail_sync, main_task=confirmation_message == 'Autorun',
+                        notification_id=hashlib.sha256(str(directory).encode()).hexdigest())
         prepared = prepare(message, directory, str(directory), limit=self.max_bytes)
         state = {'schema_version': 2, 'recipient': api.recipient(recipient),
                  'max_mime_bytes': self.max_bytes, 'attachments': prepared['attachments'],

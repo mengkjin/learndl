@@ -280,3 +280,50 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 ```
 
 卸载接收任务保留数据、配置及回执。停止自动发布将服务器配置 `enabled` 改为 false。删除正式 Syncthing folder 配置前先确认没有未收取包。后续如需重新进行联网稳定性测试，请另建独立测试共享。
+
+## 9. 邮件档案和模型预览
+
+更新两端代码后先用 `doctor` 核对角色、共享路径和固定的 `source_host`。本机继续使用
+现有接收任务。重启项目控制台后可启动 **邮件档案**（8506）和 **模型预览**（8507）。
+端口可分别由 `LEARNDL_MAIL_ARCHIVE_PORT` 和 `LEARNDL_MODEL_PREVIEW_PORT` 覆盖。
+两个服务监听本机地址，远程访问使用现有的 SSH 端口转发方式。
+
+- 日常更新、模型训练和测试等任务的现有邮件会额外投递完整档案。可在脚本
+  YAML 头部设置 `mail_sync: true` 或 `false`，也可在 `ScriptTool`、`AutoRunTask`
+  或邮件入口显式传入。SMTP 仍使用原有配置。邮件档案中的“SMTP 未知”表示接收时
+  没有 SMTP 回执，发送与重试进度仍由发件端的原有队列记录。
+- 档案含逻辑通知的 EML、正文、SMTP 附件与产物交接前的原附件。邮件及附件长期保留。
+  归档只改变列表显示。删除进入本机应用回收站，恢复或彻底删除在该视图操作。
+- 模型本地 `run_logs/` 下保存固定两份 `train.md` 和 `test.md`，按阶段实际使用；
+  本机接收的累计文件位于 `results/model_run_logs/`。同步只携带正在归档的运行章节，
+  接收器按主机、模型、运行身份和阶段合并。没有自动过期规则。
+- 显式训练、手动恢复训练和独立测试保存本次模型 HTML。自动模型更新和
+  `resume_testing` 仍可由父脚本保存一份任务 HTML，模型调用只写 Markdown。
+  分析 callback 的报告作为独立结果打开。模型预览和实验面板共享已启动的实例和额度。
+- 启用后可用一次正常的小型任务验收。确认本机能打开邮件的原始附件、按邮件关联
+  找到模型运行章节，并从两个面板打开同一 TensorBoard 或 Optuna 实例。
+
+## 10. 0.7.2 目录迁移与历史邮件补投
+
+升级前，在将要运行补丁的 checkout 中用项目解释器查看只读预检：
+
+```bash
+.venv/bin/python -m src.automation.artifact_exchange.result_layout
+.venv/bin/python -m src.automation.artifact_exchange.mail_backfill
+.venv/bin/python -m src.automation.version_autofix plan
+```
+
+先更新接收机，再更新服务器。按 [版本补丁说明](../../scripts/.version_autofix/README.md)
+在空闲窗口运行补丁。迁移前关停正在阅读或写入实验文件的 TensorBoard、Optuna 和其他程序。
+本机接收程序会通过接收锁与迁移互斥。升级后重启控制台和实验面板。
+
+- `0.7.2/001` 将模型的 TensorBoard 移到 `results/tensorboard/`，将可唯一归属到模型的
+  Optuna SQLite 备份到 `results/optuna/`。旧 SQLite 和 WAL 保留供恢复。
+  同步批次内的 ZIP 同样移到 `results/{tensorboard,optuna}/`，原清单和接收回执不变。
+  若报告显示冲突或文件正在使用，处理原因后重试该补丁。
+- `0.7.2/002` 在已启用的发布端固定首次执行时刻之前七天的窗口，补投有 SMTP 接受凭据的
+  日常数据和模型任务邮件。原始 EML、留档附件和可关联的分卷一并打包。
+  接收机跳过发布；服务器不会重发 SMTP 邮件。若报告显示待投递，恢复共享目录后使用
+  `python -m src.automation.artifact_exchange retry`，本机再核对接收档案。
+- 两个补丁在各自的版本补丁尝试目录写入 JSON 报告。历史发送前就移除的附件无法恢复；
+  无法确认所属模型的旧数据库保留在独立实验入口。

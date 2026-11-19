@@ -5,6 +5,7 @@ import sys , os
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
+from uuid import uuid4
 from typing import Any
 from collections.abc import Callable
 
@@ -166,6 +167,7 @@ class AutoRunTask(BoundLogger):
 
     def __enter__(self):
         from src.automation.artifact_exchange.research import CURRENT_TASK
+        self.init_time = datetime.now()
         self._artifacts = []
         self._artifact_results = []
         self._artifact_delivery = None
@@ -189,6 +191,9 @@ class AutoRunTask(BoundLogger):
             if not marker.exists():
                 script_event('started', email=self.email)
                 self._autofix_primary = True
+        self.task_run_id = uuid4().hex
+        self._model_run_ids: list[str] = []
+        self._script_entry = Path(sys.argv[0]).name
         self._artifact_token = CURRENT_TASK.set(self)
         return self
 
@@ -222,6 +227,27 @@ class AutoRunTask(BoundLogger):
             self.logger.conclude(
                 f'AutoRunTask aborted: {exc_type.__name__}: {exc_value}' , level = 'error')
 
+        from src.automation.artifact_exchange.mail_archive import freeze_task_attachments
+        with freeze_task_attachments(self):
+            AutoRunTask._finish_delivery(self, exc_type, exc_value, exc_traceback, artifact_saves_complete)
+
+        try:
+            if self.execution_success:
+                self.task_recorder.mark_finished(
+                    remark=f'source: {self.source} | exit_code: {len(self.error_messages)}'
+                )
+            else:
+                self.task_recorder.mark_failed(
+                    remark=f'source: {self.source} | exit_code: {len(self.error_messages)}'
+                )
+        except Exception as e:
+            self.logger.error(f'AutoRunTask task_record update failed: {e}')
+        if getattr(self, '_autofix_primary', False):
+            from src.automation.scheduling.autofix_sandbox import script_event
+            script_event('finished', success=self.status == 'Success' and not self.error_messages,
+                         status=self.execution_status, email=self.email)
+
+    def _finish_delivery(self, exc_type, exc_value, exc_traceback, artifact_saves_complete):
         if not self.should_forfeit:
             from src.automation.artifact_exchange.research import finalize_task_artifacts
             try:
@@ -263,22 +289,6 @@ class AutoRunTask(BoundLogger):
                 if getattr(self, '_autofix_primary', False):
                     from src.automation.scheduling.autofix_sandbox import script_event
                     script_event('mail', enabled=self.email, delivered=False, error=type(e).__name__)
-
-        try:
-            if self.execution_success: 
-                self.task_recorder.mark_finished(
-                    remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}'])
-                )
-            else:
-                self.task_recorder.mark_failed(
-                    remark = ' | '.join([f'source: {self.source}' , f'exit_code: {len(self.error_messages)}'])
-                )
-        except Exception as e:
-            self.logger.error(f'AutoRunTask task_record update failed: {e}')
-        if getattr(self, '_autofix_primary', False):
-            from src.automation.scheduling.autofix_sandbox import script_event
-            script_event('finished', success=self.status == 'Success' and not self.error_messages,
-                         status=self.execution_status, email=self.email)
 
     def __call__(self , func : Callable):
         assert callable(func) , 'func must be a callable'
@@ -442,7 +452,12 @@ class AutoRunTask(BoundLogger):
             # It runs after HtmlCatcher closes and must return True only when all
             # parts reached SMTP. Other tasks retain the existing outbox behavior.
             sender = getattr(self, 'email_sender', None) or Email.send
-            sent = sender(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
+            if sender == Email.send:
+                sent = Email.send(title, '\n'.join(bodies), recipient=self.kwargs.get('email_recipient'),
+                                  confirmation_message='Autorun', attachments=self.exit_files,
+                                  project_attachments=True, archive_task=True)
+            else:
+                sent = sender(title , '\n'.join(bodies) , recipient=self.kwargs.get('email_recipient'),
                               confirmation_message='Autorun' , attachments = self.exit_files , project_attachments = True)
             if getattr(self, '_autofix_primary', False):
                 from src.automation.scheduling.autofix_sandbox import script_event

@@ -82,6 +82,7 @@ class ScriptTool:
         verbosity : int | None = None ,
         source_mode : SourceMode = 'script' ,
         interaction : dict[str, Any] | None = None ,
+        mail_sync: bool | None = None,
         **kwargs
     ):  
         self.task_name = task_name
@@ -93,6 +94,7 @@ class ScriptTool:
         self._forfeit_if_done = forfeit_if_done
         self._markdown_catcher = markdown_catcher
         self._verbosity = verbosity
+        self._mail_sync = mail_sync
 
         ln , lt = lock_num , lock_timeout
         if source_mode == 'api' and interaction:
@@ -143,6 +145,14 @@ class ScriptTool:
             if not is_main_process():
                 return inner(*args , **kwargs)
             self.autorun_task.kwargs = _get_default_args(func) | self.autorun_task.kwargs
+            archive = self._mail_sync
+            if self.source_mode != 'api' and (header_path := _resolve_script_header_path()) is not None:
+                from src.api.util.backend import ScriptHeader
+                if (header_value := ScriptHeader.read_from_file(header_path).mail_sync) is not None:
+                    archive = header_value
+            elif self.source_mode == 'api' and self.interaction and 'mail_sync' in self.interaction:
+                archive = self.interaction['mail_sync']
+            self.autorun_task.kwargs['mail_sync'] = kwargs.get('mail_sync', archive)
             if 'email' in kwargs:
                 self.autorun_task.kwargs['email'] = bool(kwargs['email'])
             if self.source_mode == 'api':

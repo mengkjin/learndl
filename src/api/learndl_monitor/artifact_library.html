@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__ · Learndl</title>
+<style>
+:root{color-scheme:dark;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
+*{box-sizing:border-box}body{margin:0}main{max-width:1240px;margin:36px auto;padding:0 24px}h1,h2{line-height:1.25}h1{font-size:28px}h2{font-size:19px;overflow-wrap:anywhere}
+.toolbar,.actions,.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button,select,input{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px}
+button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55ccb9}a{color:#8de2d3}
+.layout{display:grid;grid-template-columns:minmax(290px,2fr) minmax(330px,3fr);gap:18px;margin-top:14px}
+.panel{border:1px solid #293748;border-radius:10px;background:#17212c;padding:14px;min-width:0}
+#items{max-height:68vh;overflow:auto}#items label{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #273544}
+.item{border:0;background:transparent;text-align:left;width:100%;overflow-wrap:anywhere}.item[aria-current=true]{color:#8de2d3;background:#203b3c}
+small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywhere}iframe{width:100%;height:57vh;background:white;border:0;border-radius:4px}
+#notice{color:#f4bd9b;white-space:pre-wrap}details{margin:8px 0;border-bottom:1px solid #293748}summary{cursor:pointer;padding:6px 0}
+@media(max-width:760px){main{margin:20px auto;padding:0 12px}.layout{grid-template-columns:1fr}#items{max-height:42vh}}
+</style>
+<main>
+<h1>__TITLE__</h1>
+<div class="toolbar">
+<input id="search" type="search" placeholder="搜索主题、脚本或模型" aria-label="搜索">
+<select id="host" aria-label="来源"><option value="">全部来源</option></select>
+<select id="status" aria-label="执行状态"><option value="">全部状态</option></select>
+<select id="model" aria-label="模型"><option value="">全部模型</option></select>
+<select id="view" aria-label="视图"><option value="active">当前</option><option value="archived">已归档</option><option value="trash">回收站</option></select>
+<button id="refresh">刷新</button>
+</div>
+<p id="notice" role="status"></p>
+<div class="layout">
+<section class="panel"><div id="actions" class="actions"></div><small id="count"></small><div id="items"></div></section>
+<section class="panel" id="detail" aria-live="polite">选择一条记录查看详情。</section>
+</div>
+</main>
+<script>
+const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
+const $=id=>document.getElementById(id), selected=new Set(), filters=new URLSearchParams(location.search);
+let rows=[], shown=[], active='', blobURL='';
+const element=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
+const button=(text,fn)=>{const b=element('button',text);b.onclick=()=>Promise.resolve().then(fn).catch(e=>notice(e.message));return b;};
+const notice=text=>{$('notice').textContent=text;};
+if(kind==='mail_archive') $('model').hidden=true;
+else $('status').hidden=true;
+async function api(path,body){
+ const response=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer __TOKEN__','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ if(!response.ok){const error=await response.json();throw Error(error.error||'操作失败');}
+ return response;
+}
+const url=(path,params)=>path+'?'+new URLSearchParams(params);
+function options(id,values){
+ const select=$(id), value=select.value;
+ select.replaceChildren(select.options[0],...Array.from(new Set(values.filter(Boolean))).sort().map(x=>new Option(x,x)));
+ select.value=Array.from(select.options).some(o=>o.value===value)?value:'';
+}
+async function refresh(){
+ rows=await (await api(url('/api/list',{run:filters.get('run')||''}))).json();
+ options('host',rows.map(r=>r.host));options('status',rows.map(r=>r.metadata?.status));
+ options('model',rows.filter(r=>r.model).map(r=>r.host+' · '+r.model));
+ render();
+}
+function matches(r){
+ const state=$('view').value, q=$('search').value.toLowerCase(), run=filters.get('run');
+ return (state==='trash'?r.trashed:!r.trashed&&Boolean(r.archived)===(state==='archived'))&&
+  (!$('host').value||r.host===$('host').value)&&(!$('status').value||r.metadata?.status===$('status').value)&&
+  (!$('model').value||r.host+' · '+r.model===$('model').value)&&
+  (!run||(kind==='mail_archive'?r.metadata?.model_runs?.includes(run):r.run===run||r.type==='process_log'))&&
+  [r.label,r.host,r.model,r.metadata?.task,r.metadata?.script,r.stamp].filter(Boolean).join(' ').toLowerCase().includes(q);
+}
+function render(){
+ shown=rows.filter(matches);
+ const visible=new Set(shown.map(r=>r.id));
+ for(const id of selected)if(!visible.has(id))selected.delete(id);
+ $('items').replaceChildren(...shown.map(r=>{
+  const line=element('label'), check=element('input'), b=button(r.label,()=>details(r));check.type='checkbox';check.checked=selected.has(r.id);
+  check.setAttribute('aria-label','选择 '+r.label);
+  check.onchange=()=>{check.checked?selected.add(r.id):selected.delete(r.id);renderActions();};
+  b.className='item';b.setAttribute('aria-current',String(active===r.id));
+  b.append(element('small',[r.host,r.model,r.metadata?.task,r.metadata?.status,r.stamp,r.historical?'历史文件':''].filter(Boolean).join(' · ')));
+  line.append(check,b);return line;
+ }));
+ if(!shown.length)$('items').append(element('p','没有符合条件的记录。'));
+ renderActions();
+}
+function renderActions(){
+ const view=$('view').value;
+ const ops=view==='trash'?[['恢复','restore'],['彻底删除','purge']]:
+  [[view==='archived'?'取消归档':'归档',view==='archived'?'unarchive':'archive'],['移到回收站','delete']];
+ $('count').textContent=shown.length+' 项 · 已选 '+selected.size+' 项';
+ $('actions').replaceChildren(button(selected.size?'清空选择':'全选当前结果',()=>{
+  if(selected.size)selected.clear();else shown.slice(0,500).forEach(r=>selected.add(r.id));render();
+ }),...ops.map(([label,action])=>{
+  const b=button(label,async()=>{
+   if(['delete','purge'].includes(action)&&!confirm(label+' '+selected.size+' 项？'))return;
+   const result=await (await api('/api/action',{action,ids:[...selected]})).json();
+   notice(result.filter(r=>!r.ok).map(r=>(rows.find(item=>item.id===r.id)?.label||r.id)+' '+r.error).join('\n')||'已处理 '+result.length+' 项');
+   selected.clear();active='';$('detail').textContent='选择一条记录查看详情。';await refresh();
+  });b.disabled=selected.size===0;return b;
+ }));
+}
+async function file(r,index,name,download=false){
+ const response=await api(url('/api/file',{id:r.id,index}));
+ const target=$('preview');
+ if(blobURL)URL.revokeObjectURL(blobURL);
+ if(!download&&response.headers.get('Content-Type').startsWith('text/')&&!name.toLowerCase().endsWith('.html')){
+  target.replaceChildren(element('pre',await response.text()));return;
+ }
+ const blob=await response.blob();
+ blobURL=URL.createObjectURL(blob);
+ if(!download&&['text/html','application/pdf'].includes(blob.type)){
+  const frame=element('iframe');frame.setAttribute('sandbox','');frame.title=name;
+  frame.src=blobURL;target.replaceChildren(frame);
+ }else{
+  const anchor=element('a','下载 '+name);anchor.href=blobURL;anchor.download=name;
+  target.replaceChildren(anchor);anchor.click();
+ }
+}
+function link(run,label){
+ const a=element('a',label);a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
+}
+async function chapters(r,page){
+ const data=await (await api(url('/api/chapters',{id:r.id,page,run:filters.get('run')||''}))).json();
+ const target=$('preview');target.replaceChildren();
+ if(!data.pages)target.append(element('p','没有关联的运行章节。'));
+ for(const c of data.chapters){
+  const section=element('details'), idx=c.title.lastIndexOf(' · ');
+  section.open=target.children.length===0;
+  section.append(element('summary',c.title),link(c.title.slice(idx+3),'查阅相关邮件'),element('pre',c.content));
+  if(c.truncated)section.append(element('small','预览已截断，可下载完整 Markdown。'));
+  target.append(section);
+ }
+ if(page>0)target.append(button('上一页',()=>chapters(r,page-1)));
+ if(page+1<data.pages)target.append(button('下一页',()=>chapters(r,page+1)));
+}
+async function details(r){
+ active=r.id;render();
+ const pane=$('detail'), actions=element('div'), preview=element('div');
+ actions.className='actions';preview.id='preview';
+ pane.replaceChildren(element('h2',r.label),actions,preview);
+ if(r.trashed){preview.textContent='从回收站恢复后即可查看。';return;}
+ actions.append(button('打开文件夹',async()=>{
+  const locally=confirm('在运行本服务的电脑打开文件夹？从远程连接时请选择取消以显示路径。');
+  const data=await (await api('/api/action',{action:'folder',id:r.id,open_locally:locally})).json();
+  notice(data.folder);
+ }));
+ if(r.type==='mail'){
+  const m=r.metadata;
+  pane.insertBefore(element('pre',[m.task,m.status,m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
+   'SMTP 状态：'+(m.smtp_status==='unknown'?'未知':m.smtp_status),m.missing_attachments?.length?'缺失附件：'+m.missing_attachments.join('、'):''].filter(Boolean).join('\n')),actions);
+  for(const id of m.model_runs||[])actions.append(link(id,'模型运行 '+id.slice(0,8)));
+  r.files.forEach((name,i)=>{
+   actions.append(button(name,()=>file(r,i,name)));
+   if(i>0)actions.append(button('下载 '+name,()=>file(r,i,name,true)));
+  });
+  if(r.files.length)await file(r,0,r.files[0]);
+ }else if(r.type==='process_log'){
+  actions.append(button('下载完整 Markdown',()=>file(r,0,r.label,true)));
+  await chapters(r,0);
+ }else if(['tensorboard','optuna'].includes(r.type)){
+  actions.append(button('启动或打开',async()=>{
+   const result=await (await api('/api/action',{action:'start',id:r.id})).json();
+   const address=result.url||result.instance?.url;
+   if(!address)throw Error('实例尚未就绪');
+   const a=element('a','打开实验实例');a.href=address;a.target='_blank';a.rel='noopener';
+   preview.replaceChildren(a);
+  }),button('停止',async()=>{await api('/api/action',{action:'stop',id:r.id});preview.textContent='实例已停止。';}));
+ }else{
+  actions.append(button('预览或下载',()=>file(r,0,r.label)),button('下载',()=>file(r,0,r.label,true)));
+  if(r.run)actions.append(link(r.run,'查阅相关邮件'));
+ }
+}
+for(const id of ['search','host','status','model','view'])$(id).oninput=render;
+$('refresh').onclick=()=>refresh().catch(e=>notice(e.message));
+if(filters.has('run'))notice('当前按关联运行筛选。');
+refresh().catch(e=>notice(e.message));
+</script>
+</html>

@@ -326,6 +326,10 @@ coverage until repaired. Use a tested master and retain an external way to inspe
 systemd failures. Updating worklist/schedule contents also invalidates completion
 versions and can cause future idle training to run again, per worklist policy.
 
+The Git maintenance timer also reconciles [version patches](../../scripts/.version_autofix/README.md)
+for local data and models after verified updates and manual pulls. Install the updated
+managed bootstrap to enable migration checks before new business work.
+
 ## Autofix maintenance
 
 `autofix` is an explicitly installed watchdog job and independent systemd worker. Requests are declared in `autofix.yaml`. Installation requires Bubblewrap on Linux and initializes a protected, project-external ledger; ordinary code pulls do not initialize it. Admission follows the installed scheduler version described below. See [Autofix configuration and operations](AUTOFIX.md) for one-attempt IDs, script opt-in, notification ownership, sandbox prerequisites, and installation/rollback instructions.

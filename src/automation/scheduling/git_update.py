@@ -3,6 +3,7 @@ from __future__ import annotations
 
 __all__ = [
     'queue_update_email',
+    'queue_version_failure',
     'deliver_update_emails',
     'GitUpdateError',
     'repository_blocker',
@@ -21,6 +22,7 @@ import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import portalocker
 import psutil
@@ -29,6 +31,9 @@ from .config import runtime_dir
 from .runtime import RunStore
 
 from src.automation.console import logger
+
+if TYPE_CHECKING:
+    from src.automation.version_autofix import AttemptRecord
 
 
 def _mail_store() -> RunStore:
@@ -51,6 +56,16 @@ def queue_update_email(result: dict, root: Path) -> str:
         connection.execute('INSERT OR IGNORE INTO git_update_mail(id,data) VALUES (?,?)',
                            (notice_id, json.dumps(data)))
     return notice_id
+
+
+def queue_version_failure(attempt: AttemptRecord) -> None:
+    """Queue one durable notification per failed or interrupted attempt."""
+    data = {key: attempt[key] for key in
+            ('patch', 'commit_hash', 'host', 'attempt', 'status', 'log_path')}
+    data['kind'] = 'version_patch_failure'
+    with _mail_store().connect() as connection:
+        connection.execute('INSERT OR IGNORE INTO git_update_mail(id,data) VALUES (?,?)',
+                           ('version-' + attempt['id'], json.dumps(data)))
 
 
 def _record_repository_status(root: Path, status: str) -> None:
@@ -116,7 +131,13 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
     delivered = True
     for key, raw in rows:
         data = json.loads(raw)
-        if data.get('kind') == 'git_operation':
+        if data.get('kind') == 'version_patch_failure':
+            subject = f'Learndl version patch failed - {data["host"]} - {data["patch"]}'
+            body = (f'Patch: {data["patch"]}\nCommit: {data["commit_hash"]}\n'
+                    f'Attempt: {data["attempt"]} ({data["status"]})\nLog: {data["log_path"]}\n'
+                    'New business tasks are paused. Inspect the log and backups, then run '
+                    f'python -m src.automation.version_autofix retry {data["patch"]}.')
+        elif data.get('kind') == 'git_operation':
             subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
             body = data['body']
         elif data.get('kind') == 'dirty_repository':
@@ -279,7 +300,7 @@ def check_and_update(options: dict, *, root: Path | None = None) -> dict:
         return {'status': 'deferred', 'reason': 'execution/code lease occupied; Git retains priority'}
 
 
-def _admitted_update(root, options, *, target_snapshot=None):
+def _admitted_update(root, options, *, target_snapshot=None, migrate=None):
     from . import priority
     if not priority.enabled():
         return _update(root, options)
@@ -296,8 +317,17 @@ def _admitted_update(root, options, *, target_snapshot=None):
             if reason or head != state.get('target'):
                 raise GitUpdateError(reason or 'checkout HEAD differs from the intended target')
         except (OSError, GitUpdateError) as exc:
-            priority.write(store, dict(state, phase='blocked', reason=str(exc)))
+            priority.write(store, dict(state, phase='blocked', reason=str(exc), version_verified=False))
             return {'status': 'blocked', 'reason': str(exc)}
+        if migrate is not None:
+            # The mail worker can now load the verified checkout even if a
+            # migration fails. Business workers still see checkout/blocked.
+            state = dict(state, version_verified=True, version_verified_head=head)
+            priority.write(store, state)
+            result = migrate()
+            if result['status'] != 'ready':
+                priority.write(store, dict(state, phase='blocked', reason=result['reason']))
+                return result
         priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'verified_head': head})
         return {'status': 'verified', 'after': head}
     if options.get('enabled') is False:
@@ -387,13 +417,37 @@ def _channel_update(root, options):
     """Fetch before admission; only an applicable commit reserves business lanes."""
     from . import channels, priority
     from .autofix_store import Store, state_dir
-    from .maintenance_gate import permit, MaintenanceBusy
+    from .maintenance_gate import permit, MaintenanceBusy, pass_fds
+    from .config import installed_config
+    from src.automation import version_autofix as version
     from src.proj.util.web.mail_package import atomic_json
     store = Store(state_dir())
     result = {}
     with portalocker.Lock(str(runtime_dir() / 'git-worker.lock'), timeout=0):
         state = priority.read(store)
+        activated = version.activation(installed_config())
+
+        def migrate(fd):
+            if reason := training_blocker():
+                return {'status': 'deferred', 'reason': reason}
+            try:
+                return version.apply_pending(root, runtime_dir().parent, pass_fds=(fd, *pass_fds()),
+                                             notify=queue_version_failure)
+            except Exception as exc:
+                return {'status': 'blocked', 'reason': f'{type(exc).__name__}: {exc}'}
+
         if state['phase'] not in {'checkout', 'blocked'}:
+            if activated and version.needs_migration(root, runtime_dir().parent):
+                # Detect manual pulls before fetching, even with Git updates disabled.
+                try:
+                    with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(runtime_dir()) as fd:
+                        result = migrate(fd)
+                except (MaintenanceBusy, version.CodeBusy) as exc:
+                    result = {'status': 'deferred', 'reason': str(exc)}
+                finally:
+                    channels.release(store, 'git')
+                    atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
+                return result
             deadline = time.monotonic() + options.get('max_seconds', 45)
             try:
                 if not options.get('enabled'):
@@ -419,17 +473,19 @@ def _channel_update(root, options):
                 return {'status': 'error', 'reason': str(exc)}
         try:
             with permit(exclusive=True, blocking=False, task_class='git'):
-                with portalocker.Lock(str(runtime_dir() / 'git_update.lock'), mode='a', timeout=0):
+                with version.code_lease(runtime_dir()) as fd:
                     if state['phase'] not in {'checkout', 'blocked'}:
                         # Manual/non-managed trainer coverage retained as a final check.
                         if reason := training_blocker():
                             return {'status': 'deferred', 'reason': reason}
                         channels.running(store, 'git')
-                    result = _admitted_update(root, options, target_snapshot=(before, target) if state['phase'] not in {'checkout', 'blocked'} else None)
+                    result = _admitted_update(
+                        root, options, target_snapshot=(before, target) if state['phase'] not in {'checkout', 'blocked'} else None,
+                        migrate=(lambda: migrate(fd)) if activated else None)
                     if not result.get('checkout_attempted') and result.get('status') != 'blocked':
                         channels.release(store, 'git')
                     return result
-        except (portalocker.LockException, MaintenanceBusy) as exc:
+        except (portalocker.LockException, MaintenanceBusy, version.CodeBusy) as exc:
             from .maintenance_notice import record_failure
             record_failure(store, 'git', exc)
             return {'status': 'deferred', 'reason': str(exc) or 'code users still active'}

@@ -35,7 +35,7 @@ def argument(args, name, default=''):
 def synced_sources(results, *, timestamps=False):
     """Only committed v2 manifests can advertise synchronized experiment ZIPs."""
     from src.automation.artifact_exchange.core import (
-        Config, _target, category_root, experiment_members, real_tree, safe_path, valid_category,
+        Config, _target, category_root, experiment_members, real_tree, received_member, valid_category,
     )
     result = {'tensorboard': [], 'optuna': []}
     seen = set()
@@ -63,7 +63,7 @@ def synced_sources(results, *, timestamps=False):
                 date = datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ').strftime('%Y-%m-%d %H:%M:%S UTC')
                 label = ' · '.join([manifest['host'], manifest['category'], manifest['experiment'], date, manifest['status']])
                 for name, kind in members.items():
-                    path = real_tree(source.parent / safe_path(name))
+                    path = real_tree(source.parent / received_member(manifest, name, members, folder=source.parent))
                     if path.is_file() and str(path) not in seen:
                         seen.add(str(path))
                         result[kind].append({'path': str(path), 'label': label + ' · ' + name, '_stamp': stamp})
@@ -129,6 +129,7 @@ class Instances:
                 display = record.get('archive_source') if owned else None
                 display = display or source
                 rows.append(dict(pid=process.pid, created=process.info['create_time'], kind=kind, source=source,
+                                 archive_source=record.get('archive_source', '') if owned else '',
                                  port=port, display_source=str(Path(display).relative_to(ROOT)) if display and Path(display).is_relative_to(ROOT) else display, url=url if healthy else '', status='running' if healthy else 'not ready',
                                  origin='managed' if owned else 'external', controllable=True,
                                  error=record.get('error', '') if owned else '',
@@ -265,13 +266,14 @@ class Instances:
         raise RuntimeError(record['error'])
     def sources(self):
         from src.proj import PATH
-        from src.api.pkgs.dashboard import archived_tensorboard_index, _tensorboard_snapshot_ready
+        from src.api.pkgs.dashboard import archived_tensorboard_index, _tensorboard_snapshot_ready, model_tensorboard, saved_optuna_databases
 
         def option(path, label):
             return {'path': str(path), 'label': label}
 
-        trained = [p for p in PATH.model.glob('**/snapshot/tensorboard')
-                   if not p.is_relative_to(PATH.model_archive) and _tensorboard_snapshot_ready(p)]
+        bases = {p.parent.parent for pattern in ('*/*/results/tensorboard', '*/*/snapshot/tensorboard', '*/results/tensorboard', '*/snapshot/tensorboard')
+                 for p in PATH.model.glob(pattern) if not p.is_relative_to(PATH.model_archive)}
+        trained = [p for base in bases if _tensorboard_snapshot_ready(p := model_tensorboard(base))]
         def trained_time(path):
             stamps = []
             for event in path.rglob('*tfevents*'):
@@ -288,7 +290,11 @@ class Instances:
         recent = [option(p, f'{datetime.fromtimestamp(stamp).astimezone():%Y-%m-%d %H:%M:%S %Z} · {p.parent.parent.relative_to(PATH.model)}')
                   for stamp, p in dated]
         archived = archived_tensorboard_index(PATH.model_archive)
-        databases = sorted(PATH.optuna.rglob('*.sqlite3'), key=lambda p: p.stat().st_mtime, reverse=True)
+        databases = sorted(saved_optuna_databases(PATH), key=lambda p: p.stat().st_mtime, reverse=True)
+        def optuna_label(path):
+            return str(path.relative_to(PATH.optuna) if path.is_relative_to(PATH.optuna)
+                       else path.relative_to(PATH.model))
+
         synchronized = synced_sources(ROOT / 'results', timestamps=True)
 
         def latest(kind, local):
@@ -306,7 +312,7 @@ class Instances:
 
         recent = latest('tensorboard', [(stamp, item) for (stamp, _), item in zip(dated, recent)])
         recent_optuna = latest('optuna', [(p.stat().st_mtime, option(
-            p, f'{datetime.fromtimestamp(p.stat().st_mtime).astimezone():%Y-%m-%d %H:%M:%S %Z} · {p.relative_to(PATH.optuna)}'))
+            p, f'{datetime.fromtimestamp(p.stat().st_mtime).astimezone():%Y-%m-%d %H:%M:%S %Z} · {optuna_label(p)}'))
             for p in databases])
         def synced(kind):
             return {'zh': '同步研究实验', 'en': 'Synchronized research experiments', 'items': [option(item['path'], item['label']) for item in synchronized[kind]]}
@@ -331,14 +337,14 @@ class Instances:
             'tensorboard': [
                 {'zh': '最近训练', 'en': 'Latest training', 'items': recent},
                 {'zh': '已训练模型', 'en': 'Trained models', 'items': [option(p, str(p.parent.parent.relative_to(PATH.model))) for p in sorted(trained)]},
-                {'zh': '归档模型', 'en': 'Archived models', 'items': [option(p / 'snapshot/tensorboard', f'{module} / {name} / {p.name}')
+                {'zh': '归档模型', 'en': 'Archived models', 'items': [option(model_tensorboard(p), f'{module} / {name} / {p.name}')
                     for module, names in archived.items() for name, paths in names.items() for p in paths]},
                 synced('tensorboard'),
                 downloaded('tensorboard'),
             ],
             'optuna': [
                 {'zh': '最近实验', 'en': 'Latest study', 'items': recent_optuna},
-                {'zh': '已保存实验', 'en': 'Saved studies', 'items': [option(p, str(p.relative_to(PATH.optuna))) for p in databases]},
+                {'zh': '已保存实验', 'en': 'Saved studies', 'items': [option(p, optuna_label(p)) for p in databases]},
                 synced('optuna'),
                 downloaded('optuna'),
             ],

@@ -55,6 +55,139 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(publish_artifacts('research', 'run', [ArtifactSpec(self.source)], config=self.pub)[0]['status'], 'published')
         self.assertFalse(archive.exists())
 
+    def test_model_log_merge_survives_receipt_failure_and_replay(self):
+        from src.automation.artifact_exchange import core
+        from src.automation.artifact_exchange.model_logs import log_root
+
+        fragment = self.source / 'train.md'
+        fragment.write_text('## 2026-11-01 · run-one\n\n- epoch 0\n')
+        spec = ArtifactSpec(fragment, category='model_training', experiment='nn@test', destination='run-log')
+        archive = self.publish(spec, 'run-one')
+        payload = archive.read_bytes()
+        real_atomic = core.atomic_json
+
+        def crash(path, value):
+            if path.parent.name == 'received':
+                raise OSError('simulated failure before receipt')
+            return real_atomic(path, value)
+
+        with patch.object(core, 'atomic_json', side_effect=crash):
+            self.assertEqual(receive(self.rec)[0]['status'], 'failed')
+        log = log_root(self.rec, self.pub.source_host, 'nn@test') / 'train.md'
+        self.assertEqual(log.read_text(), fragment.read_text())
+        target = Path(receive(self.rec)[0]['target'])
+        self.assertFalse((target / 'run-log').exists())
+        self.assertEqual(log.read_text(), fragment.read_text())
+        removed = log.with_suffix('.deleted')
+        log.rename(removed)
+        archive.parent.mkdir(parents=True)
+        archive.write_bytes(payload)
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+        self.assertFalse(log.exists())
+        fragment.write_text('## 2026-11-02 · run-two\n\n- epoch 0\n')
+        self.publish(spec, 'run-two')
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+        self.assertEqual(log.read_text(), fragment.read_text())
+
+    def test_model_snapshot_uses_only_current_html_and_log_increment(self):
+        from types import SimpleNamespace
+        from src.automation.artifact_exchange.model_logs import capture_run, log_root
+
+        class BasePath:
+            full_name = 'nn@test'
+
+            def __call__(self, *parts):
+                return model.joinpath(*parts)
+
+            def rslt(self, *parts):
+                return self('results', *parts)
+
+            def snapshot(self, name):
+                return self('snapshot', name)
+
+        class Catcher:
+            def __init__(self, title):
+                self.output: Path | None = None
+
+            def set_export_files(self, path):
+                self.output = path
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                assert self.output is not None
+                self.output.parent.mkdir(parents=True)
+                self.output.write_text('current HTML')
+
+        model = self.root / 'model'
+        base = BasePath()
+        base.rslt().mkdir(parents=True)
+        (base.rslt() / 'testing_output.html').write_text('stale HTML')
+        trainer = SimpleNamespace(config=SimpleNamespace(base_path=base), queue_of_stages=['test'],
+                                  model_html_title='Test', callback=SimpleNamespace(callbacks=[]))
+
+        def write(phase, text):
+            trainer.process_log.write(phase, text)
+
+        trainer.write_process_log = write
+        with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
+                patch('src.proj.util.catcher.HtmlCatcher', Catcher), patch('src.proj.Save.async_wait_all'):
+            with capture_run(trainer):
+                first = trainer.process_log.run_id
+                write('test', '20261116–20261117')
+            trainer.model_html_title = None
+            with capture_run(trainer):
+                second = trainer.process_log.run_id
+                write('test', 'no new dates')
+        received = receive(self.rec)
+        self.assertEqual([row['status'] for row in received], ['received', 'received'])
+        files = [path for row in received for path in Path(row['target']).rglob('*.html')]
+        self.assertEqual([path.name for path in files], [first + '.html'])
+        self.assertEqual(files[0].read_text(), 'current HTML')
+        merged = log_root(self.rec, self.pub.source_host, base.full_name) / 'test.md'
+        for run in (first, second):
+            self.assertEqual(merged.read_text().count(run), 1)
+        self.assertEqual(merged.read_text(), base('run_logs', 'test.md').read_text())
+
+    def test_self_contained_mail_archive_and_trash(self):
+        from datetime import datetime
+        from email.message import EmailMessage
+        from types import SimpleNamespace
+        from src.api.learndl_monitor.artifact_library import Library
+        from src.automation.artifact_exchange.mail_archive import archive_message
+        from src.automation.artifact_exchange.research import CURRENT_TASK
+
+        message = EmailMessage()
+        message['Subject'] = 'Daily run'
+        message.set_content('This is the body')
+        message.add_attachment(b'actual', maintype='application', subtype='octet-stream', filename='report.txt')
+        original = self.source / 'original'
+        original.write_bytes(b'before handoff')
+        owner = SimpleNamespace(task_name='daily_update', kwargs={}, execution_status='Success', source='test',
+                                init_time=datetime.now(), _mail_original=[('report.txt', original)])
+        token = CURRENT_TASK.set(owner)
+        try:
+            with patch('src.automation.artifact_exchange.mail_archive.Config.load', return_value=self.pub), \
+                    patch('src.automation.artifact_exchange.research.log_results'):
+                archive_message(message, main_task=True, notification_id='one')
+                archive_message(message, main_task=True, notification_id='one')
+        finally:
+            CURRENT_TASK.reset(token)
+        self.assertEqual(len(receive(self.rec)), 1)
+        library = Library('mail_archive', self.rec, self.root / 'library')
+        row, = library.rows().values()
+        self.assertEqual(row['metadata']['subject'], 'Daily run')
+        self.assertEqual([item['smtp'] for item in row['metadata']['attachments']], [True, False])
+        self.assertEqual([path.read_bytes() for _, path in row['files'][2:]], [b'actual', b'before handoff'])
+        self.assertTrue(library.manage('archive', [row['id']])[0]['ok'])
+        self.assertTrue(library.listing()[0]['archived'])
+        self.assertTrue(library.manage('delete', [row['id']])[0]['ok'])
+        trashed, = library.listing()
+        self.assertTrue(trashed['trashed'])
+        self.assertTrue(library.manage('restore', [trashed['id']])[0]['ok'])
+        self.assertEqual(library.listing()[0]['label'], 'Daily run')
+
     def test_receive_removes_empty_routes_and_old_leftovers(self):
         archive = self.publish()
         routes = ['model_training/old_model', 'reports/custom', 'tensorboard', 'optuna']
@@ -366,7 +499,7 @@ class ExchangeTest(unittest.TestCase):
             (reports/'complete.binary').write_bytes(b'all files')
         trainer = SimpleNamespace(callback=SimpleNamespace(callbacks=[SimpleNamespace(reset_writer=close)]),
             config=SimpleNamespace(base_path=SimpleNamespace(full_name='nn@modelAAA',
-                rslt=lambda: reports, snapshot=lambda name: events)))
+                rslt=lambda *parts: events if parts == ('tensorboard',) else reports)))
         owner = SimpleNamespace(_artifact_results=[], _artifacts=[])
         token = CURRENT_TASK.set(owner)
         try:

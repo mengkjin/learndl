@@ -239,7 +239,7 @@ def next_times(slots: set, timezone: str) -> list[str]:
 
 
 def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone: str) -> dict:
-    config = dict(config, scheduler_version=3)
+    config = dict(config, scheduler_version=3, version_autofix=True)
     coverage, conflicts, global_conflicts = cron_coverage(cron, config, root, local_timezone)
     desired: dict[str, set] = {key: set() for key in config['tasks']}
     for schedule in config['schedules'].values():
@@ -293,7 +293,8 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         units[name + '.service'] = protected_service(root, python, job).replace('TimeoutStartSec=infinity', f'TimeoutStartSec={limit}s')
         units[name + '.timer'] = ('[Unit]\nDescription=Learndl auxiliary worker\n[Timer]\n'
             'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
-    units['learndl-git-update.service'] = service(root, python, 'src.automation.scheduling.git_update', []).replace('TimeoutStartSec=infinity', 'TimeoutStartSec=120s')
+    # Git is internally bounded, and each version patch has its own deadline.
+    units['learndl-git-update.service'] = service(root, python, 'src.automation.scheduling.git_update', [])
     units['learndl-git-update.timer'] = ('[Unit]\nDescription=Learndl Git check and maintenance\n[Timer]\n'
         'OnBootSec=60s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Watchdog always has one trigger, even when individual jobs are disabled.
@@ -557,6 +558,9 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
             if old_config.get('scheduler_version', 1) >= 3:
                 from .channels import read as read_channels
                 read_channels(Store(state_dir()))
+    if old_config and old_config.get('version_autofix'):
+        from src.automation.version_autofix import initialize as initialize_versions
+        initialize_versions(directory.parent, required=True)
     if not recovering and policy_matches and files_match and timers_match and actual_desktop == desired_desktop and (plan['units'] == previous['units'] and plan['cron'] == original_cron and plan['config'] == old_config):
         logger.info('Already up to date')
         return
@@ -578,6 +582,9 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         import time
         paused_at = time.time()
         atomic_json(directory / 'transaction.json', {'phase': 'prepared', 'plan': plan, 'paused_at': paused_at})
+        if plan.get('impact', {}).get('mode') != 'config' and plan['config'] and plan['config'].get('version_autofix'):
+            from src.automation.version_autofix import initialize as initialize_versions
+            initialize_versions(directory.parent, required=bool(old_config and old_config.get('version_autofix')))
         if plan.get('impact', {}).get('mode') != 'config' and plan['config'] and (plan['config'].get('scheduler_version', 1) >= 2 or plan['config']['watchdog']['jobs'].get('autofix', {}).get('enabled')):
             from .autofix_sandbox import preflight
             from .autofix_store import initialize, state_dir

@@ -92,7 +92,7 @@ class SummaryWriter(BaseCallBack):
             model_key += f'.ac_restart{restart}'
         if self.__dict__.get('_writer_key') != model_key:
             self.reset_writer()
-            self._writer = TsboardWriter(self.base_path.snapshot('tensorboard', model_key))
+            self._writer = TsboardWriter(self.base_path.rslt('tensorboard', model_key))
             self._writer_key = model_key
         return self._writer
 
@@ -231,10 +231,10 @@ class SummaryWriter(BaseCallBack):
     def sync_latest_tensorboard(self):
         """Copy this run's tensorboard snapshot onto ``PATH.tsboard/run``.
 
-        Historical curves stay in the model ``snapshot/tensorboard`` directory and
+        Historical curves stay in the model ``results/tensorboard`` directory and
         move with the model folder on archive. A separate tar is not written.
         """
-        ts_folder = self.config.base_path.snapshot('tensorboard')
+        ts_folder = self.config.base_path.rslt('tensorboard')
         if not ts_folder.exists() or not any(ts_folder.iterdir()):
             return
         run_folder = PATH.tsboard.joinpath('run')

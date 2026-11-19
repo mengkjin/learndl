@@ -68,6 +68,13 @@ class DashboardAPI:
         """
         TSBoardAPI.launch(open_browser = True)
 
+def saved_optuna_databases(paths=PATH):
+    canonical = {p for pattern in ('*/*/results/optuna/*.sqlite3', '*/results/optuna/*.sqlite3')
+                 for p in paths.model.glob(pattern)}
+    names = {p.name for p in canonical}
+    return sorted(canonical | {p for p in paths.optuna.rglob('*.sqlite3') if p.name not in names})
+
+
 class OptunaDBAPI:
     """API for launching Optuna Dashboard."""
     @classmethod
@@ -100,7 +107,7 @@ class OptunaDBAPI:
         """
         Start Optuna Dashboard pointing at ``PATH.optuna/run`` if logs exist.
         """
-        candidates = list(PATH.optuna.rglob('*.sqlite3'))
+        candidates = saved_optuna_databases()
         if not candidates:
             Logger.alert1("No local Optuna Dashboard database found in optuna folder")
             return
@@ -112,19 +119,19 @@ class OptunaDBAPI:
         """
         Interactively pick a saved Optuna Dashboard database and launch it.
         """
-        candidates = list(PATH.optuna.rglob('*.sqlite3'))
+        candidates = saved_optuna_databases()
         if not candidates:
             Logger.alert1("No available Optuna Dashboard databases found")
             return
         flag = AskFor.Options([
-            cand.relative_to(PATH.optuna) for cand in candidates] , 
+            cand.relative_to(PATH.main) for cand in candidates] ,
             confirm=False , multiple=False , 
             title = f'Choose from available Optuna Dashboard databases:',
-            help_description='SQLite study logs under PATH.optuna; sorted by modification time elsewhere.',
+            help_description='SQLite studies under model results and the standalone study directory; sorted by modification time elsewhere.',
         )
         if flag.result is None:
             return
-        cls.call_optuna_dashboard(PATH.optuna / flag.result , open_browser = open_browser)
+        cls.call_optuna_dashboard(PATH.main / flag.result , open_browser = open_browser)
 
     @classmethod
     def choose_to_delete_optuna_record(cls , **kwargs):
@@ -132,19 +139,19 @@ class OptunaDBAPI:
         Interactively pick Optuna Dashboard database(s) to delete.
         """
         for loop in AskFor.LoopTillExit(message = f'Do you want to delete more Optuna Dashboard databases?'):
-            candidates = list(PATH.optuna.rglob('*.sqlite3'))
+            candidates = saved_optuna_databases()
             if not candidates:
                 Logger.alert1("No available Optuna Dashboard databases found")
                 return
             flag = AskFor.Options(
-                [db_path.relative_to(PATH.optuna) for db_path in candidates] , 
+                [db_path.relative_to(PATH.main) for db_path in candidates] ,
                 multiple=True , confirm=True ,
                 title = f'Choose from available Optuna Dashboard databases to delete:',
                 help_description='Permanently removes selected .sqlite3 study files from PATH.optuna.',
             )
             if loop.set_flag(flag):
                 for db_path in flag.results:
-                    PATH.optuna.joinpath(db_path).resolve().unlink()
+                    PATH.main.joinpath(db_path).resolve().unlink()
                 Logger.success(f"Deleted {len(flag.results)} Optuna Dashboard databases")
 
     @classmethod
@@ -214,6 +221,11 @@ def _archived_model_keys(name : str) -> tuple[str , str] | None:
     model_name = f'{model_clean_name}@{index}' if index and int(index) >= 2 else model_clean_name
     return module , model_name
 
+def model_tensorboard(base: Path) -> Path:
+    canonical = base / 'results/tensorboard'
+    return canonical if canonical.is_dir() else base / 'snapshot/tensorboard'
+
+
 def archived_tensorboard_index(root : Path) -> dict[str , dict[str , list[Path]]]:
     """Group archived model dirs that still contain tensorboard logs.
 
@@ -228,7 +240,7 @@ def archived_tensorboard_index(root : Path) -> dict[str , dict[str , list[Path]]
         if not path.is_dir():
             continue
         keys = _archived_model_keys(path.name)
-        if keys is None or not _tensorboard_snapshot_ready(path.joinpath('snapshot' , 'tensorboard')):
+        if keys is None or not _tensorboard_snapshot_ready(model_tensorboard(path)):
             continue
         module , model_name = keys
         entries.append((module , model_name , path.name.rpartition('.')[2] , path))
@@ -282,7 +294,7 @@ class TSBoardAPI:
         from src.api.pkgs.model import ModelAPI
         from src.res.model.util import ModelPath
         candidates = [ModelPath(model) for model in ModelAPI.available_models(include_short_test = True)]
-        candidates = [model for model in candidates if _tensorboard_snapshot_ready(model.snapshot('tensorboard'))]
+        candidates = [model for model in candidates if _tensorboard_snapshot_ready(model_tensorboard(model.base))]
         if len(candidates) == 0:
             Logger.alert1("No available models with tensorboard logs found")
             return
@@ -290,11 +302,11 @@ class TSBoardAPI:
             [model.full_name for model in candidates] , 
             multiple=False , confirm=False ,
             title = f'Which model to launch TensorBoard?',
-            help_description='Models with snapshot/tensorboard subfolders containing event files.',
+            help_description='Models with results/tensorboard subfolders containing event files.',
         )
         if flag.result is None:
             return
-        cls.call_tensorboard(ModelPath(flag.result).snapshot('tensorboard') , open_browser = open_browser)
+        cls.call_tensorboard(model_tensorboard(ModelPath(flag.result).base) , open_browser = open_browser)
 
     @classmethod
     def run_archived_models_tensorboard(cls , * , open_browser : bool = False , **kwargs):
@@ -310,7 +322,7 @@ class TSBoardAPI:
             flag = AskFor.Options(
                 modules , multiple=False , confirm=False , allow_back=True ,
                 title = 'Choose module of archived models:',
-                help_description='Archived models under PATH.model_archive that still contain snapshot/tensorboard.',
+                help_description='Archived models under PATH.model_archive that contain TensorBoard results.',
             )
             if not flag.valid or flag.result is None:
                 return
@@ -334,7 +346,7 @@ class TSBoardAPI:
                 if not flag.valid or flag.result is None:
                     continue
                 chosen = next(path for path in archives if path.name == flag.result)
-                cls.call_tensorboard(chosen.joinpath('snapshot' , 'tensorboard') , open_browser = open_browser)
+                cls.call_tensorboard(model_tensorboard(chosen) , open_browser = open_browser)
                 return
 
     @classmethod

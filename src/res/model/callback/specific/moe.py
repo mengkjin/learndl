@@ -28,7 +28,7 @@ class SpecificCB_MOE(BaseCallBack):
             f'{self.config.base_path.model_clean_name}.'
             f'{self.model_num}.{self.model_date}.{self.status.attempt_key}'
         )
-        return TsboardWriter(self.config.base_path.snapshot('tensorboard' , model_key))
+        return TsboardWriter(self.config.base_path.rslt('tensorboard' , model_key))
 
     def reset_gate_record(self) -> None:
         self.gate_sum = None

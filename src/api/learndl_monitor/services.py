@@ -20,8 +20,13 @@ SERVICES = {
     'storage': {'zh': '存储洞察', 'en': 'Storage Insights', 'port': 8503, 'entry': 'src.api.learndl_monitor.storage'},
     'research': {'zh': '研究工作台', 'en': 'Research Workbench', 'port': 8501, 'entry': 'src/api/interactive/launch.py'},
     'compare': {'zh': '模型对比', 'en': 'Model Compare', 'port': 8504, 'entry': 'src/api/learndl_monitor/compare_app.py'},
+    'mail_archive': {'zh': '邮件档案', 'en': 'Mail Archive', 'port': 8506, 'entry': 'src.api.learndl_monitor.mail_archive'},
+    'model_preview': {'zh': '模型预览', 'en': 'Model Preview', 'port': 8507, 'entry': 'src.api.learndl_monitor.model_preview'},
     'experiments': {'zh': '实验面板', 'en': 'Experiment Dashboards', 'port': 8505, 'entry': 'src.api.learndl_monitor.experiments'},
 }
+MODULE_SERVICES = ('storage', 'experiments', 'mail_archive', 'model_preview')
+HEALTH_SERVICES = ('experiments', 'mail_archive', 'model_preview')
+
 for _key, _definition in SERVICES.items():
     _definition['port'] = int(os.environ.get(f'LEARNDL_{_key.upper()}_PORT', str(_definition['port'])))
 
@@ -44,7 +49,7 @@ class Manager:
                 args = process.info['cmdline'] or []
                 if process.info['username'] != psutil.Process().username():
                     continue
-                if key in ('storage', 'experiments'):
+                if key in MODULE_SERVICES:
                     valid = '-m' in args and entry in args and Path(process.cwd()).resolve() == ROOT
                 else:
                     valid = any(Path(arg).name == 'streamlit' for arg in args) and 'run' in args and any(
@@ -75,9 +80,9 @@ class Manager:
                     ports = sorted({c.laddr.port for c in process.net_connections(kind='inet') if c.status == psutil.CONN_LISTEN})
                 except psutil.AccessDenied:
                     ports = []
-                if not ports and key == 'experiments':
+                if not ports and key in HEALTH_SERVICES:
                     ports = [SERVICES[key]['port']]
-                if not ports and key not in ('storage', 'experiments'):
+                if not ports and key not in MODULE_SERVICES:
                     args = process.cmdline()
                     port = SERVICES[key]['port']
                     for i, arg in enumerate(args):
@@ -90,7 +95,7 @@ class Manager:
                 if ports and key != 'storage':
                     for port in ports:
                         try:
-                            with urlopen(f'http://127.0.0.1:{port}' + ('/health' if key == 'experiments' else '/_stcore/health'), timeout=1):
+                            with urlopen(f'http://127.0.0.1:{port}' + ('/health' if key in HEALTH_SERVICES else '/_stcore/health'), timeout=1):
                                 result['port'] = port
                                 result['url'] = f'http://127.0.0.1:{port}'
                                 break
@@ -141,7 +146,7 @@ class Manager:
                     if action in ('stop', 'restart'):
                         process = matches[0]
                         process_created = process.create_time()
-                        targets = [process] if key == 'experiments' else process.children(recursive=True) + [process]
+                        targets = [process] if key in HEALTH_SERVICES else process.children(recursive=True) + [process]
                         if psutil.Process(process.pid).create_time() != process_created:
                             raise ValueError('Process identity changed')
                         for target in targets:
@@ -173,7 +178,7 @@ class Manager:
         with socket.socket() as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind(('127.0.0.1', port))
-        if key in ('storage', 'experiments'):
+        if key in MODULE_SERVICES:
             args = [sys.executable, '-m', definition['entry']]
         else:
             args = [sys.executable, '-m', 'streamlit', 'run', str(ROOT / definition['entry']),
@@ -197,7 +202,7 @@ class Manager:
             address = self.snapshot(key)['url']
             if address:
                 try:
-                    with urlopen(address if key == 'storage' else address + ('/health' if key == 'experiments' else '/_stcore/health'), timeout=1) as response:
+                    with urlopen(address if key == 'storage' else address + ('/health' if key in HEALTH_SERVICES else '/_stcore/health'), timeout=1) as response:
                         if response.status == 200:
                             return
                 except OSError:

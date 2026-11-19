@@ -169,6 +169,7 @@ class ScriptHeader:
     content: str = ''
     todo: str = ''
     email: bool = False
+    mail_sync: bool | None = None
     mode: Base.lit.RunScriptMode = 'shell'
     blacklist: dict[str, list[str]] = field(default_factory=dict)
     parameters: dict[str, Any] = field(default_factory=dict)

@@ -29,7 +29,7 @@ class BoostPredictor(PredictorModel):
             given_name = f'{self.config.base_path.full_name}@{self.config.start_time.strftime("%Y%m%d%H%M%S")}' ,
             sub_name = f'{self.config.model_clean_name}/{self.model_num}/{self.model_date}/{self.model_submodel}' ,
             optuna = self.config.boost_optuna , override_boost = self.config.train_boost,
-            n_trials = self.config.boost_optuna_trials)
+            n_trials = self.config.boost_optuna_trials, study_directory=self.config.base_path.rslt('optuna'))
 
         self.model_dict.reset()
         self.complete_model_param = param

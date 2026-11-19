@@ -366,7 +366,8 @@ class Email(BoundLogger, metaclass=NoInstance):
              attachments: AttachmentSpec | Sequence[AttachmentSpec] | None = None,
              project_attachments: bool = False, title_prefix: str | None = f'Learndl [{MACHINE.nickname}]:',
              confirmation_message: str = '', queue_on_failure: bool = True,
-             delivery_id: str | None = None) -> bool:
+             delivery_id: str | None = None, mail_sync: bool | None = None,
+             archive_task: bool = False) -> bool:
         """Prepare bounded mail; True only when all parts have SMTP acceptance.
 
         Automatic mail has a single durable outbox owner. External callers use
@@ -377,6 +378,8 @@ class Email(BoundLogger, metaclass=NoInstance):
             return False
         message = cls.message(title, body, recipient, attachments=attachments,
                               project_attachments=project_attachments, title_prefix=title_prefix)
+        from src.automation.artifact_exchange.mail_archive import archive_message
+        archive_message(message, override=mail_sync, main_task=archive_task, notification_id=delivery_id)
         if not queue_on_failure:
             return cls.send_with_smtplib(message, recipient, confirmation_message, delivery_id=delivery_id)
         # Publish before network work. A competing worker can safely deliver this entry.

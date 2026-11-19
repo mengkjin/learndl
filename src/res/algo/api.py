@@ -6,6 +6,7 @@ Classes:
                  module list to a text file.
 """
 from __future__ import annotations
+from pathlib import Path
 import torch
 from typing import Any , Literal , TypeAlias
 
@@ -89,9 +90,11 @@ class AlgoModule:
         given_name : str | None = None , sub_name : str | None = None , 
         override_boost : dict | None = None ,
         override_criterion : dict | None = None , 
-        optuna : bool = False , **kwargs
+        optuna : bool = False , *, study_directory: Path | None = None, **kwargs
     ):
         boost_class = OptunaBoostModel if optuna else GeneralBoostModel
+        if optuna:
+            kwargs['study_directory'] = study_directory
         boost_cfg = override_boost if override_boost is not None else override_criterion
         boost = boost_class(
             model_module , model_param , cuda = bool(cuda) , seed = seed , 

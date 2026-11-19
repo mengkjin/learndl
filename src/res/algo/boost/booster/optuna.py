@@ -48,6 +48,10 @@ class OptunaBoostModel(GeneralBoostModel):
     DEFAULT_N_TRIALS = 50 if MACHINE.platform_server else 20
     OPTUNA_SAVE_STUDIES = True
     
+    def __init__(self, *args, study_directory: Path | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.study_directory = study_directory
+
     @property
     def best_params(self):
         return self.study.best_trial.params
@@ -123,7 +127,8 @@ class OptunaBoostModel(GeneralBoostModel):
 
     @property
     def study_db_path(self) -> Path:
-        return PATH.optuna / self.boost_type / f'{self.given_name}.sqlite3'
+        directory = self.study_directory or PATH.optuna / self.boost_type
+        return directory / f'{self.given_name}.sqlite3'
 
     @property
     def study_storage(self) -> str:

@@ -133,7 +133,8 @@ def finalize_task_artifacts(owner, saves_complete=True):
     queue.flushing = True
     if owner._artifacts:
         if saves_complete:
-            publish_safe(owner.task_name, owner.init_time.isoformat(), owner._artifacts, owner.execution_status)
+            publish_safe(owner.task_name, getattr(owner, 'task_run_id', None) or owner.init_time.isoformat(),
+                         owner._artifacts, owner.execution_status)
         else:
             record = {'status': 'skipped', 'reason': 'asynchronous saves incomplete'}
             owner._artifact_results.append(record)
@@ -326,12 +327,32 @@ def register_report(source, run_id):
 
 
 @contextmanager
-def model_run(trainer):
+def model_run(trainer, log=None):
     """Collect one model invocation, including standalone and resumed trainers."""
     specs = []
     token = MODEL_ARTIFACTS.set(specs)
     status = 'success'
-    run_id = datetime.now(timezone.utc).isoformat() + '__' + uuid.uuid4().hex
+    run_id = log.run_id if log is not None else datetime.now(timezone.utc).isoformat() + '__' + uuid.uuid4().hex
+    def inventory(folder):
+        signatures = {}
+        for path in folder.rglob('*'):
+            try:
+                if not path.is_symlink() and path.is_file():
+                    stat = path.stat()
+                    signatures[path] = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
+            except FileNotFoundError:
+                continue
+        return signatures
+
+    def reports(folder):
+        return {p: signature for p, signature in inventory(folder).items()
+                if p.relative_to(folder).parts[0] not in ('optuna', 'tensorboard')}
+
+    before_results = before_events = {}
+    if log is not None:
+        base = trainer.config.base_path
+        before_results = reports(base.rslt())
+        before_events = inventory(base.rslt('tensorboard'))
     try:
         yield
     except BaseException:
@@ -351,10 +372,18 @@ def model_run(trainer):
                 Save.async_wait_all(caller_name='artifact_exchange')
                 base = trainer.config.base_path
                 results = base.rslt()
-                if results.exists() and any(p.is_file() for p in results.rglob('*')):
-                    specs.append(ArtifactSpec(results, category='model_training'))
-                events = base.snapshot('tensorboard')
-                if events.exists() and any(events.rglob('*tfevents*')):
+                after_results = reports(results)
+                members = tuple(str(p.relative_to(results)) for p in after_results
+                                if p.name not in {'fitting_output.html', 'testing_output.html', 'fitting_testing_output.html'})
+                if members and (log is None or before_results != after_results):
+                    specs.append(ArtifactSpec(results, category='model_training', members=members))
+                if log is not None:
+                    if any(log.fragments.glob('*.md')):
+                        specs.append(ArtifactSpec(log.fragments, category='model_training', destination='run-log'))
+                    if log.html is not None and log.html.is_file():
+                        specs.append(ArtifactSpec(log.html, category='model_training', destination='html'))
+                events = base.rslt('tensorboard')
+                if any(events.rglob('*tfevents*')) and (log is None or before_events != inventory(events)):
                     specs.append(ArtifactSpec(events, kind='tensorboard', category='model_training', name=base.full_name))
                 specs = [replace(s, category='model_training', experiment=base.full_name, run_id=run_id) for s in specs]
                 # Studies may be registered once per date; one final SQLite snapshot suffices.

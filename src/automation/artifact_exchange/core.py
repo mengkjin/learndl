@@ -302,7 +302,9 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None,
 
 
 def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False) -> dict[str, Any]:
-    declaration = [asdict(s) | {'source': str(s.source)} for s in specs]
+    # Mail callers use private temporary directories. The notification ID
+    # identifies the logical message even when it is retried from a new directory.
+    declaration = [] if category == 'mail_archive' else [asdict(s) | {'source': str(s.source)} for s in specs]
     key = hashlib.sha256(json.dumps([2, config.source_host, task, run_id, category, experiment, declaration], sort_keys=True).encode()).hexdigest()
     ledger = config.state / 'outbox' / key / 'delivery.json'
     if ledger.exists():
@@ -322,6 +324,8 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
             part.mkdir(parents=True)
             _snapshot(spec, part, config)
             destination = spec.destination or ('results' if spec.kind == 'reports' else spec.kind)
+            if category == 'model_training' and task == 'model_training' and spec.kind != 'reports' and not spec.destination:
+                destination = f'results/{spec.kind}'
             safe_path(destination)
             paths = []
             for source in sorted(part.rglob('*')):
@@ -496,11 +500,24 @@ def experiment_members(manifest):
     return experiments
 
 
+def received_member(manifest, name, experiments, *, folder=None):
+    """Map old model experiment members without changing the signed inventory."""
+    original = safe_path(name)
+    kind = experiments.get(name)
+    if (manifest.get('schema_version') == 2 and manifest.get('category') == 'model_training'
+            and kind and original.parts[0] == kind):
+        canonical = Path('results') / original
+        if folder is None or real_tree(folder / canonical).exists():
+            return canonical
+    return original
+
+
 def _verify_target(target, manifest):
     if json.loads((target / 'source.json').read_text()) != manifest:
         raise ValueError('Existing target has different provenance')
+    experiments = experiment_members(manifest)
     for item in manifest['files']:
-        p = real_tree(target / item['path'])
+        p = real_tree(target / received_member(manifest, item['path'], experiments, folder=target))
         if p.stat().st_size != item['size'] or digest(p) != item['sha256']:
             raise ValueError('Existing target content differs; package retained')
 
@@ -527,11 +544,19 @@ def _receive(archive, config):
             if item['path'].casefold() == 'source.json' or item['path'] in listed:
                 raise ValueError('Reserved or duplicate manifest member')
             listed[item['path']] = item
+        mapped = {name: received_member(manifest, name, experiments) for name in listed}
+        paths = {str(p).casefold() for p in mapped.values()}
+        if len(paths) != len(mapped) or any(str(parent).casefold() in paths
+                                           for p in mapped.values() for parent in p.parents):
+            raise ValueError('Overlapping received artifact paths')
         if not listed or set(i.filename for i in entries) != {'manifest.json', *('payload/' + n for n in listed)}:
             raise ValueError('Manifest/payload mismatch')
         receipt = config.state / 'received' / (manifest['id'] + '.json')
-        if receipt.exists() and json.loads(receipt.read_text())['sha256'] != archive_hash:
+        previous = json.loads(receipt.read_text()) if receipt.exists() else None
+        if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
+        if previous and manifest.get('category') in ('model_training', 'mail_archive'):
+            return _finish_receive(archive, archive_hash, manifest, target)
         target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=target.parent, prefix='.receive-') as tmp:
             staging = Path(tmp) / 'result'
@@ -540,7 +565,7 @@ def _receive(archive, config):
                 info = z.getinfo('payload/' + name)
                 if info.file_size != item['size']:
                     raise ValueError('Manifest size mismatch')
-                p = staging / name
+                p = staging / mapped[name]
                 p.parent.mkdir(parents=True, exist_ok=True)
                 with z.open(info) as src, p.open('xb') as dst:
                     shutil.copyfileobj(src, dst, 1024 * 1024)
@@ -562,7 +587,30 @@ def _receive(archive, config):
             else:
                 staging.rename(target)
                 fsync_dir(target.parent)
+        from .model_logs import append_received
+        if manifest['schema_version'] == 2:
+            append_received(config, target, manifest)
         atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
+    return _finish_receive(archive, archive_hash, manifest, target)
+
+
+def _finish_receive(archive, archive_hash, manifest, target):
+    if manifest.get('category') == 'model_training':
+        fragments = {'run-log/train.md', 'run-log/test.md'}
+        members = {item['path'] for item in manifest['files']}
+        for name in members & fragments:
+            real_tree(target / name).unlink(missing_ok=True)
+        folder = target / 'run-log'
+        with contextlib.suppress(FileNotFoundError):
+            if members & fragments and not any(folder.iterdir()):
+                folder.rmdir()
+                fsync_dir(target)
+        if members and members <= fragments:
+            with contextlib.suppress(FileNotFoundError):
+                real_tree(target / 'source.json').unlink(missing_ok=True)
+                if not any(target.iterdir()):
+                    target.rmdir()
+                    fsync_dir(target.parent)
     if digest(archive) != archive_hash:
         raise ValueError('Package changed before cleanup')
     archive.unlink()

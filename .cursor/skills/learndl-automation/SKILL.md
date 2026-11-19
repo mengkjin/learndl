@@ -53,6 +53,23 @@ configuration files and retain their existing locations.
   maintenance context variables. Keep old installed startup commands working until
   explicit installer apply replaces them.
 
+## Version patches for local project files
+
+When a release changes Git-ignored data, model configs, or directory layouts,
+ship the migration with the version bump in `scripts/.version_autofix/<version>/`.
+Use ordered numbered scripts with explicit verification. Scope writes to the
+affected files, back up before changing them, and handle already migrated files
+and partial attempts safely. Preserve successful patch IDs, paths, and bytes.
+Put later corrections in a higher version.
+
+Version patches are part of server code upgrades, including manual pulls. Use
+the shared maintenance and code leases. Keep new business work blocked until
+verification succeeds. Keep the failure record and backups, notify by email,
+and require operator retry after a failure or interruption. Use the existing
+Autofix request workflow for one-off operational repairs. Follow the
+[version patch guide](../../../scripts/.version_autofix/README.md) for the
+script interface and runbook.
+
 ## Installation and publication
 
 `install_impact.py` classifies configuration publication, explicitly reviewed

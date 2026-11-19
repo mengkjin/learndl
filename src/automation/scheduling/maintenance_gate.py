@@ -139,6 +139,12 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         reason = blocker(Store(directory), task_class) if modern else None
                         if reason:
                             raise MaintenanceBusy(reason)
+                        if modern and task_class not in {'git', 'installation'}:
+                            from .config import installed_config, runtime_dir
+                            from src.automation.version_autofix import activation, admission_reason
+                            if activation(installed_config()):
+                                if reason := admission_reason(ROOT, runtime_dir().parent):
+                                    raise MaintenanceBusy(reason)
                         if modern_channels:
                             descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class, exclusive_groups))
                             lane_token = _lane_fds.set(descriptors)

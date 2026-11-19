@@ -20,7 +20,7 @@ import sys
 import time
 
 
-def code_pending(directory, *, ignore_reservation=False):
+def code_pending(directory, *, ignore_reservation=False, allow_verified_checkout=False):
     with sqlite3.connect((directory / 'ledger.sqlite').as_uri() + '?mode=ro', uri=True) as db:
         row = db.execute("SELECT value FROM metadata WHERE key='scheduling_git'").fetchone()
     if row is None:
@@ -28,6 +28,8 @@ def code_pending(directory, *, ignore_reservation=False):
     state = json.loads(row[0])
     if state.get('phase') not in {'idle', 'draining', 'checkout', 'blocked'}:
         raise RuntimeError('Invalid scheduling priority state')
+    if allow_verified_checkout and state.get('version_verified') is True:
+        return False
     settings_path = directory / 'worker-settings.json'
     settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
     installed_path = Path(settings['runtime']) / 'installed.json' if settings.get('runtime') else None
@@ -59,7 +61,8 @@ def wait_for_code(directory, kind):
         if transaction and transaction.exists() and kind != 'email_outbox':
             if json.loads(transaction.read_text()).get('phase') != 'complete':
                 return True
-        return code_pending(directory, ignore_reservation=kind == 'watchdog')
+        return code_pending(directory, ignore_reservation=kind == 'watchdog',
+                            allow_verified_checkout=kind == 'email_outbox')
     except (OSError, ValueError, sqlite3.Error, RuntimeError):
         # The independent control-failure outbox must survive ledger loss.
         # This exception applies only to mail, still under the physical code
@@ -127,6 +130,13 @@ def main():
             return 0
         os.chdir(settings['root'])
         sys.path.insert(0, settings['root'])
+        config = json.loads((runtime / 'installed.json').read_text())
+        if config.get('version_autofix') and kind != 'email_outbox':
+            from src.automation.console import logger
+            from src.automation.version_autofix import admission_reason
+            if reason := admission_reason(Path(settings['root']), runtime.parent):
+                logger.error('%s', reason)
+                return 0
         sys.argv = [module, *arguments]
         runpy.run_module(module, run_name='__main__')
     return 0
