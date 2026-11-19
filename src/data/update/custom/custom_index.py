@@ -196,11 +196,6 @@ class MicroCap_400(CustomIndex):
         # Count the listed SSE/SZSE universe before excluding ST constituents.
         # Floor odd counts so the index never exceeds half of that universe.
         count = min(400, pool.nunique() // 2)
-        trading = DATAVENDOR.TRADE.get_trd(date)
-        if trading.empty or not {'secid', 'status', 'close'}.issubset(trading.columns):
-            raise ValueError(f'Cannot build {self.index_name} holdings at {date}: missing trading-status quotes')
-        active = trading.loc[(trading.status == 1) & np.isfinite(trading.close) & (trading.close > 0), 'secid']
-        df = df[df.secid.isin(active)]
         df = df[df['secid'].isin(pool) & ~df['secid'].isin(st_stocks)].sort_values('free_cap' , ascending=True).\
             head(count).reset_index(drop=True).drop(columns=['free_cap'])
         if df.empty:

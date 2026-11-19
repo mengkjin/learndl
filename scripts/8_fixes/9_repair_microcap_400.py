@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# description: Repair historical microcap_400 returns and market inputs without training
+# description: Repair adjusted prices, listing references, microcap history and market inputs
 # email: true
 # mode: shell
 # parameters:
@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.proj.util.script import ScriptTool
-from src.data.preprocess.repair_microcap import rebuild_microcap
+from src.data.preprocess.repair_microcap import repair_all
 
 __all__ = ["main"]
 
@@ -37,7 +37,7 @@ __all__ = ["main"]
     markdown_catcher=True,
 )
 def main(start=20050101, end=None, validate_only=False):
-    return rebuild_microcap(start, end, validate_only)
+    return repair_all(start, end, validate_only)
 
 
 if __name__ == "__main__":

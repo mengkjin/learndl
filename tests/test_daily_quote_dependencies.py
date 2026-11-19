@@ -68,7 +68,7 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
                 self.assertEqual(description.call_args.kwargs['exchange'], ['SZSE', 'SSE'])
                 self.assertEqual(int(description.call_args.args[0]), 20041230)
 
-    def test_microcap_excludes_suspended_unknown_and_absent_holdings_day_quotes(self):
+    def test_microcap_retains_style_without_trading_status_exclusions(self):
         secids = np.arange(1, 7)
         valuation = pd.DataFrame({'secid': secids, 'free_share': 1., 'close': secids.astype(float)})
         trading = pd.DataFrame({'secid': [1, 2, 4, 5, 6], 'status': [0, np.nan, 1, 1, 1], 'close': 10.})
@@ -77,8 +77,8 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
               patch.object(custom_index.DATAVENDOR.INFO, 'get_desc', return_value=pd.DataFrame({'secid': secids})),
               patch.object(custom_index.DATAVENDOR.INFO, 'get_st', return_value=pd.DataFrame({'secid': []}))):
             weights = custom_index.MicroCap_400().rebalance_portfolio(20041231)
-        np.testing.assert_array_equal(weights.secid, [4, 5, 6])
-        quotes.assert_called_once_with(20041231)
+        np.testing.assert_array_equal(weights.secid, [1, 2, 3])
+        quotes.assert_not_called()
 
     def test_microcap_start_and_repair_default_are_2005(self):
         import inspect
@@ -97,7 +97,7 @@ class DailyQuoteDependenciesTest(unittest.TestCase):
     def test_valid_day_still_fills_individual_halted_stock(self):
         day = pd.DataFrame({'secid': [1], 'adjfactor': [2.0], **{c: [10.0] for c in adjprice.PRICE_COLS}})
         previous = pd.DataFrame({'secid': [1, 2], **{c: [19.0, 30.0] for c in adjprice.PRICE_COLS}})
-        with patch.object(adjprice.DB, 'load', side_effect=[day, previous]), patch.object(adjprice.INFO, 'get_secid', return_value=np.array([1, 2])), patch.object(adjprice.CALENDAR, 'td', return_value=SimpleNamespace(as_int=lambda: 20261117)):
+        with patch.object(adjprice.DB, 'load', side_effect=[day, previous]), patch.object(adjprice.INFO, 'get_desc', return_value=pd.DataFrame({'secid': [1, 2], 'list_dt': [20000101]*2, 'delist_dt': [99991231]*2})), patch.object(adjprice.CALENDAR, 'td', return_value=SimpleNamespace(as_int=lambda: 20261117)):
             result = adjprice.calc_adjprice(20261118).set_index('secid')
         self.assertEqual(result.loc[1, 'close'], 20.0)
         self.assertEqual(result.loc[2, 'close'], 30.0)

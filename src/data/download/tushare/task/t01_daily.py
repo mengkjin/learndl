@@ -18,6 +18,7 @@ class DailyQuote(DayFetcher):
     def update_dates(self , dates : Base.intDates , **kwargs) -> Dates:
         """Save day quotes then immediately rebuild ``trade_ts/adjprice`` for each date."""
         from src.data.update.custom.adjprice import AdjPriceUpdater
+        from src.data.update.custom.listing_price import update_listing_prices
 
         dates = Dates(dates)
         if self.check_server_down():
@@ -32,6 +33,7 @@ class DailyQuote(DayFetcher):
                 vb_level = self.vb_level + 1 ,
             )
             AdjPriceUpdater.update_one(int(date))
+            update_listing_prices(int(date))
         return dates
 
     def get_data(self , date : int):

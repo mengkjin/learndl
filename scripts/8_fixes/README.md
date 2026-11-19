@@ -186,10 +186,13 @@ Run in an idle data-maintenance window, after raw Tushare history has been resto
 The script shares the `daily_update` script lock, but this does not exclude every
 manual downloader, preprocessing job, or already-running model process. Stop those
 writers/readers before installation. It does not download missing history or repair
-raw prices. Missing daily quotes, incomplete holding returns, or existing AdjPrice
-inconsistent with raw quotes stop the run and identify the date; repair that upstream
-data before rerunning. In particular, rebuild 20261118 AdjPrice if it still contains
-forward-filled whole-market prices from the outage.
+raw prices. It first stages adjusted-price corrections chronologically from the
+oldest local trade_ts/day, then rebuilds the persisted listing reference table.
+Missing raw quotes or incomplete holding returns still stop downstream repair.
+The upstream and downstream installations are separate transactions: a later
+microcap failure retains the corrected upstream prices and their rollback journal.
+With --validate-only, upstream corrections are staged but not installed; if any
+are needed, the command stops before downstream validation and reports that fact.
 
 All candidates are prepared before installation:
 
@@ -219,10 +222,9 @@ Microcap repair defaults to 2005-01-01 through the latest confirmed trading day.
 The first return uses holdings at 2004-12-31; the existing one-trading-day lag
 for constituent selection therefore also requires 2004-12-30 valuation data.
 The equal-weight constituent count is min(400, floor(listed SSE/SZSE stocks / 2)),
-counting ST names in the market total but excluding them from selection. Selection
-also requires a holding-date quote with status=1 and a finite positive close;
-suspended stocks and stocks without confirmed trading quotes are excluded.
-This does not use next-day status and cannot prevent a holding from halting later. If fewer
+counting ST names in the market total but excluding them from selection.
+Suspension is NOT an exclusion: historical adjusted prices carry held stocks
+through suspensions rather than changing the index's market-cap style. If fewer
 eligible stocks are available, use all of them; an empty selection fails.
 Run script 9 over the full default range to replace the previous methodology
 and rebuild market inputs; existing model weights are not retrained.
@@ -235,10 +237,24 @@ adjustment factor, status, volume, adjusted close, missing columns and read erro
 Diagnostics never fill missing returns, remove holdings, or permit installation
 after a failed return validation.
 
-Close-return queries now use DATAVENDOR's lazily cached `list_day_price` table
+Close-return queries read the persisted information_ts/list_day_price table
 when the interval starts on/before a stock's listing date and ends on/after it.
 The reference is listing-day `preclose * adjfactor`, not listing-day close; the
 actual factor is used (missing factors follow the existing fallback of 1).
 `get_returns_block` applies this only to listing-day close returns. Open/VWAP
-retain their previous calculations. Missing references remain NaN and are retried;
-`DATAVENDOR.clear_all()` clears both listing and return caches.
+retain their previous calculations. DailyQuote updates the persisted table after
+saving each day and adjusted prices, refreshing that day's listings and retrying
+missing references. Unavailable raw history leaves explicit NaN values, counted
+in the price-repair summary. Query-time reads never scan historical daily files;
+the in-memory table reloads when the persisted file changes. Script 9 initializes
+the table on first use. Restart running consumers after historical corrections.
+
+Adjusted-price coverage uses the union of current quotes and the previous panel,
+not membership in description. Only known future listing dates and completed
+delistings remove rows; unknown descriptions are retained. `get_adjprice` checks
+valid raw daily price cells, repairs missing rows/cells with a per-date writer
+lock and atomic replacement, and reloads its cache. A failed repair raises rather
+than silently returning incomplete prices. This check repairs coverage, not all
+numerical discrepancies; script 9 performs the full chronological correction.
+Microcap uses the SSE/SZSE exchange filter without additional code-prefix
+exclusions. Suspensions remain eligible.

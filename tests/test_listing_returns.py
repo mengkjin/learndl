@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import threading
+import tempfile
+from pathlib import Path
 from contextlib import ExitStack
 import unittest
 from unittest.mock import patch
@@ -27,23 +29,30 @@ class ListingReturnsTest(unittest.TestCase):
         self.vendor.__dict__['all_stocks'] = pd.DataFrame({
             'secid': [1, 2, 3], 'list_dt': [20260106, 20260106, 20260108]})
         self.day = pd.DataFrame({'secid': [1, 2], 'preclose': [10., 20.], 'adjfactor': [2., 1.]})
+        self.persisted = pd.DataFrame({'secid': [1, 2, 3], 'list_dt': [20260106, 20260106, 20260108],
+                                       'list_price': [10., 20., np.nan], 'adjfactor': [2., 1., np.nan],
+                                       'adj_list_price': [20., 20., np.nan]})
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.path = Path(tmp.name) / 'list_day_price.feather'
+        self.persisted.to_feather(self.path)
+        patcher = patch('src.data.loader.data_vendor.DB.path', return_value=self.path)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
-    def test_lazy_price_table_actual_factor_and_retry_missing(self):
-        with patch('src.data.loader.data_vendor.DB.load', side_effect=[pd.DataFrame(), self.day]) as load:
-            self.assertTrue(self.vendor.list_day_price.list_price.isna().all())
-            load.assert_not_called()
-            self.assertTrue(self.vendor.get_list_day_price(20260106, 20260106).adj_list_price.isna().all())
+
+    def test_persisted_table_reads_once_and_reloads_after_replacement(self):
+        with patch('src.data.loader.data_vendor.DB.load', return_value=self.persisted) as load:
             table = self.vendor.get_list_day_price(20260106, 20260106)
             self.assertEqual(table.loc[1, 'adj_list_price'], 20.)
-            self.assertEqual(table.loc[1, 'list_price'], 10.)
+            self.vendor.get_list_day_price(20260106, 20260106)
+            self.assertEqual(load.call_count, 1)
+            self.path.write_bytes(b'changed stamp')
             self.vendor.get_list_day_price(20260106, 20260106)
             self.assertEqual(load.call_count, 2)
-            self.assertTrue(np.isnan(self.vendor.list_day_price.loc[3, 'list_price']))
-            table.loc[1, 'list_price'] = 999
-            self.assertEqual(self.vendor.list_day_price.loc[1, 'list_price'], 10.)
 
     def test_clear_all_invalidates_listing_reference_cache(self):
-        with patch('src.data.loader.data_vendor.DB.load', return_value=self.day):
+        with patch('src.data.loader.data_vendor.DB.load', return_value=self.persisted):
             self.vendor.get_list_day_price(20260106, 20260106)
         self.vendor.day_quotes = {}
         self.vendor.day_secids = {}
@@ -55,13 +64,13 @@ class ListingReturnsTest(unittest.TestCase):
         self.assertIsNone(self.vendor._list_day_price)
         self.assertNotIn('all_stocks', self.vendor.__dict__)
 
-    def test_invalid_listing_reference_stays_unknown(self):
-        for value in (0., -1., np.inf, np.nan):
-            with self.subTest(value=value), patch('src.data.loader.data_vendor.DB.load', return_value=self.day.assign(preclose=value)):
-                self.assertTrue(self.vendor.get_list_day_price(20260106, 20260106).adj_list_price.isna().all())
+    def test_missing_persisted_table_requests_initialization(self):
+        self.path.unlink()
+        with self.assertRaisesRegex(FileNotFoundError, 'repair script 9'):
+            self.vendor.get_list_day_price(20260106, 20260106)
 
     def test_period_close_includes_listing_at_or_after_start(self):
-        with patch('src.data.loader.data_vendor.DB.load', return_value=self.day):
+        with patch('src.data.loader.data_vendor.DB.load', return_value=self.persisted):
             listing = self.vendor.get_list_day_price(20260106, 20260106)
         for start in (20260105, 20260106):
             for adj_present in (True, False):
@@ -91,7 +100,7 @@ class ListingReturnsTest(unittest.TestCase):
               patch.object(DATAVENDOR, 'get_list_day_price', return_value=pd.DataFrame())):
             result: Any = TRADE.period_return(20260107, 20260108)
             self.assertAlmostEqual(result.loc[1, 'ret'], .25)
-        with patch('src.data.loader.data_vendor.DB.load', return_value=self.day):
+        with patch('src.data.loader.data_vendor.DB.load', return_value=self.persisted):
             listing = self.vendor.get_list_day_price(20260106, 20260106)
         with (patch.object(TRADE, '_adj_price_col', side_effect=[pd.Series({9: 10.}), pd.Series({9: 11.})]),
               patch.object(DATAVENDOR, 'get_list_day_price', return_value=listing)):
@@ -105,7 +114,7 @@ class ListingReturnsTest(unittest.TestCase):
         dates = np.array([20260105, 20260106, 20260107])
         with (patch.object(self.vendor, 'td_within', return_value=dates),
               patch.object(self.vendor, 'get_quotes_block', return_value=block),
-              patch('src.data.loader.data_vendor.DB.load', return_value=self.day)):
+              patch('src.data.loader.data_vendor.DB.load', return_value=self.persisted)):
             self.vendor.update_return_block(20260105, 20260107)
         out: Any = self.vendor.blocks_cache['daily_ret'].to_dataframe()
         self.assertAlmostEqual(out.loc[(1, 20260106), 'close'], .2, places=6)

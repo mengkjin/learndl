@@ -97,7 +97,17 @@ class TradeDataAccess(DateDataAccess):
 
     def get_adjprice(self , date , field = None) -> pd.DataFrame:
         """Return halt-filled adjfactor-adjusted OHLC/VWAP for a single ``date``."""
-        return self.get(date , 'adj' , field)
+        from src.data.update.custom.adjprice import AdjPriceUpdater, covers_day
+        date = int(date)
+        adj = self.get(date, 'adj')
+        day = self.get_trd(date)
+        if not covers_day(adj, day, date):
+            AdjPriceUpdater.update_one(date)
+            # Force a reload so the just-repaired rows are visible immediately.
+            adj = self.get(date, 'adj', overwrite=True)
+            if not covers_day(adj, day, date):
+                raise ValueError(f'Incomplete adjprice coverage after repair at {date}')
+        return self.get(date, 'adj', field)
 
     def period_return(
         self ,

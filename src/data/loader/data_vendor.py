@@ -93,41 +93,21 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
 
     @property
     def list_day_price(self) -> pd.DataFrame:
-        """Listing metadata and lazily loaded reference prices, indexed by secid.
-
-        list_price is the listing day's preclose, not its first close/open.
-        adj_list_price uses that day's actual adjustment factor. Unavailable
-        prices stay NaN and are retried on the next relevant request.
-        """
+        """Read persisted IPO reference prices; never scan historical quotes here."""
         with self._list_price_lock:
-            if self._list_day_price is None:
-                self._list_day_price = self.all_stocks[['secid', 'list_dt']].drop_duplicates('secid').set_index('secid').copy()
-                for column in ('list_price', 'adjfactor', 'adj_list_price'):
-                    self._list_day_price[column] = np.nan
+            path = DB.path('information_ts', 'list_day_price')
+            if not path.exists():
+                raise FileNotFoundError('Missing list_day_price; run repair script 9 to initialize price history')
+            stamp = (path.stat().st_mtime_ns, path.stat().st_size)
+            if self._list_day_price is None or getattr(self, '_list_price_stamp', None) != stamp:
+                self._list_day_price = DB.load('information_ts', 'list_day_price').set_index('secid')
+                self._list_price_stamp = stamp
             return self._list_day_price.copy()
 
     def get_list_day_price(self, start: int, end: int) -> pd.DataFrame:
-        """Load valid listing reference prices only for IPO dates in [start, end]."""
-        with self._list_price_lock:
-            table = self.list_day_price
-            selected = table.loc[table.list_dt.between(int(start), int(end))]
-            pending = selected.loc[selected.adj_list_price.isna()]
-            for date in pending.list_dt.unique():
-                stocks = pending.loc[pending.list_dt == date]
-                day = DB.load('trade_ts', 'day', int(date), vb_level='never')
-                if day is None or day.empty or not {'secid', 'preclose', 'adjfactor'}.issubset(day.columns):
-                    continue
-                day = day.loc[~day.secid.duplicated(keep=False)].set_index('secid').reindex(stocks.index)
-                price = pd.to_numeric(day.preclose, errors='coerce')
-                factor = pd.to_numeric(day.adjfactor, errors='coerce').fillna(1.)
-                adjusted = price * factor
-                valid = np.isfinite(price) & (price > 0) & np.isfinite(factor) & (factor > 0) & np.isfinite(adjusted)
-                ids = price.index[valid]
-                table.loc[ids, 'list_price'] = price.loc[ids]
-                table.loc[ids, 'adjfactor'] = factor.loc[ids]
-                table.loc[ids, 'adj_list_price'] = adjusted.loc[ids]
-            self._list_day_price = table
-            return table.loc[selected.index].copy()
+        """Subset persisted reference prices, retaining unavailable values as NaN."""
+        table = self.list_day_price
+        return table.loc[table.list_dt.between(int(start), int(end))].copy()
 
     def clear_all(self) -> None:
         """clear all the data in the collection"""

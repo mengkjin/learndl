@@ -19,7 +19,7 @@ from src.data.util import DataBlock, INFO
 from src.data.update.custom.custom_index import MicroCap_400
 from .processors.market import PrePro_market
 
-__all__ = ["rebuild_microcap"]
+__all__ = ["rebuild_microcap", "repair_all"]
 
 
 def digest(path):
@@ -440,3 +440,69 @@ def rebuild_microcap(start: int | np.integer = MicroCap_400.START_DATE, end=None
         )
         Logger.stdout(f"[microcap repair] {report['status']}: {folder}", vb_level=0)
     return report
+
+
+def repair_price_inputs(validate_only=False):
+    """Stage chronological price corrections; install upstream as one transaction.
+
+    Downstream failure leaves successfully repaired upstream data in place.
+    Existing transaction.json/backups support an explicit rollback if needed.
+    """
+    from src.data.update.custom.adjprice import calc_adjprice
+    from src.data.update.custom.listing_price import build_listing_prices
+
+    dates = DB.dates('trade_ts', 'day')
+    if dates.empty:
+        raise ValueError('Cannot repair prices: trade_ts/day is empty')
+    folder = PATH.result / 'microcap_repair' / ('prices_' + uuid4().hex)
+    stage_dir = folder / 'staged'
+    stage_dir.mkdir(parents=True)
+    replacements = []
+    baseline = {}
+
+    def stage(candidate, target, name):
+        baseline[target] = digest(target)
+        old = Load.df(target) if target.exists() else pd.DataFrame()
+        try:
+            pd.testing.assert_frame_equal(old.reset_index(drop=True), candidate.reset_index(drop=True), check_dtype=False)
+            return
+        except AssertionError:
+            pass
+        staged = stage_dir / name
+        Save.df(candidate, staged, vb_level='never')
+        pd.testing.assert_frame_equal(Load.df(staged), candidate.reset_index(drop=True))
+        replacements.append((target, staged))
+
+    previous = pd.DataFrame()
+    for date in dates:
+        date = int(date)
+        Logger.stdout(f'[price repair] Rebuild adjprice date={date}', vb_level=0)
+        candidate = calc_adjprice(date, previous=previous)
+        stage(candidate, DB.path('trade_ts', 'adjprice', date), f'adjprice_{date}.feather')
+        previous = candidate
+    Logger.stdout('[price repair] Rebuild persisted listing reference prices', vb_level=0)
+    listing = build_listing_prices(rebuild=True)
+    stage(listing, DB.path('information_ts', 'list_day_price'), 'list_day_price.feather')
+    summary = dict(status='validated' if validate_only else 'prepared', changed_files=len(replacements),
+                   first_date=int(dates.min), last_date=int(dates.max),
+                   missing_listing_references=int(listing.adj_list_price.isna().sum()))
+    (folder / 'summary.json').write_text(json.dumps(summary, indent=2))
+    Logger.stdout(f'[price repair] {len(replacements)} changed files; report={folder}', vb_level=0)
+    if validate_only and replacements:
+        raise ValueError(f'Price preflight found {len(replacements)} corrections; no live files changed. '
+                         f'Run without --validate-only before validating downstream. Evidence: {folder}')
+    if replacements:
+        install(replacements, baseline, folder)
+    summary['status'] = 'validated' if validate_only else 'complete'
+    (folder / 'summary.json').write_text(json.dumps(summary, indent=2))
+    return summary
+
+
+def repair_all(start=MicroCap_400.START_DATE, end=None, validate_only=False):
+    """Repair prices, listing references, index history, and market inputs in order."""
+    end = int(CALENDAR.updated() if end is None else end)
+    if not MicroCap_400.START_DATE <= int(start) <= end <= CALENDAR.updated():
+        raise ValueError('Invalid microcap repair date interval')
+    repair_price_inputs(validate_only=validate_only)
+    DATAVENDOR.clear_all()
+    return rebuild_microcap(start, end, validate_only)
