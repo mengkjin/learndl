@@ -4,7 +4,7 @@ All losses inherit from ``BaseLoss``.  The ``Loss`` class is the factory used
 by the training loop.  Loss values should be minimized (lower is better).
 
 Registry keys: 'mse', 'pearson', 'ccc', 'hidden_corr_deprecated',
-               'hidden_corr', 'quantile', 'ccc_hcorr', 'mse_hcorr', 'abcm' , 'global2top'
+               'hidden_corr', 'quantile', 'ccc_hcorr', 'mse_hcorr', 'pearson_hcorr', 'abcm' , 'global2top'
 ! important: 'lamb' is a special keyword argument for loss functions, cannot be used as a key in the dictionary
 """
 from __future__ import annotations
@@ -191,6 +191,28 @@ class CCCHiddenCorrLoss(BaseLoss):
             'ccc' : ccc ,
             'hidden_corr' : hidden_corr * self.alpha
         }
+
+class PearsonHiddenCorrLoss(BaseLoss):
+    """exp(-Pearson) + alpha * HiddenCorr, matching the ccc_hcorr interface.
+
+    Sample weights and dim apply only to PearsonLoss; HiddenCorr is unweighted.
+    """
+    key = 'pearson_hcorr'
+
+    def __init__(self, alpha: float = 0.01):
+        super().__init__()
+        self.alpha = alpha
+        self.pearson_loss = PearsonLoss()
+        self.hidden_corr_loss = HiddenCorr()
+
+    def forward(self, pred: torch.Tensor, label: torch.Tensor, hidden: torch.Tensor,
+                weight: torch.Tensor | None = None, dim: int | None = None,
+                **kwargs) -> dict[str, torch.Tensor]:
+        prediction_loss = self.pearson_loss(pred, label, weight, dim)
+        hidden_corr = self.hidden_corr_loss(hidden=hidden)
+        assert isinstance(prediction_loss, torch.Tensor) and isinstance(hidden_corr, torch.Tensor)
+        return {'pearson': prediction_loss, 'hidden_corr': self.alpha * hidden_corr}
+
 
 class MSEHiddenCorrLoss(BaseLoss):
     """MSE + alpha * existing standardized covariance Frobenius penalty.

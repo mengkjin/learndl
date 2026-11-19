@@ -83,3 +83,17 @@ ModelTrainer.schedule(schedule_name='resnet_gru_simp_15m', resume=0)
 对比全期及近期 RankIC、Top5/Top50、训练验证差距、峰值 epoch、重试次数与总耗时。
 CCC 与 MSE 的损失尺度不同，固定 alpha 的本轮比较包含正则相对强度变化；
 两层 GRU 对照也包含既定层间 dropout 的启用。队列消费由既有服务器 worklist 流程负责。
+
+## 追加输出组合与 Pearson 对照
+
+当前 worklist 路径已迁移到 `configs/schedule/worklists/main.yaml`。追加两份独立 schedule：
+
+- `resnet_gru_simp_15m_learned`：仅 `hidden_mean_pool=false`，将因子等权均值换成
+  可学习 `Linear(64,1)`；继续使用 `mse_hcorr`。
+- `resnet_gru_simp_15m_pearson`：仅将损失换成 `pearson_hcorr: {alpha: 0.01}`；
+  保持等权输出。复用现有 PearsonLoss，即 `exp(-Pearson)`，不是 `1-Pearson`。
+  返回 `pearson`、`hidden_corr` 两个分项；权重和 dim 只传给 Pearson，HiddenCorr 不加权。
+
+其余配置均沿用原始 simp 基线，种子 0、histnorm=true、fit/test 权重 equal，
+单层 GRU、日级宽度 128、Global2Top=false。以 sparse、resume=false 入队，
+不重新加入已经从队列移除的旧实验。新增两项按基线粗估共约 6 小时。
