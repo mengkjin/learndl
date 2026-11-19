@@ -7,7 +7,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
-from test_t50_array import Market, assert_groups
+from tests.test_t50_array import Market, assert_groups
 from src.res.factor.fmp.builder import PortfolioGroupBuilder
 from src.res.factor.fmp.generator_array import run_generator
 from src.res.factor.fmp.prepared_market import prepare_market, PreparedMarket

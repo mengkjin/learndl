@@ -156,7 +156,7 @@ class Repair15mrawTest(TestCase):
 
     def test_request_targets_only_gru_15mraw_with_stable_id(self):
         # Exercise the real helper separately from the mocked GPU handoff above.
-        from src.api.calls.worklist_state import WorklistState
+        from src.res.model.workflow.worklist_state import WorklistState
         calls = []
         def request(state, request_id):
             calls.append((state.schedule_name, request_id))

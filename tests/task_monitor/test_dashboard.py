@@ -17,7 +17,7 @@ from streamlit.testing.v1 import AppTest
 from src.api.task_monitor.actions import KillResult, KillTarget
 from src.api.task_monitor.core import TaskPage, WatchdogHealth
 from src.api.task_monitor.resources import ResourceSnapshot
-from src.api.task_monitor.tests.test_actions import snapshot
+from tests.task_monitor.test_actions import snapshot
 
 
 class MonitorDashboardTest(unittest.TestCase):

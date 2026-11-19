@@ -152,7 +152,7 @@ def repair_datablocks(dry_run: bool = False, *, prepare_block=None, configure_pr
 def request_training(default_request_id: str = TRAINING_REQUEST_ID):
     # Autofix has a private /dev and an exclusive maintenance lease. Persist the
     # request; the ordinary idle worker starts training after that lease exits.
-    from src.api.calls.worklist_state import WorklistState
+    from src.res.model.workflow.worklist_state import WorklistState
     from src.automation.scheduling.maintenance_gate import sandbox_request
     context = sandbox_request()
     request_id = context['id'] if context is not None else default_request_id

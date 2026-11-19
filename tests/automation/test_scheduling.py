@@ -30,7 +30,7 @@ from src.automation.scheduling.runtime import RunStore, inspect_timeouts, member
 from src.automation.watchdog import default_jobs
 
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class ScheduleConfigTest(unittest.TestCase):
@@ -383,7 +383,7 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
-            fixture = str(ROOT / 'src/automation/tests/fixtures/scheduler_probe.py')
+            fixture = str(ROOT / 'tests/automation/fixtures/scheduler_probe.py')
             with patch('src.automation.scheduling.runner.installed_config', return_value=config), \
                  patch('src.automation.scheduling.runtime.runtime_dir', return_value=root), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \

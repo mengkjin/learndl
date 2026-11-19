@@ -28,19 +28,12 @@ class MigrationTest(unittest.TestCase):
         self.addCleanup(temp.cleanup)
         self.base = Path(temp.name).resolve()
 
-    def test_aliases_share_module_and_lock_context_identity(self):
-        names = ['watchdog', 'cli_recovery'] + [
-            'scheduling.' + p.stem for p in (ROOT/'src/api/task_monitor/scheduling').glob('*.py')
-            if p.stem != '__init__']
-        for name in names:
-            with self.subTest(module=name):
-                old = importlib.import_module('src.api.task_monitor.' + name)
-                new = importlib.import_module('src.automation.' + name)
-                self.assertIs(old, new)
-        old = importlib.import_module('src.api.task_monitor.scheduling.maintenance_gate')
-        new = importlib.import_module('src.automation.scheduling.maintenance_gate')
-        self.assertIs(old._depth, new._depth)
-        self.assertIs(old._lane_fds, new._lane_fds)
+    def test_scheduling_entrypoints_are_canonical(self):
+        self.assertFalse(any((ROOT / 'src/api/task_monitor' / 'scheduling').glob('*.py')))
+        for name in ('watchdog', 'cli_recovery'):
+            self.assertFalse((ROOT / 'src/api/task_monitor' / (name + '.py')).exists())
+        gate = importlib.import_module('src.automation.scheduling.maintenance_gate')
+        self.assertIs(gate, importlib.import_module('src.automation.scheduling.maintenance_gate'))
 
     def test_builtin_alias_and_custom_configuration(self):
         expected = load_config(ROOT/'configs/automation', 'mengkjin-server')
@@ -54,7 +47,7 @@ class MigrationTest(unittest.TestCase):
         self.assertEqual(config_directory(), ROOT/'configs/automation')
 
     def test_control_directory_and_successful_request_survive_rename(self):
-        old = importlib.import_module('src.api.task_monitor.scheduling.autofix_store')
+        old = importlib.import_module('src.automation.scheduling.autofix_store')
         root = self.base/'project'
         key = hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:16]
         self.assertEqual(state_dir(root), Path.home()/'.local/state/learndl'/key/'autofix')
@@ -104,7 +97,7 @@ class MigrationTest(unittest.TestCase):
         root = self.base/'offline-project'
         (root/'configs/automation').mkdir(parents=True)
         (root/'configs/automation/autofix.yaml').write_text('schema_version: 1\nfixes: []\n')
-        for prefix in ('src.automation', 'src.api.task_monitor'):
+        for prefix in ('src.automation',):
             for module in ('scheduling.installer', 'scheduling.autofix', 'cli_recovery'):
                 result = subprocess.run([sys.executable, '-m', prefix+'.'+module, '--help'],
                                         cwd=ROOT, capture_output=True, text=True, timeout=30)
@@ -113,12 +106,12 @@ class MigrationTest(unittest.TestCase):
                                      'plan', '--root', str(root)], cwd=ROOT,
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
-        for path in ('src/automation/cli_recovery.py', 'src/api/task_monitor/cli_recovery.py'):
+        for path in ('src/automation/cli_recovery.py',):
             result = subprocess.run([sys.executable, str(ROOT/path), '--help'],
                                     cwd=self.base, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_copied_legacy_bootstrap_dispatches_through_compatibility_module(self):
+    def test_copied_bootstrap_dispatches_through_canonical_module(self):
         from src.automation.scheduling import worker_bootstrap
         root = self.base/'project'
         runtime = self.base/'runtime'
@@ -131,14 +124,10 @@ class MigrationTest(unittest.TestCase):
         (runtime/'installed.json').write_text(json.dumps({'scheduler_version': 3}))
         (directory/'worker-settings.json').write_text(json.dumps({'root': str(root), 'runtime': str(runtime)}))
         # Reproduce the old installed target spelling without invoking production workers.
-        (directory/'worker_bootstrap.py').write_text(Path(worker_bootstrap.__file__).read_text().replace(
-            'src.automation.', 'src.api.task_monitor.'))
-        old = root/'src/api/task_monitor/scheduling'
+        (directory/'worker_bootstrap.py').write_text(Path(worker_bootstrap.__file__).read_text())
         new = root/'src/automation/scheduling'
-        old.mkdir(parents=True)
         new.mkdir(parents=True)
         (root/'src/__init__.py').touch()
-        shutil.copyfile(ROOT/'src/api/task_monitor/scheduling/auxiliary.py', old/'auxiliary.py')
         marker = root/'executed'
         (new/'auxiliary.py').write_text(f'from pathlib import Path\nPath({str(marker)!r}).touch()\n')
         subprocess.run([sys.executable, str(directory/'worker_bootstrap.py'), 'email_outbox'],

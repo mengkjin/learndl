@@ -18,7 +18,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from src.api.calls.worklist_state import WorklistState
+from src.res.model.workflow.worklist_state import WorklistState
 from src.automation.scheduling import idle_worklist as idle, recovery, runtime
 from src.automation.scheduling.config import load_config
 from src.automation.scheduling.installer import build_plan, validate_unit
@@ -51,7 +51,7 @@ class RecoveryTest(unittest.TestCase):
         self.worklist.parent.mkdir()
         self.worklist.write_text('fit: [first, second]\nresume: false\nforce: true\n')
         self.enterContext(patch.object(PATH, 'sched_worklists', self.worklist.parent))
-        self.enterContext(patch('src.api.calls.worklists.git_time', return_value=1))
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time', return_value=1))
         self.schedule = self.root / 'schedule.yaml'
         self.schedule.write_text('model.module: gru\n')
         self.enterContext(patch.object(ScheduleConfig, 'find_path', return_value=self.schedule))

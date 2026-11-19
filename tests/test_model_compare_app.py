@@ -12,7 +12,7 @@ __all__ = []
 
 class CompareAppTest(unittest.TestCase):
     def test_form_comparison_and_language_switch_preserve_result(self):
-        fixture = importlib.import_module('test_model_compare').CompareInputTest()
+        fixture = importlib.import_module('tests.test_model_compare').CompareInputTest()
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
         from src.api.learndl_monitor import compare_app

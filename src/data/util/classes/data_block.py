@@ -29,7 +29,7 @@ __all__ = ['DataBlock']
 
 def _trace(tag: str, **objects) -> None:
     if os.environ.get('LEARNDL_MEMORY_TRACE') == '1':
-        from src.data.preprocess.mem_trace import trace_stage
+        from src.data.util.mem_trace import trace_stage
         trace_stage(tag, **objects)
 
 INDAY_MARK_COLUMNS : tuple[str,...] = ('inday' , 'minute')

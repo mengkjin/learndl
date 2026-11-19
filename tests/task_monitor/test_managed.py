@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from src.api.task_monitor.core import TaskMonitorRepository
 from src.api.task_monitor.actions import kill_unavailable_reason
-from src.api.task_monitor.tests.test_core import _create_database
+from tests.task_monitor.test_core import _create_database
 
 
 class ManagedTests(unittest.TestCase):

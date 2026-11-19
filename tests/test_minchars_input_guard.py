@@ -10,7 +10,7 @@ import numpy as np
 import polars as pl
 
 from src.data.preprocess.minchars_input import load_selected, validate_keys
-from src.data.preprocess.memory_guard import available_bytes, check_allocation
+from src.proj.util.resource.memory_guard import available_bytes, check_allocation
 
 
 class MinCharsInputTest(unittest.TestCase):
@@ -44,7 +44,7 @@ class MinCharsInputTest(unittest.TestCase):
 
 class MemoryGuardTest(unittest.TestCase):
     def test_large_union_fails_before_torch_allocation(self):
-        with patch('src.data.preprocess.memory_guard.available_bytes', return_value=100 * 1024**3):
+        with patch('src.proj.util.resource.memory_guard.available_bytes', return_value=100 * 1024**3):
             with self.assertRaisesRegex(MemoryError, '47312.*refusing'):
                 check_allocation(85 * 1024**3, 'minc union=(47312,3156,1,152)')
             check_allocation(4 * 1024**3, 'small merge')
@@ -59,7 +59,7 @@ class MemoryGuardTest(unittest.TestCase):
             if str(path) not in values:
                 raise FileNotFoundError(str(path))
             return values[str(path)]
-        with patch('src.data.preprocess.memory_guard.psutil.virtual_memory', return_value=SimpleNamespace(available=5000)), patch.object(Path, 'read_text', read):
+        with patch('src.proj.util.resource.memory_guard.psutil.virtual_memory', return_value=SimpleNamespace(available=5000)), patch.object(Path, 'read_text', read):
             self.assertEqual(available_bytes(), 300)
 
 

@@ -124,7 +124,7 @@ class WalkForwardTest(unittest.TestCase):
         self.assertEqual(choose_screen(rows, False)['penalty'], .003)
 
     def test_default_plan(self):
-        c = load_config(Path(__file__).parents[1]/'example_walk_forward.json')
+        c = load_config(Path(__file__).parents[2]/'src/res/rl_experimental/example_walk_forward.json')
         p = task_plan(c)
         self.assertEqual(p['total_training_tasks'], 132)
         self.assertEqual(p['folds'][0]['start'], 20180101)

@@ -18,7 +18,7 @@ from src.res.rl_experimental.bundle import _sha256
 from src.res.rl_experimental.progress import quiet_output
 from src.res.rl_experimental.recover_results import audit_suite
 from src.res.rl_experimental.resume import git_sources, historical_package, inspect_resume, resume_suite
-from src.res.rl_experimental.tests.test_walk_forward import real_like_panel
+from tests.rl_experimental.test_walk_forward import real_like_panel
 
 
 class ResumeTest(unittest.TestCase):
@@ -28,7 +28,7 @@ class ResumeTest(unittest.TestCase):
     def test_actual_20261026_legacy_engine(self):
         revision = '858dca6bd47070dcc0960dc8689542e987c2d320'
         try:
-            sources = git_sources(Path(__file__).parents[4], revision)
+            sources = git_sources(Path(__file__).parents[2], revision)
         except subprocess.CalledProcessError:
             self.skipTest('Historical regression source not present in this shallow clone')
         self._run_case(sources)
@@ -39,7 +39,7 @@ class ResumeTest(unittest.TestCase):
             source = root/'src/res/rl_experimental'
             source.mkdir(parents=True)
             if sources is None:
-                sources = {path.name: path.read_bytes() for path in Path(__file__).parents[1].glob('*.py')}
+                sources = {path.name: path.read_bytes() for path in (Path(__file__).parents[2] / 'src/res/rl_experimental').glob('*.py')}
             for name, data in sources.items():
                 (source/name).write_bytes(data)
 

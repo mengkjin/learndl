@@ -369,7 +369,7 @@ class RLSchedulingTest(unittest.TestCase):
         from src.automation.scheduling.config import load_config
         from src.automation.scheduling.installer import build_plan, validate_unit
         # The committed installer documents, not the temporary Git fixture.
-        root = Path(__file__).resolve().parents[3]
+        root = Path(__file__).resolve().parents[2]
         config = load_config(root / 'configs/automation', 'mengkjin-server')
         config['watchdog']['jobs']['idle_worklist']['enabled'] = False
         plan = build_plan(config, root=self.root, python=Path(sys.executable), cron='', local_timezone='Asia/Shanghai')

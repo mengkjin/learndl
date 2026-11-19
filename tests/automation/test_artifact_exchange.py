@@ -215,7 +215,7 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(report.read_bytes(), b'old')
 
     def test_bundle_handoff_excludes_weights_and_preserves_logs(self):
-        from src.automation.artifact_exchange.research import handoff_bundle
+        from src.res.rl_experimental.bundle import handoff_result as handoff_bundle
         from src.res.rl_experimental.bundle import create_bundle, bundle_attachments
         (self.source/'final_model.zip').write_bytes(b'weights')
         (self.source/'stdout.log').write_text('research log')
@@ -233,6 +233,15 @@ class ExchangeTest(unittest.TestCase):
         self.assertTrue(received)
         for r in received:
             self.assertFalse(list(Path(r['target']).rglob('final_model.zip')))
+
+    def test_disabled_handoff_does_not_eagerly_validate_rl_parts(self):
+        from src.res.rl_experimental.bundle import handoff_result
+        self.pub.enabled = False
+        with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
+                patch('src.res.rl_experimental.bundle._parts', side_effect=ValueError('broken attachment')) as parts:
+            records = handoff_result(self.root / 'missing.parts.json', self.source, 'rl')
+        self.assertTrue(all(record['status'] == 'skipped' for record in records))
+        parts.assert_not_called()
 
     def test_same_package_id_different_archive_is_rejected(self):
         import json
@@ -580,7 +589,7 @@ class ExchangeTest(unittest.TestCase):
         from types import SimpleNamespace
         from unittest.mock import Mock
         from src.automation.artifact_exchange.research import CURRENT_TASK, finalize_task_artifacts, run_deferred_mail
-        from src.data.preprocess.factor_sequence.training_mail import send_training_result
+        from src.res.model.experiment.factor_sequence.training_mail import send_training_result
         owner = SimpleNamespace(_artifact_results=[], _artifacts=[], logger=Mock())
         token = CURRENT_TASK.set(owner)
         try:
@@ -611,7 +620,8 @@ class ExchangeTest(unittest.TestCase):
         from unittest.mock import Mock
         from src.proj.env.variable.files import UniqueFileList
         from src.res.rl_experimental.bundle import create_bundle, bundle_attachments
-        from src.automation.artifact_exchange.research import CURRENT_TASK, finalize_task_artifacts, handoff_bundle
+        from src.automation.artifact_exchange.research import CURRENT_TASK, finalize_task_artifacts
+        from src.res.rl_experimental.bundle import handoff_result as handoff_bundle
         metadata = create_bundle(self.source, self.root/'bundles')
         originals = bundle_attachments(metadata)
         files = UniqueFileList('test_bundle_queued')

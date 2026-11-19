@@ -13,7 +13,7 @@ from unittest.mock import patch
 import polars as pl
 import torch
 
-from src.data.preprocess.mem_trace import describe
+from src.data.util.mem_trace import describe
 from src.data.util import DataBlock
 
 

@@ -33,7 +33,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from src.data.preprocess.mem_trace import fmt_bytes , rss_bytes
+from src.data.util.mem_trace import fmt_bytes , rss_bytes
 from src.data.util import DataBlock
 from src.func.basic import INTERSECT_MESH_MAX_BYTES , IntersectCopyMethod , index_merge , intersect_mesh_bytes
 
