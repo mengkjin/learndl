@@ -18,11 +18,11 @@ from src.data.preprocess.factor_sequence.context_audit import (
     context_quality,
 )
 from src.data.preprocess.factor_sequence.risk_audit import minute_reference
-from src.data.preprocess.factor_sequence.context_diagnostics import (
+from src.res.model.analytic.factor_sequence.context_diagnostics import (
     film_probe,
     paired_days,
 )
-from src.data.preprocess.factor_sequence.audit_runner import read_factor
+from src.res.model.experiment.factor_sequence.audit_runner import read_factor
 from src.res.algo.nn.model.factor_sequence.residual import FactorResidual
 
 
@@ -174,7 +174,7 @@ class AuditDeliveryTests(unittest.TestCase):
     def test_mail_uses_complete_csv_zip_and_mock_sender(self):
         import json
         from zipfile import ZipFile
-        from src.data.preprocess.factor_sequence.audit_runner import deliver
+        from src.res.model.experiment.factor_sequence.audit_runner import deliver
 
         with tempfile.TemporaryDirectory() as tmp:
             folder = Path(tmp)
@@ -185,7 +185,7 @@ class AuditDeliveryTests(unittest.TestCase):
             (folder / "coverage_daily.csv").write_text("date,complete\n20110104,0\n")
             with (
                 patch(
-                    "src.data.preprocess.factor_sequence.context_diagnostics.recover_reports",
+                    "src.res.model.experiment.factor_sequence.report_delivery.recover_reports",
                     return_value=[],
                 ),
                 patch(

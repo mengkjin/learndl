@@ -15,9 +15,10 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from .schema import FACTORS
-from .bundle import file_digest, write_json
-from .rebuild_data import REPAIR_VERSION, build_repaired_data
+from src.data.preprocess.factor_sequence.schema import FACTORS
+from src.data.preprocess.factor_sequence.bundle import file_digest, write_json
+from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION
+from src.res.model.experiment.factor_sequence.sources import build_repaired_project
 
 __all__ = ["Checkpoint", "dependency_order", "run_repair", "arguments"]
 
@@ -363,7 +364,10 @@ def _run_repair(
         for directory in [
             PATH.srcs / "func",
             PATH.srcs / "res" / "factor",
-            Path(__file__).parent,
+            PATH.srcs / "data" / "preprocess" / "factor_sequence",
+            PATH.srcs / "data" / "maintenance" / "factor_sequence",
+            PATH.srcs / "res" / "model" / "experiment" / "factor_sequence",
+            PATH.srcs / "res" / "model" / "analytic" / "factor_sequence",
         ]:
             for p in sorted(directory.rglob("*.py")):
                 code.update(str(p).encode())
@@ -680,7 +684,7 @@ def _run_repair(
                     "Raw sources changed during repair; use a new version/run before publishing data"
                 )
             # Full prefix required for persistent observation/event state.
-            target = build_repaired_data(
+            target = build_repaired_project(
                 PATH.interim / "factor_sequence_repaired",
                 20110101,
                 affected_end,
@@ -690,7 +694,7 @@ def _run_repair(
             write_json(marker, dict(dataset=str(target), version=REPAIR_VERSION))
 
         checkpoint.step("data", [marker], data)
-        from .rebuild_data import load_repaired_manifest
+        from src.data.preprocess.factor_sequence.repaired_bundle import load_repaired_manifest
 
         load_repaired_manifest(json.loads(marker.read_text())["dataset"])
         status["status"] = "completed"

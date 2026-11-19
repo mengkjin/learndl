@@ -12,9 +12,9 @@ from unittest.mock import patch
 import pandas as pd
 
 from src.data.preprocess.factor_sequence.bundle import file_digest
-from src.data.preprocess.factor_sequence.repair import Checkpoint
-from src.data.preprocess.factor_sequence.recovery import RecoverySource, run_recovery
-from src.data.preprocess.factor_sequence.rebuild_data import REPAIR_VERSION
+from src.data.maintenance.factor_sequence.repair import Checkpoint
+from src.data.maintenance.factor_sequence.recovery import RecoverySource, run_recovery
+from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION
 from src.proj.db.io.snapshot import ReadSnapshot
 from src.proj.db.io.dataframe import dfIOHandler
 from src.proj.db.basic.df_handler import dfHandler, quiet_empty_stock_factors
@@ -214,7 +214,7 @@ class RecoveryTests(unittest.TestCase):
             with (
                 patch("src.proj.PATH", path),
                 patch(
-                    "src.data.preprocess.factor_sequence.repair.run_repair",
+                    "src.data.maintenance.factor_sequence.repair.run_repair",
                     side_effect=run,
                 ),
                 patch("src.data.DATAVENDOR"),
@@ -235,7 +235,7 @@ class RecoveryTests(unittest.TestCase):
     ):
         from contextlib import ExitStack
         import numpy as np
-        from src.data.preprocess.factor_sequence.repair import run_repair
+        from src.data.maintenance.factor_sequence.repair import run_repair
         import importlib
 
         for module in (
@@ -401,12 +401,12 @@ class RecoveryTests(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repair.FACTORS", ("dtop", "x")
+                    "src.data.maintenance.factor_sequence.repair.FACTORS", ("dtop", "x")
                 )
             )
             inventory = stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repair._inventory",
+                    "src.data.maintenance.factor_sequence.repair._inventory",
                     side_effect=AssertionError("Must not scan live DB"),
                 )
             )
@@ -415,7 +415,7 @@ class RecoveryTests(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.rebuild_data.load_repaired_manifest"
+                    "src.data.preprocess.factor_sequence.repaired_bundle.load_repaired_manifest"
                 )
             )
 
@@ -432,7 +432,7 @@ class RecoveryTests(unittest.TestCase):
 
             builder = stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repair.build_repaired_data",
+                    "src.data.maintenance.factor_sequence.repair.build_repaired_project",
                     side_effect=build,
                 )
             )

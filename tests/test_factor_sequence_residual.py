@@ -49,7 +49,7 @@ class CompactScheduleTests(unittest.TestCase):
         import numpy as np
         from pathlib import Path
         from unittest.mock import patch
-        from src.data.preprocess.factor_sequence.worklist import resolve_schedule
+        from src.res.model.experiment.factor_sequence.worklist import resolve_schedule
 
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

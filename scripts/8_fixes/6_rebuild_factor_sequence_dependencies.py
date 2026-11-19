@@ -31,7 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from src.proj.util.script import ScriptTool
-from src.data.preprocess.factor_sequence.repair import run_repair, arguments
+from src.data.maintenance.factor_sequence.repair import run_repair, arguments
 
 __all__ = ["main"]
 

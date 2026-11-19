@@ -73,7 +73,7 @@ class TransformTests(unittest.TestCase):
         self.assertTrue((out[..., 7 * k : 9 * k] == 0).all())
 
     def test_source_identifiers_are_required_per_file(self):
-        from src.data.preprocess.factor_sequence.sources import read_daily_factor
+        from src.res.model.experiment.factor_sequence.sources import read_daily_factor
 
         db = Mock()
         db.path.return_value.exists.return_value = True
@@ -338,7 +338,7 @@ class ModelTests(unittest.TestCase):
         self.assertLess(int(train[:, 1].max()) + 3, int(valid[:, 1].min()))
 
     def test_effective_config_and_required_history(self):
-        from src.data.preprocess.factor_sequence.pipeline import (
+        from src.res.model.experiment.factor_sequence.pipeline import (
             train_overrides,
             purged_split,
         )
@@ -432,7 +432,7 @@ class ModelTests(unittest.TestCase):
 
     def test_prediction_location_and_comparison_sample_guard(self):
         import json
-        from src.data.preprocess.factor_sequence.pipeline import (
+        from src.res.model.experiment.factor_sequence.pipeline import (
             read_predictions,
             compare,
         )
@@ -522,11 +522,11 @@ class ServerSuiteTests(unittest.TestCase):
             folder = Path(tmp)
             with (
                 patch(
-                    "src.data.preprocess.factor_sequence.server_suite.run_suite",
+                    "src.res.model.experiment.factor_sequence.server_suite.run_suite",
                     return_value=(folder, {"status": "passed"}),
                 ) as run,
                 patch(
-                    "src.data.preprocess.factor_sequence.server_suite.send_result",
+                    "src.res.model.experiment.factor_sequence.server_suite.send_result",
                     return_value={"status": "sent"},
                 ) as mail,
                 patch.object(sys, "argv", ["host-cli", "--unrelated-host-option"]),
@@ -564,7 +564,7 @@ class ServerSuiteTests(unittest.TestCase):
         self.assertFalse(torch.allclose(z[:, -1], z2[:, -1]))
 
     def test_discovery_uses_earliest_history_without_stale_factor_cutoff(self):
-        from src.data.preprocess.factor_sequence.server_suite import discover
+        from src.res.model.experiment.factor_sequence.server_suite import discover
 
         report = dict(
             status="passed",
@@ -576,7 +576,7 @@ class ServerSuiteTests(unittest.TestCase):
         )
         with (
             patch(
-                "src.data.preprocess.factor_sequence.sources.preflight",
+                "src.res.model.experiment.factor_sequence.sources.preflight",
                 return_value=report,
             ),
             patch("src.proj.DB") as db,
@@ -595,7 +595,7 @@ class ServerSuiteTests(unittest.TestCase):
         self.assertEqual(actual["data_end"], 20261029)
 
     def test_walk_forward_exact_coverage_and_purge(self):
-        from src.data.preprocess.factor_sequence.pipeline import walk_forward_splits
+        from src.res.model.experiment.factor_sequence.pipeline import walk_forward_splits
 
         dates = np.arange(1000)
         ends = dates + 11
@@ -609,7 +609,7 @@ class ServerSuiteTests(unittest.TestCase):
             walk_forward_splits(dates, ends, 300)
 
     def test_aggregate_and_reject_missing_dates(self):
-        from src.data.preprocess.factor_sequence.server_suite import aggregate
+        from src.res.model.experiment.factor_sequence.server_suite import aggregate
         from src.data.preprocess.factor_sequence.bundle import write_json
 
         with TemporaryDirectory() as tmp:
@@ -640,7 +640,7 @@ class ServerSuiteTests(unittest.TestCase):
                 aggregate(folders, root, [0, 1, 2, 3])
 
     def test_suite_failure_is_recorded_and_stops(self):
-        from src.data.preprocess.factor_sequence import server_suite as suite
+        from src.res.model.experiment.factor_sequence import server_suite as suite
 
         with TemporaryDirectory() as tmp:
             with patch.object(
@@ -659,7 +659,7 @@ class ServerSuiteTests(unittest.TestCase):
             self.assertTrue((folder / "suite.json").exists())
 
     def test_suite_success_orders_stages_and_freezes_range(self):
-        from src.data.preprocess.factor_sequence import server_suite as suite
+        from src.res.model.experiment.factor_sequence import server_suite as suite
         from src.data.preprocess.factor_sequence.bundle import write_json
 
         with TemporaryDirectory() as tmp:
@@ -699,7 +699,7 @@ class ServerSuiteTests(unittest.TestCase):
                 patch.object(suite, "load", return_value={"version": "test"}),
                 patch.object(suite, "available_splits", return_value=plan) as split,
                 patch(
-                    "src.data.preprocess.factor_sequence.schedule_training.export_folds",
+                    "src.res.model.experiment.factor_sequence.schedule_training.export_folds",
                     return_value=[],
                 ),
                 patch.object(suite, "aggregate", return_value=[{}]),
@@ -717,7 +717,7 @@ class ServerSuiteTests(unittest.TestCase):
             split.assert_called_once_with(dataset, 20170101, None)
 
     def test_mail_packaging_without_sending(self):
-        from src.data.preprocess.factor_sequence import server_suite as suite
+        from src.res.model.experiment.factor_sequence import server_suite as suite
         from src.data.preprocess.factor_sequence.bundle import write_json
 
         with TemporaryDirectory() as tmp:

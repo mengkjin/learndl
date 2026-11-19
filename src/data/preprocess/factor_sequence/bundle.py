@@ -69,9 +69,12 @@ def build(root, raw, returns, dates, secids, market, events, eligible=None,
     events = events.loc[events.event_date <= dates[-1], ['event', 'event_date', 'start', 'end']].sort_values(['event_date','event']).reset_index(drop=True)
     sources = {k: digest(v) for k, v in snapshots.items()}
     sources['events'] = hashlib.sha256(events.to_json(orient='records').encode()).hexdigest()
-    transform_hashes = {name:file_digest(Path(__file__).with_name(name))
-                        for name in ('schema.py','numeric.py','bundle.py','sources.py')}
-    transform_hashes['factor_groups.py'] = file_digest(Path(__file__).parents[3]/'func'/'factor_groups.py')
+    repository = next(parent for parent in Path(__file__).resolve().parents if (parent / 'pyproject.toml').is_file())
+    components = {name: 'src/data/preprocess/factor_sequence/' + name
+                  for name in ('schema.py', 'numeric.py', 'bundle.py')}
+    components.update({'sources.py': 'src/res/model/experiment/factor_sequence/sources.py',
+                       'factor_groups.py': 'src/func/factor_groups.py'})
+    transform_hashes = {name: file_digest(repository / source_path) for name, source_path in components.items()}
     identity = {'config': asdict(cfg), 'inputs': sources, 'source': source or {},
                 'transform_hashes': transform_hashes}
     version = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:24]
@@ -152,7 +155,7 @@ def load(path, expected_config=None, verify=True):
     path = Path(path)
     manifest = json.loads((path/'manifest.json').read_text())
     if manifest.get('format') == 'factor-sequence-repair-2':
-        from .rebuild_data import load_repaired_manifest
+        from src.data.preprocess.factor_sequence.repaired_bundle import load_repaired_manifest
         if expected_config and expected_config.fingerprint != manifest['config_hash']:
             raise ValueError('Config fingerprint mismatch')
         return load_repaired_manifest(path, verify=verify)

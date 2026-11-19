@@ -83,7 +83,7 @@ class FactorResidualDiagnostics(BaseCallBack):
         # Do not silently resolve an unnumbered sibling when this run is @2.
         # Historical pairing belongs to the explicit-root audit, not root guessing.
         if self.comparison_roots:
-            from src.data.preprocess.factor_sequence.context_diagnostics import diagnose_roots
+            from src.res.model.analytic.factor_sequence.context_diagnostics import diagnose_roots
             diagnose_roots(self.comparison_roots, self.folder / "comparison")
         else:
             self.logger.stdout("Paired comparison not run: explicit comparison_roots required; use factor_sequence_coverage audit")

@@ -9,8 +9,8 @@ import re
 import sqlite3
 from uuid import uuid4
 
-from .bundle import file_digest, write_json
-from .rebuild_data import REPAIR_VERSION
+from src.data.preprocess.factor_sequence.bundle import file_digest, write_json
+from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION
 
 __all__ = ["RecoverySource", "run_recovery"]
 
@@ -81,7 +81,7 @@ def run_recovery(
     from src.proj.db.io.snapshot import ReadSnapshot
     from src.proj.util.functional.parallel import serial_execution
     from src.data import DATAVENDOR
-    from .repair import run_repair
+    from src.data.maintenance.factor_sequence.repair import run_repair
 
     run_id = (
         run_id

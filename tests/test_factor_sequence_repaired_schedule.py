@@ -17,9 +17,9 @@ import yaml
 from src.data.preprocess.factor_sequence.schema import FACTORS, STOCK_CHANNELS
 from src.data.preprocess.factor_sequence.context_audit import PERF_NAMES, MARKET_NAMES
 from src.data.preprocess.factor_sequence.bundle import file_digest
-from src.data.preprocess.factor_sequence.rebuild_data import REPAIR_VERSION
-from src.data.preprocess.factor_sequence.repaired_schedule import expanded_folds
-from src.data.preprocess.factor_sequence.worklist import resolve_schedule
+from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION
+from src.res.model.experiment.factor_sequence.repaired_schedule import expanded_folds
+from src.res.model.experiment.factor_sequence.worklist import resolve_schedule
 from src.data.preprocess.factor_sequence.processors import load_block
 from src.res.algo.nn.model.factor_sequence.residual import FactorResidual
 
@@ -89,7 +89,7 @@ class RepairedScheduleTests(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repaired_schedule._label_state",
+                    "src.res.model.experiment.factor_sequence.repaired_schedule._label_state",
                     side_effect=lambda _, ds: (np.ones(len(ds), bool), "stable_labels"),
                 )
             )
@@ -144,7 +144,7 @@ class RepairedScheduleTests(unittest.TestCase):
             self.assertEqual(pin["data_version"], "first")
             self.assertEqual(pin["folds"][0]["test"][0], 20170102)
             with patch(
-                "src.data.preprocess.factor_sequence.repaired_schedule._label_state",
+                "src.res.model.experiment.factor_sequence.repaired_schedule._label_state",
                 side_effect=lambda _, ds: (np.ones(len(ds), bool), "revised"),
             ):
                 with self.assertRaisesRegex(
@@ -187,10 +187,11 @@ class RepairedScheduleTests(unittest.TestCase):
 
     def test_worklist_order_and_common_source(self):
         root = Path(__file__).resolve().parents[1]
-        work = yaml.safe_load((root / "configs/schedule/worklist.yaml").read_text())
+        work = yaml.safe_load((root / "configs/schedule/worklists/main.yaml").read_text())
         names = [row["name"] for row in work["fit"]]
         expected = [f"factorseq_v3_{m}" for m in ("snapshot", "temporal", "contextual")]
-        self.assertIn("resnet_gru_simp_15m", names)
+        self.assertIn("resnet_gru_simp_15m_learned", names)
+        self.assertIn("resnet_gru_simp_15m_pearson", names)
         self.assertEqual([n for n in names if n.startswith("factorseq_")], expected)
         sources = []
         for name in expected:

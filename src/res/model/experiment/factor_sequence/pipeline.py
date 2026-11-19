@@ -1,6 +1,6 @@
 """Opt-in build/audit/smoke/compare stages with optional per-training result mail.
 
-python -m src.data.preprocess.factor_sequence.pipeline --help
+python -m src.res.model.experiment.factor_sequence.pipeline --help
 """
 from __future__ import annotations
 
@@ -25,8 +25,8 @@ import resource
 import sys
 import numpy as np
 import pandas as pd
-from .bundle import build, load, audit, write_json, file_digest
-from .schema import BuildConfig, KEYS
+from src.data.preprocess.factor_sequence.bundle import build, load, audit, write_json, file_digest
+from src.data.preprocess.factor_sequence.schema import BuildConfig, KEYS
 
 
 def purged_split(dates, ends, train=252, valid=63, test=63, warmup=239):
@@ -228,7 +228,7 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
             card.update(status='running',run_id=folder.parent.name,name=name,results='runs.json')
             runs.append(result)
             write_json(folder/'runs.json',runs)
-            from .training_mail import capture_log
+            from src.res.model.experiment.factor_sequence.training_mail import capture_log
             log_path=folder/f'{name}.log'
             result['log_path']=str(log_path)
             capture=capture_log(log_path)
@@ -354,7 +354,7 @@ def main():
         try:
             result: dict[str, Any]
             if stage=='build':
-                from .sources import preflight, read_project
+                from src.res.model.experiment.factor_sequence.sources import preflight, read_project
                 pre=preflight(cfg)
                 write_json(folder/'preflight.json',pre)
                 if pre['status']!='passed':

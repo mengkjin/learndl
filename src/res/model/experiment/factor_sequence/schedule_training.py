@@ -17,8 +17,8 @@ import time
 import numpy as np
 import pandas as pd
 import yaml
-from .bundle import load, write_json, file_digest
-from .pipeline import train_overrides, read_predictions, compare
+from src.data.preprocess.factor_sequence.bundle import load, write_json, file_digest
+from src.res.model.experiment.factor_sequence.pipeline import train_overrides, read_predictions, compare
 
 
 def schedule_config(dataset, name, model, folds, research=False, seed=17, variant=None):

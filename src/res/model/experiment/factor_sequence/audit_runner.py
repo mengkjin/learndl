@@ -1,6 +1,7 @@
 """Server audit entry: daily bounded stock reads, independent of training loaders."""
 
 from __future__ import annotations
+from src.data.preprocess.factor_sequence.provenance import component_paths
 import json
 import hashlib
 from typing import Any
@@ -12,7 +13,7 @@ from uuid import uuid4
 from zipfile import ZipFile, ZIP_DEFLATED
 import numpy as np
 import pandas as pd
-from .context_audit import (
+from src.data.preprocess.factor_sequence.context_audit import (
     FACTORS,
     EVENTS,
     RISK_NAMES,
@@ -24,9 +25,9 @@ from .context_audit import (
     event_summary,
     strata,
 )
-from .numeric import group_metrics
-from .bundle import file_digest
-from .risk_audit import source_quality, RISK_NOTES
+from src.data.preprocess.factor_sequence.numeric import group_metrics
+from src.data.preprocess.factor_sequence.bundle import file_digest
+from src.data.preprocess.factor_sequence.risk_audit import source_quality, RISK_NOTES
 
 __all__ = [
     'write_json',
@@ -141,7 +142,7 @@ def run_server(folder, start=20110101, end=None, model_roots=None):
             ["git", "rev-parse", "HEAD"], text=True
         ).strip()
         report["audit_code_sha256"] = {
-            p.name: file_digest(p) for p in Path(__file__).parent.glob("*.py")
+            name: file_digest(p) for name, p in component_paths().items()
         }
         desc = DATAVENDOR.INFO.get_list_dt(
             offset=91, keep_columns=["list_dt", "delist_dt"]
@@ -435,7 +436,7 @@ def run_server(folder, start=20110101, end=None, model_roots=None):
             maturity[n + "__normalized_valid"] = view[n].notna()
         maturity.loc[start:end].to_csv(folder / "risk_maturity.csv", index_label="date")
         if horizon:
-            from .context_diagnostics import horizon_lags
+            from src.res.model.analytic.factor_sequence.context_diagnostics import horizon_lags
 
             horizon_lags(
                 perf,
@@ -491,7 +492,7 @@ def run_server(folder, start=20110101, end=None, model_roots=None):
         report["errors"].append(dict(stage="audit", error=traceback.format_exc()))
     finally:
         try:
-            from .context_diagnostics import diagnose_roots
+            from src.res.model.analytic.factor_sequence.context_diagnostics import diagnose_roots
 
             report["diagnostics"] = diagnose_roots(
                 model_roots or {}, folder / "diagnostics"
@@ -509,7 +510,8 @@ def deliver(folder, recipient=None):
 
     folder = Path(folder)
     report = json.loads((folder / "summary.json").read_text())
-    from .context_diagnostics import recover_reports, MODES
+    from src.res.model.experiment.factor_sequence.report_delivery import recover_reports
+    from src.res.model.analytic.factor_sequence.context_diagnostics import MODES
     from src.proj import PATH
 
     recovered = recover_reports(

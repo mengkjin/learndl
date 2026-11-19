@@ -15,7 +15,6 @@ __all__ = [
     'inspect_delivery',
     'diagnose_roots',
     'archived_probes',
-    'recover_reports',
     'epoch_curves',
     'horizon_lags',
 ]
@@ -355,8 +354,8 @@ def archived_probes(root, config, output, max_stocks=256):
     import tempfile
     from zipfile import ZipFile
     import torch
-    from .bundle import load as load_manifest
-    from .schema import EVENTS
+    from src.data.preprocess.factor_sequence.bundle import load as load_manifest
+    from src.data.preprocess.factor_sequence.schema import EVENTS
     from src.res.algo.nn.model.factor_sequence.residual import FactorResidual
 
     root, output = Path(root), Path(output)
@@ -482,84 +481,6 @@ def archived_probes(root, config, output, max_stocks=256):
         (output / "weight_probes.json").write_text(json.dumps(results, indent=2))
     (output / "weight_probes.json").write_text(json.dumps(results, indent=2))
     return results
-
-
-def recover_reports(roots, run_id):
-    """Retry only these experiments; preserve outbox identities and server originals."""
-    from src.automation.artifact_exchange.core import (
-        Config,
-        ArtifactSpec,
-        locked,
-        _send,
-        sandboxed,
-    )
-    from src.automation.artifact_exchange.research import publish_safe
-    import portalocker
-
-    c = Config.load()
-    if sandboxed() or not c.enabled or c.role != "publisher":
-        return [
-            dict(status="skipped", reason="not an enabled publisher or autofix context")
-        ]
-    output = []
-    for root in map(Path, roots.values()):
-        name = "nn@" + root.name
-        matches = []
-        for ledger in (c.state / "outbox").glob("*/delivery.json"):
-            record = json.loads(ledger.read_text())
-            if record.get("manifest", {}).get("experiment") == name:
-                matches.append((ledger, record))
-        if matches:
-            for ledger, record in matches:
-                if record.get("status") == "published":
-                    output.append(
-                        dict(
-                            status="published",
-                            id=record["id"],
-                            experiment=name,
-                            reason="existing receipt; no duplicate publication",
-                        )
-                    )
-                    continue
-                try:
-                    with locked(c, "publish"):
-                        record = json.loads(ledger.read_text())
-                        output.append(_send(record, ledger, c))
-                except Exception as exc:
-                    output.append(
-                        dict(status="failed", experiment=name, error=str(exc))
-                    )
-        elif (root / "results").is_dir():
-            try:
-                with portalocker.Lock(str(root / ".lifecycle.lock"), timeout=0):
-                    if not any(p.is_file() for p in (root / "results").rglob("*")):
-                        raise ValueError("No completed report files")
-                    output.extend(
-                        publish_safe(
-                            "model_report_recovery",
-                            run_id,
-                            [
-                                ArtifactSpec(
-                                    root / "results",
-                                    category="model_training",
-                                    experiment=name,
-                                    run_id=run_id,
-                                )
-                            ],
-                            "historical_reports",
-                        )
-                    )
-            except Exception as exc:
-                output.append(dict(status="failed", experiment=name, error=str(exc)))
-        else:
-            output.append(
-                dict(
-                    status="unregistered",
-                    experiment=name,
-                    reason="exact model results absent",
-                )
-            )
-    return output
 
 
 def epoch_curves(root, output):

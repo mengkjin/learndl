@@ -336,7 +336,7 @@ assert module.REQUEST_ID.endswith('_04')
                 task.prepare()
 
     def test_result_comparison_aligns_actual_dates_and_marks_missing(self):
-        from src.res.model.util.original_comparison import compare_runs
+        from src.res.model.analytic.original_comparison import compare_runs
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             logs = []

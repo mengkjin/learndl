@@ -1,0 +1,1 @@
+"""Factor-sequence model diagnostics."""

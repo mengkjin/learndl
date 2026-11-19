@@ -7,7 +7,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch, Mock
 import pandas as pd
-from src.data.preprocess.factor_sequence import training_mail, resume, server_suite
+from src.res.model.experiment.factor_sequence import training_mail
+from src.res.model.experiment.factor_sequence import resume
+from src.res.model.experiment.factor_sequence import server_suite
 from src.data.preprocess.factor_sequence.bundle import write_json
 from src.automation.scheduling import factor_sequence as queue
 from src.automation.scheduling.factor_sequence_recovery import original_inactive
@@ -165,7 +167,7 @@ class RecoveryTests(unittest.TestCase):
                 )
             write_json(training / "runs.json", runs)
             with patch(
-                "src.data.preprocess.factor_sequence.pipeline.read_predictions",
+                "src.res.model.experiment.factor_sequence.pipeline.read_predictions",
                 return_value=pred,
             ):
                 self.assertTrue(
@@ -218,7 +220,7 @@ class RecoveryTests(unittest.TestCase):
                     recovery, "original_inactive", return_value=False
                 ) as inactive,
                 patch(
-                    "src.data.preprocess.factor_sequence.server_suite.send_result",
+                    "src.res.model.experiment.factor_sequence.server_suite.send_result",
                     return_value={"status": "failed"},
                 ) as summary,
                 patch(

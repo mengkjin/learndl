@@ -74,7 +74,7 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
         config_path = self.find_path(base_path, schedule_name)
         config = get_config_dict(config_path)
         if config.get('factor_sequence_source'):
-            from src.data.preprocess.factor_sequence.worklist import resolve_schedule
+            from src.res.model.experiment.factor_sequence.worklist import resolve_schedule
             config = get_config_dict(resolve_schedule(
                 config['factor_sequence_source'], config['model.module'], schedule_name,
                 mode=config.get('factor_sequence_mode')))

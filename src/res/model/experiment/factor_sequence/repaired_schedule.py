@@ -10,10 +10,10 @@ from uuid import uuid4
 
 import numpy as np
 
-from .schema import FACTORS, STOCK_CHANNELS
-from .context_audit import MARKET_NAMES, PERF_NAMES
-from .rebuild_data import load_repaired_manifest
-from .bundle import file_digest
+from src.data.preprocess.factor_sequence.schema import FACTORS, STOCK_CHANNELS
+from src.data.preprocess.factor_sequence.context_audit import MARKET_NAMES, PERF_NAMES
+from src.data.preprocess.factor_sequence.repaired_bundle import load_repaired_manifest
+from src.data.preprocess.factor_sequence.bundle import file_digest
 
 __all__ = ["resolve_repaired", "expanded_folds"]
 
@@ -128,7 +128,7 @@ def _label_state(dataset, dates):
 
 def resolve_repaired(source, model, name, mode):
     from src.proj import PATH, CALENDAR
-    from .worklist import residual_config
+    from src.res.model.experiment.factor_sequence.worklist import residual_config
 
     if model != "factorseq_residual" or mode not in (
         "snapshot",

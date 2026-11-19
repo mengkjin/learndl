@@ -1,6 +1,6 @@
 """Compare explicit experiment artifacts; never guess which old run is the baseline.
 
-python -m src.res.model.util.original_comparison --baseline-log OLD.html \
+python -m src.res.model.analytic.original_comparison --baseline-log OLD.html \
     --candidate-log NEW.html --baseline-model OLD_DIR --candidate-model NEW_DIR \
     --output comparison.json
 Missing artifacts/metrics remain null. Test metrics use intersecting model/date keys.

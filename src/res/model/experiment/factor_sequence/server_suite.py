@@ -23,14 +23,14 @@ import time
 import traceback
 import zipfile
 import pandas as pd
-from .bundle import write_json, load, file_digest
-from .pipeline import available_splits
-from .schema import BuildConfig
+from src.data.preprocess.factor_sequence.bundle import write_json, load, file_digest
+from src.res.model.experiment.factor_sequence.pipeline import available_splits
+from src.data.preprocess.factor_sequence.schema import BuildConfig
 
 
 def discover(cfg):
     from src.proj import CALENDAR, DB
-    from .sources import preflight
+    from src.res.model.experiment.factor_sequence.sources import preflight
     report=preflight(cfg)
     if report['status']!='passed':
         return report
@@ -140,7 +140,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             item['seconds']=time.perf_counter()-before
             write_json(folder/'suite.json',report)
             Logger.stdout(f'[factor-sequence] {name}: {item["status"]} ({item["seconds"]:.1f}s)',flush=True)
-    pipeline=[sys.executable,'-m','src.data.preprocess.factor_sequence.pipeline']
+    pipeline=[sys.executable,'-m','src.res.model.experiment.factor_sequence.pipeline']
     try:
         config=json.loads(Path(data_config).read_text())
         cfg=BuildConfig(**{**config,'factors':tuple(config['factors'])})
@@ -163,7 +163,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             previous_mode=json.loads((results_root/resume_from/'suite.json').read_text()).get('execution_mode')
             if previous_mode!='schedule_model':
                 raise ValueError('Legacy per-fold runs cannot resume as a single model directory. Preserve old artifacts and start a new schedule-model suite.')
-            from .resume import inspect_resume, verify_current_labels
+            from src.res.model.experiment.factor_sequence.resume import inspect_resume, verify_current_labels
             source, previous, plan, dataset = stage('inspect_resume', lambda: inspect_resume(root,results_root,resume_from))
             if config != json.loads((source/'data_config.json').read_text()):
                 raise ValueError('Resume data configuration changed')
@@ -193,7 +193,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             plan=stage('plan',resolve_plan)
         report['latest_mature_label']=plan['latest_mature_label']
         report['fold_count']=len(plan['folds'])
-        from .schedule_training import variants, export_folds
+        from src.res.model.experiment.factor_sequence.schedule_training import variants, export_folds
         candidates=variants(ablations)
         seeds=(17,29,43) if research else (17,)
         report['requested_training_runs']=len(plan['folds'])*len(candidates)*len(seeds)
@@ -203,7 +203,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
             for seed in seeds:
                 suffix='_'.join(variant) if variant else 'full'
                 key=f'{model}_{suffix}_{seed}'
-                command=[sys.executable,'-m','src.data.preprocess.factor_sequence.schedule_training',
+                command=[sys.executable,'-m','src.res.model.experiment.factor_sequence.schedule_training',
                     '--dataset',str(dataset),'--suite',str(folder),'--model',model,
                     '--seed',str(seed),'--variant',json.dumps(variant)]
                 if research:

@@ -5,10 +5,11 @@ __all__ = [
     'read_daily_factor',
     'preflight',
     'read_project',
+    'build_repaired_project',
 ]
 import numpy as np
 import pandas as pd
-from .schema import BuildConfig, EVENTS
+from src.data.preprocess.factor_sequence.schema import BuildConfig, EVENTS
 
 
 def read_daily_factor(db, source, key, dates, fingerprints=None):
@@ -22,7 +23,7 @@ def read_daily_factor(db, source, key, dates, fingerprints=None):
         if 'secid' not in frame or frame.secid.isna().any():
             raise ValueError(f'Missing stock identifiers in {path}; row order is not a stock mapping')
         if fingerprints is not None:
-            from .bundle import file_digest
+            from src.data.preprocess.factor_sequence.bundle import file_digest
             fingerprints[str(path)] = file_digest(path)
         pieces.append(frame)
     return pd.concat(pieces,ignore_index=True) if pieces else pd.DataFrame()
@@ -73,7 +74,7 @@ def read_project(start, end, cfg=None):
                 df = read_daily_factor(DB,calc.db_src,calc.db_key,dates,fingerprints)
             else:
                 df = calc.Loads(dates, normalize=False)
-                from .bundle import file_digest
+                from src.data.preprocess.factor_sequence.bundle import file_digest
                 if not issubclass(calc, AffiliateFactorCalculator):
                     raise AttributeError(f'{name} has no full_dbs')
                 for db in calc.full_dbs():
@@ -137,3 +138,26 @@ def read_project(start, end, cfg=None):
                 eligible=eligible,source={'kind':'project_daily_snapshots','start':start,'end':end,
                                           'listing_offset':91,'revision_history':'not_available',
                                           'factor_file_sha256':fingerprints})
+
+
+def build_repaired_project(root, start, end, batch_size=32, *, input_provenance=None):
+    """Resolve research registrations before calling the streaming data builder."""
+    from src.proj import DB
+    from src.res.factor.calculator import StockFactorHierarchy
+    from .audit_runner import read_factor
+    from src.data.preprocess.factor_sequence.repaired_bundle import build_repaired_data
+
+    cfg = BuildConfig()
+    calcs = {f.lstrip('+-'): StockFactorHierarchy.get_factor(f.lstrip('+-')) for f in cfg.factors}
+    factor_sources = {name: (calc.db_src, calc.db_key) for name, calc in calcs.items()}
+
+    def factor(name, date, universe, first):
+        return read_factor(calcs[name], name, date, universe, DB, first)
+
+    def event(name):
+        calc = StockFactorHierarchy.get_factor(name)
+        return calc.Load(None), DB.path(calc.db_src, calc.db_key)
+
+    return build_repaired_data(root, start, end, batch_size, cfg=cfg,
+                               factor_sources=factor_sources, read_factor=factor, read_event=event,
+                               input_provenance=input_provenance)

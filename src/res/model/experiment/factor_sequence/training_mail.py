@@ -11,7 +11,7 @@ from pathlib import Path
 import json
 import sys
 import traceback
-from .bundle import write_json
+from src.data.preprocess.factor_sequence.bundle import write_json
 
 
 class Tee:

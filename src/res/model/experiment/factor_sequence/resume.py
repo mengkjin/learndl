@@ -15,7 +15,7 @@ import re
 import shutil
 import numpy as np
 import pandas as pd
-from .bundle import file_digest, load, write_json
+from src.data.preprocess.factor_sequence.bundle import file_digest, load, write_json
 
 
 def inspect_resume(root, results_root, run_id):
@@ -46,7 +46,7 @@ def inspect_resume(root, results_root, run_id):
 
 def copy_completed_fold(root, source, destination, split, data_version, research, ablations):
     """Return False for an unfinished fold; reject a supposedly completed but corrupt fold."""
-    from .pipeline import read_predictions
+    from src.res.model.experiment.factor_sequence.pipeline import read_predictions
     from src.res.algo.nn.model.factor_sequence import MODELS
     source, destination = Path(source), Path(destination)
     marker = source/'smoke.json'

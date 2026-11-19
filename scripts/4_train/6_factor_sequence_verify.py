@@ -69,7 +69,7 @@ def main(run_id=None, test_start=20170101, test_end=None,
          research=False, ablations=False, recipient=None, no_email=False, resume_from=None):
     from src.proj import Logger
     from src.proj import PATH
-    from src.data.preprocess.factor_sequence.server_suite import run_suite, send_result
+    from src.res.model.experiment.factor_sequence.server_suite import run_suite, send_result
     from src.data.preprocess.factor_sequence.bundle import write_json
     run_id=run_id or 'fs_server_'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'_'+uuid4().hex[:6]
     config=Path(data_config)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from collections.abc import Callable, Mapping
 from pathlib import Path
 import hashlib
 import json
@@ -10,10 +11,10 @@ import shutil
 import numpy as np
 import pandas as pd
 
-from .schema import BuildConfig, FACTORS, EVENTS
-from .numeric import stock_block, group_metrics, pack
-from .context_audit import candidate_market, MARKET_NAMES, RISK_NAMES
-from .bundle import file_digest, write_json
+from src.data.preprocess.factor_sequence.schema import BuildConfig, EVENTS
+from src.data.preprocess.factor_sequence.numeric import stock_block, group_metrics, pack
+from src.data.preprocess.factor_sequence.context_audit import candidate_market, MARKET_NAMES, RISK_NAMES
+from src.data.preprocess.factor_sequence.bundle import file_digest, write_json
 from src.proj.db.io.snapshot import snapshot_read_path
 
 __all__ = ["REPAIR_VERSION", "build_repaired_data", "load_repaired_manifest"]
@@ -32,12 +33,14 @@ def load_repaired_manifest(path, verify=True):
     return manifest
 
 
-def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=None):
+def build_repaired_data(root: str | Path, start: int, end: int, batch_size: int = 32, *, cfg: BuildConfig,
+                        factor_sources: Mapping[str, tuple[str, str]],
+                        read_factor: Callable[[str, int, np.ndarray, int], tuple[pd.Series, dict]],
+                        read_event: Callable[[str], tuple[pd.DataFrame, Path]],
+                        input_provenance: Callable[[], dict] | None = None) -> Path:
     """Read one date at a time; stock features are disk-backed, not a full RAM cube."""
     from src.proj import CALENDAR, DB
     from src.data import DATAVENDOR
-    from src.res.factor.calculator import StockFactorHierarchy
-    from .audit_runner import read_factor
 
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
@@ -45,7 +48,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
     if stage.exists():
         shutil.rmtree(stage)  # private incomplete output, never a published version
     stage.mkdir()
-    cfg = BuildConfig()
+    factors = cfg.factors
     # Original dataset begins in 2011; earlier events/risk are loaded independently.
     dates = np.asarray(CALENDAR.range(start, end, "td"), dtype=int)
     if not len(dates):
@@ -54,10 +57,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
     if desc.empty or desc.index.has_duplicates:
         raise ValueError("Invalid independent stock universe")
     secids = desc.index.to_numpy()
-    n, t, k = len(secids), len(dates), len(FACTORS)
-    calcs = {
-        f.lstrip("+-"): StockFactorHierarchy.get_factor(f.lstrip("+-")) for f in FACTORS
-    }
+    n, t, k = len(secids), len(dates), len(factors)
     names = [
         f"{channel}__{f}"
         for channel in (
@@ -72,7 +72,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
             "source_age_valid",
             "degenerate",
         )
-        for f in FACTORS
+        for f in factors
     ]
     names += ["dtop__source_observed", "dtop__source_filled"]
     values = np.lib.format.open_memmap(
@@ -93,10 +93,10 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
                 window[None, :] < desc.delist_dt.to_numpy()[:, None]
             )
             for offset, date in enumerate(window):
-                for j, factor in enumerate(FACTORS):
+                for j, factor in enumerate(factors):
                     name = factor.lstrip("+-")
                     series, record = read_factor(
-                        calcs[name], name, int(date), secids, DB, start
+                        name, int(date), secids, start
                     )
                     payload = json.dumps(record, sort_keys=True) + "\n"
                     sources_file.write(payload)
@@ -107,9 +107,8 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
                         )
                     raw[:, offset, j] = series.to_numpy()
                     if name == "dtop":
-                        frame = DB.load(
-                            calcs[name].db_src, calcs[name].db_key, int(date)
-                        )
+                        source, key = factor_sources[name]
+                        frame = DB.load(source, key, int(date))
                         required = ["dtop__source_observed", "dtop__source_filled"]
                         if not set(required) <= set(frame):
                             raise ValueError(
@@ -121,7 +120,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
                             .to_numpy()
                         )
                 signed = raw[:, offset] * np.array(
-                    [-1 if f.startswith("-") else 1 for f in FACTORS]
+                    [-1 if f.startswith("-") else 1 for f in factors]
                 )
                 signed[~eligible[:, offset]] = np.nan
                 if previous is not None:
@@ -140,7 +139,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
                     ret = prices.pct_change(fill_method=None).iloc[-1].to_numpy()
                     from src.func.factor_groups import factor_groups
 
-                    for j, factor in enumerate(FACTORS):
+                    for j, factor in enumerate(factors):
                         metric = group_metrics(previous[:, j], ret, cfg.min_performance)
                         perf[begin + offset, j] = metric[[0, 3]] * [1, 100]
                         valid = np.isfinite(previous[:, j]) & np.isfinite(ret)
@@ -175,14 +174,10 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
         # Keep all prehistory for event ages and 120-day risk maturity.
         histories = {}
         for event in EVENTS:
-            frame = StockFactorHierarchy.get_factor(event).Load(None)
+            frame, path = read_event(event)
             if frame.empty or frame.date.duplicated().any():
                 raise ValueError(f"Invalid event history: {event}")
             histories[event] = frame.set_index("date")[event]
-            path = DB.path(
-                StockFactorHierarchy.get_factor(event).db_src,
-                StockFactorHierarchy.get_factor(event).db_key,
-            )
             source_hash.update(file_digest(path).encode())
         risk = DB.load("market_daily", "risk")
         quote = DB.load("index_daily_ts", "000985.CSI")
@@ -210,7 +205,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
         p, pnames = pack(
             {
                 f"{factor.lstrip('+-')}__{metric}": perf[:, j, i]
-                for j, factor in enumerate(FACTORS)
+                for j, factor in enumerate(factors)
                 for i, metric in enumerate(("ic", "spread"))
             }
         )
@@ -222,7 +217,7 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
     finally:
         sources_file.close()
         groups_file.close()
-    from .context_audit import dictionary
+    from src.data.preprocess.factor_sequence.context_audit import dictionary
 
     feature_dictionary = dictionary()
     feature_dictionary["input_features"] = {
@@ -234,7 +229,8 @@ def build_repaired_data(root, start, end, batch_size=32, *, input_provenance=Non
     files = {p.name: file_digest(p) for p in stage.iterdir() if p.is_file()}
     from src.func.factor_groups import GROUPING_VERSION
 
-    code = {p.name: file_digest(p) for p in Path(__file__).parent.glob("*.py")}
+    from src.data.preprocess.factor_sequence.provenance import component_paths
+    code = {name: file_digest(p) for name, p in component_paths().items()}
     identity = dict(
         recovery=input_provenance() if input_provenance is not None else None,
         grouping=GROUPING_VERSION,

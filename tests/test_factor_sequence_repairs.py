@@ -13,7 +13,7 @@ import pandas as pd
 
 from src.func.factor_groups import factor_groups
 from src.data.preprocess.factor_sequence.dividend import dividend_values
-from src.data.preprocess.factor_sequence.repair import Checkpoint, dependency_order
+from src.data.maintenance.factor_sequence.repair import Checkpoint, dependency_order
 from src.data.preprocess.factor_sequence.numeric import (
     stock_block,
     group_metrics,
@@ -30,7 +30,7 @@ __all__ = ["RepairTests"]
 
 class RepairTests(unittest.TestCase):
     def test_streaming_build_chunk_and_future_invariance(self):
-        from src.data.preprocess.factor_sequence.rebuild_data import build_repaired_data
+        from src.res.model.experiment.factor_sequence.sources import build_repaired_project
         from src.data.preprocess.factor_sequence.context_audit import RISK_NAMES
         from src.data.preprocess.factor_sequence.schema import EVENTS
         from src.proj import DB, CALENDAR
@@ -94,19 +94,13 @@ class RepairTests(unittest.TestCase):
 
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.rebuild_data.FACTORS",
-                    ("a", "dtop"),
-                )
-            )
-            stack.enter_context(
-                patch(
-                    "src.data.preprocess.factor_sequence.rebuild_data.BuildConfig",
+                    "src.res.model.experiment.factor_sequence.sources.BuildConfig",
                     lambda: BuildConfig(factors=("a", "dtop")),
                 )
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.audit_runner.read_factor",
+                    "src.res.model.experiment.factor_sequence.audit_runner.read_factor",
                     side_effect=read,
                 )
             )
@@ -136,9 +130,9 @@ class RepairTests(unittest.TestCase):
                 patch.object(DATAVENDOR.TRADE, "get_specific_data", side_effect=prices)
             )
             stack.enter_context(patch.object(DATAVENDOR, "data_storage_control"))
-            a = build_repaired_data(root / "a", 180, 190, batch_size=4)
-            b = build_repaired_data(root / "b", 180, 190, batch_size=7)
-            c = build_repaired_data(root / "c", 180, 195, batch_size=4)
+            a = build_repaired_project(root / "a", 180, 190, batch_size=4)
+            b = build_repaired_project(root / "b", 180, 190, batch_size=7)
+            c = build_repaired_project(root / "c", 180, 195, batch_size=4)
             for key in ("factorseq", "factorperf", "factormarket"):
                 x = np.load(a / f"{key}.npy")
                 np.testing.assert_allclose(x, np.load(b / f"{key}.npy"))
@@ -150,7 +144,7 @@ class RepairTests(unittest.TestCase):
             )  # dtop economic zero is valid
 
     def test_dry_run_and_failed_delivery_registration(self):
-        from src.data.preprocess.factor_sequence.repair import run_repair
+        from src.data.maintenance.factor_sequence.repair import run_repair
         from src.proj import PATH, CALENDAR, DB
         from contextlib import ExitStack
 
@@ -161,19 +155,19 @@ class RepairTests(unittest.TestCase):
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repair._inventory",
+                    "src.data.maintenance.factor_sequence.repair._inventory",
                     return_value="raw",
                 )
             )
             stack.enter_context(
                 patch(
-                    "src.data.preprocess.factor_sequence.repair._factor_inventory",
+                    "src.data.maintenance.factor_sequence.repair._factor_inventory",
                     return_value="factors",
                 )
             )
             save = stack.enter_context(patch.object(DB, "save"))
             build = stack.enter_context(
-                patch("src.data.preprocess.factor_sequence.repair.build_repaired_data")
+                patch("src.data.maintenance.factor_sequence.repair.build_repaired_project")
             )
             register = stack.enter_context(
                 patch("src.automation.artifact_exchange.research.register")
@@ -189,7 +183,7 @@ class RepairTests(unittest.TestCase):
                 Path(register.call_args.args[0].source), folder / "reports"
             )
             with patch(
-                "src.data.preprocess.factor_sequence.repair.Checkpoint",
+                "src.data.maintenance.factor_sequence.repair.Checkpoint",
                 side_effect=RuntimeError("source revised"),
             ):
                 with self.assertRaisesRegex(RuntimeError, "source revised"):
@@ -442,7 +436,7 @@ class RepairTests(unittest.TestCase):
                     )
 
     def test_repaired_masked_loader(self):
-        from src.data.preprocess.factor_sequence.rebuild_data import REPAIR_VERSION
+        from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION
         from src.data.preprocess.factor_sequence.processors import load_block
         from src.data.preprocess.factor_sequence.bundle import file_digest
 

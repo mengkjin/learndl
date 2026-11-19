@@ -9,8 +9,8 @@ import re
 
 def resolve_schedule(source, model, name, mode=None):
     from src.proj import PATH, CALENDAR
-    from .bundle import load
-    from .schedule_training import schedule_config, variants
+    from src.data.preprocess.factor_sequence.bundle import load
+    from src.res.model.experiment.factor_sequence.schedule_training import schedule_config, variants
     from pathlib import Path
 
     if not re.fullmatch(r"[A-Za-z0-9_-]+", source):
@@ -18,7 +18,7 @@ def resolve_schedule(source, model, name, mode=None):
     if model not in dict(variants(False)) and model != "factorseq_residual":
         raise ValueError("Unsupported factor sequence model")
     if source.startswith("repaired_"):
-        from .repaired_schedule import resolve_repaired
+        from src.res.model.experiment.factor_sequence.repaired_schedule import resolve_repaired
         return resolve_repaired(source, model, name, mode)
     suite = PATH.result / "factor_sequence" / source
     report = json.loads((suite / "suite.json").read_text())
@@ -74,7 +74,7 @@ def resolve_schedule(source, model, name, mode=None):
 
 def residual_config(dataset, name, model, folds, mode, view="compact"):
     """Shared ordinary training policy; only the versioned input contract changes."""
-    from .schedule_training import schedule_config
+    from src.res.model.experiment.factor_sequence.schedule_training import schedule_config
     config = schedule_config(dataset, name, model, folds, research=True, seed=17)
     keys = (
         ("factorseq", "factorperf", "factormarket")

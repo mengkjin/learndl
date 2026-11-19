@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pandas as pd
 import yaml
-from src.data.preprocess.factor_sequence import schedule_training as schedule
+from src.res.model.experiment.factor_sequence import schedule_training as schedule
 from src.res.model.util.data.factor_sequence_plan import validate_folds, select_fold
 
 
