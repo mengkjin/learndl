@@ -45,6 +45,7 @@ class RLSchedulingTest(unittest.TestCase):
         self.enterContext(patch.object(rl, 'settings', return_value={'enabled': True, 'interval_seconds': 0}))
         self.enterContext(patch.object(PATH, 'main', self.root))
         self.enterContext(patch.object(idle, 'runtime_dir', return_value=self.root / 'runtime'))
+        self.enterContext(patch.object(idle.version_patch, 'admission_reason', return_value=None))
         self.enterContext(patch.object(rl, 'runtime_dir', return_value=self.root / 'runtime'))
         self.enterContext(patch.object(idle, 'idle_reason', return_value=None))
         self.git('init', '-q')

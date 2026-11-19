@@ -28,7 +28,7 @@ import subprocess
 import sys
 import time
 import uuid
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 
 import portalocker
 import psutil
@@ -37,6 +37,8 @@ from .config import installed_config, runtime_dir
 from .runtime import RunStore, members, process_cgroup, boot_id
 
 from src.automation.console import logger
+from src.automation import version_patch
+from src.automation.paths import ROOT
 
 OWNER = 'idle_worklist'
 ACTIVE = {'queued', 'starting', 'running', 'terminating', 'finalizing'}
@@ -187,9 +189,27 @@ def _defer_retired_requests(store: RunStore) -> None:
             store.put(run)
 
 
+@contextmanager
+def _worklist_lease():
+    directory = runtime_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with version_patch.code_lease(directory, shared=True) as fd:
+        # Old installed launchers may have no version-patch activation flag.
+        if reason := version_patch.admission_reason(ROOT, directory.parent):
+            raise version_patch.CodeBusy(reason)
+        yield fd
+
+
 def dispatch(options: dict, store: RunStore | None = None) -> dict:
+    try:
+        with _worklist_lease():
+            return _dispatch(options, store or RunStore())
+    except version_patch.CodeBusy as exc:
+        return {'idle_worklist': str(exc)}
+
+
+def _dispatch(options: dict, store: RunStore) -> dict:
     from . import rl_experiment as rl
-    store = store or RunStore()
     with queue_lock():
         _defer_retired_requests(store)
         rl_request = rl.observe(store, throttle=True)
@@ -225,21 +245,7 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
         return {'queued': request['task'], 'version': request['version'], **diagnostics}
 
 
-def _launch(request: dict, store: RunStore) -> int:
-    from .maintenance_gate import MaintenanceBusy, permit
-    try:
-        with permit(blocking=False, task_class='research'):
-            return _launch_admitted(request, store)
-    except MaintenanceBusy as exc:
-        if store.get(request['id']).get('suppress_auto_recovery'):
-            return DEFERRED
-        request['blocked_by'] = str(exc)
-        request['phase'] = 'queued'
-        store.put(request)
-        return DEFERRED
-
-
-def _launch_admitted(request: dict, store: RunStore) -> int:
+def _launch(request: dict, store: RunStore, code_fd: int) -> int:
     if store.get(request['id']).get('suppress_auto_recovery'):
         return DEFERRED
     from src.proj import PATH
@@ -258,7 +264,7 @@ def _launch_admitted(request: dict, store: RunStore) -> int:
         env.update(child_env())
         with log.open('ab', buffering=0) as output:
             child = subprocess.Popen([sys.executable, '-u', '-m', 'src.automation.scheduling.idle_worklist', '_child', request['id']],
-                                     cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, *pass_fds()),
+                                     cwd=PATH.main, env=env, start_new_session=True, pass_fds=(read_fd, code_fd, *pass_fds()),
                                      stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT)
         request.update(pid=child.pid, process_created=psutil.Process(child.pid).create_time(), phase='running')
         cgroup = process_cgroup(child.pid)
@@ -295,7 +301,7 @@ def worker() -> int:
     from src.proj.util.script.script_lock import ScriptLock
     from .maintenance_gate import MaintenanceBusy, permit
     try:
-        with ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases:
+        with _worklist_lease() as code_fd, ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases:
             store = RunStore()
             with queue_lock():
                 _defer_retired_requests(store)
@@ -334,7 +340,10 @@ def worker() -> int:
                 request.pop('blocked_by', None)
                 request.update(phase='starting', started_at=time.time())
                 store.put(request)
-            return _launch(request, store)
+            return _launch(request, store, code_fd)
+    except version_patch.CodeBusy as exc:
+        logger.info('Idle worklist waiting: %s', exc)
+        return 0
     except (portalocker.LockException, BlockingIOError, TimeoutError):
         return 0
 

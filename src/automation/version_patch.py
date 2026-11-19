@@ -6,7 +6,6 @@ import ast
 from collections.abc import Callable, Collection
 from contextlib import closing, contextmanager
 from dataclasses import asdict, dataclass
-import fcntl
 import hashlib
 from importlib.util import module_from_spec, spec_from_file_location
 import json
@@ -351,11 +350,14 @@ def admission_reason(root: Path, runtime: Path) -> str | None:
 
 
 @contextmanager
-def code_lease(scheduling_runtime: Path):
-    # Close our copy rather than unlocking: an orphaned patch retains the lease.
+def code_lease(scheduling_runtime: Path, *, shared: bool = False):
+    import fcntl
+
+    # Close our copy rather than unlocking: a surviving child retains the lease.
     with (scheduling_runtime / 'git_update.lock').open('a') as stream:
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            mode = fcntl.LOCK_SH if shared else fcntl.LOCK_EX
+            fcntl.flock(stream, mode | fcntl.LOCK_NB)
         except BlockingIOError:
             raise CodeBusy('Code lease occupied') from None
         yield stream.fileno()

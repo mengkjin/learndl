@@ -42,6 +42,7 @@ class RecoveryTest(unittest.TestCase):
         self.enterContext(patch.object(PATH, 'lc_machine', self.root))
         self.enterContext(patch.object(runtime, 'runtime_dir', return_value=self.root))
         self.enterContext(patch.object(idle, 'runtime_dir', return_value=self.root))
+        self.enterContext(patch.object(idle.version_patch, 'admission_reason', return_value=None))
         self.enterContext(patch.object(idle, 'idle_reason', return_value=None))
         self.enterContext(patch.object(idle, 'settings', return_value={'enabled': True}))
         self.enterContext(patch.object(recovery, 'boot_id', return_value='boot'))

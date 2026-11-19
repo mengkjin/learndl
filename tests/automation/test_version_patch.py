@@ -1,6 +1,7 @@
 """Exercise migrations with real Git, subprocesses and a disposable host ledger."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing, nullcontext
 from pathlib import Path
 import json
@@ -8,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -15,6 +17,8 @@ from src.automation import version_patch as version
 from src.automation.scheduling import channels, git_update, priority
 from src.automation.scheduling.autofix_store import Store, initialize
 from src.automation.scheduling import worker_bootstrap
+from src.automation.scheduling import idle_worklist as idle
+from src.automation.scheduling.runtime import RunStore
 
 __all__ = ['VersionPatchTest']
 
@@ -319,6 +323,75 @@ def verify(ctx):
             self.assertEqual(git_update._channel_update(self.root, {'enabled': False})['status'], 'deferred')
         self.assertEqual(git_update._channel_update(self.root, {'enabled': False})['status'], 'ready')
         self.assertEqual(git_update._channel_update(self.root, {'enabled': False})['status'], 'disabled')
+
+    def test_worklist_keeps_queue_until_patch_retry_verifies(self):
+        from src.proj.util.script.script_lock import ScriptLock
+
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_wait', """
+import time
+
+def apply(ctx):
+    (ctx.root.parent / 'started').touch()
+    deadline = time.monotonic() + 15
+    while not (ctx.root.parent / 'finish').exists():
+        if time.monotonic() > deadline:
+            raise TimeoutError('test did not release patch')
+        time.sleep(.02)
+
+def verify(ctx):
+    return (ctx.root.parent / 'valid').exists()
+""")
+        self.commit()
+        store = RunStore(self.scheduling / 'runs.sqlite')
+        request = dict(id='queued-model', task='model', version='model-v1', owner=idle.OWNER, phase='queued')
+        store.put(request)
+        self.enterContext(patch.object(idle, 'runtime_dir', return_value=self.scheduling))
+        self.enterContext(patch.object(idle, 'ROOT', self.root))
+        self.enterContext(patch.object(idle, 'RunStore', return_value=store))
+        self.enterContext(patch.object(ScriptLock, 'LOCK_DIR', self.scheduling / 'script_lock'))
+        self.enterContext(patch.object(idle, 'installed_config', return_value={'watchdog': {'jobs': {
+            'idle_worklist': {'enabled': True}}}}))
+        self.enterContext(patch.object(idle, 'idle_reason', return_value=None))
+        self.enterContext(patch.object(idle, 'candidate', return_value=request))
+        self.enterContext(patch('src.automation.scheduling.maintenance_gate.permit', return_value=nullcontext()))
+        launch = self.enterContext(patch.object(idle, '_launch', return_value=0))
+
+        def assert_waiting(reason):
+            self.assertIn(reason, idle.dispatch({'enabled': True}, store)['idle_worklist'])
+            self.assertEqual(idle.worker(), 0)
+            self.assertEqual(store.owned(idle.OWNER), [request])
+            launch.assert_not_called()
+
+        assert_waiting('migration pending')
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            attempt = pool.submit(self.apply)
+            try:
+                deadline = time.monotonic() + 10
+                while not (self.root.parent / 'started').exists():
+                    self.assertLess(time.monotonic(), deadline, 'patch child did not start')
+                    self.assertFalse(attempt.done())
+                    time.sleep(.02)
+                assert_waiting('Code lease occupied')
+            finally:
+                (self.root.parent / 'finish').touch()
+            self.assertEqual(attempt.result(timeout=10)['status'], 'blocked')
+        assert_waiting('migration pending')
+        (self.root.parent / 'valid').touch()
+        self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
+        self.assertEqual(idle.worker(), 0)
+        launch.assert_called_once()
+        self.assertEqual(launch.call_args.args[0]['id'], request['id'])
+
+    def test_worklist_waits_for_first_ledger_on_legacy_install(self):
+        self.use_fresh_runtime()
+        with (patch.object(idle, 'runtime_dir', return_value=self.scheduling),
+              patch.object(idle, 'installed_config', return_value={'scheduler_version': 3}),
+              patch.object(idle, 'RunStore') as store):
+            self.assertIn('migration check failed', idle.dispatch({'enabled': True})['idle_worklist'])
+            self.assertEqual(idle.worker(), 0)
+            store.assert_not_called()
+        self.assertFalse(version.ledger_path(self.runtime).exists())
 
     def test_auto_update_defers_patch_to_checkout_verification(self):
         self.apply()

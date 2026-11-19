@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -45,6 +46,7 @@ class IdleTest(unittest.TestCase):
         self.root = Path(temp.name)
         self.enterContext(patch.object(PATH, 'lc_machine', self.root))
         self.enterContext(patch.object(idle, 'runtime_dir', return_value=self.root))
+        self.enterContext(patch.object(idle.version_patch, 'admission_reason', return_value=None))
         self.enterContext(patch.object(runtime, 'runtime_dir', return_value=self.root))
         self.enterContext(patch.object(training_history, 'git', return_value='test-commit'))
         self.worklist = self.root / 'worklists' / 'main.yaml'
@@ -395,8 +397,8 @@ class IdleTest(unittest.TestCase):
             code = ('import os; fd=int(os.environ["LEARNDL_GATE_FD"]); '
                     'assert os.read(fd,1)==b"1"; os.close(fd); print("fit done", flush=True)')
             return popen([sys.executable, '-u', '-c', code], **kwargs)
-        with patch.object(idle.subprocess, 'Popen', side_effect=probe):
-            self.assertEqual(idle._launch(request, self.store), 0)
+        with idle._worklist_lease() as fd, patch.object(idle.subprocess, 'Popen', side_effect=probe):
+            self.assertEqual(idle._launch(request, self.store, fd), 0)
         runtime.inspect_timeouts(self.store)
         self.assertEqual(self.store.get(request['id'])['phase'], 'complete')
         self.assertIn('fit done', Path(request['log_path']).read_text())
@@ -409,6 +411,43 @@ class IdleTest(unittest.TestCase):
             runtime.inspect_timeouts(self.store)
             runtime.deliver_timeout_events(send, self.store)
             self.assertEqual(send.call_count, 2)
+
+    def test_training_child_keeps_patch_out_after_worker_exits(self):
+        idle.dispatch(self.options, self.store)
+        request = self.store.owned(idle.OWNER)[0]
+        popen = subprocess.Popen
+        children = []
+
+        def start_child(command, **kwargs):
+            with self.assertRaises(idle.version_patch.CodeBusy), idle.version_patch.code_lease(self.root):
+                self.fail('Patch entered during training startup')
+            kwargs['stdin'] = subprocess.PIPE
+            child = popen([sys.executable, '-c', 'import sys; sys.stdin.buffer.read()'], **kwargs)
+            children.append(child)
+            # Simulate loss of the supervisor after the training process is registered.
+            return Mock(pid=child.pid, wait=Mock(side_effect=SystemExit))
+
+        try:
+            with (patch.object(idle, 'candidate', return_value=request),
+                  patch.object(idle, 'settings', return_value=self.options),
+                  patch('src.automation.scheduling.maintenance_gate.permit', return_value=nullcontext()),
+                  patch.object(idle.subprocess, 'Popen', side_effect=start_child),
+                  self.assertRaises(SystemExit)):
+                idle.worker()
+            self.assertEqual(len(children), 1)
+            self.assertIsNone(children[0].poll())
+            with (patch('src.automation.scheduling.config.runtime_dir', return_value=self.root),
+                  patch('src.automation.scheduling.maintenance_gate.permit', return_value=nullcontext()),
+                  patch('src.automation.scheduling.git_update.training_blocker') as probe):
+                for args in (['apply'], ['retry', '0.7.2/001']):
+                    with self.subTest(args=args), patch.object(sys, 'argv', ['version_patch', *args]):
+                        self.assertEqual(idle.version_patch.main(), 1)
+                probe.assert_not_called()  # The physical lock refused both before any patch preflight.
+        finally:
+            for child in children:
+                child.communicate(timeout=10)
+        with idle.version_patch.code_lease(self.root):
+            self.assertEqual(children[0].returncode, 0)
 
     def test_script_mail_receipts_and_watchdog_fallback(self):
         from datetime import datetime
