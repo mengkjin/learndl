@@ -340,13 +340,16 @@ class DataVendor(Base.BoundLogger , metaclass=Base.Singleton):
             def endpoint(date, price):
                 fields = ['secid', price]
                 frame = (self.TRADE.get_adjprice(int(date), fields) if secid is None else
-                         self.TRADE.get_adjprice_with_ensure(int(date), secid, fields))
+                         self.TRADE.get_adjprice_checked(int(date), secid, fields))
                 return frame.reindex(columns=fields).set_index('secid')[price]
 
             start, end = endpoint(date0, price0), endpoint(date1, price1)
             ids = start.index.intersection(end.index) if secid is None else secid
             start, end = start.reindex(ids), end.reindex(ids)
-            ret = (end / start.where(start > 0) - 1).replace([np.inf, -np.inf], np.nan).fillna(0)
+            start = start.where(np.isfinite(start) & (start > 0))
+            end = end.where(np.isfinite(end) & (end > 0))
+            ret = (end / start - 1).replace([np.inf, -np.inf], np.nan)
+            ret = ret.dropna() if secid is None else ret.fillna(0)
             return ret.rename('ret').to_frame()
         if price0 == price1:
             q = self.TRADE.period_return(int(date0) , int(date1) , price0)

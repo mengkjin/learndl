@@ -22,7 +22,7 @@ from uuid import uuid4
 
 from src.proj import CALENDAR, DB, Save, Logger
 from src.proj.db.interface.db_path import DBPath
-from src.proj.db.io.snapshot import snapshot_active
+from src.proj.db.io.snapshot import snapshot_active, snapshot_read_path
 
 __all__ = ['calc_adjprice', 'ensure_adjprice', 'publish_day', 'covers_day', 'ensure_adjprices']
 
@@ -60,13 +60,34 @@ def exclude_inactive(frame: pd.DataFrame, date: int) -> pd.DataFrame:
     return frame.loc[~frame.secid.isin(inactive)].copy()
 
 
-def recent_listing_ids(date: int, secids) -> set[int]:
-    """Eligible query repairs: known, active listings aged 0..364 calendar days."""
-    desc = listing_description()
-    listed = pd.to_datetime(desc.list_dt.astype(str), format='%Y%m%d', errors='coerce')
-    age = (pd.to_datetime(str(int(date)), format='%Y%m%d') - listed).dt.days
-    valid = age.ge(0) & age.lt(365) & ((desc.delist_dt <= 0) | (desc.delist_dt > date) | desc.delist_dt.isna())
-    return set(desc.loc[valid & desc.secid.isin(secids), 'secid'].astype(int))
+@lru_cache(maxsize=4)
+def _listing_intervals(path, version):
+    return listing_description()
+
+
+@lru_cache(maxsize=32768)
+def _warn_unknown_listing(secid):
+    Logger.warning(f'Portfolio listing status unknown for secid={secid}; retaining candidate')
+
+
+def cached_listing_description() -> pd.DataFrame:
+    path = Path(snapshot_read_path(DB.path('information_ts', 'description')))
+    return _listing_intervals(path, tuple(stamp(path) or ()))
+
+
+def rebalance_candidates(secids, model_date: int) -> np.ndarray:
+    """Apply listing intervals on the next trading day, when the trade executes."""
+    execution = int(CALENDAR.td(int(model_date), 1).as_int())
+    desc = cached_listing_description()
+    known = desc.loc[desc.list_dt.gt(0)]
+    active = known.loc[known.list_dt.le(execution) &
+                       (known.delist_dt.isna() | known.delist_dt.le(0) |
+                        known.delist_dt.gt(execution)), 'secid']
+    ids = np.asarray(secids)
+    unknown = ~np.isin(ids, known.secid)
+    for sid in ids[unknown]:
+        _warn_unknown_listing(int(sid))
+    return ids[unknown | np.isin(ids, active)]
 
 
 def log_summary(reason, actions):

@@ -46,7 +46,7 @@ from src.res.factor.util.classes.analysis_inputs import (
     return_label_scope,
 )
 
-SCHEMA = 3
+SCHEMA = 4
 
 
 class SnapshotBuildReport(TypedDict):

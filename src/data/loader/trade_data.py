@@ -5,11 +5,15 @@ Provides adjusted OHLCV, valuation, moneyflow, and limit data from the
 ``trade_ts`` database.  Exported as the ``TRADE`` singleton.
 """
 from __future__ import annotations
+import numpy as np
 import pandas as pd
+from collections import OrderedDict
+from pathlib import Path
+from threading import Lock
 from typing import Any , Literal , cast
 
 from src.proj import CALENDAR , DB , Base , Dates , Logger
-from src.proj.db.io.snapshot import snapshot_active
+from src.proj.db.io.snapshot import snapshot_active, snapshot_read_path
 from src.data.util import INFO
 
 from .access import DateDataAccess
@@ -30,6 +34,30 @@ ReturnType = Literal['close' , 'vwap' , 'open' , 'intraday' , 'overnight']
 VolumeType = Literal['amount' , 'volume' , 'turn_tt' , 'turn_fl' , 'turn_fr']
 MvType = Literal['circ_mv' , 'total_mv']
 TurnoverType = Literal['tt' , 'fl' , 'fr']
+
+_missing_price_warnings: OrderedDict = OrderedDict()
+_missing_price_lock = Lock()
+
+
+def _warn_missing_price(date, secid, path, version, field):
+    from src.data.util.prices.adjusted import cached_listing_description
+
+    key = date, secid, path, version
+    with _missing_price_lock:
+        if key in _missing_price_warnings:
+            _missing_price_warnings.move_to_end(key)
+            return
+        _missing_price_warnings[key] = None
+        if len(_missing_price_warnings) > 32768:
+            _missing_price_warnings.popitem(last=False)
+    try:
+        desc = cached_listing_description()
+        intervals = desc.loc[desc.secid.eq(secid), ['list_dt', 'delist_dt']].to_dict('records')
+    except (ValueError, OSError):
+        intervals = []
+    Logger.warning(f'adjprice date={date} missing holdings secid={secid} endpoint={field} '
+                   f'listing_intervals={intervals}; portfolio return uses zero')
+
 
 class TradeDataAccess(DateDataAccess):
     """
@@ -104,31 +132,35 @@ class TradeDataAccess(DateDataAccess):
             return frame if field is None or frame.empty else frame.loc[:, Base.ensure_name_list(field, [])]
         return self.get(int(date), 'adj', field)
 
-    def get_adjprice_with_ensure(self, date, secid, field=None) -> pd.DataFrame:
-        """Repair only when requested holdings lack adjusted-price rows."""
-        from src.data.util.prices.adjusted import ensure_adjprice, recent_listing_ids
+    def get_adjprice_checked(self, date, secid, field=None) -> pd.DataFrame:
+        """Read held prices and warn once per missing price file version."""
         ids = Base.ensure_secid(secid)
-        if ids is None:
-            raise ValueError('Explicit holdings are required for adjusted-price repair')
-        wanted = pd.Index(ids)
         frame = self.get_adjprice(date)
+        fields = ([field] if isinstance(field, str) else field)
+        present = frame
+        if fields is not None and 'secid' in frame:
+            prices = [name for name in fields if name != 'secid']
+            if prices:
+                values = frame.reindex(columns=prices).to_numpy(dtype=float)
+                valid = np.asarray(np.all(np.isfinite(values) & (values > 0), axis=1))
+                present = frame.loc[valid]
+        if ids is not None:
+            missing = pd.Index(ids).difference(present.secid.tolist() if 'secid' in present else [])
+            if len(missing):
+                path = Path(snapshot_read_path(DB.path('trade_ts', 'adjprice', int(date))))
+                try:
+                    stat = path.stat()
+                    version = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+                except FileNotFoundError:
+                    version = None
+                for sid in missing:
+                    _warn_missing_price(int(date), int(sid), str(path), version,
+                                        ','.join(fields or []) or 'row')
+        return frame if fields is None else frame.reindex(columns=fields)
 
-        def missing(frame):
-            return wanted.difference(frame.secid if 'secid' in frame else [])
-
-        if len(missing(frame)):
-            try:
-                if recent_listing_ids(int(date), missing(frame)):
-                    ensure_adjprice(int(date), force=not snapshot_active(), reason='holdings-query')
-            except (ValueError, OSError) as exc:
-                Logger.warning(f'adjprice date={date} repair unavailable: {exc}')
-            if not snapshot_active():
-                frame = self.get(int(date), 'adj', overwrite=True)
-            unresolved = missing(frame)
-            if len(unresolved):
-                Logger.warning(f'adjprice date={date} missing holdings secid={unresolved.tolist()}; '
-                               'portfolio returns for these securities will be zero')
-        return frame if field is None else frame.reindex(columns=([field] if isinstance(field, str) else field))
+    def get_adjprice_with_ensure(self, date, secid, field=None) -> pd.DataFrame:
+        """Compatibility alias for the read-only holdings check."""
+        return self.get_adjprice_checked(date, secid, field)
 
     def period_return(
         self ,

@@ -9,6 +9,7 @@ from copy import deepcopy
 from typing import Any
  
 from src.proj import Const , Base
+from src.data.util.prices.adjusted import rebalance_candidates
 from src.res.factor.util import AlphaModel , Amodel , Port , RISK_MODEL , Rmodel
 
 from .solver_input import SolverInput
@@ -74,7 +75,9 @@ class OptimizedPortfolioInput:
         self.alpha_model = self.alpha_model.pre_process()
         
         self.initial_port = init_port
-        self.secid = self.risk_model.universe
+        self.secid = rebalance_candidates(self.risk_model.universe, model_date)
+        if not len(self.secid):
+            return None
 
         self.cfg_pool.set_additional(pool_additional)
 

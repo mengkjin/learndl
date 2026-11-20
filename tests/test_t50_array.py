@@ -57,7 +57,12 @@ class Market:
         values[(self.ids + date) % 31 == 0] = None
         return pd.DataFrame({"indus": values}, index=pd.Index(self.ids, name="secid"))
 
-    def install(self, stack, resume=False):
+    def install(self, stack, resume=False, *, listing_filter=False):
+        if not listing_filter:
+            stack.enter_context(patch(
+                "src.res.factor.fmp.generator.basic.rebalance_candidates",
+                side_effect=lambda ids, date: ids,
+            ))
         stack.enter_context(
             patch.object(DATAVENDOR, "get_quote_ret", side_effect=self.quote)
         )
@@ -307,16 +312,6 @@ class T50ArraysTest(TestCase):
                     elif case == "empty_pool":
                         for port in group.benchmarks[0].ports.values():
                             port.port["secid"] += 10000
-                if case == "empty_pool":
-                    with self.assertRaises(KeyError):
-                        run_generator(groups[0], "legacy")
-                    with self.assertRaisesRegex(
-                        UnsupportedGenerator, "empty candidate"
-                    ):
-                        run_generator(groups[1], "array")
-                    with self.assertRaises(KeyError):
-                        run_generator(groups[1], "auto")
-                    continue
                 with (
                     patch.object(
                         DATAVENDOR,

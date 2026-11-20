@@ -176,7 +176,10 @@ class Port:
         else:
             return pd.DataFrame(columns=pd.Index(['date','secid','weight'])).astype({'date':int,'secid':int,'weight':float})
         
-    def to_dataframe(self):
+    def to_dataframe(self, *, preserve_cash=False):
+        if preserve_cash and self.exists and self.emtpy:
+            # Port drops zero weights on load but preserves the date and value.
+            return pd.DataFrame([dict(name=self.name, date=self.date, secid=0, weight=0., value=self.value)])
         if self.emtpy:
             return pd.DataFrame(columns=['name','date','secid','weight','value']).astype({'name':str,'date':int,'secid':int,'weight':float,'value':float})
         else:
@@ -233,6 +236,8 @@ class Port:
         if not self or self is another: 
             return 0.
         assert isinstance(another , Port) , another
+        if self.emtpy:
+            return np.round(another.port.weight.abs().sum(), Const.Factor.ROUNDING.turnover)
         turn = (self - another).port['weight'].abs().sum()
         return np.round(turn , Const.Factor.ROUNDING.turnover)
 

@@ -22,7 +22,7 @@ from src.proj import DB, Const
 
 
 def default_contract():
-    return {'creator': Const.Factor.FMP.creator, 'price_semantics': 'portfolio-adjprice-v2',
+    return {'creator': Const.Factor.FMP.creator, 'price_semantics': 'portfolio-adjprice-v3',
             'rounding': [Const.Factor.ROUNDING.ret, Const.Factor.ROUNDING.turnover],
             'version': 1}
 

@@ -7,6 +7,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 from tests.test_t50_array import Market, assert_groups
 from src.res.factor.fmp.builder import PortfolioGroupBuilder
 from src.res.factor.fmp.generator_array import run_generator
@@ -15,6 +16,67 @@ from src.res.factor.util.classes.alpha_model import AlphaComponent
 
 
 class GeneratorArrayTest(TestCase):
+    def test_delisted_holdings_exit_at_rebalance_and_cash_round_trips(self):
+        from src.data.util.prices import adjusted
+        from src.res.factor.util import Portfolio
+
+        market = Market(days=5)
+        first = int(market.dates[0])
+        # Listed on the second signal day, delisted on its execution day.
+        description = pd.DataFrame({
+            "secid": market.ids, "list_dt": 20000101, "delist_dt": first + 2,
+        })
+        with ExitStack() as stack, TemporaryDirectory() as tmp:
+            market.install(stack, listing_filter=True)
+            stack.enter_context(patch.object(adjusted, "cached_listing_description", return_value=description))
+            from types import SimpleNamespace
+
+            stack.enter_context(patch.object(
+                adjusted.CALENDAR, "td", side_effect=lambda date, offset=0: SimpleNamespace(
+                    as_int=lambda: int(date) + offset),
+            ))
+            old, new = market.group(models=1), market.group(models=1)
+            a, b = run_generator(old, "legacy"), run_generator(new, "array")
+            assert_groups(self, old, new, a, b)
+            builder = old.builders[0]
+            ports = builder.portfolio.ports
+            self.assertGreater(len(ports[first]), 0)
+            self.assertEqual(len(ports[first + 1]), 0)
+            self.assertTrue(ports[first + 1].exists)
+            account = builder.account.df
+            row = account.loc[account["model_date"].eq(first + 1)]
+            turn = row["turn"].item()
+            self.assertGreater(turn, 0.)
+            self.assertAlmostEqual(
+                row["pf"].item(), row["pf_open"].item() - turn * builder.account.config.trade_cost,
+            )
+            path = Path(tmp) / "cash.feather"
+            builder.portfolio.save(path)
+            restored = Portfolio.load(path).ports[first + 1]
+            self.assertTrue(restored.exists)
+            self.assertEqual(len(restored), 0)
+            self.assertEqual(restored.value, ports[first + 1].value)
+
+    def test_optimizer_returns_cash_when_execution_universe_is_empty(self):
+        from types import SimpleNamespace
+
+        from src.data.util.prices import adjusted
+        from src.res.factor.fmp.optimizer.optim import OptimizedPortfolioCreator
+        from src.res.factor.util import Amodel, Port, RISK_MODEL
+
+        signal = 20260102
+        description = pd.DataFrame({'secid': [1], 'list_dt': [20000101], 'delist_dt': [20260105]})
+        alpha = Amodel(signal, np.array([1.]), np.array([1]))
+        old = Port.create([1], [1.], date=signal, value=17.)
+        with (patch.object(adjusted, 'cached_listing_description', return_value=description),
+              patch.object(RISK_MODEL, 'get_model', return_value=SimpleNamespace(universe=np.array([1])))):
+            creator = OptimizedPortfolioCreator('cash', vb_level='never')
+            result = creator.create(signal, alpha, init_port=old)
+        self.assertTrue(result.port.exists)
+        self.assertEqual(len(result.port), 0)
+        self.assertEqual(result.port.value, 17.)
+        self.assertEqual(result.port.turnover(old), 1.)
+
     def test_four_generators_and_parameter_fallback(self):
         market = Market(days=7)
         with ExitStack() as stack:

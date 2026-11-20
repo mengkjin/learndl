@@ -17,20 +17,16 @@ from src.data.maintenance.repair_microcap import check_prices
 __all__ = ['AdjpriceCoverageTest']
 
 class AdjpriceCoverageTest(unittest.TestCase):
-    def test_query_repair_requires_recent_known_listing(self):
-        frame = pd.DataFrame({'secid': [1], 'close': [10.]})
-        fake: Any = SimpleNamespace(get=Mock(return_value=frame), get_adjprice=Mock(return_value=frame))
-        # Age is measured in calendar days at the requested price date.
-        for listed, eligible in ((20250101, False), (20250102, True),
-                                 (20260101, True), (20260102, False), (0, False)):
-            desc = pd.DataFrame({'secid': [2], 'list_dt': [listed], 'delist_dt': [99991231]})
-            with (self.subTest(listed=listed),
-                  patch.object(adjprice, 'listing_description', return_value=desc),
-                  patch.object(adjprice, 'ensure_adjprice') as ensure,
-                  patch('src.data.loader.trade_data.Logger.warning')):
-                TradeDataAccess.get_adjprice_with_ensure(fake, 20260101, [1, 2, 3])
-                self.assertEqual(ensure.call_count, int(eligible))
-                self.assertNotIn(3, adjprice.recent_listing_ids(20260101, [3]))
+    def test_rebalance_filters_on_execution_day_and_keeps_unknown(self):
+        desc = pd.DataFrame({
+            'secid': [1, 2, 3, 3, 4, 5],
+            'list_dt': [20000101, 20000101, 20000101, 20260105, 20000101, 20260106],
+            'delist_dt': [20260102, 20260106, 20250101, 99991231, 20260105, 99991231],
+        })
+        with (patch.object(adjprice, '_listing_intervals', return_value=desc),
+              patch.object(adjprice.Logger, 'warning') as warning):
+            self.assertEqual(adjprice.rebalance_candidates([1, 2, 3, 4, 5, 6], 20260102).tolist(), [2, 3, 6])
+            warning.assert_called_once()
 
     def test_frozen_prices_bypass_live_cache_in_both_directions(self):
         trade = object.__new__(TradeDataAccess)
@@ -49,7 +45,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         fake.get_adjprice = lambda date: TradeDataAccess.get_adjprice(fake, date)
         with patch.object(adjprice, 'ensure_adjprice') as ensure:
             TradeDataAccess.get_adjprice(fake, 20050104)
-            TradeDataAccess.get_adjprice_with_ensure(fake, 20050104, [1])
+            TradeDataAccess.get_adjprice_checked(fake, 20050104, [1])
         ensure.assert_not_called()
         self.assertFalse(any(c.kwargs.get('overwrite') for c in fake.get.call_args_list))
 
@@ -57,19 +53,23 @@ class AdjpriceCoverageTest(unittest.TestCase):
         frame = pd.DataFrame({'secid': [1], 'close': [10.], 'open': [11.]})
         trade: Any = SimpleNamespace(get=Mock(return_value=frame))
         trade.get_adjprice = lambda date: TradeDataAccess.get_adjprice(trade, date)
-        trade.get_adjprice_with_ensure = lambda *a: TradeDataAccess.get_adjprice_with_ensure(trade, *a)
+        trade.get_adjprice_checked = lambda *a: TradeDataAccess.get_adjprice_checked(trade, *a)
         vendor: Any = SimpleNamespace(TRADE=trade)
-        for failure in (None, ValueError('missing source')):
-            for price in ('close', 'open'):
-                with (self.subTest(failure=failure, price=price),
-                      patch.object(adjprice, 'recent_listing_ids', return_value={2}),
-                      patch.object(adjprice, 'ensure_adjprice', side_effect=failure),
-                      patch('src.data.loader.trade_data.Logger.warning') as warning):
-                    result = DataVendor.get_quote_ret(vendor, 20041231, 20050104, 'close', price, [1, 2])
-                    self.assertEqual(result.index.tolist(), [1, 2])
-                    self.assertEqual(result.loc[2, 'ret'], 0.)
-                    np.testing.assert_allclose(result.loc[[1], 'ret'].to_numpy(), [0. if price == 'close' else .1])
-                    self.assertTrue(any('secid=[2]' in str(c) for c in warning.call_args_list))
+        from src.data.loader.trade_data import _missing_price_warnings
+
+        _missing_price_warnings.clear()
+        with (patch.object(adjprice, 'ensure_adjprice') as ensure,
+              patch.object(adjprice, 'atomic_frame') as write,
+              patch('src.data.loader.trade_data.Logger.warning') as warning):
+            for _ in range(2):
+                result = DataVendor.get_quote_ret(vendor, 20041231, 20050104, 'close', 'open', [1, 2])
+                self.assertEqual(result.index.tolist(), [1, 2])
+                self.assertEqual(result.loc[2, 'ret'], 0.)
+                np.testing.assert_allclose(result.loc[[1], 'ret'].to_numpy(), [.1])
+            self.assertEqual(warning.call_count, 2)
+            self.assertTrue(all('secid=2' in str(c) for c in warning.call_args_list))
+            ensure.assert_not_called()
+            write.assert_not_called()
 
     def test_precomputed_portfolio_quotes_use_held_prices_on_listing_day(self):
         frames = {
@@ -78,7 +78,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         }
         trade = Mock()
         trade.get_adjprice.side_effect = lambda date, fields: frames[date][fields]
-        trade.get_adjprice_with_ensure.side_effect = lambda date, ids, fields: frames[date][fields]
+        trade.get_adjprice_checked.side_effect = lambda date, ids, fields: frames[date][fields]
         vendor: Any = SimpleNamespace(TRADE=trade)
         panel = DataVendor.get_quote_ret(vendor, 20260106, 20260107, portfolio=True)
         held = DataVendor.get_quote_ret(vendor, 20260106, 20260107, secid=[1, 2, 3])
@@ -133,26 +133,19 @@ class AdjpriceCoverageTest(unittest.TestCase):
             self.assertFalse(adjprice.covers_day(good.assign(close=np.nan), day, 20261029))
             self.assertFalse(adjprice.covers_day(pd.DataFrame(), day, 20261029))
 
-    def test_get_repairs_and_reloads_only_when_incomplete(self):
-        day = self.quotes([1, 2], [10., 20.])
-        old = self.quotes([1], [20.])
-        new = self.quotes([1, 2], [20., 40.])
-        state = {'frame': old}
-        def get(date, kind, field=None, overwrite=False):
-            if overwrite:
-                state['frame'] = new
-            return state['frame'] if field is None else state['frame'][field]
-        fake: Any = SimpleNamespace(get=Mock(side_effect=get), get_trd=Mock(return_value=day))
-        fake.get_adjprice = lambda date: TradeDataAccess.get_adjprice(fake, date)
-        with (patch.object(adjprice, 'listing_description', return_value=pd.DataFrame(columns=['secid', 'list_dt', 'delist_dt'])),
-              patch.object(adjprice, 'recent_listing_ids', return_value={2}),
-              patch.object(adjprice, 'ensure_adjprice') as update):
-            result = TradeDataAccess.get_adjprice_with_ensure(fake, 20261029, [1, 2], ['secid', 'close'])
-            TradeDataAccess.get_adjprice(fake, 20261029)
-        self.assertEqual(result.close.tolist(), [20., 40.])
-        self.assertEqual(update.call_count, 1)
-        update.assert_called_with(20261029, force=True, reason='holdings-query')
-        self.assertTrue(any(c.kwargs.get('overwrite') for c in fake.get.call_args_list))
+    def test_frozen_missing_holdings_are_read_only(self):
+        trade = object.__new__(TradeDataAccess)
+        frozen = pd.DataFrame({'secid': [1], 'close': [10.]})
+        with (patch.object(trade, 'get') as cached,
+              patch.object(trade, 'data_loader', return_value=frozen),
+              patch('src.data.loader.trade_data.snapshot_active', return_value=True),
+              patch.object(adjprice, 'ensure_adjprice') as ensure,
+              patch.object(adjprice, 'atomic_frame') as write):
+            result = trade.get_adjprice_with_ensure(20050104, [1, 2], ['secid', 'close'])
+            self.assertEqual(result.secid.tolist(), [1])
+            cached.assert_not_called()
+            ensure.assert_not_called()
+            write.assert_not_called()
 
     def test_writer_replaces_atomically_and_preserves_original_on_failure(self):
         with tempfile.TemporaryDirectory() as folder:

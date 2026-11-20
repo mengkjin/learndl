@@ -9,6 +9,7 @@ from abc import abstractmethod
 from functools import cached_property
 
 from src.proj import Const , Logger , Base
+from src.data.util.prices.adjusted import rebalance_candidates
 from src.res.factor.util import (
     Port , AlphaModel , AlphaScreener , 
     Amodel , AlphaComposite , PortCreator , PortCreateResult
@@ -86,7 +87,12 @@ class BasicCreatorConfig:
         alpha_model = alpha_model if isinstance(alpha_model , AlphaModel) else alpha_model.to_alpha_model()
         alpha_secid = alpha_model.get(model_date).secid
         universe = bench_port.secid if (bench_port and not bench_port.emtpy) else alpha_secid
-        candidates = alpha_secid if universe is None else np.intersect1d(alpha_secid , universe)
+        if universe is None:
+            universe = alpha_secid
+        universe = rebalance_candidates(universe, model_date)
+        candidates = np.intersect1d(alpha_secid, universe)
+        if not len(candidates):
+            return candidates
         all_screened = self.alpha_screener.screened_pool(model_date , universe.astype(int) , other_models = alpha_model if 'self' in self.screener else None)
         screened = np.intersect1d(all_screened , candidates)
         secid = np.setdiff1d(candidates , screened)
@@ -109,6 +115,8 @@ class BasicCreatorConfig:
         bench_port : Port | None = None, 
     ) -> pd.DataFrame:
         candidates = self.get_candidate_pool(model_date , alpha_model , bench_port)
+        if not len(candidates):
+            return pd.DataFrame(columns=['secid', 'weight'])
         sorting_alpha = self.get_sorting_alpha(model_date , alpha_model).align(candidates)
         pool = sorting_alpha.to_dataframe(indus=True , na_indus_as = 'unknown')
         

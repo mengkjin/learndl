@@ -121,7 +121,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
             self.updated_fmp_dates.append(date)
         
     def build_day(self , date : int) -> pd.DataFrame:
-        ports = [builder.build(date).port.to_dataframe() for builder in self.iter_builders(date)]
+        ports = [builder.build(date).port.to_dataframe(preserve_cash=True) for builder in self.iter_builders(date)]
         df = pd.concat(ports).reset_index(drop=True)
         assert all(col in df.columns for col in ['name' , 'date' , 'secid' , 'weight']) , \
             f'expect columns: name , date , secid , weight , got {df.columns.tolist()}'

@@ -22,6 +22,8 @@ from src.res.factor.fmp.fmp_basic import (
     get_full_name , parse_full_name , category_title
 )
 
+FMP_RESUME_VERSION = 'execution-listing-v1'
+
 __all__ = ['PortfolioBuilder' , 'PortfolioGroupBuilder']
 
 class PortfolioBuilder(Base.BoundLogger):
@@ -125,14 +127,14 @@ class PortfolioBuilder(Base.BoundLogger):
         if self.resume_path is None:
             return None
         else:
-            return Path(self.resume_path) / 'portfolio' / f'{self.full_name.lower()}.feather'
+            return Path(self.resume_path) / FMP_RESUME_VERSION / 'portfolio' / f'{self.full_name.lower()}.feather'
 
     @property
     def resume_path_account(self):
         if self.resume_path is None:
             return None
         else:
-            return Path(self.resume_path) / 'account' / f'{self.full_name.lower()}.tar'
+            return Path(self.resume_path) / FMP_RESUME_VERSION / 'account' / f'{self.full_name.lower()}.tar'
 
     def set_build_on(self , build_on : Portfolio | None = None , start : int = -1 , end : int = 99991231):
         if build_on is None:

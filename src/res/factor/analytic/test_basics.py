@@ -187,7 +187,9 @@ class BaseFactorAnalyticTest(ABC, Base.BoundLogger):
         if test_path is None:
             return 19000101
         else:
-            portfolio_resume_path = Path(test_path) / _camel_to_snake(cls.__name__) / 'portfolio'
+            from src.res.factor.fmp.builder import FMP_RESUME_VERSION
+
+            portfolio_resume_path = Path(test_path) / _camel_to_snake(cls.__name__) / FMP_RESUME_VERSION / 'portfolio'
             last_dates = [DB.load_df_max_date(path) for path in portfolio_resume_path.glob('*.feather')]
             return min(last_dates) if len(last_dates) else 19000101
 

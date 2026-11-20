@@ -237,6 +237,11 @@ class Portfolio:
             port = pd.concat([prev_port , new_port]).sort_values(by=['date' , 'secid'])
         else:
             port = self.to_dataframe()
+        # A zero-weight row preserves the date and value of an all-cash rebalance.
+        cash = [p.to_dataframe(preserve_cash=True).assign(name=self.name)
+                for p in self.ports.values() if p.exists and p.emtpy]
+        if cash:
+            port = pd.concat([port, *cash], ignore_index=True)
         Save.df(port , path , overwrite = True , prefix = f'Portfolio' , indent = indent , vb_level = vb_level)
     
     def filter_secid(self , secid : Base.alias.SecidType , exclude = False , inplace = False):

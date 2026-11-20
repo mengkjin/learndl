@@ -156,6 +156,10 @@ def evolve(position: Position, date: int, quotes: Quotes | None) -> Position:
 def turnover(new: Position, old: Position, decimals: int):
     if not new.exists or new is old:
         return 0.
+    if not len(new.ids):
+        return np.round(np.abs(old.weights).sum(), decimals)
+    if not len(old.ids):
+        return np.round(np.abs(new.weights).sum(), decimals)
     ids = np.union1d(new.ids, old.ids)
     weights = np.zeros(len(ids))
     weights[np.searchsorted(ids, new.ids)] += new.weights
@@ -232,7 +236,7 @@ class Inputs:
         return self.quotes[key]
 
     def held_quote(self, position, end=None, price: Literal['close', 'open', 'vwap'] = 'close'):
-        """Repair missing held endpoints once per block, including for prepared inputs."""
+        """Check missing held endpoints once per block, including for prepared inputs."""
         start = int(DATAVENDOR.td(position.date))
         end = int(DATAVENDOR.td(start, 1)) if end is None else int(end)
         quotes = self.quote(start, end, price)
@@ -270,9 +274,7 @@ class Inputs:
         benchmark = builder.benchmark.get(date, closest=True)
         candidates = builder.creator.conf.get_candidate_pool(date, model, benchmark)
         if not len(candidates):
-            # The reference cannot add an industry column to an empty frame
-            # and raises in groupby. Do not silently invent an empty portfolio.
-            raise UnsupportedGenerator('empty candidate pool is unsupported by the legacy creator')
+            return prepare_selection(candidates, np.empty(0), np.empty(0, dtype=int))
         # Preserve the self-composite normalization, including constant/NaN alpha.
         sorted_model = builder.creator.conf.get_sorting_alpha(date, model).align(candidates)
         alpha = sorted_model.alpha

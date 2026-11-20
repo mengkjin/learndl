@@ -61,10 +61,16 @@ class OptimizedPortfolioCreator(PortCreator):
         return self
     
     def parse_input(self):
-        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port).rescale()
+        self.solver_input = self.opt_input.to_solver_input(self.model_date , self.alpha_model , self.bench_port , self.init_port)
+        if self.solver_input is not None:
+            self.solver_input = self.solver_input.rescale()
         return self
 
     def solve(self):
+        if self.solver_input is None:
+            port = Port.create([], [], date=self.model_date, name=self.name, value=self.value)
+            self.create_result = PortCreateResult(port, True)
+            return self
         if self.conf.engine_type == 'mosek':
             self.solver = MosekSolver(self.solver_input, self.conf.prob_type)
         elif self.conf.engine_type == 'cvxpy':   
@@ -88,7 +94,7 @@ class OptimizedPortfolioCreator(PortCreator):
         return self
 
     def output(self):
-        if self.detail_infos:
+        if self.detail_infos and self.solver_input is not None:
             w, is_success, status = self._optimized_tuple
             self.create_result.utility  = self.solver_input.utility(w , self.conf.prob_type , **self.conf.opt_cond) 
             self.create_result.accuracy = self.solver_input.accuracy(w)
