@@ -73,6 +73,8 @@ def main(kind, *, state=STATE):
             try:
                 if url.path == '/api/list':
                     return self.reply(catalog.listing(param('run')))
+                if url.path == '/api/models' and kind == 'model_preview':
+                    return self.reply(catalog.model_listing(param('run')))
                 if url.path == '/api/chapters':
                     row = catalog.rows()[param('id')]
                     return self.reply(catalog.chapters(row, max(0, int(param('page', '0'))), param('run')))
@@ -108,6 +110,9 @@ def main(kind, *, state=STATE):
                     if not isinstance(ids, list) or len(ids) > 500 or not all(isinstance(i, str) for i in ids):
                         raise ValueError('Select up to 500 items')
                     return self.reply(catalog.manage(action, ids))
+                if action == 'model_folder' and kind == 'model_preview':
+                    path = catalog.model_folder(data['id'])
+                    return self.reply({'folder': open_folder(path) if data.get('open_locally') is True else str(path)})
                 row = catalog.rows()[data['id']]
                 if action == 'folder':
                     if row.get('trashed'):

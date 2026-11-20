@@ -260,7 +260,15 @@ class PredictorModel(TrainerPipeline):
             if not self.status.deposition_loading_status:
                 continue
             for _ in self.trainer.iter_test_dataloader():
+                is_new = (max(self.trainer.batch_resumed, self.trainer.batch_warm_up) <= self.batch_idx <
+                          self.trainer.batch_aftermath and
+                          self.trainer.batch_dates[self.batch_idx] in self.data.model_test_dates)
+                if is_new:
+                    self.trainer.record_model_work()
                 self.batch_forward()
+                if is_new and not self.batch_output.empty:
+                    date = self.trainer.batch_dates[self.batch_idx]
+                    self.trainer.record_model_work(date, date)
 
     def batch_forward(self) -> None: 
         if self.batch_idx >= self.trainer.batch_resumed: 

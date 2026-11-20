@@ -10,7 +10,7 @@ import torch
 import numpy as np
 
 from functools import wraps
-from typing import Any , Literal , TypeAlias , cast , Sized , Callable
+from typing import Any , Literal , TypeAlias , cast , Sized , Callable, TYPE_CHECKING
 
 from src.proj import Const , Base, PATH
 from src.proj.util.script.fit_lock import FitLock, FitLockNN
@@ -21,6 +21,10 @@ from src.res.model.util.config import ModelConfig
 from .pipeline import BasePipeline
 from .future_utils import FutureUtils
 from ..training_history import TrainingRun, record_training
+
+if TYPE_CHECKING:
+    from src.automation.artifact_exchange.model_properties import Phase as ModelPropertyPhase
+
 
 __all__ = ['BaseTrainer']
 
@@ -367,10 +371,24 @@ class BaseTrainer(BasePipeline):
             self.on_data_end_after()
         self.memory_tracker.mark('stage_data_end')
         
+    property_phase: ModelPropertyPhase | None = None
+
+    def record_model_work(self, first=None, last=None):
+        if (phase := self.property_phase) is not None:
+            try:
+                if first is None:
+                    phase.begin()
+                else:
+                    phase.worked(first, last)
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                self.logger.warning(f'Model properties write failed: {exc}', vb_level=0)
+
     def stage_fit(self):
         """stage of fitting"""
         self.memory_tracker.mark('stage_fit_start')
-        with FitLock.guard(), FitLockNN.guard(try_cuda=self.config.try_cuda):
+        from src.automation.artifact_exchange.model_properties import track_phase
+
+        with FitLock.guard(), FitLockNN.guard(try_cuda=self.config.try_cuda), track_phase(self, 'initial_training'):
             with self.logger.paragraph('Stage [Fit]' , 2):
                 self.config.log_operation('fit' , 'start')
                 self.on_fit_start_before()
@@ -378,10 +396,13 @@ class BaseTrainer(BasePipeline):
                 for self.status.model_date , self.status.model_num in self.iter_model_num_date():
                     if self.status.model_num == 0:
                         self.on_fit_model_date_start()
+                    self.record_model_work()
                     self.fit_current_model()
                     self.on_fit_model_end()
                     from src.res.model.util.lifecycle import ModelLifecycle
                     ModelLifecycle.record_node(self)
+                    self.record_model_work(self.data.datas.date[self.data.d0],
+                                           self.data.datas.date[self.data.d1 - 1])
                     if self.status.model_num == self.config.model_num:
                         self.on_fit_model_date_end()
                 self.on_fit_end()
@@ -442,7 +463,9 @@ class BaseTrainer(BasePipeline):
         """stage of testing"""
         self.memory_tracker.mark('stage_test_start')
         self.config.apply_inference_device('test')
-        with self.logger.paragraph('Stage [Test]' , 2):
+        from src.automation.artifact_exchange.model_properties import track_phase
+
+        with self.logger.paragraph('Stage [Test]' , 2), track_phase(self, 'last_test'):
             self.config.log_operation('test' , 'start')
             self.on_test_start_before()
             self.on_test_start()

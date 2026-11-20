@@ -2,7 +2,7 @@
 from __future__ import annotations
 import contextvars
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from datetime import datetime, timezone
 import uuid
@@ -393,11 +393,20 @@ def model_run(trainer, log=None):
                 events = base.rslt('tensorboard')
                 if any(events.rglob('*tfevents*')) and (log is None or before_events != inventory(events)):
                     specs.append(ArtifactSpec(events, kind='tensorboard', category='model_training', name=base.full_name))
-                specs = [replace(s, category='model_training', experiment=base.full_name, run_id=run_id) for s in specs]
-                # Studies may be registered once per date; one final SQLite snapshot suffices.
-                specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
-                if specs:
-                    publish_safe('model_training', run_id, specs, status)
+                from .core import atomic_json
+                from .model_metadata import metadata_specs
+
+                snapshot = (metadata_specs(config, base(), base.full_name) if log is not None
+                            else nullcontext(([], None, {})))
+                with snapshot as (metadata, baseline, metadata_inventory):
+                    specs.extend(metadata)
+                    specs = [replace(s, category='model_training', experiment=base.full_name, run_id=run_id) for s in specs]
+                    # Studies may be registered once per date; one final SQLite snapshot suffices.
+                    specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
+                    if specs:
+                        outcomes = publish_safe('model_training', run_id, specs, status)
+                        if baseline is not None and metadata and outcomes and outcomes[0]['status'] in ('prepared', 'published'):
+                            atomic_json(baseline, metadata_inventory)
             else:
                 reason = 'autofix' if config is None else f'publisher inactive: enabled={config.enabled}, role={config.role}'
                 record = {'status': 'skipped', 'reason': reason}

@@ -5,8 +5,8 @@
 <title>__TITLE__ · Learndl</title>
 <style>
 :root{color-scheme:dark;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
-*{box-sizing:border-box}body{margin:0}main{max-width:1240px;margin:36px auto;padding:0 24px}h1,h2{line-height:1.25}h1{font-size:28px}h2{font-size:19px;overflow-wrap:anywhere}
-.toolbar,.actions,.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+*{box-sizing:border-box}body{margin:0}main{max-width:1240px;margin:36px auto;padding:0 24px}h1,h2{line-height:1.25}h1{font-size:28px;margin:0}header{justify-content:space-between;margin-bottom:16px}h2{font-size:19px;overflow-wrap:anywhere}
+.toolbar[hidden]{display:none}.toolbar,.actions,.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 button,select,input{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px}
 button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55ccb9}a{color:#8de2d3}
 .layout{display:grid;grid-template-columns:minmax(290px,2fr) minmax(330px,3fr);gap:18px;margin-top:14px}
@@ -18,250 +18,481 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .model-files .item{font-size:14px}.model-actions{margin-top:10px}
 .sheet{max-height:48vh;overflow:auto;margin-top:10px}.sheet table{border-collapse:collapse}
 .sheet td{border:1px solid #3b4b60;padding:5px 8px;min-width:85px;max-width:260px;overflow-wrap:anywhere}
+.model-heading{justify-content:space-between}.model-heading h2{margin:0}
+#model-filters{margin-top:8px}.properties{margin:12px 0;display:grid;grid-template-columns:max-content 1fr;gap:3px 12px}
+.properties dt{color:#a6b8cc}.properties dd{margin:0;overflow-wrap:anywhere}
 small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywhere}iframe{width:100%;height:57vh;background:white;border:0;border-radius:4px}
 #notice{color:#f4bd9b;white-space:pre-wrap}details{margin:8px 0;border-bottom:1px solid #293748}summary{cursor:pointer;padding:6px 0}
 @media(max-width:760px){main{margin:20px auto;padding:0 12px}.layout{grid-template-columns:1fr}#items{max-height:42vh}}
 </style>
 <main>
-<h1>__TITLE__</h1>
+<header class="row"><h1>__TITLE__</h1><select id="language" aria-label="Language">
+<option value="zh">中文</option><option value="en">English</option></select></header>
 <div class="toolbar">
-<input id="search" type="search" placeholder="搜索主题、脚本或模型" aria-label="搜索">
-<select id="host" aria-label="来源"><option value="">全部来源</option></select>
-<select id="status" aria-label="执行状态"><option value="">全部状态</option></select>
-<select id="view" aria-label="视图"><option value="active">当前</option><option value="archived">已归档</option><option value="trash">回收站</option></select>
-<button id="refresh">刷新</button>
+<input id="search" type="search">
+<select id="host"></select><select id="status"></select><select id="view"></select>
+<button id="refresh"></button>
 </div>
+<div id="model-filters" class="toolbar" hidden></div>
 <p id="notice" role="status"></p>
 <div class="layout">
-<section class="panel"><div id="actions" class="actions"></div><small id="count" role="status">正在加载记录…</small><div id="items"></div></section>
-<section class="panel" id="detail" aria-live="polite">选择一条记录查看详情。</section>
+<section class="panel"><div id="actions" class="actions"></div><small id="count" role="status"></small><div id="items"></div></section>
+<section class="panel" id="detail" aria-live="polite"></section>
 </div>
 </main>
 <script>
 const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
-const $=id=>document.getElementById(id), selected=new Set(), filters=new URLSearchParams(location.search);
-let rows=[], shown=[], active='', activeModel='', blobURL='', loaded=false;
-const element=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
-const button=(text,fn)=>{const b=element('button',text);b.onclick=()=>Promise.resolve().then(fn).catch(e=>notice(e.message));return b;};
-const notice=text=>{$('notice').textContent=text;};
-if(kind==='model_preview'){
- $('status').hidden=true;
- $('search').placeholder='搜索模型或结果文件';
- $('detail').textContent='选择一个模型查看结果。';
+const modelPage=kind==='model_preview', $=id=>document.getElementById(id);
+const filters=new URLSearchParams(location.search), selected=new Set(), bindings=new WeakMap();
+let lang=localStorage.getItem('learndl-language')==='en'?'en':'zh';
+let rows=[], models={}, shown=[], active='', activeModel='', version='', blobURL='', loaded=false;
+const tr=(zh,en)=>lang==='en'?en:zh;
+const terms={
+ title:modelPage?['模型预览','Model Preview']:['邮件档案','Mail Archive'],
+ search:modelPage?['搜索模型或文件','Search models or files']:['搜索主题或脚本','Search subjects or scripts'],
+ host:['来源','Source'], allHosts:['全部来源','All sources'], status:['执行状态','Execution status'],
+ allStatus:['全部状态','All statuses'], view:['视图','View'], active:['当前','Active'],
+ archived:['已归档','Archived'], trash:['回收站','Trash'], refresh:['刷新','Refresh'],
+ loading:['正在加载记录…','Loading records…'], loadFailed:['记录加载失败','Could not load records'],
+ catalogError:['无法载入目录','Could not load the catalog'], actionError:['操作失败','Action failed'],
+ selectMail:['选择一条记录查看详情。','Select a record to view its details.'],
+ selectModel:['选择一个模型查看结果。','Select a model to view its results.'],
+ noMail:['没有符合条件的记录。','No matching records.'], noModel:['没有符合条件的模型。','No matching models.'],
+ selectFile:['选择一个文件预览，或选择 TensorBoard / Optuna 启动。','Select a file to preview or choose TensorBoard / Optuna to launch.'],
+ type:['模型类型','Model type'], module:['架构','Architecture'], stage:['生命周期阶段','Lifecycle stage'],
+ short:['短测','Short test'], experiment:['实验产物','Experiment artifacts'], dateField:['日期字段','Date field'],
+ from:['开始日期','From date'], to:['结束日期','To date'], unknown:['未知','Unknown'], yes:['是','Yes'], no:['否','No'],
+ any:['全部','All'], allTypes:['全部类型','All types'], allModules:['全部架构','All architectures'],
+ allStages:['全部阶段','All stages'], allExperiments:['全部实验产物','All experiment artifacts'],
+ hasExperiment:['有实验产物','Has experiment artifacts'], noExperiment:['无实验产物','No experiment artifacts'],
+ dateUnknown:['时间未知','Unknown time'], clearFilters:['清除筛选','Clear filters'], initial_training:['开始训练','First training started'],
+ last_train:['最后训练','Last training completed'], last_test:['最后测试','Last test completed'],
+ resume_training:['恢复训练汇总','Resumed training summary'], coverage:['交易日期范围','Trading date range'],
+ cumulative:['累计覆盖范围','Cumulative range'], resumes:['恢复次数','Resume count'], estimated:['估算','Estimated'],
+ propertyStatus:['状态','Status'], started:['开始时间','Started'], finished:['结束时间','Finished'],
+ provenance:['来源依据','Evidence'], firstResume:['首次恢复','First resume'], runId:['运行 ID','Run ID'],
+ file_created:['文件创建时间','File creation time'], file_modified:['文件修改时间','File modification time'],
+ operation_log:['操作日志','Operation log'], training_history:['训练历史','Training history'],
+ exploration:['探索','Exploration'], validation:['验证','Validation'], production:['生产','Production'],
+ success:['成功','Success'], failed:['失败','Failed'], skipped:['跳过','Skipped'], running:['进行中','Running'],
+ interrupted:['中断','Interrupted'], completed:['已完成','Completed'], sent:['已发送','Sent'],
+ pending:['待处理','Pending'], queued:['已排队','Queued'], prepared:['已准备','Prepared'],
+ modelFolder:['打开模型文件夹','Open model folder'], folder:['打开所在文件夹','Open containing folder'],
+ confirmFolder:['在运行本服务的电脑打开文件夹？选择取消可查看路径。','Open the folder on the computer running this service? Choose Cancel to display its path.'],
+ configurations:['配置','Configuration'], logs:['日志','Logs'], results:['结果文件','Result files'],
+ history:['配置与日志版本','Configuration and log version'], latest:['最新','Latest'],
+ backfill:['历史补投','Historical backfill'], incomplete:['部分文件尚未到达','Some files have yet to arrive'],
+ clear:['清空选择','Clear selection'], selectAll:['全选当前文件','Select all visible files'],
+ select:['选择','Select'], restore:['恢复','Restore'], purge:['彻底删除','Permanently delete'],
+ archive:['归档','Archive'], unarchive:['取消归档','Unarchive'], delete:['移到回收站','Move to Trash'],
+ processed:['已处理','Processed'], download:['下载','Download'], downloadMD:['下载完整 Markdown','Download full Markdown'],
+ preview:['预览或下载','Preview or download'], worksheet:['工作表','Worksheet'],
+ loadSheet:['正在加载工作表…','Loading worksheet…'], sheetLimit:['预览最多显示前 40 行、20 列。','Preview limited to the first 40 rows and 20 columns.'],
+ related:['查阅相关邮件','View related mail'], runFilter:['当前按关联运行筛选。','Filtered by related run.'],
+ noChapters:['没有关联的运行章节。','No matching run chapters.'], truncated:['预览已截断，可下载完整 Markdown。','Preview truncated. Download the full Markdown.'],
+ previous:['上一页','Previous'], next:['下一页','Next'], mustRestore:['从回收站恢复后即可查看。','Restore the item from Trash to view it.'],
+ modelRun:['模型运行','Model run'], smtp:['SMTP 状态','SMTP status'], missing:['缺失附件','Missing attachments'],
+ body:['正文','Body'], original:['原始邮件','Original email'], start:['启动或打开','Start or open'],
+ stop:['停止','Stop'], ready:['实例尚未就绪','The instance is not ready'],
+ stopped:['实例已停止。','Instance stopped.'], openInstance:['打开实验实例','Open experiment instance'],
+ nn:['神经网络','Neural network'], boost:['提升树','Boosting'], factor:['因子','Factor'], linear:['线性模型','Linear model'],
+};
+const t=key=>terms[key]?.[lang==='en'?1:0]??key;
+const element=(tag,value)=>{const e=document.createElement(tag);if(value)e.textContent=value;return e;};
+const localized=(e,fn,attr)=>{
+ const update=attr?()=>e.setAttribute(attr,fn()):()=>{e.textContent=fn();};
+ if(!bindings.has(e))bindings.set(e,[]);
+ bindings.get(e).push(update);
+ e.dataset.localized='';
+ update();
+ return e;
+};
+const label=(tag,key)=>localized(element(tag),()=>t(key));
+const button=(value,fn)=>{
+ const b=element('button');b.type='button';
+ if(typeof value==='function')localized(b,value);else b.textContent=value;
+ b.onclick=()=>Promise.resolve().then(fn).catch(e=>setNotice(()=>t('actionError')+' · '+e.message));
+ return b;
+};
+const action=(key,fn)=>button(()=>t(key),fn);
+function notice(value){
+ $('notice').textContent=typeof value==='function'?value():value;
+ if(typeof value==='function')localized($('notice'),value);
 }
+function setNotice(value){
+ bindings.delete($('notice'));
+ notice(value);
+}
+const count=(total,noun)=>lang==='zh'?total+' '+noun[0]:total+' '+(total===1?noun[1]:noun[2]);
+const items=total=>count(total,['项','item','items']);
+const formatDate=value=>new Date(value).toLocaleString(lang==='en'?'en-US':'zh-CN');
+const batchDate=batch=>{
+ const match=batch.match(/^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)/);
+ return match?formatDate(`${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`):batch;
+};
 async function api(path,body){
  const response=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer __TOKEN__','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
- if(!response.ok){const error=await response.json();throw Error(error.error||'操作失败');}
+ if(!response.ok){const error=await response.json();throw Error(error.error||t('actionError'));}
  return response;
 }
 const url=(path,params)=>path+'?'+new URLSearchParams(params);
-function options(id,values){
+function option(value,key=value){return localized(new Option('',value),()=>t(key));}
+function options(id,values,empty='any'){
  const select=$(id), value=select.value;
- select.replaceChildren(select.options[0],...Array.from(new Set(values.filter(Boolean))).sort().map(x=>new Option(x,x)));
+ select.replaceChildren(option('',empty),...Array.from(new Set(values)).filter(Boolean).sort().map(x=>option(x)));
  select.value=Array.from(select.options).some(o=>o.value===value)?value:'';
+}
+function field(id,key,tag='select'){
+ const e=element(tag);e.id=id;
+ localized(e,()=>t(key),'aria-label');
+ return e;
+}
+const modelFields={type:'module_type',module:'module',stage:'stage',short:'short_test'};
+const filterLabels={type:'allTypes',module:'allModules',stage:'allStages',short:'short'};
+function setup(){
+ localized(document.querySelector('h1'),()=>t('title'));
+ localized($('search'),()=>t('search'),'placeholder');
+ localized($('search'),()=>t('search'),'aria-label');
+ for(const id of ['host','status','view'])localized($(id),()=>t(id),'aria-label');
+ $('view').append(...['active','archived','trash'].map(value=>option(value)));
+ options('host',[],'allHosts');options('status',[],'allStatus');
+ localized($('refresh'),()=>t('refresh'));
+ localized($('count'),()=>t('loading'));
+ localized($('detail'),()=>t(modelPage?'selectModel':'selectMail'));
+ $('status').hidden=modelPage;
+ if(modelPage){
+  const bar=$('model-filters');bar.hidden=false;
+  for(const id of Object.keys(modelFields))bar.append(field(id,id));
+  const experiment=field('experiment','experiment');
+  experiment.append(option('','allExperiments'),option('TensorBoard'),option('Optuna'),
+                    option('yes','hasExperiment'),option('no','noExperiment'));
+  const date=field('dateField','dateField');
+  date.append(...['initial_training','last_train','last_test'].map(value=>option(value)));
+  bar.append(experiment,date);
+  for(const id of ['from','to']){
+   const input=field(id,id,'input');input.type='date';
+   const wrapper=element('label');wrapper.append(label('span',id),' ',input);bar.append(wrapper);
+  }
+  const unknown=field('dateUnknown','dateUnknown','input');unknown.type='checkbox';
+  const wrapper=element('label');wrapper.append(unknown,label('span','dateUnknown'));bar.append(wrapper);
+  bar.append(action('clearFilters',()=>{
+   for(const id of ['search','host',...Object.keys(modelFields),'experiment','from','to'])$(id).value='';
+   $('dateField').value='initial_training';$('dateUnknown').checked=false;render();
+  }));
+ }
+ const ids=['search','host','status','view',...Object.keys(modelFields),'experiment','dateField','from','to','dateUnknown'];
+ for(const id of ids)if($(id))$(id).oninput=render;
+ $('refresh').onclick=refresh;
+ $('language').value=lang;
+ $('language').onchange=()=>{
+  lang=$('language').value;localStorage.setItem('learndl-language',lang);updateLanguage();
+ };
+ if(filters.has('run'))setNotice(()=>t('runFilter'));
+ updateLanguage();
+}
+function updateLanguage(){
+ document.documentElement.lang=lang;document.title=t('title')+' · Learndl';
+ for(const e of document.querySelectorAll('[data-localized]'))for(const update of bindings.get(e)||[])update();
 }
 async function refresh(){
  $('refresh').disabled=true;
  try{
-  rows=await (await api(url('/api/list',{run:filters.get('run')||''}))).json();
-  options('host',rows.map(r=>r.host));options('status',rows.map(r=>r.metadata?.status));
-  loaded=true;
-  if($('notice').textContent.startsWith('无法载入目录：'))notice(filters.has('run')?'当前按关联运行筛选。':'');
-  render();
- }catch(error){
-  if(!loaded){
-   $('count').textContent='记录加载失败';
+  const data=await (await api(url(modelPage?'/api/models':'/api/list',{run:filters.get('run')||''}))).json();
+  rows=modelPage?data.files:data;models=modelPage?data.models:{};
+  options('host',rows.map(r=>r.host),'allHosts');options('status',rows.map(r=>r.metadata?.status),'allStatus');
+  if(modelPage)for(const [id,key] of Object.entries(modelFields)){
+   options(id,Object.values(models).map(m=>modelValue(m,key)),filterLabels[id]);
   }
-  notice('无法载入目录：'+error.message);
+  loaded=true;setNotice(filters.has('run')?()=>t('runFilter'):'');render();
+ }catch(error){
+  if(!loaded){bindings.delete($('count'));localized($('count'),()=>t('loadFailed'));}
+  setNotice(()=>t('catalogError')+' · '+error.message);
  }finally{
   $('refresh').disabled=false;
  }
 }
-function matches(r){
- const state=$('view').value, q=$('search').value.toLowerCase(), run=filters.get('run');
- return (state==='trash'?r.trashed:!r.trashed&&Boolean(r.archived)===(state==='archived'))&&
-  (!$('host').value||r.host===$('host').value)&&(!$('status').value||r.metadata?.status===$('status').value)&&
-  (!run||(kind==='mail_archive'?r.metadata?.model_runs?.includes(run):r.run===run||r.type==='process_log'))&&
-  [r.label,r.relative,r.host,r.model,r.metadata?.task,r.metadata?.script,r.stamp].filter(Boolean).join(' ').toLowerCase().includes(q);
+function modelValue(m,key){
+ return key==='short_test'&&m[key]!=null?(m[key]?'yes':'no'):m[key]??'unknown';
+}
+function visibleState(r){
+ const state=$('view').value;
+ return state==='trash'?r.trashed:!r.trashed&&Boolean(r.archived)===(state==='archived');
+}
+const matchesText=(values,query)=>values.filter(Boolean).join(' ').toLowerCase().includes(query);
+function modelMatches(model){
+ if($('host').value&&model.host!==$('host').value)return false;
+ for(const [id,key] of Object.entries(modelFields))if($(id).value&&$(id).value!==modelValue(model,key))return false;
+ const exp=$('experiment').value;
+ if(exp&&(exp==='yes'?!model.experiments.length:exp==='no'?model.experiments.length:
+          !model.experiments.includes(exp.toLowerCase())))return false;
+ const from=$('from').value, to=$('to').value, field=$('dateField').value;
+ if(!from&&!to&&!$('dateUnknown').checked)return true;
+ const value=field==='last_train'?model.last_train?.finished_at:field==='last_test'?
+  model.properties?.last_test?.finished_at:model.properties?.initial_training?.started_at;
+ if($('dateUnknown').checked)return !value;
+ if(!value)return false;
+ const date=new Date(value);
+ const day=[date.getFullYear(),date.getMonth()+1,date.getDate()].map(n=>String(n).padStart(2,'0')).join('-');
+ return (!from||day>=from)&&(!to||day<=to);
 }
 function render(){
  if(!loaded)return;
- shown=rows.filter(matches);
- if(kind==='model_preview'){renderModels(shown);return;}
- const visible=new Set(shown.map(r=>r.id));
- for(const id of selected)if(!visible.has(id))selected.delete(id);
+ const query=$('search').value.trim().toLowerCase();
+ shown=rows.filter(visibleState);
+ if(modelPage){renderModels(shown,query);return;}
+ shown=shown.filter(r=>(!$('host').value||r.host===$('host').value)&&
+  (!$('status').value||r.metadata?.status===$('status').value)&&
+  matchesText([r.label,r.host,r.metadata?.task,r.metadata?.script,r.stamp],query));
  $('items').replaceChildren(...shown.map(fileRow));
- if(!shown.length)$('items').append(element('p','没有符合条件的记录。'));
- renderActions();
+ if(!shown.length)$('items').append(label('p','noMail'));
+ trimSelection();renderActions();
+}
+function trimSelection(){
+ const visible=new Set(shown.filter(r=>!r.readonly).map(r=>r.id));
+ for(const id of selected)if(!visible.has(id))selected.delete(id);
 }
 function fileRow(r){
-  const line=element('label'), check=element('input'), b=button(r.label,()=>details(r));check.type='checkbox';check.checked=selected.has(r.id);
-  check.setAttribute('aria-label','选择 '+r.label);
+ const line=element('label'), b=button(r.label,()=>details(r));
+ if(!r.readonly){
+  const check=element('input');check.type='checkbox';check.checked=selected.has(r.id);
+  localized(check,()=>t('select')+' '+r.label,'aria-label');
   check.onchange=()=>{check.checked?selected.add(r.id):selected.delete(r.id);renderActions();};
-  b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
-  const subtitle=kind==='model_preview'?[r.relative&&r.relative!==r.label?r.relative:'',r.stamp]:
-   [r.host,r.metadata?.task,r.metadata?.status,r.stamp];
-  b.append(element('small',subtitle.filter(Boolean).join(' · ')));
-  line.append(check,b);return line;
+  line.append(check);
+ }
+ b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
+ b.append(localized(element('small'),()=> (modelPage?
+  [r.relative!==r.label?r.relative:'',r.batch?batchDate(r.batch):'']:
+  [r.host,r.metadata?.task,t(r.metadata?.status||''),r.stamp]).filter(Boolean).join(' · ')));
+ line.append(b);return line;
 }
-function renderModels(records){
+function folder(actionName,id){
+ return async()=>{
+  const locally=confirm(t('confirmFolder'));
+  const data=await (await api('/api/action',{action:actionName,id,open_locally:locally})).json();
+  setNotice(data.folder);
+ };
+}
+function properties(model){
+ const fields=element('dl');fields.className='properties';
+ const add=(key,fn)=>fields.append(label('dt',key),localized(element('dd'),fn));
+ for(const [id,key] of Object.entries(modelFields))add(id,()=>t(modelValue(model,key)));
+ const time=(record,key)=>record?.[key]?formatDate(record[key])+
+  (record.status==='estimated'?' · '+t('estimated'):''):t('unknown');
+ const props=model.properties||{};
+ add('initial_training',()=>time(props.initial_training,'started_at'));
+ add('last_train',()=>time(model.last_train,'finished_at'));
+ add('last_test',()=>time(props.last_test,'finished_at'));
+ const details=element('div');
+ for(const key of ['initial_training','resume_training','last_test']){
+  const record=props[key];
+  if(!record)continue;
+  const node=element('details'), values=element('dl');values.className='properties';
+  const field=(key,fn)=>values.append(label('dt',key),localized(element('dd'),fn));
+  field('started',()=>time(record,'started_at'));field('finished',()=>time(record,'finished_at'));
+  field('propertyStatus',()=>t(record.status||'unknown'));
+  field('coverage',()=>record.date_range?.join(' – ')||t('unknown'));
+  if(record.count!=null){
+   field('resumes',()=>String(record.count));
+   field('firstResume',()=>time(record,'first_started_at'));
+   field('cumulative',()=>record.cumulative_date_range?.join(' – ')||t('unknown'));
+  }
+  field('Git HEAD',()=>record.git_head||t('unknown'));
+  if(record.source)field('provenance',()=>t(record.source)+(record.finish_source?' · '+t(record.finish_source):''));
+  if(record.run_id)field('runId',()=>record.run_id);
+  node.append(label('summary',key),values);details.append(node);
+ }
+ return [fields,details];
+}
+function renderModels(records,query){
  const groups=new Map();
  for(const row of records){
-  if(!row.model)continue;
-  const key=JSON.stringify([row.host,row.model]);
+  const key=row.model_id;
+  if(!key)continue;
   if(!groups.has(key))groups.set(key,[]);
   groups.get(key).push(row);
  }
- if(!groups.has(activeModel))activeModel=groups.keys().next().value||'';
+ for(const [key,files] of [...groups]){
+  const m=models[key]||{host:files[0].host,name:files[0].model,experiments:[]};
+  if(!modelMatches(m)||!matchesText([m.name,m.host,m.stage,m.module,...files.map(r=>r.relative)],query))groups.delete(key);
+ }
+ if(!groups.has(activeModel)){
+  activeModel=groups.keys().next().value||'';active='';version='';
+ }
  const entries=Array.from(groups,([key,files])=>{
-  const b=button(files[0].model,()=>{activeModel=key;active='';selected.clear();render();});
+  const m=models[key]||{host:files[0].host,name:files[0].model};
+  const b=button('',()=>{
+   if(activeModel!==key){activeModel=key;active='';version='';selected.clear();render();}
+  });
+  const title=localized(element('span'),()=>m.name+(m.archive_stamp?' · '+t('archived')+' '+m.archive_stamp:''));
+  b.replaceChildren(title,localized(element('small'),()=>m.host+' · '+items(files.length)));
   b.className='item';b.setAttribute('aria-current',String(key===activeModel));
-  b.append(element('small',files[0].host+' · '+files.length+' 项产物'));
   return b;
  });
  $('items').replaceChildren(...entries);
- $('count').textContent=groups.size+' 个模型';
- shown=groups.get(activeModel)||[];
- const visible=new Set(shown.map(r=>r.id));
- for(const id of selected)if(!visible.has(id))selected.delete(id);
- const pane=$('detail');
- if(!shown.length){pane.textContent='没有符合条件的模型。';return;}
- const files=element('div'), actions=element('div'), count=element('small'), preview=element('section');
- actions.id='model-actions';actions.className='actions model-actions';count.id='file-count';
+ bindings.delete($('count'));localized($('count'),()=>count(groups.size,['个模型','model','models']));
+ const pane=$('detail');bindings.delete(pane);
+ if(!activeModel){localized(pane,()=>t('noModel'));return;}
+ const m=models[activeModel]||{name:groups.get(activeModel)[0].model,host:groups.get(activeModel)[0].host};
+ const versions=m.versions||[];
+ if(!versions.some(v=>v.batch===version))version=versions[0]?.batch??'';
+ const snapshot=versions.find(v=>v.batch===version);
+ const members=new Set(snapshot?.files||[]);
+ const filesForModel=groups.get(activeModel);
+ shown=filesForModel.filter(r=>!r.relative?.match(/^(configs|logs)\//)||!versions.length||members.has(r.id));
+ trimSelection();
+ const previous=$('model-file-detail');
+ const keep=previous&&shown.some(r=>r.id===active);
+ const files=element('div'), actions=element('div'), fileCount=element('small');
+ const preview=keep?previous:element('section');
+ actions.id='model-actions';actions.className='actions model-actions';fileCount.id='file-count';
  files.className='model-files';preview.id='model-file-detail';
- for(const [title,kindFilter] of [['结果文件与日志','file'],['TensorBoard','tensorboard'],['Optuna','optuna']]){
-  const items=shown.filter(r=>kindFilter==='file'?!['tensorboard','optuna'].includes(r.type):r.type===kindFilter);
-  if(!items.length)continue;
-  const section=element('details');
-  section.open=true;
-  section.append(element('summary',title+' · '+items.length));
-  for(const item of items)section.append(fileRow(item));
-  files.append(section);
+ const heading=element('div');heading.className='row model-heading';
+ heading.append(localized(element('h2'),()=>m.name+(m.archive_stamp?' · '+t('archived')+' '+m.archive_stamp:'')));
+ if(models[activeModel])heading.append(action('modelFolder',folder('model_folder',activeModel)));
+ const picker=element('div');
+ if(versions.some(v=>v.batch)){
+  const select=field('metadata-version','history');
+  select.append(...versions.map((v,i)=>localized(new Option('',v.batch),()=>
+   [i===0?t('latest'):'',v.batch?batchDate(v.batch):'',v.historical?t('backfill'):''].filter(Boolean).join(' · '))));
+  select.value=version;select.onchange=()=>{version=select.value;render();};
+  const lab=element('label');lab.append(label('span','history'),' ',select);picker.append(lab);
+  if(snapshot?.missing)picker.append(label('small','incomplete'));
  }
- pane.replaceChildren(element('h2',shown[0].model),element('small',shown[0].host),actions,count,files,preview);
- preview.textContent='选择一个结果文件预览，或选择 TensorBoard / Optuna 启动。';
- active='';
+ const sectionOf=r=>r.type==='tensorboard'?'TensorBoard':r.type==='optuna'?'Optuna':
+  r.relative?.startsWith('configs/')?'configurations':
+  /^(logs|run_logs|html)\//.test(r.relative||'')||r.type==='process_log'?'logs':'results';
+ for(const key of ['configurations','logs','results','TensorBoard','Optuna']){
+  const items=shown.filter(r=>sectionOf(r)===key);
+  if(!items.length)continue;
+  const section=element('details');section.open=true;
+  section.append(localized(element('summary'),()=>t(key)+' · '+items.length),...items.map(fileRow));files.append(section);
+ }
+ pane.replaceChildren(heading,element('small',m.host),...properties({...m,experiments:m.experiments||[]}),
+                      picker,actions,fileCount,files,preview);
+ if(!keep){active='';localized(preview,()=>t('selectFile'));}
  renderActions();
 }
 function renderActions(){
- const model=kind==='model_preview';
- const view=$('view').value;
- const ops=view==='trash'?[['恢复','restore'],['彻底删除','purge']]:
-  [[view==='archived'?'取消归档':'归档',view==='archived'?'unarchive':'archive'],['移到回收站','delete']];
- $(model?'file-count':'count').textContent=shown.length+' 项 · 已选 '+selected.size+' 项';
- $(model?'model-actions':'actions').replaceChildren(button(selected.size?'清空选择':'全选当前结果',()=>{
-  if(selected.size)selected.clear();else shown.slice(0,500).forEach(r=>selected.add(r.id));render();
- }),...ops.map(([label,action])=>{
-  const b=button(label,async()=>{
-   if(['delete','purge'].includes(action)&&!confirm(label+' '+selected.size+' 项？'))return;
-   const result=await (await api('/api/action',{action,ids:[...selected]})).json();
-   notice(result.filter(r=>!r.ok).map(r=>(rows.find(item=>item.id===r.id)?.label||r.id)+' '+r.error).join('\n')||'已处理 '+result.length+' 项');
-   selected.clear();active='';$('detail').textContent='选择一条记录查看详情。';await refresh();
+ const view=$('view').value, countLabel=$(modelPage?'file-count':'count');
+ if(!countLabel)return;
+ const ops=view==='trash'?['restore','purge']:[view==='archived'?'unarchive':'archive','delete'];
+ bindings.delete(countLabel);
+ localized(countLabel,()=>items(shown.length)+' · '+tr('已选 ','Selected ')+items(selected.size));
+ const pick=action(selected.size?'clear':'selectAll',()=>{
+  if(selected.size)selected.clear();else shown.filter(r=>!r.readonly).slice(0,500).forEach(r=>selected.add(r.id));
+  render();
+ });
+ pick.disabled=!shown.some(r=>!r.readonly);
+ $(modelPage?'model-actions':'actions').replaceChildren(pick,...ops.map(key=>{
+  const b=action(key,async()=>{
+   if(['delete','purge'].includes(key)&&!confirm(t(key)+' '+items(selected.size)+'?'))return;
+   const result=await (await api('/api/action',{action:key,ids:[...selected]})).json();
+   await refresh();selected.clear();active='';render();
+   setNotice(()=>result.filter(r=>!r.ok).map(r=>(rows.find(item=>item.id===r.id)?.label||r.id)+' '+r.error)
+    .join('\n')||t('processed')+' '+items(result.length));
   });b.disabled=selected.size===0;return b;
  }));
 }
 async function file(r,index,name,download=false){
  if(!download&&name.toLowerCase().endsWith('.xlsx'))return spreadsheet(r,index);
- const target=$('preview');
+ const target=$('preview');bindings.delete(target);
  const response=await api(url('/api/file',{id:r.id,index}));
- if(!target.isConnected)return;
+ if(!target?.isConnected)return;
  if(blobURL)URL.revokeObjectURL(blobURL);
  const mime=response.headers.get('Content-Type');
  if(!download&&(mime.startsWith('text/')&&mime!=='text/html'||mime==='application/json')){
   let content=await response.text();
   if(mime==='application/json')try{content=JSON.stringify(JSON.parse(content),null,2);}catch{}
-  target.replaceChildren(element('pre',content));return;
+  if(target.isConnected)target.replaceChildren(element('pre',content));
+  return;
  }
  const blob=await response.blob();
+ if(!target.isConnected)return;
  blobURL=URL.createObjectURL(blob);
  if(!download&&['text/html','application/pdf'].includes(blob.type)){
   const frame=element('iframe');if(blob.type==='text/html')frame.setAttribute('sandbox','');frame.title=name;
   frame.src=blobURL;target.replaceChildren(frame);
  }else{
-  const anchor=element('a','下载 '+name);anchor.href=blobURL;anchor.download=name;
-  target.replaceChildren(anchor);anchor.click();
+  const anchor=localized(element('a'),()=>t('download')+' '+name);
+  anchor.href=blobURL;anchor.download=name;target.replaceChildren(anchor);anchor.click();
  }
 }
 async function spreadsheet(r,index,sheet=''){
  const target=$('preview');
- target.textContent='正在加载工作表…';
+ bindings.delete(target);localized(target,()=>t('loadSheet'));
  const workbook=await (await api(url('/api/spreadsheet',{id:r.id,index,sheet}))).json();
  if(!target.isConnected)return;
- const select=element('select');
- select.setAttribute('aria-label','工作表');
+ const select=field('sheet-select','worksheet');
  select.append(...workbook.sheets.map(name=>new Option(name,name)));
  select.value=workbook.sheet;
- select.onchange=()=>spreadsheet(r,index,select.value).catch(e=>notice(e.message));
- const grid=element('div'), table=element('table');
- grid.className='sheet';
+ select.onchange=()=>spreadsheet(r,index,select.value).catch(e=>setNotice(()=>t('actionError')+' · '+e.message));
+ const grid=element('div'), table=element('table');grid.className='sheet';
  for(const values of workbook.rows){
   const row=table.insertRow();
   for(const value of values)row.insertCell().textContent=value;
  }
  grid.append(table);
- target.replaceChildren(select,element('small','预览最多显示前 40 行、20 列。'),grid);
+ bindings.delete(target);target.replaceChildren(select,label('small','sheetLimit'),grid);
 }
-function link(run,label){
- const a=element('a',label);a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
+function link(run,key,prefix=''){
+ const a=localized(element('a'),()=>t(key)+prefix);
+ a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
 }
 async function chapters(r,page){
+ const target=$('preview');
  const data=await (await api(url('/api/chapters',{id:r.id,page,run:filters.get('run')||''}))).json();
- const target=$('preview');target.replaceChildren();
- if(!data.pages)target.append(element('p','没有关联的运行章节。'));
+ if(!target?.isConnected)return;
+ target.replaceChildren();
+ if(!data.pages)target.append(label('p','noChapters'));
  for(const c of data.chapters){
   const section=element('details'), idx=c.title.lastIndexOf(' · ');
   section.open=target.children.length===0;
-  section.append(element('summary',c.title),link(c.title.slice(idx+3),'查阅相关邮件'),element('pre',c.content));
-  if(c.truncated)section.append(element('small','预览已截断，可下载完整 Markdown。'));
+  section.append(element('summary',c.title),link(c.title.slice(idx+3),'related'),element('pre',c.content));
+  if(c.truncated)section.append(label('small','truncated'));
   target.append(section);
  }
- if(page>0)target.append(button('上一页',()=>chapters(r,page-1)));
- if(page+1<data.pages)target.append(button('下一页',()=>chapters(r,page+1)));
+ if(page>0)target.append(action('previous',()=>chapters(r,page-1)));
+ if(page+1<data.pages)target.append(action('next',()=>chapters(r,page+1)));
 }
 async function details(r){
  active=r.id;
- if(kind==='model_preview'){
-  for(const b of $('detail').querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
- }else render();
- const pane=$(kind==='model_preview'?'model-file-detail':'detail'), actions=element('div'), preview=element('div');
- actions.className='actions';preview.id='preview';
+ for(const b of document.querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
+ const pane=$(modelPage?'model-file-detail':'detail'), actions=element('div'), preview=element('div');
+ bindings.delete(pane);actions.className='actions';preview.id='preview';
  pane.replaceChildren(element('h2',r.label),actions,preview);
- if(r.trashed){preview.textContent='从回收站恢复后即可查看。';return;}
- actions.append(button('打开文件夹',async()=>{
-  const locally=confirm('在运行本服务的电脑打开文件夹？从远程连接时请选择取消以显示路径。');
-  const data=await (await api('/api/action',{action:'folder',id:r.id,open_locally:locally})).json();
-  notice(data.folder);
- }));
+ if(r.trashed){localized(preview,()=>t('mustRestore'));return;}
+ actions.append(action('folder',folder('folder',r.id)));
  if(r.type==='mail'){
   const m=r.metadata;
-  pane.insertBefore(element('pre',[m.task,m.status,m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
-   'SMTP 状态：'+(m.smtp_status==='unknown'?'未知':m.smtp_status),m.missing_attachments?.length?'缺失附件：'+m.missing_attachments.join('、'):''].filter(Boolean).join('\n')),actions);
-  for(const id of m.model_runs||[])actions.append(link(id,'模型运行 '+id.slice(0,8)));
+  pane.insertBefore(localized(element('pre'),()=>[m.task,t(m.status||''),m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
+   t('smtp')+' · '+t(m.smtp_status||'unknown'),m.missing_attachments?.length?
+   t('missing')+' · '+m.missing_attachments.join(', '):''].filter(Boolean).join('\n')),actions);
+  for(const id of m.model_runs||[])actions.append(link(id,'modelRun',' '+id.slice(0,8)));
   r.files.forEach((name,i)=>{
-   actions.append(button(name,()=>file(r,i,name)));
-   if(i>0)actions.append(button('下载 '+name,()=>file(r,i,name,true)));
+   actions.append(button(()=>r.mail_parts?.[i]?t(r.mail_parts[i]):name,()=>file(r,i,name)));
+   if(i>0)actions.append(button(()=>t('download')+' '+(r.mail_parts?.[i]?t(r.mail_parts[i]):name),()=>file(r,i,name,true)));
   });
   if(r.files.length)await file(r,0,r.files[0]);
  }else if(r.type==='process_log'){
-  actions.append(button('下载完整 Markdown',()=>file(r,0,r.label,true)));
+  actions.append(action('downloadMD',()=>file(r,0,r.label,true)));
   await chapters(r,0);
  }else if(['tensorboard','optuna'].includes(r.type)){
-  actions.append(button('启动或打开',async()=>{
+  actions.append(action('start',async()=>{
    const result=await (await api('/api/action',{action:'start',id:r.id})).json();
    const address=result.url||result.instance?.url;
-   if(!address)throw Error('实例尚未就绪');
-   const a=element('a','打开实验实例');a.href=address;a.target='_blank';a.rel='noopener';
-   preview.replaceChildren(a);
-  }),button('停止',async()=>{await api('/api/action',{action:'stop',id:r.id});preview.textContent='实例已停止。';}));
+   if(!address)throw Error(t('ready'));
+   const a=label('a','openInstance');a.href=address;a.target='_blank';a.rel='noopener';
+   bindings.delete(preview);preview.replaceChildren(a);
+  }),action('stop',async()=>{
+   await api('/api/action',{action:'stop',id:r.id});bindings.delete(preview);localized(preview,()=>t('stopped'));
+  }));
  }else{
-  actions.append(button('预览或下载',()=>file(r,0,r.label)),button('下载',()=>file(r,0,r.label,true)));
-  if(r.run)actions.append(link(r.run,'查阅相关邮件'));
-  if(kind==='model_preview'&&/\.(md|txt|html|pdf|xlsx|json)$/i.test(r.label))await file(r,0,r.label);
+  actions.append(action('preview',()=>file(r,0,r.label)),action('download',()=>file(r,0,r.label,true)));
+  if(r.run&&!r.historical)actions.append(link(r.run,'related'));
+  if(/\.(md|txt|html|pdf|xlsx|json|jsonl|ya?ml|log|toml)$/i.test(r.label))await file(r,0,r.label);
  }
 }
-for(const id of ['search','host','status','view'])$(id).oninput=render;
-$('refresh').onclick=()=>refresh().catch(e=>notice(e.message));
-if(filters.has('run'))notice('当前按关联运行筛选。');
-refresh().catch(e=>notice(e.message));
+setup();
+refresh();
 </script>
 </html>

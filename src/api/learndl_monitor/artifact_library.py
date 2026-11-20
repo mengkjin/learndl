@@ -15,6 +15,7 @@ from src.automation.artifact_exchange.core import (
     Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
 from src.automation.artifact_exchange.model_logs import STAGES
+from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY, source_models
 from .experiments import Instances
 from .services import ROOT, STATE
 
@@ -75,6 +76,9 @@ class Library:
                 host = manifest.get('host') or 'unknown'
                 model = manifest.get('experiment') or manifest['task']
                 experiments = experiment_members(manifest)
+                common = dict(host=host, model=model, model_root=folder.parent, lock=None,
+                              stamp=manifest.get('created_at', ''), batch=folder.name,
+                              run=manifest['run_id'], historical=manifest.get('task') == BACKFILL_TASK)
                 for item in manifest['files']:
                     relative = item['path']
                     if relative.startswith(('run-log/', 'snapshot/', 'results/factor_residual/')):
@@ -84,42 +88,31 @@ class Library:
                     except (OSError, ValueError):
                         continue
                     if path:
-                        add(path, path.name, type=experiments.get(relative, 'file'), host=host, model=model,
-                            run=manifest['run_id'], stamp=manifest.get('created_at', ''), batch=folder.name,
-                            relative=path.relative_to(folder).as_posix(), lock=None)
+                        metadata = relative.startswith(('configs/', 'logs/'))
+                        add(path, path.name, type=('metadata_index' if relative == INVENTORY
+                                                   else experiments.get(relative, 'file')),
+                            relative=path.relative_to(folder).as_posix(), sha=item['sha256'],
+                            readonly=metadata or relative == INVENTORY, **common)
 
             for identity in self.config.results.glob('external/models/*/*/run_logs/model.json'):
                 try:
                     meta = read_json(identity)
                     for phase in STAGES:
                         if path := existing(identity.parent, f'{phase}.md'):
-                            add(path, path.name, type='process_log', lock=None, **meta)
+                            add(path, path.name, type='process_log', lock=None, model_root=identity.parent.parent,
+                                relative=f'run_logs/{phase}.md', host=meta['host'], model=meta['model'])
                 except (OSError, ValueError, KeyError, TypeError):
                     continue
 
             from src.proj import PATH
-            from src.res.model.util import ModelPath
-
             from src.api.pkgs.dashboard import model_tensorboard
 
             studies = list(PATH.optuna.glob('*/*.sqlite3'))
-            for base in PATH.model.glob('*/*'):
+            for model, base, archived in source_models(PATH.model):
                 try:
-                    real_tree(base)
-                    if not base.is_dir() or base.name.startswith('.'):
-                        continue
-                    try:
-                        if base.parent == PATH.model_archive:
-                            name, _, stamp = base.name.rpartition('.')
-                            if len(stamp) != 14 or not stamp.isdigit():
-                                continue
-                            model = f'{ModelPath(name).full_name} · 归档 {stamp}'
-                        else:
-                            model = ModelPath(base).full_name
-                    except (AssertionError, ValueError):
-                        continue
-                    common = dict(host=self.config.source_host, model=model, lock=base)
-                    for relative in ('run_logs', 'results'):
+                    common = dict(host=self.config.source_host, model=model.full_name, lock=base,
+                                  model_root=base, archive_stamp=archived)
+                    for relative in ('configs', 'logs', 'run_logs', 'results'):
                         for path in (base / relative).rglob('*'):
                             try:
                                 real_tree(path)
@@ -131,7 +124,8 @@ class Library:
                                 phase_log = path in (base / 'run_logs/train.md', base / 'run_logs/test.md')
                                 html = path.parent == base / 'run_logs/html' and path.suffix == '.html'
                                 add(path, path.name, type='process_log' if phase_log else 'file',
-                                    run=path.stem if html else '', relative=path.relative_to(base).as_posix(), **common)
+                                    run=path.stem if html else '', relative=path.relative_to(base).as_posix(),
+                                    readonly=relative in ('configs', 'logs'), **common)
                             except (OSError, ValueError):
                                 continue
                     events = real_tree(model_tensorboard(base))
@@ -140,7 +134,7 @@ class Library:
                     for study in (base / 'results/optuna').glob('*.sqlite3'):
                         add(real_tree(study), study.name, type='optuna', **common)
                     for study in studies:
-                        if not (base / 'results/optuna' / study.name).exists() and study.stem.rpartition('@')[0] == model:
+                        if not (base / 'results/optuna' / study.name).exists() and study.stem.rpartition('@')[0] == model.full_name and not archived:
                             add(real_tree(study), study.name, type='optuna', **common)
                 except (OSError, ValueError):
                     continue
@@ -157,9 +151,11 @@ class Library:
                 continue
         return catalog
 
-    def listing(self, run=''):
+    def listing(self, run='', *, catalog=None):
         rows = []
-        for row in self.rows().values():
+        for row in (self.rows() if catalog is None else catalog).values():
+            if row['type'] == 'metadata_index':
+                continue
             if run:
                 if self.kind == 'mail_archive':
                     if run not in row['metadata'].get('model_runs', []):
@@ -167,9 +163,15 @@ class Library:
                 elif row.get('run') != run and (
                         row['type'] != 'process_log' or row.get('trashed') or not self.chapters(row, 0, run)['pages']):
                     continue
-            public = {k: v for k, v in row.items() if k not in ('path', 'files', 'lock', 'original')}
+            public = {k: v for k, v in row.items()
+                      if k not in ('path', 'files', 'lock', 'original', 'model_root', 'sha')}
+            if row.get('model'):
+                public['model_id'] = self.model_id(row)
             files = row.get('files', [])
             public['files'] = [name for name, _ in files]
+            if row['type'] == 'mail':
+                public['mail_parts'] = [{'body.txt': 'body', 'message.eml': 'original'}.get(
+                    path.name, '') if path.parent == row['path'] / 'mail' else '' for _, path in files]
             if row.get('type') == 'mail' and not row.get('trashed'):
                 public['bytes'] = sum(path.stat().st_size for _, path in files)
             elif row['path'].is_file():
@@ -178,6 +180,24 @@ class Library:
                 public['bytes'] = 0
             rows.append(public)
         return sorted(rows, key=lambda r: (r.get('stamp', ''), r['label']), reverse=True)
+
+    @staticmethod
+    def model_id(row):
+        return sha256(json.dumps([row.get('host'), row.get('model'), row.get('archive_stamp') or ''])
+                      .encode()).hexdigest()
+
+    def model_folder(self, key):
+        for row in self.rows().values():
+            if row.get('model_root') and not row.get('trashed') and self.model_id(row) == key:
+                return real_tree(row['model_root'])
+        raise ValueError('Model folder unavailable')
+
+    def model_listing(self, run=''):
+        from .model_catalog import describe_models
+
+        catalog = self.rows()
+        files = self.listing(run, catalog=catalog)
+        return {'files': files, 'models': describe_models(catalog.values(), self.model_id)}
 
     def chapters(self, row, page, run=''):
         if row['type'] != 'process_log' or row.get('trashed'):
@@ -217,6 +237,8 @@ class Library:
         if not path.is_file():
             raise ValueError('This item is not a file')
         mime = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+        if path.suffix.lower() in ('.yaml', '.yml', '.log', '.jsonl', '.toml', '.eml'):
+            mime = 'text/plain'
         if mime not in ('text/html', 'text/plain', 'text/markdown', 'application/json', 'application/pdf'):
             mime = 'application/octet-stream'
         return path, name, mime
@@ -262,6 +284,8 @@ class Library:
             for key in dict.fromkeys(keys):
                 try:
                     row = catalog[key]
+                    if row.get('readonly'):
+                        raise ValueError('Model configuration and provenance are read-only')
                     if action in ('archive', 'unarchive'):
                         if row.get('trashed'):
                             raise ValueError('Restore the item before archiving it')
