@@ -39,7 +39,7 @@ from .storage import locked_day, atomic_frame, sample_size
 __all__ = ['RcquantMinBarDownloader']
 
 RcquantFileType : TypeAlias = Literal['secdf' , 'min']
-SEC_BACKFILL_FLOOR = 20090101
+SEC_BACKFILL_FLOOR = 20070101
 SEC_BACKFILL_MAX_DAYS_DEFAULT = 5
 SEC_BACKFILL_MIN_STOCKS = 5
 
