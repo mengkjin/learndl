@@ -20,7 +20,7 @@ class FactorResidualDiagnostics(BaseCallBack):
 
     @property
     def folder(self):
-        path = self.config.base_path.rslt("factor_residual")
+        path = self.config.base_path.snapshot("factor_residual")
         path.mkdir(parents=True, exist_ok=True)
         return path
 

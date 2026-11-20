@@ -502,13 +502,16 @@ def experiment_members(manifest):
 
 
 def received_member(manifest, name, experiments, *, folder=None):
-    """Map old model experiment members without changing the signed inventory."""
+    """Map historical model members without changing the recorded inventory."""
     original = safe_path(name)
     kind = experiments.get(name)
-    if (manifest.get('schema_version') == 2 and manifest.get('category') == 'model_training'
-            and kind and original.parts[0] == kind):
-        canonical = Path('results') / original
-        if folder is None or real_tree(folder / canonical).exists():
+    if manifest.get('schema_version') == 2 and manifest.get('category') == 'model_training':
+        canonical = None
+        if original.parts[:2] == ('results', 'factor_residual'):
+            canonical = Path('snapshot', *original.parts[1:])
+        elif kind and original.parts[0] == kind:
+            canonical = Path('results') / original
+        if canonical is not None and (folder is None or real_tree(folder / canonical).exists()):
             return canonical
     return original
 

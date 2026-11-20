@@ -13,6 +13,11 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .panel{border:1px solid #293748;border-radius:10px;background:#17212c;padding:14px;min-width:0}
 #items{max-height:68vh;overflow:auto}#items label{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #273544}
 .item{border:0;background:transparent;text-align:left;width:100%;overflow-wrap:anywhere}.item[aria-current=true]{color:#8de2d3;background:#203b3c}
+.model-files{max-height:34vh;overflow:auto;margin:10px 0}
+.model-files label{display:flex;align-items:center;gap:8px;border-bottom:1px solid #273544}
+.model-files .item{font-size:14px}.model-actions{margin-top:10px}
+.sheet{max-height:48vh;overflow:auto;margin-top:10px}.sheet table{border-collapse:collapse}
+.sheet td{border:1px solid #3b4b60;padding:5px 8px;min-width:85px;max-width:260px;overflow-wrap:anywhere}
 small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywhere}iframe{width:100%;height:57vh;background:white;border:0;border-radius:4px}
 #notice{color:#f4bd9b;white-space:pre-wrap}details{margin:8px 0;border-bottom:1px solid #293748}summary{cursor:pointer;padding:6px 0}
 @media(max-width:760px){main{margin:20px auto;padding:0 12px}.layout{grid-template-columns:1fr}#items{max-height:42vh}}
@@ -23,25 +28,27 @@ small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywher
 <input id="search" type="search" placeholder="搜索主题、脚本或模型" aria-label="搜索">
 <select id="host" aria-label="来源"><option value="">全部来源</option></select>
 <select id="status" aria-label="执行状态"><option value="">全部状态</option></select>
-<select id="model" aria-label="模型"><option value="">全部模型</option></select>
 <select id="view" aria-label="视图"><option value="active">当前</option><option value="archived">已归档</option><option value="trash">回收站</option></select>
 <button id="refresh">刷新</button>
 </div>
 <p id="notice" role="status"></p>
 <div class="layout">
-<section class="panel"><div id="actions" class="actions"></div><small id="count"></small><div id="items"></div></section>
+<section class="panel"><div id="actions" class="actions"></div><small id="count" role="status">正在加载记录…</small><div id="items"></div></section>
 <section class="panel" id="detail" aria-live="polite">选择一条记录查看详情。</section>
 </div>
 </main>
 <script>
 const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
 const $=id=>document.getElementById(id), selected=new Set(), filters=new URLSearchParams(location.search);
-let rows=[], shown=[], active='', blobURL='';
+let rows=[], shown=[], active='', activeModel='', blobURL='', loaded=false;
 const element=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
 const button=(text,fn)=>{const b=element('button',text);b.onclick=()=>Promise.resolve().then(fn).catch(e=>notice(e.message));return b;};
 const notice=text=>{$('notice').textContent=text;};
-if(kind==='mail_archive') $('model').hidden=true;
-else $('status').hidden=true;
+if(kind==='model_preview'){
+ $('status').hidden=true;
+ $('search').placeholder='搜索模型或结果文件';
+ $('detail').textContent='选择一个模型查看结果。';
+}
 async function api(path,body){
  const response=await fetch(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer __TOKEN__','Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
  if(!response.ok){const error=await response.json();throw Error(error.error||'操作失败');}
@@ -54,40 +61,95 @@ function options(id,values){
  select.value=Array.from(select.options).some(o=>o.value===value)?value:'';
 }
 async function refresh(){
- rows=await (await api(url('/api/list',{run:filters.get('run')||''}))).json();
- options('host',rows.map(r=>r.host));options('status',rows.map(r=>r.metadata?.status));
- options('model',rows.filter(r=>r.model).map(r=>r.host+' · '+r.model));
- render();
+ $('refresh').disabled=true;
+ try{
+  rows=await (await api(url('/api/list',{run:filters.get('run')||''}))).json();
+  options('host',rows.map(r=>r.host));options('status',rows.map(r=>r.metadata?.status));
+  loaded=true;
+  if($('notice').textContent.startsWith('无法载入目录：'))notice(filters.has('run')?'当前按关联运行筛选。':'');
+  render();
+ }catch(error){
+  if(!loaded){
+   $('count').textContent='记录加载失败';
+  }
+  notice('无法载入目录：'+error.message);
+ }finally{
+  $('refresh').disabled=false;
+ }
 }
 function matches(r){
  const state=$('view').value, q=$('search').value.toLowerCase(), run=filters.get('run');
  return (state==='trash'?r.trashed:!r.trashed&&Boolean(r.archived)===(state==='archived'))&&
   (!$('host').value||r.host===$('host').value)&&(!$('status').value||r.metadata?.status===$('status').value)&&
-  (!$('model').value||r.host+' · '+r.model===$('model').value)&&
   (!run||(kind==='mail_archive'?r.metadata?.model_runs?.includes(run):r.run===run||r.type==='process_log'))&&
-  [r.label,r.host,r.model,r.metadata?.task,r.metadata?.script,r.stamp].filter(Boolean).join(' ').toLowerCase().includes(q);
+  [r.label,r.relative,r.host,r.model,r.metadata?.task,r.metadata?.script,r.stamp].filter(Boolean).join(' ').toLowerCase().includes(q);
 }
 function render(){
+ if(!loaded)return;
  shown=rows.filter(matches);
+ if(kind==='model_preview'){renderModels(shown);return;}
  const visible=new Set(shown.map(r=>r.id));
  for(const id of selected)if(!visible.has(id))selected.delete(id);
- $('items').replaceChildren(...shown.map(r=>{
-  const line=element('label'), check=element('input'), b=button(r.label,()=>details(r));check.type='checkbox';check.checked=selected.has(r.id);
-  check.setAttribute('aria-label','选择 '+r.label);
-  check.onchange=()=>{check.checked?selected.add(r.id):selected.delete(r.id);renderActions();};
-  b.className='item';b.setAttribute('aria-current',String(active===r.id));
-  b.append(element('small',[r.host,r.model,r.metadata?.task,r.metadata?.status,r.stamp,r.historical?'历史文件':''].filter(Boolean).join(' · ')));
-  line.append(check,b);return line;
- }));
+ $('items').replaceChildren(...shown.map(fileRow));
  if(!shown.length)$('items').append(element('p','没有符合条件的记录。'));
  renderActions();
 }
+function fileRow(r){
+  const line=element('label'), check=element('input'), b=button(r.label,()=>details(r));check.type='checkbox';check.checked=selected.has(r.id);
+  check.setAttribute('aria-label','选择 '+r.label);
+  check.onchange=()=>{check.checked?selected.add(r.id):selected.delete(r.id);renderActions();};
+  b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
+  const subtitle=kind==='model_preview'?[r.relative&&r.relative!==r.label?r.relative:'',r.stamp]:
+   [r.host,r.metadata?.task,r.metadata?.status,r.stamp];
+  b.append(element('small',subtitle.filter(Boolean).join(' · ')));
+  line.append(check,b);return line;
+}
+function renderModels(records){
+ const groups=new Map();
+ for(const row of records){
+  if(!row.model)continue;
+  const key=JSON.stringify([row.host,row.model]);
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(row);
+ }
+ if(!groups.has(activeModel))activeModel=groups.keys().next().value||'';
+ const entries=Array.from(groups,([key,files])=>{
+  const b=button(files[0].model,()=>{activeModel=key;active='';selected.clear();render();});
+  b.className='item';b.setAttribute('aria-current',String(key===activeModel));
+  b.append(element('small',files[0].host+' · '+files.length+' 项产物'));
+  return b;
+ });
+ $('items').replaceChildren(...entries);
+ $('count').textContent=groups.size+' 个模型';
+ shown=groups.get(activeModel)||[];
+ const visible=new Set(shown.map(r=>r.id));
+ for(const id of selected)if(!visible.has(id))selected.delete(id);
+ const pane=$('detail');
+ if(!shown.length){pane.textContent='没有符合条件的模型。';return;}
+ const files=element('div'), actions=element('div'), count=element('small'), preview=element('section');
+ actions.id='model-actions';actions.className='actions model-actions';count.id='file-count';
+ files.className='model-files';preview.id='model-file-detail';
+ for(const [title,kindFilter] of [['结果文件与日志','file'],['TensorBoard','tensorboard'],['Optuna','optuna']]){
+  const items=shown.filter(r=>kindFilter==='file'?!['tensorboard','optuna'].includes(r.type):r.type===kindFilter);
+  if(!items.length)continue;
+  const section=element('details');
+  section.open=true;
+  section.append(element('summary',title+' · '+items.length));
+  for(const item of items)section.append(fileRow(item));
+  files.append(section);
+ }
+ pane.replaceChildren(element('h2',shown[0].model),element('small',shown[0].host),actions,count,files,preview);
+ preview.textContent='选择一个结果文件预览，或选择 TensorBoard / Optuna 启动。';
+ active='';
+ renderActions();
+}
 function renderActions(){
+ const model=kind==='model_preview';
  const view=$('view').value;
  const ops=view==='trash'?[['恢复','restore'],['彻底删除','purge']]:
   [[view==='archived'?'取消归档':'归档',view==='archived'?'unarchive':'archive'],['移到回收站','delete']];
- $('count').textContent=shown.length+' 项 · 已选 '+selected.size+' 项';
- $('actions').replaceChildren(button(selected.size?'清空选择':'全选当前结果',()=>{
+ $(model?'file-count':'count').textContent=shown.length+' 项 · 已选 '+selected.size+' 项';
+ $(model?'model-actions':'actions').replaceChildren(button(selected.size?'清空选择':'全选当前结果',()=>{
   if(selected.size)selected.clear();else shown.slice(0,500).forEach(r=>selected.add(r.id));render();
  }),...ops.map(([label,action])=>{
   const b=button(label,async()=>{
@@ -99,21 +161,45 @@ function renderActions(){
  }));
 }
 async function file(r,index,name,download=false){
- const response=await api(url('/api/file',{id:r.id,index}));
+ if(!download&&name.toLowerCase().endsWith('.xlsx'))return spreadsheet(r,index);
  const target=$('preview');
+ const response=await api(url('/api/file',{id:r.id,index}));
+ if(!target.isConnected)return;
  if(blobURL)URL.revokeObjectURL(blobURL);
- if(!download&&response.headers.get('Content-Type').startsWith('text/')&&!name.toLowerCase().endsWith('.html')){
-  target.replaceChildren(element('pre',await response.text()));return;
+ const mime=response.headers.get('Content-Type');
+ if(!download&&(mime.startsWith('text/')&&mime!=='text/html'||mime==='application/json')){
+  let content=await response.text();
+  if(mime==='application/json')try{content=JSON.stringify(JSON.parse(content),null,2);}catch{}
+  target.replaceChildren(element('pre',content));return;
  }
  const blob=await response.blob();
  blobURL=URL.createObjectURL(blob);
  if(!download&&['text/html','application/pdf'].includes(blob.type)){
-  const frame=element('iframe');frame.setAttribute('sandbox','');frame.title=name;
+  const frame=element('iframe');if(blob.type==='text/html')frame.setAttribute('sandbox','');frame.title=name;
   frame.src=blobURL;target.replaceChildren(frame);
  }else{
   const anchor=element('a','下载 '+name);anchor.href=blobURL;anchor.download=name;
   target.replaceChildren(anchor);anchor.click();
  }
+}
+async function spreadsheet(r,index,sheet=''){
+ const target=$('preview');
+ target.textContent='正在加载工作表…';
+ const workbook=await (await api(url('/api/spreadsheet',{id:r.id,index,sheet}))).json();
+ if(!target.isConnected)return;
+ const select=element('select');
+ select.setAttribute('aria-label','工作表');
+ select.append(...workbook.sheets.map(name=>new Option(name,name)));
+ select.value=workbook.sheet;
+ select.onchange=()=>spreadsheet(r,index,select.value).catch(e=>notice(e.message));
+ const grid=element('div'), table=element('table');
+ grid.className='sheet';
+ for(const values of workbook.rows){
+  const row=table.insertRow();
+  for(const value of values)row.insertCell().textContent=value;
+ }
+ grid.append(table);
+ target.replaceChildren(select,element('small','预览最多显示前 40 行、20 列。'),grid);
 }
 function link(run,label){
  const a=element('a',label);a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
@@ -133,8 +219,11 @@ async function chapters(r,page){
  if(page+1<data.pages)target.append(button('下一页',()=>chapters(r,page+1)));
 }
 async function details(r){
- active=r.id;render();
- const pane=$('detail'), actions=element('div'), preview=element('div');
+ active=r.id;
+ if(kind==='model_preview'){
+  for(const b of $('detail').querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
+ }else render();
+ const pane=$(kind==='model_preview'?'model-file-detail':'detail'), actions=element('div'), preview=element('div');
  actions.className='actions';preview.id='preview';
  pane.replaceChildren(element('h2',r.label),actions,preview);
  if(r.trashed){preview.textContent='从回收站恢复后即可查看。';return;}
@@ -167,9 +256,10 @@ async function details(r){
  }else{
   actions.append(button('预览或下载',()=>file(r,0,r.label)),button('下载',()=>file(r,0,r.label,true)));
   if(r.run)actions.append(link(r.run,'查阅相关邮件'));
+  if(kind==='model_preview'&&/\.(md|txt|html|pdf|xlsx|json)$/i.test(r.label))await file(r,0,r.label);
  }
 }
-for(const id of ['search','host','status','model','view'])$(id).oninput=render;
+for(const id of ['search','host','status','view'])$(id).oninput=render;
 $('refresh').onclick=()=>refresh().catch(e=>notice(e.message));
 if(filters.has('run'))notice('当前按关联运行筛选。');
 refresh().catch(e=>notice(e.message));

@@ -9,6 +9,7 @@ from pathlib import Path
 import secrets
 import shutil
 from urllib.parse import parse_qs, quote, urlsplit
+from zipfile import BadZipFile
 
 from .artifact_library import Library, open_folder
 from .services import SERVICES, STATE
@@ -75,6 +76,9 @@ def main(kind, *, state=STATE):
                 if url.path == '/api/chapters':
                     row = catalog.rows()[param('id')]
                     return self.reply(catalog.chapters(row, max(0, int(param('page', '0'))), param('run')))
+                if url.path == '/api/spreadsheet':
+                    row = catalog.rows()[param('id')]
+                    return self.reply(catalog.spreadsheet(row, int(param('index', '0')), param('sheet')))
                 if url.path == '/api/file':
                     path, name, mime = catalog.file(catalog.rows()[param('id')], int(param('index', '0')))
                     with path.open('rb') as stream:
@@ -87,7 +91,7 @@ def main(kind, *, state=STATE):
                 self.reply({'error': 'Not found'}, 404)
             except (BrokenPipeError, ConnectionResetError):
                 pass
-            except (OSError, KeyError, IndexError, ValueError) as exc:
+            except (OSError, KeyError, IndexError, ValueError, BadZipFile) as exc:
                 self.reply({'error': str(exc)}, 409)
 
         def do_POST(self):

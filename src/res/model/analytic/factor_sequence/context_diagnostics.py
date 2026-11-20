@@ -11,6 +11,7 @@ import yaml
 __all__ = [
     'MODES',
     'paired_days',
+    'residual_snapshot',
     'film_probe',
     'inspect_delivery',
     'diagnose_roots',
@@ -20,6 +21,13 @@ __all__ = [
 ]
 
 MODES = ("snapshot", "temporal", "contextual")
+
+
+def residual_snapshot(root):
+    root = Path(root)
+    snapshot = root / "snapshot/factor_residual"
+    # Explicit comparison roots can point to an older export outside managed storage.
+    return snapshot if snapshot.is_dir() else root / "results/factor_residual"
 
 
 def paired_days(left, right):
@@ -297,8 +305,8 @@ def diagnose_roots(roots, folder):
                 raise ValueError("Missing dataset identity")
             pair = candidate + "-" + base
             daily = paired_days(
-                Path(roots[base]) / "results/factor_residual",
-                Path(roots[candidate]) / "results/factor_residual",
+                residual_snapshot(roots[base]),
+                residual_snapshot(roots[candidate]),
             )
             daily.to_csv(folder / (pair + "_daily.csv"), index=False)
             daily.assign(year=daily.date // 10000).groupby(["year", "group"]).mean(
@@ -369,7 +377,7 @@ def archived_probes(root, config, output, max_stocks=256):
     folds = {int(f["model_date"]): f for f in config["train.factor_sequence.folds"]}
     days = [int(folds[a]["test"][0]) for a in selected]
     records = [
-        pd.read_feather(root / "results/factor_residual" / f"{d}.feather")
+        pd.read_feather(residual_snapshot(root) / f"{d}.feather")
         .sort_values("secid")
         .head(max_stocks)
         for d in days

@@ -332,3 +332,14 @@ PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.2/support/mail_backfill
   `python -m src.automation.artifact_exchange retry`，本机再核对接收档案。
 - 两个补丁在各自的版本补丁尝试目录写入 JSON 报告。历史发送前就移除的附件无法恢复；
   无法确认所属模型的旧数据库保留在独立实验入口。
+
+## 11. 0.7.3 模型结果浏览与残差数据目录
+
+模型预览以来源和模型为单位列出文件夹。选择模型后可预览结果文件与日志，也可打开
+TensorBoard 和 Optuna。XLSX 预览可切换工作表，每张显示前 40 行和 20 列。
+
+`0.7.3/001` 把模型目录（含旧模型归档）和已接收的 `model_training` 批次中的
+`results/factor_residual/` 移到同级 `snapshot/factor_residual/`。训练以后将相关中间
+数据直接写入 snapshot。旧版在途包在接收时映射到新路径，原收据和校验清单仍然有效。
+如果目标已存在或相关文件仍被占用，补丁停止并在报告中指出该目录；处理后用版本
+补丁的 retry 命令继续。升级后重启模型预览服务，以启用 XLSX 预览接口。

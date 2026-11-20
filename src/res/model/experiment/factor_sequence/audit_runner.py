@@ -92,6 +92,8 @@ def read_factor(calc, name, date, universe, db, first):
 def run_server(folder, start=20110101, end=None, model_roots=None):
     """Always leave partial tables and a non-success summary on failure."""
     from src.proj import Logger
+    from src.res.model.analytic.factor_sequence.context_diagnostics import residual_snapshot
+
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=False)
     report: dict[str, Any] = dict(
@@ -315,11 +317,7 @@ def run_server(folder, start=20110101, end=None, model_roots=None):
                     [dict(zip(["date", *PERF_NAMES], [date] + metrics))],
                 )
             if model_roots and "contextual" in model_roots:
-                recorded = (
-                    Path(model_roots["contextual"])
-                    / "results/factor_residual"
-                    / f"{date}.feather"
-                )
+                recorded = residual_snapshot(model_roots["contextual"]) / f"{date}.feather"
                 if recorded.exists():
                     label = (
                         pd.read_feather(recorded)

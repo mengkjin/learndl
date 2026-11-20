@@ -109,3 +109,63 @@ class ArtifactUpgradeTest(unittest.TestCase):
         self.assertEqual({row['status'] for row in metadata}, {'Error', 'Success'})
         self.assertEqual({row['smtp_status'] for row in metadata}, {'sent'})
         self.assertEqual({row['attachments'][0]['name'] for row in metadata}, {'report.7z.001'})
+
+    def test_factor_residual_patch_moves_local_archive_and_received_results(self):
+        from runpy import run_path
+        from types import SimpleNamespace
+        from src.automation.artifact_exchange.core import _verify_target
+        from src.automation.version_patch import ROOT
+
+        self.shared.joinpath('.stfolder').mkdir()
+        source = self.root / 'package/factor_residual'
+        source.mkdir(parents=True)
+        (source / '20261119.feather').write_bytes(b'residual')
+        spec = ArtifactSpec(source.parent, category='model_training', experiment='nn@test')
+        publish_artifacts('model_training', 'old', [spec], config=self.pub)
+        batch = Path(receive(self.rec)[0]['target'])
+        snapshot = batch / 'snapshot/factor_residual'
+        self.assertEqual((snapshot / '20261119.feather').read_bytes(), b'residual')
+        manifest = (batch / 'source.json').read_bytes()
+        _verify_target(batch, json.loads(manifest))
+
+        # Also emulate the layout of a batch received before updating.
+        legacy = batch / 'results/factor_residual'
+        legacy.parent.mkdir()
+        snapshot.rename(legacy)
+        models = self.root / 'models'
+        active = models / 'nn/model'
+        archived = models / 'archive/model.20261119000000'
+        for base in (active, archived):
+            folder = base / 'results/factor_residual'
+            folder.mkdir(parents=True)
+            (folder / 'daily.csv').write_bytes(b'diagnostics')
+        migration = run_path(str(ROOT / 'scripts/.version_patch/0.7.3/001_factor_residual_snapshot.py'))
+        ctx = SimpleNamespace(root=self.root, backup_dir=self.root / 'patch-report')
+        with patch('src.proj.PATH', SimpleNamespace(model=models)), patch.object(Config, 'load', return_value=self.rec), \
+                patch('subprocess.run', return_value=SimpleNamespace(returncode=1, stdout=b'', stderr=b'')):
+            for _ in range(2):
+                migration['apply'](ctx)
+                self.assertTrue(migration['verify'](ctx))
+        self.assertEqual((batch / 'source.json').read_bytes(), manifest)
+        _verify_target(batch, json.loads(manifest))
+        for base in (active, archived):
+            self.assertFalse((base / 'results/factor_residual').exists())
+            self.assertEqual((base / 'snapshot/factor_residual/daily.csv').read_bytes(), b'diagnostics')
+
+    def test_results_workbook_preview_is_bounded_and_selects_sheet(self):
+        from openpyxl import Workbook
+        from src.api.learndl_monitor.artifact_library import Library
+
+        book = Workbook()
+        book.create_sheet('实验')
+        sheet = book['实验']
+        assert sheet is not None
+        sheet['A1'] = '指标'
+        sheet['B1'] = .25
+        sheet['U1'] = 'outside visible columns'
+        sheet['A41'] = 'outside visible rows'
+        path = self.root / 'result.xlsx'
+        book.save(path)
+        catalog = Library('model_preview', self.rec, state=self.root / 'library')
+        preview = catalog.spreadsheet({'type': 'file', 'path': path}, 0, '实验')
+        self.assertEqual(preview, {'sheets': ['Sheet', '实验'], 'sheet': '实验', 'rows': [['指标', '0.25']]})

@@ -82,7 +82,7 @@ class Library:
                 experiments = experiment_members(manifest)
                 for item in manifest['files']:
                     relative = item['path']
-                    if relative.startswith('run-log/'):
+                    if relative.startswith(('run-log/', 'snapshot/', 'results/factor_residual/')):
                         continue
                     try:
                         path = existing(folder, received_member(manifest, relative, experiments, folder=folder).as_posix())
@@ -90,7 +90,8 @@ class Library:
                         continue
                     if path:
                         add(path, path.name, type=experiments.get(relative, 'file'), host=host, model=model,
-                            run=manifest['run_id'], stamp=manifest['created_at'], lock=None)
+                            run=manifest['run_id'], stamp=manifest['created_at'], batch=folder.name,
+                            relative=path.relative_to(folder).as_posix(), lock=None)
 
             for identity in self.config.results.glob('model_run_logs/*/*/model.json'):
                 try:
@@ -113,7 +114,13 @@ class Library:
                     if not base.is_dir() or base.name.startswith('.'):
                         continue
                     try:
-                        model = ModelPath(base).full_name
+                        if base.parent == PATH.model_archive:
+                            name, _, stamp = base.name.rpartition('.')
+                            if len(stamp) != 14 or not stamp.isdigit():
+                                continue
+                            model = f'{ModelPath(name).full_name} · 归档 {stamp}'
+                        else:
+                            model = ModelPath(base).full_name
                     except (AssertionError, ValueError):
                         continue
                     common = dict(host=self.config.source_host, model=model, lock=base)
@@ -121,14 +128,15 @@ class Library:
                         for path in (base / relative).rglob('*'):
                             try:
                                 real_tree(path)
-                                if relative == 'results' and path.relative_to(base / relative).parts[0] in ('tensorboard', 'optuna'):
+                                if relative == 'results' and path.relative_to(base / relative).parts[0] in (
+                                        'tensorboard', 'optuna', 'factor_residual'):
                                     continue
                                 if not path.is_file() or any(part.startswith('.') for part in path.relative_to(base).parts):
                                     continue
                                 phase_log = path in (base / 'run_logs/train.md', base / 'run_logs/test.md')
                                 html = path.parent == base / 'run_logs/html' and path.suffix == '.html'
                                 add(path, path.name, type='process_log' if phase_log else 'file',
-                                    run=path.stem if html else '', historical=relative == 'results', **common)
+                                    run=path.stem if html else '', relative=path.relative_to(base).as_posix(), **common)
                             except (OSError, ValueError):
                                 continue
                     events = real_tree(model_tensorboard(base))
@@ -214,9 +222,41 @@ class Library:
         if not path.is_file():
             raise ValueError('This item is not a file')
         mime = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
-        if mime not in ('text/html', 'text/plain', 'text/markdown', 'application/pdf'):
+        if mime not in ('text/html', 'text/plain', 'text/markdown', 'application/json', 'application/pdf'):
             mime = 'application/octet-stream'
         return path, name, mime
+
+    def spreadsheet(self, row, index, sheet=''):
+        """Return a bounded, read-only worksheet preview."""
+        from openpyxl import load_workbook
+        from zipfile import ZipFile
+
+        path, name, _ = self.file(row, index)
+        if Path(name).suffix.lower() != '.xlsx':
+            raise ValueError('请选择 XLSX 文件')
+        if path.stat().st_size > 32 * 1024**2:
+            raise ValueError('工作簿超过预览大小限制，请下载查看')
+        with ZipFile(path) as archive:
+            if sum(item.file_size for item in archive.infolist()) > 128 * 1024**2:
+                raise ValueError('工作簿解压后超过预览大小限制，请下载查看')
+        book = load_workbook(path, read_only=True, data_only=True, keep_links=False)
+        try:
+            names = [worksheet.title for worksheet in book.worksheets]
+            if not names:
+                raise ValueError('工作簿没有可预览的工作表')
+            sheet = sheet or names[0]
+            if sheet not in names:
+                raise ValueError('工作表不存在')
+            worksheet = book[sheet]
+            worksheet.reset_dimensions()
+            rows = [[str(value)[:1024] if value is not None else '' for value in values]
+                    for values in worksheet.iter_rows(max_row=40, max_col=20, values_only=True)]
+            while rows and not any(rows[-1]):
+                rows.pop()
+            width = max((i + 1 for values in rows for i, value in enumerate(values) if value), default=0)
+            return {'sheets': names, 'sheet': sheet, 'rows': [values[:width] for values in rows]}
+        finally:
+            book.close()
 
     def manage(self, action, keys):
         with portalocker.Lock(str(self.state / 'operations.lock'), timeout=2):

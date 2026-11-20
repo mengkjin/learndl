@@ -346,7 +346,7 @@ def model_run(trainer, log=None):
 
     def reports(folder):
         return {p: signature for p, signature in inventory(folder).items()
-                if p.relative_to(folder).parts[0] not in ('optuna', 'tensorboard')}
+                if p.relative_to(folder).parts[0] not in ('optuna', 'tensorboard', 'factor_residual')}
 
     before_results, before_events = {}, {}
     config = None
