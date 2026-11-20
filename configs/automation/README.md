@@ -330,6 +330,17 @@ The Git maintenance timer also reconciles [version patches](../../scripts/.versi
 for local data and models after verified updates and manual pulls. Install the updated
 managed bootstrap to enable migration checks before new business work.
 
+With automatic Git updates and version patches enabled, a recorded patch
+failure keeps business work paused while Git maintenance continues checking
+`origin/master` for a clean fast-forward. After verifying the new checkout, the
+worker retries the first failed or interrupted patch once per commit. This
+also applies when an operator pulls the fast-forward first. The attempt
+ledger prevents re-execution on the same commit across worker restarts.
+Set `watchdog.jobs.git_auto_update.retry_failed_patch_on_update: false` in
+`maintenance.yaml` and publish the configuration to return to explicit
+`version_patch retry` during a patch failure. Existing installed settings
+without this option use the default of `true`.
+
 ## Autofix maintenance
 
 `autofix` is an explicitly installed watchdog job and independent systemd worker. Requests are declared in `autofix.yaml`. Installation requires Bubblewrap on Linux and initializes a protected, project-external ledger; ordinary code pulls do not initialize it. Admission follows the installed scheduler version described below. See [Autofix configuration and operations](AUTOFIX.md) for one-attempt IDs, script opt-in, notification ownership, sandbox prerequisites, and installation/rollback instructions.

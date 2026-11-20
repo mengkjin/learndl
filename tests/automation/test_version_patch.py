@@ -523,6 +523,80 @@ sys.stdin.buffer.read()
         self.assertIsNone(version.admission_reason(self.root, self.runtime))
         self.assertEqual(priority.read(store)['phase'], 'idle')
 
+    def test_blocked_worker_fetches_and_retries_once_per_new_commit(self):
+        store = self.control()
+        self.git_worker(store)
+        origin = self.root.parent / 'origin'
+        self.git('clone', str(self.root), str(origin))
+        self.git('remote', 'add', 'origin', str(origin))
+        (origin / version.VERSION_FILE).write_text("__version__ = '0.7.2'\n")
+        location = origin / version.PATCH_DIRECTORY / '0.7.2' / '001_patch.py'
+        location.parent.mkdir(parents=True)
+        location.write_text('def apply(ctx): pass\ndef verify(ctx): return False\n')
+
+        def publish(message):
+            self.git('-C', str(origin), 'add', '.')
+            self.git('-C', str(origin), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', message)
+
+        def worker(expected):
+            result = git_update._channel_update(self.root, {'enabled': True})
+            self.assertEqual(result['status'], expected, result)
+            return version.status(self.root, self.runtime)['records']
+
+        with patch.object(git_update, 'queue_update_email', return_value='notice'):
+            publish('broken release')
+            self.assertEqual(worker('updated'), [])
+            attempts = worker('blocked')
+            self.assertEqual(len(attempts), 1)
+            self.assertEqual(worker('blocked'), attempts)
+            self.assertEqual(priority.read(store)['phase'], 'blocked')
+
+            (origin / 'fix-notes.txt').write_text('new revision, still broken')
+            publish('first fix')
+            result = git_update._channel_update(
+                self.root, {'enabled': True, 'retry_failed_patch_on_update': False})
+            self.assertEqual(result['status'], 'blocked')
+            self.assertEqual(version.status(self.root, self.runtime)['records'], attempts)
+
+            self.assertEqual(worker('updated'), attempts)
+            attempts = worker('blocked')
+            self.assertEqual([row['status'] for row in attempts], ['failed', 'failed'])
+            self.assertNotEqual(attempts[0]['commit_hash'], attempts[1]['commit_hash'])
+            self.assertEqual(worker('blocked'), attempts)
+
+            location.write_text('def apply(ctx): pass\ndef verify(ctx): return True\n')
+            publish('working fix')
+            self.assertEqual(worker('updated'), attempts)
+            attempts = worker('verified')
+            self.assertEqual([row['status'] for row in attempts], ['failed', 'failed', 'success'])
+        self.assertEqual(priority.read(store)['phase'], 'idle')
+        self.assertTrue(version.status(self.root, self.runtime)['ready'])
+
+    def test_manual_fast_forward_recovers_on_watchdog_tick(self):
+        store = self.control()
+        self.git_worker(store)
+        self.release('0.7.2')
+        path = self.patch_file('0.7.2', '001_patch', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
+        self.commit()
+        original = self.git('rev-parse', 'HEAD').decode().strip()
+        priority.write(store, {'phase': 'checkout', 'last_completed': 0, 'target': original})
+        self.assertEqual(git_update._channel_update(self.root, {})['status'], 'blocked')
+
+        origin = self.root.parent / 'origin'
+        self.git('clone', str(self.root), str(origin))
+        self.git('remote', 'add', 'origin', str(origin))
+        target = path.relative_to(self.root)
+        (origin / target).write_text('def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.git('-C', str(origin), 'add', str(target))
+        self.git('-C', str(origin), '-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-m', 'fix')
+        self.git('pull', '--ff-only', 'origin', 'master')
+        # A fresh worker verifies the new checkout against the failed attempt.
+        result = git_update._channel_update(self.root, {'enabled': True})
+        self.assertEqual(result['status'], 'verified', result)
+        snapshot = version.status(self.root, self.runtime)
+        self.assertEqual([row['status'] for row in snapshot['records']], ['failed', 'success'])
+        self.assertTrue(snapshot['ready'])
+
     def test_bootstrap_holds_new_business_before_import_after_manual_pull(self):
         control = self.control().directory
         (control / 'worker-settings.json').write_text(json.dumps({'root': str(self.root), 'runtime': str(self.scheduling)}))

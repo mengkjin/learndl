@@ -195,9 +195,12 @@ def load_config(directory: Path, host: str) -> dict:
         _keys(job, {'enabled', 'interval_seconds', 'max_sources', 'max_seconds'} |
               ({'max_gpu_memory_percent', 'progress_timeout_seconds', 'recovery_enabled',
                 'recovery_max_retries', 'recovery_delay_seconds', 'recovery_min_available_memory_percent'}
-               if key == 'idle_worklist' else set()))
+               if key == 'idle_worklist' else set()) |
+              ({'retry_failed_patch_on_update'} if key == 'git_auto_update' else set()))
         if key == 'git_auto_update' and (type(job.get('max_seconds', 45)) is not int or not 10 <= job.get('max_seconds', 45) <= 60):
             raise ValueError('git_auto_update max_seconds must be between 10 and 60')
+        if key == 'git_auto_update' and type(job.get('retry_failed_patch_on_update', True)) is not bool:
+            raise ValueError('git_auto_update retry_failed_patch_on_update must be a boolean')
         if key == 'rl_experiment' and job.get('enabled') and not watchdog['jobs'].get('task_timeouts', {}).get('enabled'):
             raise ValueError('rl_experiment requires task_timeouts supervision')
         if key == 'idle_worklist':

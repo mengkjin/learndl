@@ -342,7 +342,7 @@ def _admitted_update(root, options, *, target_snapshot=None, migrate=None):
     from .autofix_store import Store, state_dir
     store = Store(state_dir())
     state = priority.read(store)
-    if state['phase'] in {'checkout', 'blocked'}:
+    if state['phase'] in {'checkout', 'blocked'} and target_snapshot is None:
         # This is a fresh process after an attempted checkout. Never
         # import/dispatch work from the process that changed the tree.
         deadline = time.monotonic() + options.get('max_seconds', 45)
@@ -374,7 +374,7 @@ def _admitted_update(root, options, *, target_snapshot=None, migrate=None):
         # Even a notice/database error after merge must end this Python process.
         result = {'status': 'error', 'reason': f'{type(exc).__name__}: {exc}',
                   'checkout_attempted': priority.read(store)['phase'] == 'checkout'}
-    if not result.get('checkout_attempted'):
+    if not result.get('checkout_attempted') and state['phase'] != 'blocked':
         priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'result': result})
     return result
 
@@ -422,7 +422,8 @@ def _update(root: Path, options: dict, *, target_snapshot=None) -> dict:
             store = Store(state_dir())
             # Intent precedes the first write to the checkout; crashes remain
             # blocked until a new process verifies the exact intended commit.
-            priority.write(store, dict(priority.read(store), phase='checkout', target=target, before=before))
+            priority.write(store, dict(priority.read(store), phase='checkout', target=target, before=before,
+                                       version_verified=False))
         result['checkout_attempted'] = True
         _git(root, ['-c', 'merge.autostash=false', 'merge', '--ff-only', '--no-edit', '--no-overwrite-ignore', target], deadline)
         after = _git(root, ['rev-parse', 'HEAD'], deadline)
@@ -448,87 +449,124 @@ def _update(root: Path, options: dict, *, target_snapshot=None) -> dict:
         return dict(result, status='error', reason=str(exc))
 
 
+def _automatic_patch_retry(root, runtime, deadline, head=None):
+    """Select a failed patch only once per clean fast-forward commit."""
+    from src.automation import version_patch
+
+    snapshot = version_patch.status(root, runtime)
+    failed = snapshot['failed']
+    if failed is None:
+        return None
+    head = head or _git(root, ['rev-parse', 'HEAD'], deadline)
+    if any(row['patch'] == failed['patch'] and row['commit_hash'] == head for row in snapshot['records']):
+        return None
+    if repository_blocker(root, deadline):
+        return None
+    previous = failed['commit_hash']
+    if _git(root, ['merge-base', previous, head], deadline, allow_failure=True) == previous:
+        return failed['patch']
+    return None
+
+
 def _channel_update(root, options):
-    """Fetch before admission; only an applicable commit reserves business lanes."""
+    """Reconcile data, then fetch only when a fast-forward can be admitted."""
     from . import channels, priority
     from .autofix_store import Store, state_dir
     from .maintenance_gate import permit, MaintenanceBusy, pass_fds
     from .config import installed_config
     from src.automation import version_patch as version
+    from src.automation.patch_services import PatchServices
     from src.proj.util.web.mail_package import atomic_json
+
     store = Store(state_dir())
+    directory = runtime_dir()
+    runtime = directory.parent
     result = {}
-    with portalocker.Lock(str(runtime_dir() / 'git-worker.lock'), timeout=0):
-        state = priority.read(store)
-        activated = version.activation(installed_config())
+    keep_reservation = False
+    with portalocker.Lock(str(directory / 'git-worker.lock'), timeout=0):
+        try:
+            state = priority.read(store)
+            activated = version.activation(installed_config())
+            retry_enabled = activated and bool(options.get('enabled')) and options.get('retry_failed_patch_on_update', True)
+            checkout_pending = state['phase'] in {'checkout', 'blocked'}
+            needs_reconciliation = checkout_pending or (
+                activated and (version.needs_migration(root, runtime) or PatchServices(root, runtime).reconcile_needed())
+            )
 
-        def migrate(fd):
-            if reason := training_blocker():
-                return {'status': 'deferred', 'reason': reason}
-            try:
-                return version.apply_pending(root, runtime_dir().parent, pass_fds=(fd, *pass_fds()),
-                                             notify=queue_version_failure)
-            except Exception as exc:
-                return {'status': 'blocked', 'reason': f'{type(exc).__name__}: {exc}'}
-
-        if state['phase'] not in {'checkout', 'blocked'}:
-            from src.automation.patch_services import PatchServices
-
-            runtime = runtime_dir().parent
-            if activated and (version.needs_migration(root, runtime) or PatchServices(root, runtime).reconcile_needed()):
-                # Detect manual pulls before fetching, even with Git updates disabled.
+            def migrate(fd):
+                if reason := training_blocker():
+                    return {'status': 'deferred', 'reason': reason}
                 try:
-                    with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(runtime_dir()) as fd:
+                    deadline = time.monotonic() + options.get('max_seconds', 45)
+                    retry = None
+                    # An empty ledger can still initialize through apply_pending.
+                    if retry_enabled and version.ledger_path(runtime).is_file():
+                        retry = _automatic_patch_retry(root, runtime, deadline)
+                    return version.apply_pending(root, runtime, pass_fds=(fd, *pass_fds()),
+                                                 notify=queue_version_failure, retry=retry)
+                except Exception as exc:
+                    return {'status': 'blocked', 'reason': f'{type(exc).__name__}: {exc}'}
+
+            if needs_reconciliation:
+                with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory) as fd:
+                    if checkout_pending:
+                        if retry_enabled and state.get('version_verified_head') == state.get('target'):
+                            deadline = time.monotonic() + options.get('max_seconds', 45)
+                            head = _git(root, ['rev-parse', 'HEAD'], deadline)
+                            if head != state['target']:
+                                if retry := _automatic_patch_retry(root, runtime, deadline, head):
+                                    version.verify_manual_checkout(root, runtime, retry=retry)
+                        result = _admitted_update(root, options, migrate=(lambda: migrate(fd)) if activated else None)
+                    else:
                         result = migrate(fd)
-                except (MaintenanceBusy, version.CodeBusy) as exc:
-                    result = {'status': 'deferred', 'reason': str(exc)}
-                finally:
-                    channels.release(store, 'git')
-                    atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
+                state = priority.read(store)
+                if (not retry_enabled or result.get('status') != 'blocked' or not result.get('attempt_id')
+                        or (checkout_pending and not state.get('version_verified'))):
+                    return result
+
+            if not options.get('enabled'):
+                result = {'status': 'disabled'}
                 return result
             deadline = time.monotonic() + options.get('max_seconds', 45)
-            try:
-                if not options.get('enabled'):
-                    channels.release(store, 'git')
-                    return {'status': 'disabled'}
-                if reason := repository_blocker(root, deadline):
-                    channels.release(store, 'git')
-                    return {'status': 'deferred', 'reason': reason}
-                before = _git(root, ['rev-parse', 'HEAD'], deadline)
-                _git(root, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin',
-                            'refs/heads/master:refs/learndl/watchdog-master'], deadline)
-                target = _git(root, ['rev-parse', 'refs/learndl/watchdog-master^{commit}'], deadline)
-                if target == before:
-                    channels.release(store, 'git')
-                    return {'status': 'up_to_date'}
-                if _git(root, ['merge-base', before, target], deadline, allow_failure=True) != before:
-                    channels.release(store, 'git')
-                    return {'status': 'deferred', 'reason': 'local commits or divergent master'}
-                if not channels.reserve(store, 'git', channels.GROUPS):
-                    return {'status': 'deferred', 'reason': 'maintenance occupied or cooling down'}
-            except (OSError, GitUpdateError) as exc:
-                channels.release(store, 'git')
-                return {'status': 'error', 'reason': str(exc)}
-        try:
-            with permit(exclusive=True, blocking=False, task_class='git'):
-                with version.code_lease(runtime_dir()) as fd:
-                    if state['phase'] not in {'checkout', 'blocked'}:
-                        # Manual/non-managed trainer coverage retained as a final check.
-                        if reason := training_blocker():
-                            return {'status': 'deferred', 'reason': reason}
-                        channels.running(store, 'git')
-                    result = _admitted_update(
-                        root, options, target_snapshot=(before, target) if state['phase'] not in {'checkout', 'blocked'} else None,
-                        migrate=(lambda: migrate(fd)) if activated else None)
-                    if not result.get('checkout_attempted') and result.get('status') != 'blocked':
-                        channels.release(store, 'git')
+            if reason := repository_blocker(root, deadline):
+                result = dict(result, git_update={'status': 'deferred', 'reason': reason}) if result else {
+                    'status': 'deferred', 'reason': reason}
+                return result
+            before = _git(root, ['rev-parse', 'HEAD'], deadline)
+            _git(root, ['fetch', '--no-tags', '--no-recurse-submodules', 'origin',
+                        'refs/heads/master:refs/learndl/watchdog-master'], deadline)
+            target = _git(root, ['rev-parse', 'refs/learndl/watchdog-master^{commit}'], deadline)
+            if target == before:
+                result = result or {'status': 'up_to_date'}
+                return result
+            if _git(root, ['merge-base', before, target], deadline, allow_failure=True) != before:
+                result = {'status': 'deferred', 'reason': 'local commits or divergent master'}
+                return result
+            keep_reservation = True
+            if not channels.reserve(store, 'git', channels.GROUPS):
+                result = {'status': 'deferred', 'reason': 'maintenance occupied or cooling down'}
+                return result
+            with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory):
+                if reason := training_blocker():
+                    result = {'status': 'deferred', 'reason': reason}
                     return result
+                channels.running(store, 'git')
+                result = _admitted_update(root, options, target_snapshot=(before, target))
+                keep_reservation = False
+                return result
         except (portalocker.LockException, MaintenanceBusy, version.CodeBusy) as exc:
             from .maintenance_notice import record_failure
             record_failure(store, 'git', exc)
-            return {'status': 'deferred', 'reason': str(exc) or 'code users still active'}
+            result = {'status': 'deferred', 'reason': str(exc) or 'code users still active'}
+            return result
+        except (OSError, GitUpdateError, version.MigrationError) as exc:
+            result = dict(result, status='error', reason=str(exc))
+            return result
         finally:
-            atomic_json(runtime_dir() / 'git-channel.json', dict(result, checked_at=time.time()))
+            if (not keep_reservation and not result.get('checkout_attempted')
+                    and priority.read(store)['phase'] not in {'checkout', 'blocked'}):
+                channels.release(store, 'git')
+            atomic_json(directory / 'git-channel.json', dict(result, checked_at=time.time()))
 
 
 def main():

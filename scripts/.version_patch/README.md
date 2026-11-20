@@ -136,6 +136,12 @@ Run from the project checkout with the project's Python environment.
   of an already verified checkout, as long as the failed patch ID and the
   successful patches are preserved. Task admission resumes after the next
   Git maintenance verification if a checkout was still pending.
+- With automatic Git updates enabled, a recorded patch failure still allows
+  a clean fast-forward. The worker automatically retries the first unfinished
+  patch once on each newly verified descendant commit. Set
+  `watchdog.jobs.git_auto_update.retry_failed_patch_on_update: false` to require
+  explicit retries. To retry the same commit after an operational fix, run the
+  reported `version_patch retry` command.
 - Restore a missing or damaged ledger from backup before resuming. Keep the
   ledger with the host data when recovering a server.
   A code downgrade below the data version requires an operator-managed restore.
