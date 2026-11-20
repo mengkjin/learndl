@@ -5,7 +5,6 @@ from contextlib import ExitStack
 from hashlib import sha256
 import json
 from pathlib import Path
-import subprocess
 from typing import NotRequired, TypedDict
 
 from src.automation.artifact_exchange.core import (
@@ -209,10 +208,9 @@ def apply(config, monitor, report):
             if src.exists():
                 if dst.exists() or fingerprint(src) != expected:
                     raise ValueError(f'Source changed or destination occupied: {src} -> {dst}')
-                if src.is_dir():
-                    probe = subprocess.run(['lsof', '-Ff', '+D', str(src)], capture_output=True, text=True, timeout=120)
-                    if probe.returncode not in (0, 1) or probe.stderr or probe.stdout:
-                        raise ValueError(f'Directory in use or lsof failed: {src} {probe.stderr}')
+                from src.automation.patch_diagnostics import check_open_files
+
+                check_open_files(src, timeout=120)
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 src.rename(dst)
                 fsync_dir(src.parent)

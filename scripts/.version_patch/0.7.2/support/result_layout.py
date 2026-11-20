@@ -98,10 +98,9 @@ def _same_db(left, right):
 def _idle(path):
     if not path.exists():
         return
-    args = ['+D', str(path)] if path.is_dir() else ['--', str(path)]
-    probe = subprocess.run(['lsof', '-Fn', *args], capture_output=True, timeout=60, check=False)
-    if probe.stdout or probe.stderr or probe.returncode != 1:
-        raise RuntimeError(f'Open files or uncertain lsof result: {path}')
+    from src.automation.patch_diagnostics import check_open_files
+
+    check_open_files(path)
 
 
 def _check(move, *, check_open=True):

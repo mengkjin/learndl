@@ -120,20 +120,71 @@ Run from the project checkout with the project's Python environment.
   with the actual version of the files. The system blocks until this is set.
   The check includes data, models, results, local Optuna and TensorBoard files,
   and task mail artifacts. File timestamps are not used to infer the version.
-- After a failure, inspect the attempt under
-  `PATH.runtime/version_patch/attempts/` and check the patch's backup.
-  Correct the cause and run
+- A failed attempt reports the underlying exception, affected paths when
+  available, and the next retry command. `status` exposes failure details and
+  the notice's delivery state. The watchdog retries SMTP independently. Inspect
+  `patch.log`, `failure.json`, and the `backup/` directory alongside it. For
+  `0.7.2/001`, the first blocked move in `backup/experiment-results.json` names
+  the source and destination. `lsof` diagnostics identify open files and their
+  processes, and separately report missing tools, timeouts, and probe errors.
+- After fixing the cause, run
   `python -m src.automation.version_patch retry 0.7.2/001` using the reported
-  patch ID. The command resumes the first unfinished patch and then later
-  patches. An interrupted attempt requires the same explicit retry.
+  patch ID. The same command resumes an interrupted attempt.
 - Retry can use corrected committed code on a clean fast-forward descendant
   of an already verified checkout, as long as the failed patch ID and the
   successful patches are preserved. Task admission resumes after the next
   Git maintenance verification if a checkout was still pending.
-- The mail worker retries delivery independently. The email identifies the
-  failed attempt and log path. Restore a missing or damaged ledger from backup
-  before resuming. Keep the ledger with the host data when recovering a server.
+- Restore a missing or damaged ledger from backup before resuming. Keep the
+  ledger with the host data when recovering a server.
   A code downgrade below the data version requires an operator-managed restore.
+
+### Interface maintenance
+
+Manual runs and the automatic maintenance worker share the code and maintenance
+locks. Keep the watchdog available for failure notices and CLI recovery.
+
+Before applying patches, the runner records the running managed console,
+managed panels and dashboard instances, and any registered desktop CLI
+reporting an idle menu. It stops those processes by recorded identity. Existing
+CLI sessions from older code may need a manual exit because their idle state
+is unavailable. A service or external process that still holds a file can
+appear in the patch diagnostic.
+
+After a failure, the original console and Task Center are restored for
+diagnostics. After success, the remaining recorded interfaces are restored
+using their original ports and migrated sources. The desktop CLI returns to
+its menu through its registered desktop recovery session. If a port is busy,
+a source cannot be resolved, or the desktop session is unavailable, the
+migration remains applied and the interface recovery report lists the problem.
+Use `python -m src.automation.version_patch restore-services` to retry
+interface recovery after fixing the reported condition.
+
+### Migration checks for upgrades through 0.7.7
+
+- **0.7.2/001** verifies TensorBoard moves against file hashes, then moves or
+  copies experiments. Optuna uses SQLite backup and retains the original
+  database and its sidecars. Identical copies can survive a retry. Conflicting
+  contents require inspection before retry.
+- **0.7.2/002** fixes the original seven-day mail window and reuses durable
+  artifact delivery identifiers. Confirm the publisher configuration and
+  inspect `recent-mail.json` for missing or unverifiable packages.
+- **0.7.3/001** moves factor residual intermediates to model snapshots.
+  Already moved source directories disappear from the next discovery.
+  Two existing copies are preserved for inspection.
+- **0.7.4/001** uses a persistent move journal and per-tree fingerprints to
+  resume after renames. Check destination conflicts and preserve the journal
+  when investigating a partially applied layout migration.
+- **0.7.5/001** renames the synchronized model archive and retargets saved
+  references. A populated old and new archive requires inspecting both trees.
+- **0.7.6/001** builds model properties and verifies published or durably
+  prepared historical metadata. It keeps a source inventory and delivery
+  journal for retry. Ambiguous historical identities are reported.
+- **0.7.7/001** backs up saved YAML before renaming the status callback.
+  The runner accepts successful attempts for the two known released
+  fingerprints of this exact entry point.
+- **0.7.7/002** consolidates legacy model batches into build indexes, remaps
+  references, and keeps original batches in the attempt's backup directory.
+  Inspect content verification and publication errors before resuming.
 
 Hosts upgraded from the previous name keep using their existing
 `PATH.runtime/version_autofix/` directory. The new CLI reads the same history

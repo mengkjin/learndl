@@ -26,6 +26,7 @@ __all__ = [
     'deliver',
     'launch',
     'main',
+    'menu_idle',
 ]
 
 import argparse
@@ -140,7 +141,11 @@ def register(root: Path, path: Path | None = None) -> bool:
     if sys.platform != 'linux' or not (os.getenv('DISPLAY') or os.getenv('WAYLAND_DISPLAY')):
         return True
     path = path or state_path()
+    from src.automation.patch_services import interfaces_paused
+
     with lock(path):
+        if interfaces_paused(root):
+            return False
         state = load(path)
         current = process_identity()
         if hub_alive(state) and state['process'] != current:
@@ -148,7 +153,7 @@ def register(root: Path, path: Path | None = None) -> bool:
         state.update({'version': 1, 'uid': os.getuid(), 'root': str(root.resolve()),
                       'python': sys.executable, 'process': current, 'desired': True,
                       'terminal_process': terminal_identity(),
-                      'environment': desktop_environment(), 'failures': 0, 'pending_until': 0,
+                      'environment': desktop_environment(), 'menu_idle': False, 'failures': 0, 'pending_until': 0,
                       'next_attempt': 0, 'last_error': None, 'last_launch_error': None, 'failure_paused': False})
         save(path, state)
     return True
@@ -165,6 +170,20 @@ def stop(*, reload: bool = False, path: Path | None = None) -> None:
         if state.get('process') == process_identity():
             state.update({'desired': reload, 'process': {}, 'pending_until': time.time() + 60 if reload else 0})
             save(path, state)
+
+
+def menu_idle(waiting: bool, root: Path) -> bool:
+    """Advertise the menu wait and refuse new actions while maintenance is active."""
+    from src.automation.patch_services import interfaces_paused
+
+    path = state_path()
+    if sys.platform == 'linux' and path.exists():
+        with lock(path):
+            state = load(path)
+            if state.get('process') == process_identity():
+                state['menu_idle'] = waiting
+                save(path, state)
+    return not interfaces_paused(root)
 
 
 def session_active(env: dict) -> bool:
@@ -197,7 +216,7 @@ def dispatch(state: dict, path: Path) -> None:
     for key in ENV_KEYS:
         if key in env:
             argv.append(f'--setenv={key}={env[key]}')
-    argv += ['--', state['python'], str(Path(__file__).resolve()), 'launch', '--state', str(path)]
+    argv += ['--', state['python'], '-m', 'src.automation.cli_recovery', 'launch', '--state', str(path)]
     result = subprocess.run(argv, env=env, capture_output=True, text=True, timeout=5)
     if result.returncode:
         raise RuntimeError(result.stderr[-2048:] or f'systemd-run exit {result.returncode}')
@@ -214,6 +233,10 @@ def tick(path: Path | None = None, *, now: float | None = None) -> dict:
             state.update({'last_status': status, 'last_checked': now})
             save(path, state)
             return {'status': status}
+        from src.automation.patch_services import interfaces_paused
+
+        if state.get('root') and interfaces_paused(Path(state['root'])):
+            return report('version-maintenance')
         if not state.get('desired') or state.get('paused') or state.get('failure_paused'):
             return report('paused')
         if hub_alive(state):
@@ -276,6 +299,11 @@ def launch(path: Path) -> None:
     state = load(path)
     if not state.get('desired') or state.get('paused') or hub_alive(state):
         return
+    if __package__:
+        from src.automation.patch_services import interfaces_paused
+
+        if interfaces_paused(Path(state['root'])):
+            return
     command = [state['python'], '-c', 'from src.api.calls.launcher import DirectCallHub; DirectCallHub.go(_recovery=True)']
     env = dict(os.environ)
     socket = env.get('WEZTERM_UNIX_SOCKET')

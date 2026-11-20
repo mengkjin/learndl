@@ -133,37 +133,40 @@ class Manager:
         self.errors[key] = ''
         def work():
             try:
-                matches = self.discover(key)
-                if action in ('stop', 'restart', 'scan'):
-                    if not matches or matches[0].pid != identity or matches[0].create_time() != created:
-                        raise ValueError('Service identity changed; refresh and try again')
-                if action == 'scan':
-                    record = json.loads((STATE / 'storage.json').read_text())
-                    from urllib.request import Request
-                    with urlopen(Request(record['control'], data=b'{}', method='POST'), timeout=5):
-                        pass
-                else:
-                    if action in ('stop', 'restart'):
-                        process = matches[0]
-                        process_created = process.create_time()
-                        targets = [process] if key in HEALTH_SERVICES else process.children(recursive=True) + [process]
-                        if psutil.Process(process.pid).create_time() != process_created:
-                            raise ValueError('Process identity changed')
-                        for target in targets:
-                            try:
-                                target.terminate()
-                            except psutil.NoSuchProcess:
-                                pass
-                        _, alive = psutil.wait_procs(targets, timeout=5)
-                        for target in alive:
-                            target.kill()
-                        _, alive = psutil.wait_procs(alive, timeout=3)
-                        if alive:
-                            raise RuntimeError('Service could not be stopped')
-                    if action in ('start', 'restart'):
-                        if self.discover(key):
-                            raise ValueError('A service instance already exists')
-                        self.start(key)
+                from src.automation.patch_services import interface_operation
+
+                with interface_operation(STATE, key=key):
+                    matches = self.discover(key)
+                    if action in ('stop', 'restart', 'scan'):
+                        if not matches or matches[0].pid != identity or matches[0].create_time() != created:
+                            raise ValueError('Service identity changed; refresh and try again')
+                    if action == 'scan':
+                        record = json.loads((STATE / 'storage.json').read_text())
+                        from urllib.request import Request
+                        with urlopen(Request(record['control'], data=b'{}', method='POST'), timeout=5):
+                            pass
+                    else:
+                        if action in ('stop', 'restart'):
+                            process = matches[0]
+                            process_created = process.create_time()
+                            targets = [process] if key in HEALTH_SERVICES else process.children(recursive=True) + [process]
+                            if psutil.Process(process.pid).create_time() != process_created:
+                                raise ValueError('Process identity changed')
+                            for target in targets:
+                                try:
+                                    target.terminate()
+                                except psutil.NoSuchProcess:
+                                    pass
+                            _, alive = psutil.wait_procs(targets, timeout=5)
+                            for target in alive:
+                                target.kill()
+                            _, alive = psutil.wait_procs(alive, timeout=3)
+                            if alive:
+                                raise RuntimeError('Service could not be stopped')
+                        if action in ('start', 'restart'):
+                            if self.discover(key):
+                                raise ValueError('A service instance already exists')
+                            self.start(key)
             except Exception as exc:
                 self.errors[key] = str(exc)
             finally:
@@ -171,9 +174,9 @@ class Manager:
                 self.locks[key].release()
         threading.Thread(target=work, daemon=True).start()
 
-    def start(self, key):
+    def start(self, key, *, port=None):
         definition = SERVICES[key]
-        port = definition['port']
+        port = definition['port'] if port is None else port
         import socket
         with socket.socket() as probe:
             probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -187,7 +190,7 @@ class Manager:
         if log.exists() and log.stat().st_size > 5_000_000:
             log.replace(log.with_suffix('.log.old'))
         with log.open('ab') as output:
-            child = subprocess.Popen(args, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
+            child = subprocess.Popen(args, cwd=ROOT, env={**os.environ, f'LEARNDL_{key.upper()}_PORT': str(port)}, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
                                      start_new_session=os.name != 'nt',
                                      creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
         self.children[key] = child

@@ -303,24 +303,33 @@ class DirectCallHub(DirectCall):
         raise ValueError(f'Unknown top-level choice: {choice}')
 
     def run(self) -> None:
+        from src.automation.cli_recovery import menu_idle
+        from src.proj import PATH
         from src.proj.util.cli import AskFor
 
         for loop in AskFor.LoopTillExit(ask=False, message='Launch another action?'):
-            flag = AskFor.Options(
-                list(_TOP_LEVEL_LABELS),
-                confirm=False,
-                multiple=False,
-                allow_back=False,
-                title='DirectCall Hub — what do you want to do?',
-                help_description=(
-                    'Git Pull runs here and restarts the hub on success. Train Schedule Model opens a split pane; '
-                    'Learndl Monitor opens the background console without a new pane. '
-                    'The remaining entries open submenus. Watchdog management defaults to preview. '
-                    'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
-                ),
-                option_help=self._top_level_help(),
-            )
+            menu_idle(True, PATH.main)
+            try:
+                flag = AskFor.Options(
+                    list(_TOP_LEVEL_LABELS),
+                    confirm=False,
+                    multiple=False,
+                    allow_back=False,
+                    title='DirectCall Hub — what do you want to do?',
+                    help_description=(
+                        'Git Pull runs here and restarts the hub on success. Train Schedule Model opens a split pane; '
+                        'Learndl Monitor opens the background console without a new pane. '
+                        'The remaining entries open submenus. Watchdog management defaults to preview. '
+                        'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
+                    ),
+                    option_help=self._top_level_help(),
+                )
+            finally:
+                available = menu_idle(False, PATH.main)
             if not loop.set_flag(flag) or flag.result is None:
                 continue
 
-            self._dispatch_top_level(flag.result)
+            if available:
+                self._dispatch_top_level(flag.result)
+            else:
+                Logger.note('Version patch maintenance is in progress. Try again after it finishes.')

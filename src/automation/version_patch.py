@@ -24,6 +24,7 @@ import uuid
 
 from src.automation.console import logger
 from src.automation.paths import ROOT
+from src.automation.patch_diagnostics import failure_summary
 
 __all__ = [
     'AttemptRecord',
@@ -276,6 +277,19 @@ def _fresh_baseline(root: Path, runtime: Path, target: str) -> str:
     return target
 
 
+def _matches_success(patch: Patch, path: str, digest: str) -> bool:
+    if path != patch.relative_path:
+        return False
+    if digest == patch.digest:
+        return True
+    # The 29da4f5c replacement kept the same transformation and verification,
+    # and changed only temporary file handling and the filesystem helper import.
+    return (patch.id == '0.7.7/001'
+            and patch.relative_path == 'scripts/.version_patch/0.7.7/001_status_logger.py'
+            and patch.digest == 'b68b6b3bec58dbae2541085f28dc8a532c1c237cd8049e64b7628e2644ce8c93'
+            and digest == '8fcdcac45e7b16adf9c0eeefa5f9f097b50f5787cb5e4256d053ba6ce2cb2020')
+
+
 def inspect(root: Path, runtime: Path, db: sqlite3.Connection | None) -> MigrationStatus:
     target = code_version(root)
     baseline, applied = read_state(db) if db is not None else (None, None)
@@ -295,7 +309,7 @@ def inspect(root: Path, runtime: Path, db: sqlite3.Connection | None) -> Migrati
             recorded_path = row['path']
             if recorded_path.startswith(_LEGACY_PATCH_DIRECTORY + '/'):
                 recorded_path = PATCH_DIRECTORY + recorded_path.removeprefix(_LEGACY_PATCH_DIRECTORY)
-            if patch is None or (patch.relative_path, patch.digest) != (recorded_path, row['digest']):
+            if patch is None or not _matches_success(patch, recorded_path, row['digest']):
                 raise MigrationError(f'Successful patch changed or disappeared: {row["patch"]}')
     pending = [patch for patch in patches.values() if version_key(baseline or current) < version_key(patch.version)
                and (patch.id not in latest or latest[patch.id]['status'] != 'success')]
@@ -523,15 +537,45 @@ def run_child(path: Path, digest: str, timeout: int, payload: str) -> None:
     apply, verify = module.apply, module.verify
     if not callable(apply) or not callable(verify):
         raise MigrationError('Patch must provide callable apply and verify')
-    apply(context)
-    if verify(context) is not True:
-        raise MigrationError('Patch verification did not return True')
+    try:
+        apply(context)
+    except Exception:
+        logger.error('Version patch step: apply')
+        raise
+    try:
+        if verify(context) is not True:
+            raise MigrationError('Patch verification did not return True')
+    except Exception:
+        logger.error('Version patch step: verify')
+        raise
 
 
 def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
                   notify: Callable[[AttemptRecord], None], retry: str | None = None,
                   baseline: str | None = None) -> dict:
     """Caller holds both exclusive leases for the entire transition."""
+    from src.automation.patch_services import PatchServices
+
+    services = PatchServices(root, runtime) if root.resolve() == ROOT else None
+    try:
+        result = _apply_pending(root, runtime, pass_fds=pass_fds, notify=notify, retry=retry,
+                                baseline=baseline, services=services)
+    except BaseException:
+        if services and services.journal.exists():
+            try:
+                services.restore(ready=False)
+            except Exception as exc:
+                logger.error('Could not recover diagnostic interfaces: %s', exc)
+        raise
+    if services and result['status'] in {'ready', 'blocked'} and services.journal.exists():
+        try:
+            result['interfaces'] = services.restore(ready=result['status'] == 'ready')
+        except Exception as exc:
+            result['interfaces'] = {'errors': {'restore': str(exc)}}
+    return result
+
+
+def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services):
     with closing(connect(runtime)) as db:
         stored_baseline, _ = read_state(db)
         if baseline is not None:
@@ -558,13 +602,18 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
             db.execute("UPDATE attempts SET status='interrupted', finished=?, error=? WHERE status='running'",
                        (time.time(), 'Migration worker exited before recording completion'))
         for row in db.execute("SELECT * FROM attempts WHERE status IN ('failed','interrupted')"):
-            notify(cast(AttemptRecord, dict(row)))  # Existing outbox deduplicates by attempt ID.
+            try:
+                notify(cast(AttemptRecord, dict(row)))
+            except Exception as exc:
+                logger.error('Could not queue version patch email: %s', exc)  # Existing outbox deduplicates by attempt ID.
         state = inspect(root, runtime, db)
         failure = state['failed']
         if retry is not None and (not failure or retry != failure['patch']):
             raise MigrationError('retry requires the first failed or interrupted patch ID')
         if failure and retry is None:
-            return {'status': 'blocked', 'reason': f'{failure["patch"]} requires manual retry'}
+            summary = failure_summary(failure)
+            return {'status': 'blocked', 'reason': f'{failure["patch"]} requires manual retry: {summary["error"]}',
+                    'failure': summary, 'log': failure['log_path'], 'attempt_id': failure['id']}
 
         commit = git(root, 'rev-parse', 'HEAD').decode().strip()
         committed_catalog(root, commit, state['target'])
@@ -586,7 +635,18 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
                             patch.id, time.time(), str(log)))
             context = Context(root, source_version, patch.version, log, backups)
             try:
+                if index == 0 and services is not None:
+                    try:
+                        services.pause()
+                    except Exception as exc:
+                        raise MigrationError(f'Could not pause project interfaces: {exc}') from exc
+                if patch.id == '0.7.2/001' and services is not None:
+                    for old in db.execute('SELECT log_path FROM attempts WHERE patch=? AND id!=?',
+                                          (patch.id, key)):
+                        services.collect_paths(Path(old['log_path']).parent / 'backup')
                 run_patch(root, patch, context, pass_fds)
+                if services is not None:
+                    services.collect_paths(backups)
                 if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
                     raise MigrationError('Checkout changed during patch execution')
                 check_committed(root, commit, patch)
@@ -596,8 +656,18 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
                     db.execute("UPDATE attempts SET status='failed', finished=?, error=? WHERE id=?",
                                (time.time(), reason, key))
                 row = db.execute('SELECT * FROM attempts WHERE id=?', (key,)).fetchone()
-                notify(cast(AttemptRecord, dict(row)))
-                return {'status': 'blocked', 'reason': f'{patch.id} failed: {reason}', 'log': str(log)}
+                attempt = cast(AttemptRecord, dict(row))
+                try:
+                    summary = failure_summary(attempt, persist=True)
+                except OSError as exc:
+                    logger.error('Could not save failure summary: %s', exc)
+                    summary = failure_summary(attempt)
+                try:
+                    notify(attempt)
+                except Exception as exc:
+                    logger.error('Could not queue version patch email: %s', exc)
+                return {'status': 'blocked', 'reason': f'{patch.id} failed: {summary["error"]}',
+                        'log': str(log), 'failure': summary, 'attempt_id': key}
             with db:
                 db.execute("UPDATE attempts SET status='success', finished=? WHERE id=?", (time.time(), key))
                 if index + 1 == len(pending) or pending[index + 1].version != patch.version:
@@ -616,13 +686,13 @@ def main() -> int:
         return 0
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
-    for command in ('status', 'plan', 'apply'):
+    for command in ('status', 'plan', 'apply', 'restore-services'):
         commands.add_parser(command)
     commands.add_parser('retry').add_argument('patch_id')
     commands.add_parser('init').add_argument('--baseline', required=True)
     args = parser.parse_args()
     from src.automation.scheduling.config import installed_config, runtime_dir
-    from src.automation.scheduling.git_update import queue_version_failure, training_blocker
+    from src.automation.scheduling.git_update import queue_version_failure, training_blocker, version_failure_mail_status
     from src.automation.scheduling.maintenance_gate import MaintenanceBusy, pass_fds, permit
 
     directory = runtime_dir()
@@ -631,10 +701,24 @@ def main() -> int:
     try:
         result: dict[str, object]
         if args.command in {'status', 'plan'}:
+            from src.automation.patch_services import PatchServices
+
             snapshot = status(ROOT, directory.parent, required=required)
             result = dict(snapshot, pending=[asdict(patch) for patch in snapshot['pending']])
+            if snapshot['failed']:
+                failure = snapshot['failed']
+                result['failure'] = failure_summary(failure)
+                result['failure_email'] = version_failure_mail_status(failure['id'])
+            if interfaces := PatchServices(ROOT, directory.parent).report():
+                result['interfaces'] = interfaces
             if args.command == 'plan':
                 del result['records']
+        elif args.command == 'restore-services':
+            from src.automation.patch_services import PatchServices
+
+            with permit(exclusive=True, blocking=False, task_class='git'), code_lease(directory):
+                snapshot = status(ROOT, directory.parent, required=required)
+                result = dict(PatchServices(ROOT, directory.parent).restore(ready=snapshot['ready']))
         else:
             directory.mkdir(parents=True, exist_ok=True)
             with permit(exclusive=True, blocking=False, task_class='git'), code_lease(directory) as fd:
@@ -647,8 +731,12 @@ def main() -> int:
                 result = apply_pending(ROOT, directory.parent, pass_fds=(fd, *pass_fds()),
                                        notify=queue_version_failure, retry=retry,
                                        baseline=getattr(args, 'baseline', None))
+        if isinstance(attempt_id := result.get('attempt_id'), str):
+            result['failure_email'] = version_failure_mail_status(attempt_id)
         logger.info(json.dumps(result, ensure_ascii=False, indent=2))
-        return int(result.get('status') == 'blocked')
+        interfaces = result.get('interfaces')
+        return int(result.get('status') == 'blocked' or bool(result.get('errors'))
+                   or (isinstance(interfaces, dict) and bool(interfaces.get('errors'))))
     except (MigrationError, MaintenanceBusy, OSError, ValueError, SyntaxError, sqlite3.Error, subprocess.SubprocessError) as exc:
         logger.error('Version migration: %s', exc)
         return 1

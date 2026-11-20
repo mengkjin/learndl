@@ -147,6 +147,12 @@ class Instances:
         return sorted(rows, key=lambda row: (row['created'], row['pid']))
 
     def act(self, data):
+        from src.automation.patch_services import interface_operation
+
+        with interface_operation(self.state.parent, key='experiments'):
+            return self._operate(data)
+
+    def _operate(self, data):
         if data.get('action') == 'email':
             # Packaging/mail must not hold the process-control lock.
             from src.api.learndl_monitor.experiment_mail import send_experiment
@@ -162,7 +168,12 @@ class Instances:
         with portalocker.Lock(str(self.state / 'operations.lock'), timeout=1):
             return self._act(data)
 
-    def _act(self, data, attempt=0):
+    def start_for_maintenance(self, kind, source, *, port):
+        """Start a previous instance while its caller holds the interface lock."""
+        with portalocker.Lock(str(self.state / 'operations.lock'), timeout=1):
+            return self._act({'action': 'start', 'kind': kind, 'source': source}, preferred_port=port)
+
+    def _act(self, data, attempt=0, *, preferred_port=None):
         action = data.get('action')
         kind = data.get('kind')
         if kind not in KINDS:
@@ -231,7 +242,8 @@ class Instances:
             return {'instance': existing, 'reused': True}
         if sum(row['kind'] == kind for row in rows) >= self.settings()[kind]:
             raise ValueError('Instance limit reached (including external instances)')
-        for port in range(KINDS[kind][1], KINDS[kind][1] + 94):
+        ports = (preferred_port,) if preferred_port else range(KINDS[kind][1], KINDS[kind][1] + 94)
+        for port in ports:
             with socket.socket() as probe:
                 probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 try:
@@ -260,7 +272,7 @@ class Instances:
             if child.poll() is not None:
                 detail = log.read_text(errors='replace')[-3000:]
                 if attempt < 2 and ('address already in use' in detail.lower() or 'port is in use' in detail.lower()):
-                    return self._act(data, attempt + 1)
+                    return self._act(data, attempt + 1, preferred_port=preferred_port)
                 raise RuntimeError(f'Dashboard exited: {detail}')
             try:
                 with urlopen(f'http://127.0.0.1:{port}', timeout=.5) as response:

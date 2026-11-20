@@ -4,6 +4,7 @@ from __future__ import annotations
 __all__ = [
     'queue_update_email',
     'queue_version_failure',
+    'version_failure_mail_status',
     'deliver_update_emails',
     'GitUpdateError',
     'repository_blocker',
@@ -20,6 +21,7 @@ import subprocess
 import time
 import uuid
 from pathlib import Path
+from contextlib import closing
 from datetime import datetime, timezone
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -62,10 +64,31 @@ def queue_version_failure(attempt: AttemptRecord) -> None:
     """Queue one durable notification per failed or interrupted attempt."""
     data = {key: attempt[key] for key in
             ('patch', 'commit_hash', 'host', 'attempt', 'status', 'log_path')}
+    from src.automation.patch_diagnostics import failure_summary
+
     data['kind'] = 'version_patch_failure'
+    data['failure'] = failure_summary(attempt)
     with _mail_store().connect() as connection:
         connection.execute('INSERT OR IGNORE INTO git_update_mail(id,data) VALUES (?,?)',
                            ('version-' + attempt['id'], json.dumps(data)))
+
+
+def version_failure_mail_status(attempt_id: str) -> str:
+    """Read the failure notice status without creating the mail store."""
+    import sqlite3
+
+    path = runtime_dir() / 'runs.sqlite'
+    try:
+        with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as connection:
+            row = connection.execute('SELECT sent,data FROM git_update_mail WHERE id=?',
+                                     ('version-' + attempt_id,)).fetchone()
+    except (OSError, sqlite3.Error):
+        return 'unavailable'
+    if row is None:
+        return 'not queued'
+    if row[0]:
+        return 'SMTP accepted'
+    return 'waiting for retry' if json.loads(row[1]).get('delivery_attempted') else 'queued'
 
 
 def _record_repository_status(root: Path, status: str) -> None:
@@ -133,10 +156,17 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
         data = json.loads(raw)
         if data.get('kind') == 'version_patch_failure':
             subject = f'Learndl version patch failed - {data["host"]} - {data["patch"]}'
+            from src.automation.patch_diagnostics import failure_summary
+
+            failure = data.get('failure') or failure_summary(data)
             body = (f'Patch: {data["patch"]}\nCommit: {data["commit_hash"]}\n'
-                    f'Attempt: {data["attempt"]} ({data["status"]})\nLog: {data["log_path"]}\n'
-                    'New business tasks are paused. Inspect the log and backups, then run '
-                    f'python -m src.automation.version_patch retry {data["patch"]}.')
+                    f'Attempt: {data["attempt"]} ({data["status"]})\n'
+                    f'Step: {failure.get("step", "run")}\nError: {failure.get("error", "See the patch log")}\n')
+            for field in ('source', 'target', 'item', 'blocked_count', 'report', 'backup_dir'):
+                if field in failure:
+                    body += f'{field}: {failure[field]}\n'
+            body += (f'Log: {data["log_path"]}\nNew business tasks are paused.\n'
+                     f'Retry: {failure.get("retry") or (".venv/bin/python -m src.automation.version_patch retry " + data["patch"])}')
         elif data.get('kind') == 'git_operation':
             subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
             body = data['body']
@@ -163,6 +193,11 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
             with store.connect() as connection:
                 connection.execute('UPDATE git_update_mail SET sent=1 WHERE id=?', (key,))
         else:
+            if data.get('kind') == 'version_patch_failure' and not data.get('delivery_attempted'):
+                data['delivery_attempted'] = True
+                with store.connect() as connection:
+                    connection.execute('UPDATE git_update_mail SET data=? WHERE id=? AND sent=0',
+                                       (json.dumps(data), key))
             delivered = False
     return delivered
 
@@ -437,7 +472,10 @@ def _channel_update(root, options):
                 return {'status': 'blocked', 'reason': f'{type(exc).__name__}: {exc}'}
 
         if state['phase'] not in {'checkout', 'blocked'}:
-            if activated and version.needs_migration(root, runtime_dir().parent):
+            from src.automation.patch_services import PatchServices
+
+            runtime = runtime_dir().parent
+            if activated and (version.needs_migration(root, runtime) or PatchServices(root, runtime).reconcile_needed()):
                 # Detect manual pulls before fetching, even with Git updates disabled.
                 try:
                     with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(runtime_dir()) as fd:

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import webbrowser
 
 import portalocker
+import psutil
 
 from .services import ROOT, STATE, Manager, SERVICES
 
@@ -29,11 +30,13 @@ def main():
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     record = STATE / 'console.json'
     if not args.serve:
-        with portalocker.Lock(str(STATE / 'launch.lock'), timeout=5):
+        from src.automation.patch_services import interface_operation
+
+        with interface_operation(STATE, key='console'), portalocker.Lock(str(STATE / 'launch.lock'), timeout=5):
             existing = None
             try:
                 existing = json.loads(record.read_text())
-                with urlopen(Request(existing['url'] + '/api/services', headers={'Authorization': 'Bearer ' + existing['token']}), timeout=2) as response:
+                with urlopen(Request(existing['url'] + '/api/services', headers={'Authorization': 'Bearer ' + existing['token'], 'Origin': existing['url']}), timeout=2) as response:
                     assert json.load(response)['application'] == 'learndl-monitor'
             except (OSError, ValueError, AssertionError, KeyError):
                 existing = None
@@ -134,7 +137,7 @@ def main():
 
     with portalocker.Lock(str(STATE / 'server.lock'), timeout=0):
         with ThreadingHTTPServer(('127.0.0.1', args.port), Handler) as server:
-            record.write_text(json.dumps({'url': origin, 'token': token, 'pid': os.getpid()}))
+            record.write_text(json.dumps({'url': origin, 'token': token, 'pid': os.getpid(), 'created': psutil.Process().create_time()}))
             record.chmod(0o600)
             server.serve_forever()
 
