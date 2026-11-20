@@ -38,7 +38,7 @@ class MicrocapRepairTest(unittest.TestCase):
                     rebalance_portfolio=lambda d: weights, index_return=lambda d: 0.02
                 )
                 paths = SimpleNamespace(
-                    result=root / "results", datacache=root / "cache"
+                    rslt_custom=root / "results/custom", datacache=root / "cache"
                 )
 
                 def dump_path(key, frame):
@@ -238,7 +238,7 @@ class MicrocapRepairTest(unittest.TestCase):
     def test_numpy_dates_do_not_mask_original_failure(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)
-            with (patch.object(repair, "PATH", SimpleNamespace(result=root)),
+            with (patch.object(repair, "PATH", SimpleNamespace(rslt_custom=root)),
                   patch.object(repair.CALENDAR, "updated", return_value=np.int64(20261118)),
                   patch.object(repair.DB, "path", side_effect=ValueError("original price failure")),
                   patch("src.automation.artifact_exchange.research.register") as register):

@@ -37,7 +37,7 @@ class PriceRepairPipelineTest(unittest.TestCase):
             with self.subTest(dry=dry), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 candidate = pd.DataFrame({'secid': [1], 'close': [10.]})
-                with (patch.object(repair, 'PATH', SimpleNamespace(result=root)),
+                with (patch.object(repair, 'PATH', SimpleNamespace(rslt_custom=root)),
                       patch.object(repair.DB, 'dates', return_value=Dates([20041230, 20041231])),
                       patch.object(repair.DB, 'path', side_effect=lambda source, key, *date: root / f'{key}{date}.feather'),
                       patch.object(adjprice, 'calc_adjprice', return_value=candidate) as calc,
@@ -71,14 +71,14 @@ class PriceRepairPipelineTest(unittest.TestCase):
         from src.data.download.tushare.task.t01_daily import DailyQuote
         from src.data.loader import TRADE
         frame = pd.DataFrame({'secid': [1]})
-        fake = SimpleNamespace(check_server_down=lambda: False, get_data=lambda date: frame)
+        fake = Mock(spec=DailyQuote, check_server_down=lambda: False, get_data=lambda date: frame)
         with patch.object(adjprice, 'publish_day') as publish, patch.object(TRADE, 'clear_all'):
             DailyQuote.update_dates(fake, [20041230])
         publish.assert_called_once_with(frame, 20041230)
 
     def test_unavailable_download_reports_no_updated_dates(self):
         from src.data.download.tushare.task.t01_daily import DailyQuote
-        fake = SimpleNamespace(check_server_down=lambda: True)
+        fake = Mock(spec=DailyQuote, check_server_down=lambda: True)
         with patch.object(adjprice, 'publish_day') as publish:
             self.assertFalse(DailyQuote.update_dates(fake, [20041230]))
         publish.assert_not_called()
@@ -86,14 +86,14 @@ class PriceRepairPipelineTest(unittest.TestCase):
     def test_unchanged_download_does_not_report_a_new_raw_publication(self):
         from src.data.download.tushare.task.t01_daily import DailyQuote
         from src.data.loader import TRADE
-        fake = SimpleNamespace(check_server_down=lambda: False, get_data=lambda date: pd.DataFrame())
+        fake = Mock(spec=DailyQuote, check_server_down=lambda: False, get_data=lambda date: pd.DataFrame())
         with patch.object(adjprice, 'publish_day', return_value=False), patch.object(TRADE, 'clear_all'):
             self.assertFalse(DailyQuote.update_dates(fake, [20041230]))
 
     def test_empty_updated_dates_are_skipped_by_fetcher_status(self):
         from src.data.download.tushare.task.t01_daily import DailyQuote
         from src.proj import Base
-        fake = SimpleNamespace(overwrite=False, target_dates=lambda: Dates([20041230]),
+        fake = Mock(spec=DailyQuote, overwrite=False, target_dates=lambda: Dates([20041230]),
                                update_dates=lambda dates: Dates(), logger=Mock())
         self.assertEqual(DailyQuote.update_with_retries(fake), Base.UpdateFlag.SKIPPED)
         fake.logger.success.assert_not_called()

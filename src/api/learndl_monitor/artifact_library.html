@@ -200,8 +200,9 @@ async function refresh(){
   const data=await (await api(url(modelPage?'/api/models':'/api/list',{run:filters.get('run')||''}))).json();
   rows=modelPage?data.files:data;models=modelPage?data.models:{};
   options('host',rows.map(r=>r.host),'allHosts');options('status',rows.map(r=>r.metadata?.status),'allStatus');
-  if(modelPage)for(const [id,key] of Object.entries(modelFields)){
-   options(id,Object.values(models).map(m=>modelValue(m,key)),filterLabels[id]);
+  if(modelPage){
+   const builds=Object.values(models).flatMap(model=>model.builds);
+   for(const [id,key] of Object.entries(modelFields))options(id,builds.map(build=>modelValue(build,key)),filterLabels[id]);
   }
   loaded=true;setNotice(filters.has('run')?()=>t('runFilter'):'');render();
  }catch(error){

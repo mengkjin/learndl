@@ -31,6 +31,7 @@ __all__ = [
     'bundle_delivery',
     'register_report',
     'model_run',
+    'model_result_specs',
     'delivered_report_paths',
 ]
 

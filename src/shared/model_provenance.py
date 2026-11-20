@@ -17,7 +17,7 @@ BUILD_NAME = re.compile(r'build[0-9]{8}\.[0-9]{6}\.[0-9]+')
 
 def read_properties(path):
     with suppress(FileNotFoundError):
-        return {row['kind']: row for line in real_tree(path).read_text().splitlines() if line.strip()
+        return {row['kind']: row for line in real_tree(path).read_text(encoding='utf-8').splitlines() if line.strip()
                 for row in [json.loads(line)] if row['kind'] in KINDS}
     return {}
 

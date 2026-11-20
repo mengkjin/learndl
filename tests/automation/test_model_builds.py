@@ -16,6 +16,7 @@ class ModelBuildTest(unittest.TestCase):
         work = TemporaryDirectory()
         self.addCleanup(work.cleanup)
         self.root = Path(work.name).resolve()
+        self.enterContext(patch('src.automation.artifact_exchange.core.ROOT', self.root))
         share = self.root / 'share'
         (share / '.stfolder').mkdir(parents=True)
         self.pub = Config(True, 'publisher', share, self.root / 'pub', self.root / 'pub-results', source_host='server')
@@ -69,6 +70,48 @@ class ModelBuildTest(unittest.TestCase):
         self.assertEqual((target / 'results/summary.txt').read_text(), 'resume-test-2')
         self.assertEqual((target / 'results/initial.txt').read_text(), 'only in the first update')
         self.assertEqual((target / 'logs/test.md').read_text().count('## '), 2)
+
+        library = Library('model_preview', self.rec, self.root / 'monitor')
+        with patch('src.res.model.util.core.model_path.source_models', return_value=[]):
+            initial = library.listing('initial')
+            self.assertEqual([(row['relative'], row['run']) for row in initial], [('results/initial.txt', 'initial')])
+            resumed = {row['relative'] for row in library.listing('resume-test-1')}
+            self.assertEqual(resumed, {'logs/test.md'})
+
+    def test_migrated_trash_restores_after_build_adoption_and_replay(self):
+        from src.automation.version_patch import load_patch_support
+        from src.proj import PATH
+
+        self.enterContext(patch('src.res.model.util.core.model_path.source_models', return_value=[]))
+        library = Library('model_preview', self.rec, self.root / '.local_resources/learndl_monitor')
+        source = self.base / 'results/report.txt'
+        source.write_text('legacy')
+        record = self.publish('old', ['results/report.txt'])
+        packet = self.transfer(record).read_bytes()
+        old = Path(receive(self.rec)[0]['target'])
+        migration = load_patch_support('0.7.7', 'model_builds')
+        old_file = old / 'results/report.txt'
+        old_file.write_text('modified')
+        with self.assertRaisesRegex(ValueError, 'differs from its manifest'):
+            migration.migrate_receiver(self.rec, self.root, self.root / 'backup')
+        self.assertTrue(old_file.is_file())
+        old_file.write_text('legacy')
+        original, = library.listing()
+        self.assertTrue(library.manage('delete', [original['id']])[0]['ok'])
+        migration.migrate_receiver(self.rec, self.root, self.root / 'backup')
+        atomic_json(self.rec.state / 'model_builds_ready.json', {})
+        with patch.object(PATH, 'lc_machine', self.root / 'machine'):
+            build = build_identity(self.base)
+        self.publish('adopt', ['logs/property.jsonl'], build, adopt=True)
+        target = Path(receive(self.rec)[0]['target'])
+        self.transfer(record).parent.mkdir(parents=True, exist_ok=True)
+        self.transfer(record).write_bytes(packet)
+        self.assertEqual(receive(self.rec)[0]['target'], str(target))
+        trashed, = [row for row in library.listing() if row.get('trashed')]
+        self.assertTrue(library.manage('restore', [trashed['id']])[0]['ok'])
+        restored, = [row for row in library.listing() if row['label'] == 'report.txt']
+        self.assertEqual((target / restored['relative']).read_text(), 'legacy')
+        self.assertEqual(restored['run'], 'old')
 
     def test_old_packets_attach_to_history_and_rebuild_stays_separate(self):
         from src.proj import PATH

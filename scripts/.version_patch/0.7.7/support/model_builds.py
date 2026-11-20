@@ -10,7 +10,7 @@ from src.automation.artifact_exchange.core import (
     locked, publish_artifacts, real_tree, received_member, send_prepared,
 )
 from src.automation.artifact_exchange.model_builds import (
-    ALIAS, INDEX, apply_update, legacy_target, load, merge_legacy_log,
+    ALIAS, INDEX, apply_update, legacy_member, legacy_target, load, merge_legacy_log,
 )
 from src.automation.artifact_exchange.research import model_result_specs
 from src.automation.version_patch import load_patch_support
@@ -42,14 +42,32 @@ def merge_source_logs(base, backup):
 
 
 def migrate_receiver(config, root, backup):
-    mapping = {}
+    mapping, member_moves = {}, {}
+    monitor = root / '.local_resources/learndl_monitor'
+    trash = {Path(load(meta, {})['original']): real_tree(meta.parent / 'payload')
+             for meta in monitor.glob('model_preview/trash/*/item.json')}
     batches = sorted(archived_batches(config, 'model_training'), key=lambda pair: pair[1].get('created_at', ''))
     for folder, manifest in batches:
         target = legacy_target(folder.parent, manifest)
         members = experiment_members(manifest)
         canonical = {item['path']: received_member(manifest, item['path'], members, folder=folder)
                      for item in manifest['files']}
-        apply_update(target, folder, manifest, canonical, members, legacy=True)
+        trashed = set()
+        for item in manifest['files']:
+            name = item['path']
+            preferred = received_member(manifest, name, members)
+            if folder / preferred in trash and not (folder / canonical[name]).exists():
+                canonical[name] = preferred
+            source = real_tree(folder / canonical[name])
+            destination = target / legacy_member(canonical[name].as_posix(), members.get(name))
+            if source.relative_to(folder) != destination.relative_to(target):
+                member_moves[source] = destination
+            if source in trash and not source.exists():
+                trashed.add(name)
+                source = trash[source]
+            if source.exists() and (source.stat().st_size != item['size'] or digest(source) != item['sha256']):
+                raise ValueError(f'Historical model artifact differs from its manifest: {source}')
+        apply_update(target, folder, manifest, canonical, members, legacy=True, trashed_members=trashed)
         mapping[folder] = target
 
     for path in (config.results / 'external/models').glob('*/*/run_logs'):
@@ -84,7 +102,7 @@ def migrate_receiver(config, root, backup):
         mapping[path] = target / 'logs'
 
     layout = load_patch_support('0.7.4', 'results')
-    layout.update_state(config, root / '.local_resources/learndl_monitor', mapping)
+    layout.update_state(config, monitor, mapping | member_moves)
     for source in mapping:
         if source.name != 'run_logs':
             move(source, backup / 'received' / source.relative_to(config.results))

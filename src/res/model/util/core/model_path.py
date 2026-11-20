@@ -20,7 +20,7 @@ from src.proj.bases import ModuleType
 from .basic import parse_model_input , combine_full_name , is_null_module_type
 from .model_file import ModelFile
 
-__all__ = ['ModelPath' , 'PredictorPath']
+__all__ = ['ModelPath' , 'PredictorPath', 'source_models']
 
 class ModelPath:
     """

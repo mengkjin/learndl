@@ -24,6 +24,9 @@ def atomic_json(path, value):
 
 
 def fsync_dir(path):
+    if os.name == 'nt':
+        # Windows cannot open directories through the CRT file descriptor API.
+        return
     fd = os.open(path, os.O_RDONLY)
     try:
         os.fsync(fd)

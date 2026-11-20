@@ -30,7 +30,7 @@ def main(argv=None):
     pub.add_argument('--task', required=True)
     pub.add_argument('--run-id', required=True)
     pub.add_argument('--kind', choices=['reports', 'tensorboard', 'optuna'], default='reports')
-    pub.add_argument('--category', default='custom', help='Research category; model_training publishes under model/')
+    pub.add_argument('--category', default='custom', help='Research category; model_training publishes under models/')
     pub.add_argument('--name', default='')
     pub.add_argument('--experiment', required=True)
     pub.add_argument('--destination', default='')

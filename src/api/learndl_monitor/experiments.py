@@ -33,7 +33,7 @@ def argument(args, name, default=''):
 
 
 def synced_sources(results, *, timestamps=False):
-    """Only committed v2 manifests can advertise synchronized experiment ZIPs."""
+    """List experiment ZIPs from committed batches and model build indexes."""
     from src.automation.artifact_exchange.core import (
         Config, archived_batches, experiment_members, real_tree, received_member,
     )
@@ -68,6 +68,8 @@ def synced_sources(results, *, timestamps=False):
             try:
                 path = real_tree(folder / row['path'])
                 stamp = row['stamp']
+                if not re.fullmatch(r'[0-9]{8}T[0-9]{12}Z', stamp):
+                    stamp = '19700101T000000000000Z'  # Migrated protocol v1 batch ID.
                 datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ')
                 if path.is_file() and str(path) not in seen:
                     seen.add(str(path))

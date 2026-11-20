@@ -10,7 +10,7 @@
 
 ```text
 ~/workspace/Syncthing/artifact_exchange/
-  model/<完整模型名称>/<UTC时间>__<UUID>.transfer.zip
+  models/<完整模型名称>/<UTC时间>__<UUID>.transfer.zip
   model_compare/<实验名称>/<UTC时间>__<UUID>.transfer.zip
   factor_sequence/<实验名称>/<UTC时间>__<UUID>.transfer.zip
   rl/<实验名称>/<UTC时间>__<UUID>.transfer.zip
@@ -22,19 +22,20 @@
 本机目标：
 
 ```text
-results/external/models/server/nn@modelAAA/<UTC时间>__<UUID>/
+results/external/models/server/nn@modelAAA/<build>/
   results/                 # 模型分析报告
     tensorboard/<名称>.zip
     optuna/<名称>.zip
   html/<run_id>.html       # 显式训练或测试的运行记录
-  source.json
+  logs/                    # property.jsonl、train.md 和 test.md
+  build.json               # 文件校验、更新顺序和运行索引
 ```
 
 其他研究也遵循 `results/external/<研究类型>/<来源电脑>/<实验名称>/<批次>/`。没有产出的角色目录不创建。每个运行、每个实验一个包，包含各角色的成员大小和 SHA-256；一个任务有多个模型时分别发布。同一批次声明的源路径、目标路径、来源身份及运行 ID 构成不可变发布身份；修改内容后必须使用新 run_id。重试复用已准备的快照。直接写入共享区的普通文件不会被消费，手工材料也请使用 publish CLI。
 
 `source_host` 是发布端配置中的稳定电脑名，init 默认取当时主机名，可指定 `--source-host server`。不要跟随 Wi-Fi 的 DHCP 主机名修改它。旧配置未包含该字段时首次发布把主机名保存在私有 state/source_host.json，后续继续使用；建议显式补入配置。
 
-实验面板新增“同步研究实验”，依据已提交批次的 source.json 识别 TensorBoard/Optuna ZIP，展示电脑、研究类型、实验、批次时间和状态。普通报告 ZIP 不进入实验列表。本机模型、数据库、旧 `results/custom/legacy/model_experiments/` ZIP 仍可打开；缺少来源信息的旧 ZIP 显示“来源未知”。接收器接受 schema v1 和 v2，并将旧路由的在途包归入 external。
+实验面板新增“同步研究实验”，依据批次的 source.json 或模型的 build.json 识别 TensorBoard/Optuna ZIP，展示电脑、研究类型、实验、批次时间和状态。普通报告 ZIP 不进入实验列表。本机模型、数据库、旧 `results/custom/legacy/model_experiments/` ZIP 仍可打开；缺少来源信息的旧 ZIP 显示“来源未知”。接收器兼容旧版 `reports/<类别>/` 路由和模型包的 `model/`、`model_training/` 路由，旧在途包也归入新归档目录。
 
 默认每层 ZIP 解压限制为 4 GiB、50,000 成员，配置的 `max_bytes` / `max_files` 同时用于接收与面板导入，外层清单计入限制。需要更大产物时两端同步调整配置并检查磁盘空间。包内已登记的所有文件完整归档，不按扩展名二次过滤。
 
@@ -118,7 +119,7 @@ syncthing cli show connections
 
 ## 3. 配置应用角色
 
-更新项目代码、使用已有项目虚拟环境。在**各自项目根目录**运行以下命令。核心 CLI 只依赖 Python 标准库，不要求加载模型或机器密钥。
+更新项目代码、使用已有项目虚拟环境。在**各自项目根目录**运行以下命令。Linux 和 macOS 上的核心 CLI 只依赖 Python 标准库，Windows 文件锁使用项目已有的 portalocker。
 
 服务器：
 
@@ -241,7 +242,7 @@ AutoRunTask 的统一收尾顺序为：等待异步保存 → 发布已登记产
 
 没有待投递产物、发布未启用、receiver 角色和 autofix 的正常跳过保持静默，也不在邮件正文重复提示。内部逐包投递记录仍保留；实际发布、失败、异步保存未完成，以及已准备包被阻止发送均计入任务汇总。邮件正文也仅展示汇总。
 
-每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `external/models/<host>/<experiment>` 下增加批次子目录，不覆盖旧批次。汇总展示不改变快照保留机制，也不会复制模型权重。
+每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `external/models/<host>/<experiment>/<build>/` 下按文件更新，沿用未变化的结果，并在 `build.json` 中记录投递的运行。模型权重保存在发布端。
 
 快照准备中断后可以通过 CLI retry 发布；定时接收不负责服务器投递。投递失败使用 warning 记录，不加入研究任务的 error conclusions。
 
@@ -295,9 +296,9 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
   没有 SMTP 回执，发送与重试进度仍由发件端的原有队列记录。
 - 档案含逻辑通知的 EML、正文、SMTP 附件与产物交接前的原附件。邮件及附件长期保留。
   归档只改变列表显示。删除进入本机应用回收站，恢复或彻底删除在该视图操作。
-- 模型本地 `run_logs/` 下保存固定两份 `train.md` 和 `test.md`，按阶段实际使用；
-  本机接收的累计文件位于 `results/external/models/<来源电脑>/<模型>/run_logs/`。同步只携带正在归档的运行章节，
-  接收器按主机、模型、运行身份和阶段合并。没有自动过期规则。
+- 0.7.7 起，模型本地的 `logs/train.md` 和 `logs/test.md` 按实际运行阶段追加。
+  接收机将变更文件合入同一 build，累计日志保存在 `results/external/models/<来源电脑>/<模型>/<build>/logs/`。
+  从头训练会分配新的 build，恢复训练和测试沿用原 build。
 - 显式训练、手动恢复训练和独立测试保存本次模型 HTML。自动模型更新和
   `resume_testing` 仍可由父脚本保存一份任务 HTML，模型调用只写 Markdown。
   分析 callback 的报告作为独立结果打开。模型预览和实验面板共享已启动的实例和额度。
@@ -354,9 +355,9 @@ TensorBoard 和 Optuna。XLSX 预览可切换工作表，每张显示前 40 行�
 `custom/storage_reports/`。服务器的 RL 工作目录是 `custom/rl_experimental/`。
 
 接收端使用 `external/<类别>/<来源电脑>/<实验>/<批次>/`。模型的投递类别仍填写
-`model_training`，新共享包放入 `artifact_exchange/model/<完整模型名>/`。
+`model_training`，新共享包放入 `artifact_exchange/models/<完整模型名>/`。
 RL 批次归入 `rl_experiment`，因子序列修复批次归入 `factor_sequence`。
-模型归档目录为 `external/models/`，已有归档由 0.7.5 补丁迁移。模型运行日志累计在模型目录下的 `run_logs/`。未能确认来源的历史材料保存在 `custom/legacy/`。
+模型归档目录为 `external/models/`，已有归档由 0.7.5 补丁迁移。0.7.7 补丁将旧批次和 `run_logs/` 合并到对应 build。未能确认来源的历史材料保存在 `custom/legacy/`。
 
 先在接收机更新，再更新服务器。在两端的项目根目录预检并走现有版本补丁流程：
 

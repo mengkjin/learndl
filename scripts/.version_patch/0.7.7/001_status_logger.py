@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile
 
 import yaml
 
-from src.automation.artifact_exchange.core import fsync_dir, real_tree
+from src.shared.file_ops import fsync_dir, real_tree
 from src.res.model.util.config.status_logger import OLD, rename_status_callback
 
 
@@ -42,17 +42,18 @@ def apply(ctx):
             stream.flush()
             os.fsync(stream.fileno())
         fsync_dir(backup.parent)
-        with NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as stream:
-            temporary = Path(stream.name)
-            try:
-                os.fchmod(stream.fileno(), stat.S_IMODE(path.stat().st_mode))
+        stream = NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False)
+        temporary = Path(stream.name)
+        try:
+            with stream:
+                os.chmod(temporary, stat.S_IMODE(path.stat().st_mode))
                 yaml.safe_dump(migrated, stream, allow_unicode=True, sort_keys=False)
                 stream.flush()
                 os.fsync(stream.fileno())
-                temporary.replace(path)
-                fsync_dir(path.parent)
-            finally:
-                temporary.unlink(missing_ok=True)
+            temporary.replace(path)
+            fsync_dir(path.parent)
+        finally:
+            temporary.unlink(missing_ok=True)
     Logger.stdout(f'Migrated {len(pending)} model YAML files to StatusLogger')
 
 

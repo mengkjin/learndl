@@ -16,18 +16,19 @@ __all__ = ['write_properties', 'coverage', 'Phase', 'track_phase']
 def write_properties(path, records):
     path = real_tree(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False) as stream:
-        temp = Path(stream.name)
-        try:
+    stream = NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent, delete=False)
+    temp = Path(stream.name)
+    try:
+        with stream:
             for kind in KINDS:
                 if kind in records:
                     stream.write(json.dumps(records[kind], ensure_ascii=False) + '\n')
             stream.flush()
             os.fsync(stream.fileno())
-            temp.replace(path)
-            fsync_dir(path.parent)
-        finally:
-            temp.unlink(missing_ok=True)
+        temp.replace(path)
+        fsync_dir(path.parent)
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def coverage(*ranges):

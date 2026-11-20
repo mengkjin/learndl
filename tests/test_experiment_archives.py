@@ -19,7 +19,7 @@ class ExperimentArchivesTest(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
 
     def test_full_model_names(self):
         for path, expected in [
@@ -51,17 +51,18 @@ class ExperimentArchivesTest(unittest.TestCase):
 
     def test_downloads_are_categorized(self):
         from src.api.pkgs import dashboard
+        from src.automation.artifact_exchange.core import Config
 
         for kind in ['tensorboard', 'optuna']:
-            folder = self.root / 'results/model_experiments' / kind
+            folder = self.root / 'results/custom/legacy/model_experiments' / kind
             folder.mkdir(parents=True)
             (folder / 'model.zip').touch()
         paths = SimpleNamespace(model=self.root / 'models', model_archive=self.root / 'models/archive', optuna=self.root / 'optuna')
-        with patch('src.proj.PATH', paths), patch('src.api.learndl_monitor.experiments.ROOT', self.root), patch.object(
+        with patch('src.proj.PATH', paths), patch.object(Config, 'load', return_value=Config(results=self.root.resolve() / 'results')), patch.object(
                 dashboard, 'archived_tensorboard_index', return_value={}):
             groups = Instances(self.root / 'state').sources()
         for kind in ['tensorboard', 'optuna']:
-            self.assertEqual(groups[kind][-1]['items'][0]['path'], str(self.root / 'results/model_experiments' / kind / 'model.zip'))
+            self.assertEqual(groups[kind][-1]['items'][0]['path'], str(self.root / 'results/custom/legacy/model_experiments' / kind / 'model.zip'))
 
 
 if __name__ == '__main__':

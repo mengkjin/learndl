@@ -1,23 +1,14 @@
-import tempfile
-import importlib
 import unittest
-from pathlib import Path
+from unittest.mock import patch
 import numpy as np
 import pandas as pd
+
 from src.data.update.custom.market_daily_risk import (
     pandas_market_returns,
     polars_minutes,
-)
-from src.data.update.custom.market_daily_risk import (
     calc_market_daily_risk,
     MarketDailyRiskUpdater,
 )
-
-rebuild_script = importlib.import_module("scripts.8_fixes.5_rebuild_market_daily_risk")
-validate_day = rebuild_script.validate_day
-digest = rebuild_script.digest
-replace_checked = rebuild_script.replace_checked
-rebuild = rebuild_script.rebuild
 
 
 class MarketRiskTests(unittest.TestCase):
@@ -77,7 +68,10 @@ class MarketRiskTests(unittest.TestCase):
             ret = pandas_market_returns(x["quote"], x["val"], x["min"])
             self.assertAlmostEqual(ret.loc[1], (0.1 * 100 + 0.02 * 2000) / 2100)
             result = calc_market_daily_risk(20200102, inputs=x)
-            self.assertEqual(len(validate_day(x, result.iloc[0])), 4)
+            metrics, reference = polars_minutes(x["quote"], x["val"], x["min"], x["moneyflow"])
+            pd.testing.assert_series_equal(ret, reference, check_names=False, rtol=1e-9, atol=1e-12)
+            for key, value in metrics.items():
+                self.assertAlmostEqual(result[key].iloc[0], value)
             y = x.copy()
             y["min"] = x["min"].iloc[::-1]
             pd.testing.assert_series_equal(
@@ -104,7 +98,7 @@ class MarketRiskTests(unittest.TestCase):
         x["min"].iloc[2, list(x["min"].columns).index("close")] = np.nan
         x["val"].iloc[1, 0] = np.nan
         result = calc_market_daily_risk(20200102, inputs=x)
-        validate_day(x, result.iloc[0])
+        pd.testing.assert_frame_equal(result, calc_market_daily_risk(20200102, inputs=x, backend="polars"))
         self.assertEqual(result.market_day_5min_ret_skewness.iloc[0], 0.0)
 
     def test_reject_duplicates_and_multiple_dates(self):
@@ -116,63 +110,20 @@ class MarketRiskTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             polars_minutes(x["quote"], x["val"], x["min"], x["moneyflow"])
 
-    def test_atomic_replace_checks_concurrent_changes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            target, stage = Path(tmp) / "risk.csv", Path(tmp) / "new.csv"
-            target.write_text("old")
-            stage.write_text("new")
-            old = digest(target)
-            target.write_text("changed")
-            with self.assertRaises(RuntimeError):
-                replace_checked(target, stage, old)
-            self.assertEqual(target.read_text(), "changed")
-            replace_checked(target, stage, digest(target))
-            self.assertEqual(target.read_text(), "new")
-
-
-class RebuildIntegrationTests(unittest.TestCase):
-    data = MarketRiskTests.data
-
-    def test_validated_replacement_and_failure_preserves_database(self):
-        from unittest.mock import patch
-        from contextlib import ExitStack
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            target = root / "risk.feather"
-            old = calc_market_daily_risk(20200101, inputs=self.data())
-            old.to_feather(target)
-            with ExitStack() as stack:
-                stack.enter_context(patch("src.proj.PATH.rslt_custom", root / "results"))
-                stack.enter_context(patch("src.proj.DB.path", return_value=target))
-                stack.enter_context(
-                    patch(
-                        "src.proj.DB.load",
-                        side_effect=lambda *a, **kw: pd.read_feather(target),
-                    )
-                )
-                stack.enter_context(
-                    patch("src.proj.CALENDAR.range", return_value=[20200102])
-                )
-                source = stack.enter_context(
-                    patch(
-                        "src.data.update.custom.market_daily_risk._get_inputs",
-                        return_value=self.data(),
-                    )
-                )
-                stack.enter_context(
-                    patch("src.automation.artifact_exchange.research.register")
-                )
-                folder = rebuild(20200102, 20200102)
-                self.assertEqual(
-                    pd.read_feather(target).date.tolist(), [20200101, 20200102]
-                )
-                self.assertTrue((folder / "backup/risk.feather").exists())
-                before = digest(target)
-                source.side_effect = ValueError("missing minute file")
-                with self.assertRaisesRegex(ValueError, "missing minute"):
-                    rebuild(20200102, 20200102)
-                self.assertEqual(digest(target), before)
+    def test_update_one_preserves_other_dates_and_replaces_duplicate(self):
+        old = pd.concat([calc_market_daily_risk(date, inputs=self.data())
+                         for date in (20200101, 20200102)], ignore_index=True)
+        old.loc[1, "market_day_5min_ret_skewness"] = -999
+        with (
+            patch("src.data.update.custom.market_daily_risk._get_inputs", return_value=self.data()),
+            patch("src.proj.DB.load", return_value=old),
+            patch("src.proj.DB.save") as save,
+        ):
+            MarketDailyRiskUpdater.update_one(20200102)
+        result = save.call_args.args[0]
+        self.assertEqual(result.date.tolist(), [20200101, 20200102])
+        pd.testing.assert_series_equal(result.iloc[0], old.iloc[0])
+        self.assertNotEqual(result.iloc[1].market_day_5min_ret_skewness, -999)
 
 
 if __name__ == "__main__":

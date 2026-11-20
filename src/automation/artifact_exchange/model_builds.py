@@ -5,6 +5,7 @@ import json
 import os
 from uuid import uuid4
 
+from .archive_paths import update_state
 from .core import _copy, atomic_json, digest, fsync_dir, real_tree, safe_path
 from src.shared.model_provenance import LOG_PHASES, PROPERTY_FILE, validate_build
 from .model_metadata import INVENTORY
@@ -16,6 +17,7 @@ __all__ = [
     'LEGACY_LOG_MEMBERS',
     'load',
     'legacy_target',
+    'legacy_member',
     'adopt_history',
     'merge_legacy_log',
     'apply_update',
@@ -57,7 +59,7 @@ def legacy_target(root, manifest):
     return real_tree(root / safe_path(name))
 
 
-def adopt_history(target, manifest):
+def adopt_history(target, manifest, config, monitor):
     """Keep the provisional name pinned until a publisher explicitly claims it."""
     if not manifest.get('adopt_legacy'):
         return
@@ -68,33 +70,35 @@ def adopt_history(target, manifest):
         atomic_json(alias, target.name)
         return
     previous = real_tree(target.parent / safe_path(old))
-    if not previous.exists():
-        atomic_json(alias, target.name)
-        return
-    historical = load(previous / INDEX)
-    if not historical or not historical['build'].get('estimated'):
-        return
     current = load(target / INDEX)
-    if current is None and not target.exists():
-        previous.rename(target)
-        fsync_dir(target.parent)
-        current = historical
-    else:
+    if current and current['build'].get('fingerprint') not in (None, build['fingerprint']):
+        raise ValueError(f'Formal build has a different fingerprint: {target}')
+    if previous.exists():
+        historical = load(previous / INDEX)
+        if not historical or not historical['build'].get('estimated'):
+            return
+        if (previous / PENDING).exists() or (target / PENDING).exists():
+            raise ValueError('Finish pending updates before adopting model history')
         if current is None:
-            raise ValueError(f'Formal build has no committed index: {target}')
-        for name, file in historical['files'].items():
-            if name not in current['files']:
-                source = real_tree(previous / safe_path(name))
-                if source.is_file():
-                    replace_file(source, real_tree(target / safe_path(name)))
+            previous.rename(target)
+            fsync_dir(target.parent)
+            current = historical
+        else:
+            for name, file in historical['files'].items():
+                if name not in current['files']:
+                    source = real_tree(previous / safe_path(name))
+                    if source.is_file():
+                        replace_file(source, real_tree(target / safe_path(name)))
                     current['files'][name] = file
-        current['runs'] = historical['runs'] | current['runs']
-        atomic_json(target / INDEX, current)
-        # Keep the provisional original recoverable outside the catalog.
-        previous.rename(target.parent / f'.merged-{previous.name}')
-        fsync_dir(target.parent)
+            current['runs'] = historical['runs'] | current['runs']
+            atomic_json(target / INDEX, current)
+            previous.rename(target.parent / f'.merged-{previous.name}')
+            fsync_dir(target.parent)
+    if current is None:
+        raise ValueError(f'Missing legacy build index: {previous}')
     current['build'] = build | {'legacy_attribution': 'source_and_model_name'}
     atomic_json(target / INDEX, current)
+    update_state(config, monitor, {previous: target})
     atomic_json(alias, target.name)
 
 
@@ -147,7 +151,16 @@ def merge_legacy_log(destination, source):
             temporary.unlink(missing_ok=True)
 
 
-def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False):
+def legacy_member(relative, kind=None):
+    """Return the build-relative destination of an old batch member."""
+    if relative in LEGACY_LOG_MEMBERS:
+        return 'logs/' + relative.split('/')[-1]
+    if relative.split('/', 1)[0] not in ('configs', 'logs', 'results', 'html'):
+        return f'results/{kind}/{relative}' if kind else 'results/' + relative
+    return relative
+
+
+def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False, trashed_members=()):
     """Apply a validated package with per-file ordering and a restart marker."""
     identity = ({'name': target.name, 'estimated': True, 'legacy_attribution': 'source_and_model_name'}
                 if legacy else validate_build(manifest['model_build']))
@@ -167,21 +180,20 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
     if load(pending, manifest['id']) != manifest['id']:
         raise ValueError('Finish the pending model build update first')
     atomic_json(pending, manifest['id'])
-    stamp = manifest.get('created_at') or manifest['batch']
+    # Protocol v1 has no creation time. Keep it behind dated updates.
+    stamp = manifest.get('created_at') or '19700101T000000000000Z'
     sequence = manifest.get('build_sequence', 0)
     for item in manifest['files']:
         name = item['path']
         relative = mapped[name].as_posix()
         source = real_tree(staging / relative)
-        if (not source.is_file() or relative == INVENTORY or relative.startswith('snapshot/')
+        trashed = name in trashed_members and not source.exists()
+        if ((not trashed and not source.is_file()) or relative == INVENTORY or relative.startswith('snapshot/')
                 or any(part.startswith('.') for part in safe_path(relative).parts)):
             continue
         fragment = legacy and relative in LEGACY_LOG_MEMBERS
-        if fragment:
-            relative = 'logs/' + relative.split('/')[-1]
-        elif legacy and relative.split('/', 1)[0] not in ('configs', 'logs', 'results', 'html'):
-            kind = experiments.get(name)
-            relative = f'results/{kind}/{relative}' if kind else 'results/' + relative
+        if legacy:
+            relative = legacy_member(relative, experiments.get(name))
         destination = real_tree(target / safe_path(relative))
         previous = index['files'].get(relative, {})
         if previous and (sequence, stamp) < (previous['sequence'], previous['stamp']) and not (
@@ -190,7 +202,11 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
         if (sequence and previous.get('sequence') == sequence and
                 previous.get('package') != manifest['id']):
             raise ValueError('Model update sequence reused by a different package')
-        if fragment:
+        if trashed:
+            # Reserve the indexed path for a future restore without reviving a deleted file.
+            if destination.exists() or fragment:
+                continue
+        elif fragment:
             merge_legacy_log(destination, source)
             if not destination.exists():
                 continue
@@ -198,9 +214,9 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
             replace_file(source, destination)
         index['files'][relative] = {
             'path': relative, 'sha256': digest(destination) if fragment else item['sha256'],
-            'size': destination.stat().st_size, 'kind': experiments.get(name, 'reports'),
+            'size': item['size'] if trashed else destination.stat().st_size, 'kind': experiments.get(name, 'reports'),
             'stamp': max(stamp, previous.get('stamp', '')) if fragment else stamp,
-            'sequence': sequence, 'package': manifest['id'],
+            'sequence': sequence, 'package': manifest['id'], 'run': manifest['run_id'],
         }
     status = manifest.get('status', 'success')
     index['runs'][manifest['run_id']] = {'stamp': stamp, 'status': status, 'package': manifest['id']}

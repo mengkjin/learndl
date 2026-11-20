@@ -78,7 +78,7 @@ def _latest_completed(root):
         )
     if not candidates:
         raise ValueError(
-            "No completed repaired dataset. Finish script 6/7 first; old suite is not a fallback."
+            f"No completed repaired dataset with a dataset.json marker under {root}."
         )
     selected = max(candidates)
     return Path(selected[-1]), selected[-2]

@@ -75,8 +75,9 @@ class Library:
         else:
             for folder, index in archived_builds(self.config):
                 common = dict(host=index['host'], model=index['model'], model_root=folder,
-                              lock=None, build=folder.name, runs=list(index['runs']),
+                              lock=None, build=folder.name,
                               historical=index['build'].get('estimated', False))
+                package_runs = {run['package']: run_id for run_id, run in index['runs'].items()}
                 for item in index['files'].values():
                     name = item['path']
                     if name.startswith('snapshot/'):
@@ -88,7 +89,11 @@ class Library:
                     if path:
                         kind = ('process_log' if name in ('logs/train.md', 'logs/test.md') else
                                 'file' if item['kind'] == 'reports' else item['kind'])
+                        run = item.get('run') or package_runs.get(item['package'], '')
+                        if name.startswith('html/') and path.suffix == '.html':
+                            run = path.stem
                         add(path, path.name, type=kind, relative=name, stamp=item['stamp'],
+                            run='' if kind == 'process_log' else run,
                             readonly=name.startswith(('configs/', 'logs/')), **common)
 
             for folder, manifest in self._batches('model_training'):
@@ -181,7 +186,7 @@ class Library:
                 if self.kind == 'mail_archive':
                     if run not in row['metadata'].get('model_runs', []):
                         continue
-                elif row.get('run') != run and run not in row.get('runs', ()) and (
+                elif row.get('run') != run and (
                         row['type'] != 'process_log' or row.get('trashed') or not self.chapters(row, 0, run)['pages']):
                     continue
             public = {k: v for k, v in row.items()

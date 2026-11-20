@@ -78,7 +78,7 @@ class RepairedScheduleTests(unittest.TestCase):
         with TemporaryDirectory() as tmp, ExitStack() as stack:
             root = Path(tmp)
             dataset, dates = fixture(root)
-            stack.enter_context(patch.object(PATH, "result", root))
+            stack.enter_context(patch.object(PATH, "rslt_custom", root))
             stack.enter_context(patch.object(PATH, "lc_share", root / "shared"))
             stack.enter_context(
                 patch.object(
@@ -162,7 +162,7 @@ class RepairedScheduleTests(unittest.TestCase):
 
         with (
             TemporaryDirectory() as tmp,
-            patch.object(PATH, "result", Path(tmp)),
+            patch.object(PATH, "rslt_custom", Path(tmp)),
             patch.object(PATH, "lc_share", Path(tmp) / "shared"),
         ):
             fixture(Path(tmp), status="failed")

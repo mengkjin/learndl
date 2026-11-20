@@ -26,8 +26,8 @@ class ResultsLayoutTest(unittest.TestCase):
             row, = core.publish_artifacts('train', 'run', [
                 core.ArtifactSpec(source, category='model_training', experiment='nn@gru')], config=pub)
             archive, = pub.inbox.rglob('*.transfer.zip')
-            self.assertEqual(archive.parent.relative_to(pub.inbox), Path('model/nn@gru'))
-            old_route = pub.inbox/'model_training/nn@gru'/archive.name
+            self.assertEqual(archive.parent.relative_to(pub.inbox), Path('models/nn@gru'))
+            old_route = pub.inbox/'model/nn@gru'/archive.name
             old_route.parent.mkdir(parents=True)
             archive.rename(old_route)
             replay = old_route.read_bytes()
@@ -70,9 +70,12 @@ class ResultsLayoutTest(unittest.TestCase):
             self.assertEqual(json.loads(marks.read_text()), [key(new/'results/report.txt')])
             self.assertEqual(json.loads(trash.read_text())['original'], str(new/'results/deleted.txt'))
             self.assertEqual((rec.results/'custom/storage_reports/storage.sqlite3').read_bytes(), b'index')
-            old_route.parent.mkdir(parents=True, exist_ok=True)
-            old_route.write_bytes(replay)
-            self.assertEqual(core.receive(rec)[0]['target'], str(new))
+            for category in ('model', 'model_training', 'models'):
+                with self.subTest(category=category):
+                    route = pub.inbox/category/'nn@gru'/old_route.name
+                    route.parent.mkdir(parents=True, exist_ok=True)
+                    route.write_bytes(replay)
+                    self.assertEqual(core.receive(rec)[0]['target'], str(new))
 
     def test_server_conflict_keeps_both_files(self):
         layout = load_patch_support('0.7.4', 'results')

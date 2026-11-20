@@ -458,9 +458,9 @@ class ExchangeTest(unittest.TestCase):
         pid = 'a' * 32
         data = b'legacy report'
         manifest = dict(schema_version=1, id=pid, task='old', run_id='run',
-                        batch='run__'+pid, kind='reports', category='model_compare',
+                        batch='run__'+pid, kind='reports', category='model_training',
                         files=[dict(path='report.txt', size=len(data), sha256=hashlib.sha256(data).hexdigest())])
-        archive = self.pub.inbox/'reports/model_compare/legacy.transfer.zip'
+        archive = self.pub.inbox/'reports/model_training/legacy.transfer.zip'
         archive.parent.mkdir(parents=True)
         archive.parent.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(archive, 'w') as z:
@@ -469,6 +469,7 @@ class ExchangeTest(unittest.TestCase):
         received = receive(self.rec)[0]
         self.assertEqual(received['status'], 'received', received)
         self.assertEqual(Path(received['target']), archive_target(manifest, self.rec))
+        self.assertEqual(Path(received['target']).parent, self.rec.results/'external/models/unknown/old')
         legacy = self.rec.results/'reports/model_compare/legacy/model_compare'
         legacy.mkdir(parents=True)
         (legacy/'old.pdf').write_bytes(b'old')

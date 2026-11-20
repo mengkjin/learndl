@@ -12,6 +12,7 @@ from src.automation.artifact_exchange.core import (
     Config, _target, archive_target, atomic_json, component, digest, fsync_dir, locked, real_tree,
 )
 from src.automation.artifact_exchange.management import MIGRATIONS
+from src.automation.artifact_exchange.archive_paths import remap, update_state
 
 KEEP = {'test', 'trade', 'factor', 'gp', 'external', 'custom'}
 LOCAL = {'rl_experimental', 'factor_sequence', 'factor_sequence_fixes', 'factor_sequence_diagnostics',
@@ -173,44 +174,6 @@ def discover(config, monitor) -> Plan:
                 aliases={str(s): str(d) for s, d in aliases.items()},
                 containers=[str(p) for p in sorted(containers, key=lambda p: (-len(p.parts), str(p)))
                             if p != root / 'custom'], missing_receipts=sorted(missing))
-
-
-def remap(path, mapping):
-    for parent in (path, *path.parents):
-        if parent in mapping:
-            return mapping[parent] / path.relative_to(parent)
-    return path
-
-
-def update_state(config, monitor, mapping):
-    def update_field(path, keys):
-        record = read(path)
-        updated = dict(record)
-        for key in keys:
-            if record.get(key):
-                updated[key] = str(remap(Path(record[key]), mapping))
-        if updated != record:
-            atomic_json(path, updated)
-
-    for receipt in (config.state / 'received').glob('*.json'):
-        update_field(receipt, ('target',))
-    for meta in monitor.glob('*/trash/*/item.json'):
-        update_field(meta, ('original',))
-    for record in (monitor / 'experiments').glob('[0-9]*.json'):
-        update_field(record, ('archive_source', 'source'))
-    marks = list(monitor.glob('*/archived.json'))
-    if any(read(path) for path in marks):
-        ids = {}
-        for src, dest in mapping.items():
-            if dest.exists():
-                for actual in (dest, *dest.rglob('*')):
-                    old = src / actual.relative_to(dest)
-                    ids[sha256(str(old).encode()).hexdigest()] = sha256(str(actual).encode()).hexdigest()
-        for path in marks:
-            old = read(path)
-            new = sorted({ids.get(key, key) for key in old})
-            if old != new:
-                atomic_json(path, new)
 
 
 def apply(config, monitor, report):

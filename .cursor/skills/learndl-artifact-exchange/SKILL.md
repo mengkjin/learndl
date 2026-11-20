@@ -50,15 +50,16 @@ manual materials must also use the publish CLI. Keep state and temporary files o
 Write local research and operational output under `results/custom/<purpose>/` on all machines.
 Use `PATH.rslt_custom` or `src.proj.env.path.custom_results(project_root)` for project results.
 Preserve the dedicated test, trade, factor and gp roots.
-Archive received batches under `results/external/<category>/<source_host>/<experiment>/<batch>/`.
-Publish model_training via `artifact_exchange/model/<experiment>/`; logical categories in manifests
-remain stable. Store cumulative model logs beside the batches under `run_logs/`. Use the configured
+Archive ordinary batches under `results/external/<category>/<source_host>/<experiment>/<batch>/`.
+Publish model_training via `artifact_exchange/models/<experiment>/`; logical categories in manifests
+remain stable. The receiver merges model updates into `external/models/<source_host>/<experiment>/<build>/`
+and indexes them in `build.json`. Cumulative phase logs are `logs/train.md` and `logs/test.md`. Use the configured
 stable source_host, not a fresh Wi-Fi-dependent hostname. Server originals remain; only a checked,
 committed package with durable receipt is removed. Existing protocol v1 packets and legacy panel
 ZIPs remain supported. Do not move historical directories when adding a new research producer.
 
 The experiment panel advertises only TensorBoard/Optuna payloads identified by committed
-source.json manifests; a report ZIP is not an experiment. Reuse the importer and shared capacity limits.
+source.json manifests or model build indexes; a report ZIP is not an experiment. Reuse the importer and shared capacity limits.
 
 ## Verification
 

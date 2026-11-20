@@ -1,4 +1,4 @@
-"""Offline repair contracts: ties, missingness, regression, persistence and script discovery."""
+"""Offline repair contracts: ties, missingness, regression and persistence."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import numpy as np
 import pandas as pd
 
@@ -149,7 +149,7 @@ class RepairTests(unittest.TestCase):
         from contextlib import ExitStack
 
         with TemporaryDirectory() as tmp, ExitStack() as stack:
-            stack.enter_context(patch.object(PATH, "result", Path(tmp)))
+            stack.enter_context(patch.object(PATH, "rslt_custom", Path(tmp)))
             stack.enter_context(
                 patch.object(CALENDAR, "updated", return_value=20261113)
             )
@@ -209,6 +209,7 @@ class RepairTests(unittest.TestCase):
             first = Checkpoint(root / "one", identity, root / "reuse.sqlite")
             first.step("factor:dtop:20110104", [out], lambda: out.write_text("valid"))
             first.db.close()
+            assert first.reuse is not None
             first.reuse.close()
             second = Checkpoint(root / "two", identity, root / "reuse.sqlite")
             self.assertFalse(
@@ -219,6 +220,7 @@ class RepairTests(unittest.TestCase):
                 )
             )
             second.db.close()
+            assert second.reuse is not None
             second.reuse.close()
             out.write_text("changed")
             third = Checkpoint(root / "three", identity, root / "reuse.sqlite")
@@ -228,6 +230,7 @@ class RepairTests(unittest.TestCase):
                 )
             )
             third.db.close()
+            assert third.reuse is not None
             third.reuse.close()
 
     def test_dividend_zero_provenance(self):
@@ -283,7 +286,8 @@ class RepairTests(unittest.TestCase):
             for i, name in enumerate(["mkt", "hml", "smb"])
         ]
         fit = FF3_Model(
-            pd.DataFrame({"good": y, "short": bad, "zero": np.zeros(40)}), *parts
+            pd.DataFrame({"good": y, "short": bad, "zero": np.zeros(40)}),
+            mkt=parts[0], hml=parts[1], smb=parts[2],
         ).fit()
         np.testing.assert_allclose(fit.coef[:, 0], [2, 1, 2, 3], atol=1e-12)
         self.assertEqual(fit.fit_observations["good"], 33)
@@ -363,20 +367,10 @@ class RepairTests(unittest.TestCase):
             path = Path(tmp) / "event"
             path.touch()
             old = pd.DataFrame({"date": [1, 2], "event": [0.0, 0.0]})
-            fake = SimpleNamespace(
-                db_src="market_factor", db_key="event", factor_name="event", indent=0
-            )
-
-            class Calc:
-                db_src = fake.db_src
-                db_key = fake.db_key
-                indent = 0
-
-                def __call__(self, date):
-                    return pd.DataFrame({"date": [date], "event": [1.0]})
-
-                def validate_value(self, frame, date, strict=False):
-                    return frame
+            calc = Mock(spec=["db_src", "db_key", "indent", "validate_value"],
+                        db_src="market_factor", db_key="event", indent=0,
+                        side_effect=lambda date: pd.DataFrame({"date": [date], "event": [1.0]}))
+            calc.validate_value.side_effect = lambda frame, date, strict=False: frame
 
             with (
                 patch(
@@ -390,50 +384,12 @@ class RepairTests(unittest.TestCase):
                 ) as save,
             ):
                 self.assertFalse(
-                    MarketFactorCalculator.calc_and_deploy(Calc(), 2, overwrite=False)
+                    MarketFactorCalculator.calc_and_deploy(calc, 2, overwrite=False)
                 )
-                MarketFactorCalculator.calc_and_deploy(Calc(), 2, overwrite=True)
+                MarketFactorCalculator.calc_and_deploy(calc, 2, overwrite=True)
                 self.assertEqual(
                     save.call_args.args[0].set_index("date").loc[2, "event"], 1
                 )
-
-    def test_scripts_discovered(self):
-        from src.api.util.backend.script import PathItem
-
-        root = Path(__file__).resolve().parents[1] / "scripts" / "8_fixes"
-        names = {
-            p.path.name for p in PathItem.iter_folder(root) if p.path.suffix == ".py"
-        }
-        self.assertTrue(
-            {
-                "5_rebuild_market_daily_risk.py",
-                "6_rebuild_factor_sequence_dependencies.py",
-                "7_backfill_factor_sequence_pre2017.py",
-            }.issubset(names)
-        )
-
-    def test_fix_scripts_cli_parameter_schema(self):
-        from src.proj.util.script.param_schema import ScriptParamSchema
-
-        root = Path(__file__).resolve().parents[1] / "scripts" / "8_fixes"
-        for path in sorted(root.glob("*.py")):
-            with self.subTest(script=path.name):
-                # Exercise the same source-only parser as RunPipelineScript;
-                # discovery alone does not validate required parameter metadata.
-                schema = ScriptParamSchema.from_source(path)
-                self.assertIsNotNone(schema)
-                assert schema is not None
-                self.assertTrue(all(p.desc.strip() for p in schema.params))
-                self.assertEqual(
-                    {p.name: p.default for p in schema.params},
-                    schema.signature_defaults,
-                )
-                if path.name.startswith(("6_", "7_")):
-                    self.assertEqual(
-                        {p.name for p in schema.params},
-                        {"start", "end", "run_id", "dry_run", "batch_size"}
-                        | ({"source_run"} if path.name.startswith("7_") else set()),
-                    )
 
     def test_repaired_masked_loader(self):
         from src.data.preprocess.factor_sequence.repaired_bundle import REPAIR_VERSION

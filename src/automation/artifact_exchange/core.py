@@ -2,7 +2,6 @@
 from __future__ import annotations
 import contextlib
 import errno
-import fcntl
 import hashlib
 import json
 import os
@@ -125,11 +124,30 @@ def sandboxed():
 
 
 @contextlib.contextmanager
+def _file_lock(path):
+    if os.name == 'nt':
+        import portalocker
+
+        lock = portalocker.Lock(path, timeout=0)
+        try:
+            lock.acquire()
+        except portalocker.exceptions.AlreadyLocked as exc:
+            raise BlockingIOError(f'Artifact lock is busy: {path}') from exc
+        try:
+            yield
+        finally:
+            lock.release()
+    else:
+        import fcntl
+
+        with path.open('a') as stream:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield
+
+
 def locked(config, name):
     real_tree(config.state).mkdir(parents=True, exist_ok=True)
-    with (config.state / (name + '.lock')).open('a') as f:
-        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        yield
+    return _file_lock(config.state / (name + '.lock'))
 
 
 @dataclass(frozen=True)
@@ -315,7 +333,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
         payload = work / 'payload'
         payload.mkdir()
         artifacts = []
-        source_files = []
+        source_files = {}
         # Isolate scratch databases/events for each spec; merge only checked payloads.
         for index, spec in enumerate(specs):
             part = work / str(index) / 'payload'
@@ -336,7 +354,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
                     raise ValueError(f'Overlapping artifact destination: {relative}')
                 if spec.kind == 'reports':
                     original = spec.source / source.relative_to(part) if spec.source.is_dir() else spec.source
-                    source_files.append({'source': str(original), 'sha256': digest(source)})
+                    source_files[relative.as_posix()] = {'source': str(original), 'sha256': digest(source)}
                 source.rename(target)
                 paths.append(relative.as_posix())
             artifacts.append({'kind': spec.kind, 'name': spec.name or spec.source.name,
@@ -384,7 +402,8 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
             os.fsync(f.fileno())
         record = {'id': package_id, 'status': 'prepared', 'filename': filename, 'outbox_key': key,
                   'route': (Path(exchange_category(category)) / component(experiment)).as_posix(), 'sha256': digest(archive),
-                  'sources': [str(s.source) for s in specs], 'source_files': source_files, 'manifest': manifest}
+                  'sources': [str(s.source) for s in specs], 'manifest': manifest,
+                  'source_files': [source_files[item['path']] for item in files if item['path'] in source_files]}
         atomic_json(ledger, record)
         if build is not None:
             state['files'].update((item['path'], item['sha256']) for item in files)
@@ -670,8 +689,13 @@ def _receive(archive, config):
 
                 if legacy_update:
                     target = legacy_target(target.parent, manifest)
-                else:
-                    adopt_history(target, manifest)
+                elif manifest.get('adopt_legacy'):
+                    monitor = ROOT / '.local_resources/learndl_monitor'
+                    with contextlib.ExitStack() as stack:
+                        for folder in (monitor / 'model_preview', monitor / 'experiments'):
+                            if folder.is_dir():
+                                stack.enter_context(_file_lock(folder / 'operations.lock'))
+                        adopt_history(target, manifest, config, monitor)
                 apply_update(target, staging, manifest, mapped, experiments, legacy=legacy_update)
                 atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
                 return _finish_receive(archive, archive_hash, manifest, target)
