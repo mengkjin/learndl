@@ -2,13 +2,15 @@
 from datetime import datetime, timedelta, timezone
 import json
 import re
+import shutil
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import portalocker
 
-from .core import atomic_json, real_tree
+from .core import atomic_json, fsync_dir, real_tree
 from .model_properties import PROPERTY_FILE, read_properties, write_properties
 
 BUILD_NAME = re.compile(r'build[0-9]{8}\.[0-9]{6}\.[0-9]+')
@@ -73,12 +75,26 @@ def preserve_build(model):
     if not any((base / folder).is_dir() and any((base / folder).iterdir())
                for folder in ('configs', 'logs', 'run_logs', 'results')):
         return
-    build_identity(base)
+    build = build_identity(base)
+    archive = real_tree(PATH.model_archive)
+    archive.mkdir(parents=True, exist_ok=True)
+    for item in archive.glob(model.full_name + '.*'):
+        original = read_properties(item / PROPERTY_FILE).get('build', {})
+        if original.get('fingerprint') == build['fingerprint']:
+            return
+
     when = datetime.now()
-    while (target := PATH.model_archive / f'{model.full_name}.{when:%Y%m%d%H%M%S}').exists():
+    while (target := archive / f'{model.full_name}.{when:%Y%m%d%H%M%S}').exists():
         when += timedelta(seconds=1)
-    target.mkdir(parents=True)
-    for folder in ('configs', 'logs', 'run_logs', 'results'):
-        source = real_tree(base / folder)
-        if source.is_dir():
-            source.rename(target / folder)
+    with TemporaryDirectory(dir=archive, prefix='.preserve-') as temporary:
+        from pathlib import Path
+
+        staging = Path(temporary) / 'model'
+        staging.mkdir()
+        for folder in ('configs', 'logs', 'run_logs', 'results'):
+            source = real_tree(base / folder)
+            if source.is_dir():
+                shutil.copytree(source, staging / folder, symlinks=True)
+        (staging / '.build-preview-only').touch()
+        staging.rename(target)
+        fsync_dir(archive)

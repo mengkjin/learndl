@@ -348,6 +348,11 @@ def model_result_specs(base, name):
         members = tuple(name.split('/', 1)[1] for name in files if name.startswith(directory + '/'))
         if members:
             specs.append(ArtifactSpec(base / directory, category='model_training', members=members, destination=directory))
+    html = base / 'run_logs/html'
+    captures = tuple(path.name for path in sorted(html.glob('*.html'))
+                     if path.is_file() and not path.is_symlink())
+    if captures:
+        specs.append(ArtifactSpec(html, category='model_training', members=captures, destination='html'))
     return specs
 
 
@@ -380,8 +385,6 @@ def model_run(trainer, log=None):
                 build = build_identity(base()) if log is not None else None
                 if log is not None:
                     specs.extend(model_result_specs(base(), base.full_name))
-                    if log.html is not None and log.html.is_file():
-                        specs.append(ArtifactSpec(log.html, category='model_training', destination='html'))
                 else:
                     results = base.rslt()
                     members = tuple(p.relative_to(results).as_posix() for p in results.rglob('*') if p.is_file())

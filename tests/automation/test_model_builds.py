@@ -90,7 +90,8 @@ class ModelBuildTest(unittest.TestCase):
             original.unlink()
             second = build_identity(self.base)
         self.assertNotEqual(first['fingerprint'], second['fingerprint'])
-        self.assertNotEqual(first['name'], second['name'])
+        prefix, _, suffix = first['name'].rpartition('.')
+        self.assertEqual(second['name'], prefix + '.' + str(int(suffix) + 1))
         summary.write_text('retrained')
         self.publish('retrained', ['results/summary.txt', props], second)
         self.assertEqual(receive(self.rec)[0]['status'], 'received')
@@ -118,6 +119,33 @@ class ModelBuildTest(unittest.TestCase):
         with patch('src.automation.artifact_exchange.model_builds.replace_file', side_effect=OSError('interrupted')):
             self.assertEqual(receive(self.rec)[0]['status'], 'failed')
         self.assertEqual(load(target / PENDING), second['id'])
-        self.assertEqual(load(target / INDEX)['files']['results/summary.txt']['package'], first['id'])
+        committed = load(target / INDEX)
+        assert committed is not None
+        self.assertEqual(committed['files']['results/summary.txt']['package'], first['id'])
         self.assertEqual(receive(self.rec)[0]['status'], 'received')
         self.assertEqual((target / 'results/summary.txt').read_text(), 'second')
+
+    def test_original_results_and_status_log_survive_explicit_reset(self):
+        from src.proj import PATH
+        from src.res.model.util.core import ModelPath
+
+        short_root = self.root / 'models/st'
+        archive = self.root / 'models/archive'
+        with patch.object(PATH, 'lc_machine', self.root / 'machine'), \
+                patch.object(PATH, 'model_st', short_root), patch.object(PATH, 'model_archive', archive), \
+                patch.object(ModelPath, 'log_operation'):
+            model = ModelPath('st@' + MODEL)
+            model.mkdir(exist_ok=True)
+            before = build_identity(model.base)
+            model('logs', 'train.md').write_text('original training log')
+            model.rslt('summary.txt').write_text('original report')
+            model.clear_model_path()
+            model.mkdir(exist_ok=True)
+            after = build_identity(model.base, reset=True)
+            preserved, = archive.iterdir()
+            self.assertEqual(build_identity(preserved), before)
+            self.assertNotEqual(before['fingerprint'], after['fingerprint'])
+            self.assertFalse(model('logs', 'train.md').exists())
+            self.assertEqual((preserved / 'logs/train.md').read_text(), 'original training log')
+            self.assertEqual((preserved / 'results/summary.txt').read_text(), 'original report')
+            self.assertIsNone(ModelPath.resume_from_archive(model.full_name))

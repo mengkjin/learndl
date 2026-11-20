@@ -314,7 +314,10 @@ function renderModels(records,query){
  const modelEntries=new Map();
  for(const [key,files] of groups){
   const model=models[key]||{host:files[0].host,name:files[0].model,experiments:[]};
-  const all=model.builds||[{...model,build:files[0].build||''}];
+  const all=[...(model.builds||[])];
+  for(const build of new Set(files.map(row=>row.build||''))){
+   if(!all.some(entry=>entry.build===build))all.push({...model,build,versions:[]});
+  }
   const builds=all.filter(build=>{
    const candidates=files.filter(r=>(r.build||'')===build.build);
    return candidates.length&&modelMatches(build)&&

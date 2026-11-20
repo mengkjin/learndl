@@ -547,7 +547,7 @@ class ModelLifecycle:
         if not all(key in target for key in ('model', 'algo')):
             raise ValueError('Production target requires model and algo mappings')
         with self.lock():
-            _write(self.target_file, target)
+            _write(self.target_file, rename_status_callback(target))
             self.save(target_version=_target_digest(target), status='needs_training', accepted_request=None,
                       repair_generation=int(self.state.get('repair_generation', 0)) + 1, force_retrain=retrain)
 

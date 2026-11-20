@@ -262,17 +262,20 @@ class ModelPath:
         return self
 
     def clear_model_path(self):
-        """clear model directory , but archive directory will protected , log directory will be remained"""
-        if self.is_resumable and not self.is_short_test:
-            Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
-            return
-        else:
-            from src.automation.artifact_exchange.model_identity import preserve_build
+        """Preserve published results and start a new build on the next fit."""
+        from src.automation.artifact_exchange.model_identity import preserve_build
+        from src.res.model.util.lifecycle import ModelLifecycle
 
+        with ModelLifecycle(self.base).lock():
+            if self.is_resumable and not self.is_short_test:
+                Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
+                return
             preserve_build(self)
-            [shutil.rmtree(folder , ignore_errors=True) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
+            for folder in (self.archive(), self.conf(), self.rslt(), self.snapshot(), self('logs'), self('run_logs')):
+                if folder.exists():
+                    shutil.rmtree(folder)
             self.log_operation('clear_model_path')
-    
+
     def remove_model_path(self):
         """delete model directory and log file , will ask for confirmation if not a short test model"""
         raise NotImplementedError('remove_model_path is not implemented')
@@ -401,7 +404,9 @@ class ModelPath:
         revert model from archive
         full_name can be the full name of the model, or the full name of the model with the datetime suffix
         """
-        candidates = [path for path in PATH.model_archive.iterdir() if path.is_dir() and path.name.startswith(start_with)]
+        candidates = [path for path in PATH.model_archive.iterdir()
+                      if path.is_dir() and path.name.startswith(start_with)
+                      and not (path / '.build-preview-only').exists()]
         if not candidates:
             Logger.alert1(f'No candidates found for {start_with}')
             return None

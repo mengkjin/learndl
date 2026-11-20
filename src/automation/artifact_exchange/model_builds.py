@@ -131,7 +131,7 @@ def merge_legacy_log(destination, source):
             temporary.unlink(missing_ok=True)
 
 
-def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False, backup=None):
+def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False):
     """Apply a validated package with per-file ordering and a restart marker."""
     identity = ({'name': target.name, 'estimated': True, 'legacy_attribution': 'source_and_model_name'}
                 if legacy else validate_build(manifest['model_build']))
@@ -143,6 +143,9 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
         if existing.get('legacy_attribution'):
             identity = identity | {'legacy_attribution': existing['legacy_attribution']}
         index['build'] = identity
+    if (index['host'], index['model']) != (manifest.get('host') or 'unknown',
+                                          manifest.get('experiment') or manifest['task']):
+        raise ValueError('Model build belongs to a different source')
     target.mkdir(parents=True, exist_ok=True)
     pending = target / PENDING
     if load(pending, manifest['id']) != manifest['id']:
@@ -154,11 +157,15 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
         name = item['path']
         relative = mapped[name].as_posix()
         source = real_tree(staging / relative)
-        if not source.is_file() or relative == INVENTORY or relative.startswith('snapshot/'):
+        if (not source.is_file() or relative == INVENTORY or relative.startswith('snapshot/')
+                or any(part.startswith('.') for part in safe_path(relative).parts)):
             continue
         fragment = legacy and relative.startswith('run-log/') and relative.split('/')[-1] in ('train.md', 'test.md')
         if fragment:
             relative = 'logs/' + relative.split('/')[-1]
+        elif legacy and relative.split('/', 1)[0] not in ('configs', 'logs', 'results', 'html'):
+            kind = experiments.get(name)
+            relative = f'results/{kind}/{relative}' if kind else 'results/' + relative
         destination = real_tree(target / safe_path(relative))
         previous = index['files'].get(relative, {})
         if previous and (sequence, stamp) < (previous['sequence'], previous['stamp']) and not (
@@ -172,10 +179,6 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
             if not destination.exists():
                 continue
         elif not destination.is_file() or digest(destination) != item['sha256']:
-            if backup is not None and destination.is_file():
-                saved = backup / relative
-                if not saved.exists():
-                    replace_file(destination, saved)
             replace_file(source, destination)
         index['files'][relative] = {
             'path': relative, 'sha256': digest(destination) if fragment else item['sha256'],
