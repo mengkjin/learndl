@@ -1,0 +1,13 @@
+/* Match Model Preview inside the embedded report, including saved snapshots. */
+:root{color-scheme:dark;background:#10161e;color:#e2e8f0}
+*{box-sizing:border-box}
+body{font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;max-width:none;margin:0;padding:0;background:transparent;color:inherit}
+header,.tree{background:#17212c;border:1px solid #293748;border-radius:10px;padding:14px;margin-bottom:14px}
+h1,h2{line-height:1.25}h1{font-size:22px;margin-bottom:12px}h2{font-size:19px}
+summary,.entry-row{border-color:#293748}
+.kind,.description,small,label,#browse-status{color:#a6b8cc}
+strong{color:#f4bd9b}a{color:#8de2d3}
+button,select,input[type="search"]{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px}
+button,select{cursor:pointer}button:hover,button:focus-visible,select:focus-visible,input[type="search"]:focus-visible{border-color:#55ccb9}
+input[type="search"]{min-width:0;max-width:100%}input[type="checkbox"]{accent-color:#55ccb9}
+.load-next{font-size:12px;padding:3px 7px}

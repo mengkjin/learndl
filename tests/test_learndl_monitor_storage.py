@@ -100,7 +100,10 @@ class StorageServiceTest(unittest.TestCase):
                     with urlopen(address, timeout=5) as response:
                         self.assertIn(b'emailAfter', response.read())
                     with urlopen(address + '/snapshot/', timeout=5) as response:
-                        self.assertIn(b'/snapshot/', response.read())
+                        snapshot_page = response.read()
+                        self.assertIn(b'/snapshot/', snapshot_page)
+                        self.assertIn(b'color-scheme:dark', snapshot_page)
+                    self.assertNotIn('color-scheme:dark', report.read_text())
                     with post('scan') as response:
                         self.assertEqual(response.status, 202)
                     for _ in range(100):

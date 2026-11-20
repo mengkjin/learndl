@@ -3,9 +3,19 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Storage Insights</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#10161e;color:#dce8ee;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-header{padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;border-bottom:1px solid #293748}h1{font-size:22px;margin:0;font-weight:550}.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}button,select{border:1px solid #344355;border-radius:7px;background:#202c3a;color:#dce8ee;padding:9px 13px;cursor:pointer}button:first-child{background:#27564f;border-color:#33776b}button:disabled{opacity:.4;cursor:default}label{font-size:13px;color:#a6b6c8}input{accent-color:#55ccb9}
-#activity{margin:0;padding:12px 24px;background:#17212c}summary{cursor:pointer;color:#9bb8c8}pre{font:12px/1.8 monospace;white-space:pre-wrap;max-height:200px;overflow:auto;margin:12px 0 0}#error{color:#ffb6a6;padding:0 24px;white-space:pre-wrap}#error:empty{display:none}iframe{border:0;width:100%;height:calc(100vh - 135px);background:white;display:block}iframe[hidden]{display:none}
+:root{color-scheme:dark;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
+*{box-sizing:border-box}
+body{max-width:1240px;margin:0 auto;padding:36px 24px 0;min-height:100dvh;display:flex;flex-direction:column;gap:14px}
+header,.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+header{justify-content:space-between;gap:16px}h1{font-size:28px;line-height:1.25;margin:0}
+button,select{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px;cursor:pointer}
+button:enabled:hover,button:focus-visible,select:focus-visible{border-color:#55ccb9}
+button:disabled{opacity:.4;cursor:default}label{font-size:13px;color:#a6b8cc}input{accent-color:#55ccb9}
+#activity{padding:8px 14px;background:#17212c;border:1px solid #293748;border-radius:10px}
+summary{cursor:pointer}pre{font:12px/1.8 monospace;color:#a6b8cc;white-space:pre-wrap;max-height:200px;overflow:auto;margin:8px 0 0}
+#error{color:#f4bd9b;margin:0;white-space:pre-wrap}#error:empty{display:none}
+iframe{border:0;width:100%;flex:1;min-height:320px;background:#10161e;display:block}iframe[hidden]{display:none}
+@media(max-width:760px){body{padding:20px 12px 0}}
 </style>
 <header><h1 id="title"></h1><div class="actions"><button id="scan"></button><label><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label><button id="email"></button><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></div></header>
 <details id="activity"><summary id="summary"></summary><pre id="progress" role="log" aria-live="polite"></pre></details><p id="error" role="alert"></p>

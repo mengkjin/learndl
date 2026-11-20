@@ -1,0 +1,7 @@
+fit:
+  - name: resnet_gru_simp_15m_pearson_AdamW
+    mode: sparse
+
+resume: False
+force: False
+rerun_mark: 1

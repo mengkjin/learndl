@@ -1,17 +1,13 @@
 fit:
+
+  - name: factorseq_v3_temporal
+    mode: sparse
+    resume: True
+  - name: factorseq_v3_contextual
+    mode: sparse
   - name: resnet_gru_simp_15m_learned_swa
     mode: sparse
   - name: resnet_gru_simp_15m_pearson_swa
-    mode: sparse
-  - name: resnet_gru_simp_15m_learned
-    mode: sparse
-  - name: resnet_gru_simp_15m_pearson
-    mode: sparse
-  - name: factorseq_v3_snapshot
-    mode: sparse
-  - name: factorseq_v3_temporal
-    mode: sparse
-  - name: factorseq_v3_contextual
     mode: sparse
 
 resume: False

@@ -40,6 +40,7 @@ def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -
     def keep_nested(k: str) -> bool:
         exclude_keys = ('input.sequence.lens' , 'input.sequence.steps' , 'input.factor.types' ,
                         'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses' ,
+                        'train.trainer.optimizer.param' ,
                         'train.boost.param' , 'train.boost.weight' , 'train.boost.valid_metric')
         return (k.endswith(exclude_keys) or not k.islower())
     config = input if isinstance(input, Base.FlattenDict) else Base.FlattenDict.from_input(input, keep_nested=keep_nested)

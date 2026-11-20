@@ -30,6 +30,7 @@ def main():
     token = secrets.token_urlsafe(32)
     status = {'busy': False, 'error': '', 'snapshot': '', 'progress': [], 'revision': 0}
     reports = []
+    snapshot_style = Path(__file__).with_name('storage_snapshot.css').read_text(encoding='utf-8')
 
     def progress(message):
         status['progress'] = [*status['progress'][-499:], str(message)]
@@ -141,7 +142,8 @@ def main():
                         content = response.read()
                         content_type = response.headers.get('Content-Type', 'application/json')
                         if response.headers.get_content_type() == 'text/html':
-                            content = content.decode().replace(snapshot.base, prefix).encode()
+                            page = content.decode().replace(snapshot.base, prefix)
+                            content = page.replace('</style>', f'</style><style>{snapshot_style}</style>', 1).encode()
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
                 self.end_headers()

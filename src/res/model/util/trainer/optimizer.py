@@ -97,6 +97,7 @@ class Optimizer:
 
         return {
             'Adam': optim.Adam ,
+            'AdamW': optim.AdamW ,
             'SGD' : optim.SGD ,
             'SAM' : sam.SAM ,
             'ASAM': sam.ASAM ,  
