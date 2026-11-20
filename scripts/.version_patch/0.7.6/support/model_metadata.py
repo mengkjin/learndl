@@ -12,7 +12,7 @@ from src.automation.artifact_exchange.core import (
     Config, atomic_json, digest, publish_artifacts, real_tree, send_prepared,
 )
 from src.automation.artifact_exchange.model_metadata import (
-    BACKFILL_TASK, metadata_specs, source_models,
+    BACKFILL_TASK, DIRECTORIES, metadata_baseline, metadata_specs, source_models,
 )
 from src.automation.artifact_exchange.model_properties import (
     PROPERTY_FILE, coverage, read_properties, write_properties,
@@ -238,6 +238,12 @@ def apply(ctx):
                     ledger = config.state / 'outbox' / frozen['outbox_key'] / 'delivery.json'
             outcome = send_prepared([dict(frozen)], config)[0]
             item.update(status=durable(ledger, read(ledger)), id=frozen['id'], ledger=str(ledger))
+            if item['status'] in ('published', 'pending'):
+                with ModelLifecycle(base).lock():
+                    baseline = metadata_baseline(config, name)
+                    if not baseline.exists():
+                        atomic_json(baseline, {file['path']: file['sha256'] for file in frozen['manifest']['files']
+                                              if file['path'].split('/', 1)[0] in DIRECTORIES})
             if 'error' in outcome:
                 item['error'] = outcome['error']
             else:

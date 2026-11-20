@@ -54,11 +54,15 @@ def read_inventory(path):
         return {}
 
 
+def metadata_baseline(config, model):
+    return real_tree(config.state / 'model_metadata' / component(config.source_host) / (component(model) + '.json'))
+
+
 @contextmanager
 def metadata_specs(config, base, model, *, full=False):
     """Describe a complete inventory, with bytes for members changed since the prior snapshot."""
     current = {relative: digest(path) for path, relative in metadata_files(base)}
-    baseline = real_tree(config.state / 'model_metadata' / component(config.source_host) / (component(model) + '.json'))
+    baseline = metadata_baseline(config, model)
     previous = {} if full else read_inventory(baseline)
     specs = []
     if current == previous:

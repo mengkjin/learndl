@@ -132,6 +132,8 @@ class ModelMetadataTest(unittest.TestCase):
             ledger, = [(path, row) for path, row in migration.delivery_records(self.pub)
                        if row['manifest']['task'] == BACKFILL_TASK]
             self.assertEqual(migration.durable(ledger[0], ledger[1]), 'pending')
+            with metadata_specs(self.pub, self.base, MODEL) as (specs, _, _):
+                self.assertEqual(specs, [])
             self.config_file.write_text('model.module: changed after the frozen snapshot\n')
             (self.pub.shared_root / '.stfolder').mkdir()
             migration.apply(context)

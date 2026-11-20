@@ -30,8 +30,12 @@ class ExperimentsTest(unittest.TestCase):
             event.write_text('')
             os.utime(event, (1800000000 if name == 'older' else 500, 1800000000 if name == 'older' else 500))
         paths = SimpleNamespace(model=model, model_archive=model / 'archive', optuna=self.root / 'optuna')
-        with patch('src.proj.PATH', paths), patch.object(dashboard, '_tensorboard_snapshot_ready', return_value=True), patch(
-                'src.api.learndl_monitor.experiments.ROOT', self.root):
+        from src.automation.artifact_exchange.core import Config
+
+        root = self.root.resolve()
+        exchange = Config(shared_root=root / 'share', state=root / 'exchange', results=root / 'results')
+        with patch('src.proj.PATH', paths), patch.object(dashboard, '_tensorboard_snapshot_ready', return_value=True), \
+                patch.object(Config, 'load', return_value=exchange):
             groups = self.manager.sources()['tensorboard']
         self.assertEqual(groups[0]['en'], 'Latest training')
         self.assertEqual(len(groups[0]['items']), 2)
