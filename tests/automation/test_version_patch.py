@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing, nullcontext
+from contextlib import closing, nullcontext, redirect_stderr, redirect_stdout
 from functools import partial
 from pathlib import Path
+from io import StringIO
 import json
 import os
 import subprocess
@@ -122,13 +123,56 @@ def verify(ctx):
 """)
         self.commit()
         self.assertIsNotNone(version.admission_reason(self.root, self.runtime))
-        result = self.apply()
+        with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as progress:
+            result = self.apply()
+        self.assertFalse(stdout.getvalue())
+        lines = progress.getvalue().splitlines()
+        self.assertEqual(len(lines), 5)
+        self.assertIn('[1/2] Applying version patch 0.7.2/001', lines[0])
+        self.assertIn('[1/2] Verified version patch 0.7.2/001', lines[1])
+        self.assertIn('[2/2] Applying version patch 0.7.10/001', lines[2])
+        self.assertIn('[2/2] Verified version patch 0.7.10/001', lines[3])
+        self.assertIn('Data version 0.7.11', lines[4])
         self.assertEqual(result['patches'], ['0.7.2/001', '0.7.10/001'])
         self.assertEqual(result['version'], '0.7.11')
         self.assertEqual(self.apply()['patches'], [])
         self.assertIsNone(version.admission_reason(self.root, self.runtime))
         self.assertEqual(len(version.status(self.root, self.runtime)['records']), 2)
         self.assertEqual(len(list(version.ledger_path(self.runtime).parent.glob('attempts/*/backup/example.json'))), 1)
+
+        sender = Mock(side_effect=[False, True])
+        with patch.object(git_update, 'runtime_dir', return_value=self.scheduling):
+            self.assertFalse(git_update.deliver_update_emails(sender))
+            self.assertTrue(git_update.deliver_update_emails(sender))
+            self.assertTrue(git_update.deliver_update_emails(sender))
+        self.assertEqual(sender.call_count, 2)
+        self.assertEqual(sender.call_args_list[0], sender.call_args_list[1])
+        self.assertIn('Data version: 0.7.1 -> 0.7.11', sender.call_args.args[1])
+        self.assertIn('Verified patches (2):\n- 0.7.2/001\n- 0.7.10/001', sender.call_args.args[1])
+
+    def test_incomplete_batch_only_notifies_success_after_retry(self):
+        self.release('0.7.2')
+        script = 'def apply(ctx): pass\ndef verify(ctx): return %s\n'
+        self.patch_file('0.7.2', '001_first', script % 'True')
+        second = self.patch_file('0.7.2', '002_second', script % 'False')
+        self.commit()
+        self.assertEqual(self.apply()['status'], 'blocked')
+        enqueue = Mock()
+        version.queue_completed_batches(self.runtime, enqueue)
+        enqueue.assert_not_called()
+
+        second.write_text(script % 'True')
+        self.commit()
+        self.assertEqual(self.apply(retry='0.7.2/002')['patches'], ['0.7.2/002'])
+        enqueue.side_effect = OSError('mail store unavailable')
+        with self.assertRaisesRegex(OSError, 'mail store unavailable'):
+            version.queue_completed_batches(self.runtime, enqueue)
+        enqueue.side_effect = None
+        version.queue_completed_batches(self.runtime, enqueue)
+        version.queue_completed_batches(self.runtime, enqueue)
+        self.assertEqual(enqueue.call_count, 2)
+        self.assertEqual(enqueue.call_args_list[0], enqueue.call_args_list[1])
+        self.assertEqual(json.loads(enqueue.call_args.args[1])['patches'], ['0.7.2/002'])
 
     def test_failed_verification_blocks_until_retry_and_keeps_attempts(self):
         self.release('0.7.2')

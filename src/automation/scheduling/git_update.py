@@ -16,6 +16,7 @@ __all__ = [
 import json
 import hashlib
 import os
+import sqlite3
 import signal
 import subprocess
 import time
@@ -75,8 +76,6 @@ def queue_version_failure(attempt: AttemptRecord) -> None:
 
 def version_failure_mail_status(attempt_id: str) -> str:
     """Read the failure notice status without creating the mail store."""
-    import sqlite3
-
     path = runtime_dir() / 'runs.sqlite'
     try:
         with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as connection:
@@ -145,13 +144,29 @@ def _repository_notice_body(data: dict) -> str:
             'this same snapshot; it may no longer reflect the state at delivery time.')
 
 
+def _queue_completed_patch_mail(store: RunStore) -> bool:
+    from src.automation.version_patch import MigrationError, queue_completed_batches
+
+    def enqueue(batch_id: str, data: str) -> None:
+        with store.connect() as connection:
+            connection.execute('INSERT OR IGNORE INTO git_update_mail(id,data) VALUES (?,?)',
+                               ('version-success-' + batch_id, data))
+
+    try:
+        queue_completed_batches(runtime_dir().parent, enqueue)
+    except (OSError, sqlite3.Error, MigrationError) as exc:
+        logger.error('Could not queue completed version patch emails: %s', exc)
+        return False
+    return True
+
+
 def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> bool:
     """Retry pending notices each watchdog tick; only mark delivered after SMTP success."""
     store = _mail_store()
+    delivered = notice_id is not None or _queue_completed_patch_mail(store)
     with store.connect() as connection:
         rows = connection.execute('SELECT id,data FROM git_update_mail WHERE sent=0' +
                                   (' AND id=?' if notice_id else ''), (notice_id,) if notice_id else ()).fetchall()
-    delivered = True
     for key, raw in rows:
         data = json.loads(raw)
         if data.get('kind') == 'version_patch_failure':
@@ -167,6 +182,14 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
                     body += f'{field}: {failure[field]}\n'
             body += (f'Log: {data["log_path"]}\nNew business tasks are paused.\n'
                      f'Retry: {failure.get("retry") or (".venv/bin/python -m src.automation.version_patch retry " + data["patch"])}')
+        elif data.get('kind') == 'version_patch_success':
+            patches = '\n'.join(f'- {patch_id}' for patch_id in data['patches'])
+            finished = datetime.fromtimestamp(data['finished_at'], timezone.utc).isoformat()
+            subject = f'Learndl version patches completed - {data["host"]} - {data["target_version"]}'
+            body = (f'Host: {data["host"]}\nCommit: {data["commit_hash"]}\n'
+                    f'Data version: {data["source_version"]} -> {data["target_version"]}\n'
+                    f'Completed at: {finished}\nVerified patches ({len(data["patches"])}):\n{patches}\n'
+                    f'Attempt logs: {data["attempts_dir"]}')
         elif data.get('kind') == 'git_operation':
             subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
             body = data['body']

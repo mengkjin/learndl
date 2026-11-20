@@ -14,7 +14,8 @@ __all__ = ['logger']
 
 class _ConsoleHandler(logging.StreamHandler):
     def emit(self, record):
-        self.stream = sys.stderr if record.levelno >= logging.ERROR else sys.stdout
+        use_stderr = record.levelno >= logging.ERROR or getattr(record, 'console_stderr', False)
+        self.stream = sys.stderr if use_stderr else sys.stdout
         super().emit(record)
 
 

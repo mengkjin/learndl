@@ -38,6 +38,7 @@ __all__ = [
     'business_lease',
     'code_lease',
     'initialize',
+    'queue_completed_batches',
     'load_patch_support',
     'main',
     'needs_migration',
@@ -214,6 +215,22 @@ def initialize(runtime: Path, *, required: bool = False) -> None:
             raise MigrationError('Version migration ledger is corrupt; restore from backup')
         read_state(db)
         db.execute('SELECT id, patch, path, digest, commit_hash, host, attempt, started, finished, status, error, log_path FROM attempts LIMIT 0')
+
+
+def queue_completed_batches(runtime: Path, enqueue: Callable[[str, str], None]) -> None:
+    """Transfer committed batch notices to the mail outbox before acknowledging them."""
+    if not ledger_path(runtime).is_file():
+        return
+    with closing(connect(runtime, readonly=True)) as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='completed_batches'").fetchone() is None:
+            return
+        pending = db.execute('SELECT id, data FROM completed_batches WHERE queued=0 ORDER BY rowid').fetchall()
+    if not pending:
+        return
+    for notice in pending:
+        enqueue(notice['id'], notice['data'])
+    with closing(connect(runtime)) as db, db:
+        db.executemany('UPDATE completed_batches SET queued=1 WHERE id=?', [(row['id'],) for row in pending])
 
 
 def read_state(db: sqlite3.Connection) -> tuple[str | None, str | None]:
@@ -626,7 +643,10 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
         committed_catalog(root, commit, state['target'])
         pending = state['pending']
         source_version = state['applied']
+        host = socket.gethostname()
+        batch_id = uuid.uuid4().hex
         for index, patch in enumerate(pending):
+            started = time.time()
             if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
                 raise MigrationError('Checkout changed during migration')
             key = uuid.uuid4().hex
@@ -638,9 +658,12 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
                 db.execute("""INSERT INTO attempts
                     (id, patch, path, digest, commit_hash, host, attempt, started, status, log_path)
                     VALUES (?,?,?,?,?,?,(SELECT COUNT(*) + 1 FROM attempts WHERE patch=?),?,'running',?)""",
-                           (key, patch.id, patch.relative_path, patch.digest, commit, socket.gethostname(),
-                            patch.id, time.time(), str(log)))
+                           (key, patch.id, patch.relative_path, patch.digest, commit, host,
+                            patch.id, started, str(log)))
             context = Context(root, source_version, patch.version, log, backups)
+            progress = {'console_stderr': True}
+            logger.info('[%d/%d] Applying version patch %s (log: %s)',
+                        index + 1, len(pending), patch.id, log, extra=progress)
             try:
                 if index == 0 and services is not None:
                     try:
@@ -673,17 +696,37 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
                     notify(attempt)
                 except Exception as exc:
                     logger.error('Could not queue version patch email: %s', exc)
+                logger.error('[%d/%d] Version patch %s failed: %s', index + 1, len(pending), patch.id, summary['error'])
                 return {'status': 'blocked', 'reason': f'{patch.id} failed: {summary["error"]}',
                         'log': str(log), 'failure': summary, 'attempt_id': key}
+            finished = time.time()
+            last = index + 1 == len(pending)
             with db:
-                db.execute("UPDATE attempts SET status='success', finished=? WHERE id=?", (time.time(), key))
-                if index + 1 == len(pending) or pending[index + 1].version != patch.version:
-                    source_version = patch.version
+                db.execute("UPDATE attempts SET status='success', finished=? WHERE id=?", (finished, key))
+                if last or pending[index + 1].version != patch.version:
+                    source_version = state['target'] if last else patch.version
                     db.execute('UPDATE state SET applied=? WHERE id=1', (source_version,))
-        if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
-            raise MigrationError('Checkout changed during migration')
-        with db:
-            db.execute('UPDATE state SET applied=? WHERE id=1', (state['target'],))
+                if last:
+                    # Commit the notice with the final patch, so a worker exit
+                    # between migration and SMTP delivery cannot lose the batch.
+                    db.execute('CREATE TABLE IF NOT EXISTS completed_batches '
+                               '(id TEXT PRIMARY KEY, data TEXT NOT NULL, queued INTEGER NOT NULL DEFAULT 0)')
+                    notice = dict(kind='version_patch_success', host=host, commit_hash=commit,
+                                  source_version=state['applied'], target_version=state['target'],
+                                  patches=[item.id for item in pending],
+                                  finished_at=finished, attempts_dir=str(folder.parent))
+                    db.execute('INSERT INTO completed_batches(id, data) VALUES (?,?)',
+                               (batch_id, json.dumps(notice)))
+            logger.info('[%d/%d] Verified version patch %s (%.1fs)',
+                        index + 1, len(pending), patch.id, finished - started, extra=progress)
+        if not pending:
+            if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
+                raise MigrationError('Checkout changed during migration')
+            with db:
+                db.execute('UPDATE state SET applied=? WHERE id=1', (state['target'],))
+        else:
+            logger.info('Verified %d version patch(es). Data version %s. Success email recorded for delivery.',
+                        len(pending), state['target'], extra={'console_stderr': True})
         return {'status': 'ready', 'version': state['target'], 'patches': [p.id for p in pending]}
 
 

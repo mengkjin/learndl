@@ -110,7 +110,11 @@ Run from the project checkout with the project's Python environment.
 - `python -m src.automation.version_patch status` shows versions, pending
   patches, and attempt history. `plan` shows pending work.
 - `python -m src.automation.version_patch apply` runs pending patches under the
-  same locks as the timer. On a fresh installation, the first maintenance tick
+  same locks as the timer. `apply` and `retry` report the current patch, log path,
+  and verification result as the run progresses. Progress goes to stderr so
+  stdout remains a single JSON result. Each fully verified batch with at least
+  one patch records a single summary email for watchdog delivery, listing the
+  applied patches and resulting data version. On a fresh installation, the first maintenance tick
   or `apply` registers the current code version and skips older patches. Empty
   directory scaffolding and the checkout's `results/README.md` do not count as
   existing data.
