@@ -1,4 +1,6 @@
+from dataclasses import replace
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -33,6 +35,192 @@ class ModelBuildTest(unittest.TestCase):
 
     def transfer(self, record):
         return self.pub.inbox / record['route'] / record['filename']
+
+    def test_model_preview_moves_only_selected_build_and_routes_new_deliveries(self):
+        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.proj import PATH
+
+        self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
+        self.enterContext(patch('src.res.model.util.core.model_path.source_models', return_value=[]))
+        original = build_identity(self.base, fresh=True)
+        report = self.base / 'results/report.txt'
+        report.write_text('initial')
+        events = self.base / 'events'
+        events.mkdir()
+        (events / 'events.out.tfevents.test').write_bytes(b'events')
+        db = self.base / 'study.sqlite3'
+        with sqlite3.connect(db) as connection:
+            connection.execute('CREATE TABLE sample (x integer)')
+        publish_artifacts('model_training', 'original', [
+            ArtifactSpec(path, kind=kind, category='model_training', experiment=MODEL)
+            for path, kind in ((report, 'reports'), (events, 'tensorboard'), (db, 'optuna'))
+        ], config=self.pub, build=original)
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+
+        library = Library('model_preview', self.rec, self.root / 'monitor')
+        self.enterContext(patch('src.api.learndl_monitor.experiments.Instances.discover', return_value=[]))
+
+        def execute(action, build, value=None):
+            entry = next(row for row in inventory(library).values() if row['build'] == build['name'])
+            item = dict(id=entry['id'], value=value)
+            planned, = manage(library, action, [item])
+            self.assertTrue(planned.get('ok'), planned)
+            applied, = manage(library, action, [item | {'target': planned['target']}], apply=True)
+            self.assertTrue(applied.get('ok'), applied)
+            return Path(applied['target'])
+
+        entry, = inventory(library).values()
+        atomic_json(library.state / 'model_views.json', {entry['model_id']: {entry['build']: 'archived_trash'}})
+        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+        execute('archive', original)
+        archived = execute('rename', original, 'renamed')
+        self.assertEqual(archived.relative_to(self.rec.results).parts,
+                         ('external', 'models', 'archive', 'server', 'nn@gru@renamed', original['name']))
+        report.write_text('update')
+        updated = self.publish('update', ['results/report.txt'], original)
+        self.assertEqual(receive(self.rec)[0]['target'], str(archived))
+        self.assertEqual((archived / 'results/report.txt').read_text(), 'update')
+        receipt = load(self.rec.state / 'received' / (updated['manifest']['id'] + '.json'), {})
+        self.assertEqual(receipt['target'], str(archived))
+        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+
+        self.base.rename(self.root / 'original')
+        report.parent.mkdir(parents=True)
+        report.write_text('new build')
+        newer = build_identity(self.base, fresh=True)
+        self.publish('newer', ['results/report.txt'], newer)
+        result, = receive(self.rec)
+        self.assertEqual(Path(result['target']).parent.name, MODEL)
+        self.assertNotEqual(Path(result['target']).parent, archived.parent)
+        self.assertEqual({(row['name'], row['hidden']) for row in inventory(library).values()},
+                         {('nn@gru@renamed', True), (MODEL, False)})
+        execute('show', original)
+        restored = execute('restore_archive', original)
+        numbered = execute('renumber', original, '2')
+        self.assertFalse(restored.exists())
+        self.assertEqual(numbered.parent.name, 'nn@gru@renamed@2')
+        self.assertEqual((numbered / 'results/report.txt').read_text(), 'update')
+        self.assertEqual(report.read_text(), 'new build')
+
+        from src.api.learndl_monitor.experiments import synced_sources
+
+        for rows in synced_sources(self.rec.results).values():
+            source, = rows
+            self.assertTrue(Path(source['path']).is_relative_to(numbered))
+        other = replace(self.pub, source_host='another-server')
+        publish_artifacts('model_training', 'other-host', [
+            ArtifactSpec(report, category='model_training', experiment=MODEL)
+        ], config=other, build=original)
+        received, = receive(self.rec)
+        self.assertEqual(Path(received['target']).parent.parent.name, 'another-server')
+        self.assertEqual((numbered / 'results/report.txt').read_text(), 'update')
+
+    def test_manage_local_empty_directory_and_restore_with_number_conflict(self):
+        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.proj import PATH
+
+        base = self.root / 'models'
+        archive = base / 'archive'
+        archive.mkdir()
+        self.enterContext(patch.object(PATH, 'model', base))
+        self.enterContext(patch.object(PATH, 'model_nn', base / 'nn'))
+        self.enterContext(patch.object(PATH, 'model_archive', archive))
+        self.enterContext(patch('src.res.model.util.core.model_path.ModelPath.log_file'))
+        self.enterContext(patch('src.api.learndl_monitor.experiments.Instances.discover', return_value=[]))
+        library = Library('model_preview', self.rec, self.root / 'monitor')
+
+        def plan(operation, entry, value=None):
+            result, = manage(library, operation, [dict(id=entry['id'], value=value)])
+            self.assertTrue(result.get('ok'), result)
+            return result
+
+        def apply(operation, planned, value=None):
+            result, = manage(library, operation, [planned | {'value': value}], apply=True)
+            self.assertTrue(result.get('ok'), result)
+            return Path(result['target'])
+
+        entry, = inventory(library).values()
+        self.assertEqual(library.model_listing()['files'], [])
+        moved = apply('archive', plan('archive', entry))
+        self.assertEqual(moved.parent, archive)
+        self.base.mkdir()
+        archived = next(row for row in inventory(library).values() if row['archived'])
+        restore = plan('restore_archive', archived)
+        self.assertTrue(restore['name'].endswith('@2'))
+        restored = apply('restore_archive', restore)
+        row = next(row for row in inventory(library).values() if row['path'] == str(restored))
+        conflict, = manage(library, 'renumber', [{'id': row['id'], 'value': '1'}])
+        self.assertIn('destination already exists', conflict['error'])
+        renamed = apply('rename', plan('rename', row, 'another'), 'another')
+        self.assertTrue(renamed.is_dir())
+        self.assertTrue(self.base.is_dir())
+
+    def test_archived_legacy_build_adoption_keeps_location_and_hidden_state(self):
+        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.proj import PATH
+
+        self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
+        self.enterContext(patch('src.res.model.util.core.model_path.source_models', return_value=[]))
+        self.enterContext(patch('src.api.learndl_monitor.experiments.Instances.discover', return_value=[]))
+        atomic_json(self.rec.state / 'model_builds_ready.json', {})
+        (self.base / 'results/report.txt').write_text('legacy')
+        self.publish('legacy', ['results/report.txt'])
+        self.assertEqual(receive(self.rec)[0]['status'], 'received')
+
+        library = Library('model_preview', self.rec, self.root / '.local_resources/learndl_monitor')
+        entry, = inventory(library).values()
+        selection = {'id': entry['id']}
+        manage(library, 'hide', [selection | {'target': entry['path']}], apply=True)
+        planned, = manage(library, 'archive', [selection])
+        with patch('src.api.learndl_monitor.model_management.update_state', side_effect=OSError('interrupted')):
+            outcome, = manage(library, 'archive', [planned], apply=True)
+            self.assertEqual(outcome['error'], 'interrupted')
+        self.assertEqual(manage(library, 'recover', [], apply=True), [{'ok': True}])
+        archived = Path(planned['target'])
+        self.assertTrue(archived.is_dir())
+
+        formal = build_identity(self.base)
+        self.publish('adopt', ['logs/property.jsonl'], formal, adopt=True)
+        outcome, = receive(self.rec)
+        self.assertEqual(outcome['status'], 'received', outcome)
+        target = archived.with_name(formal['name'])
+        self.assertEqual(outcome['target'], str(target))
+        self.assertEqual((target / 'results/report.txt').read_text(), 'legacy')
+        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+
+    def test_history_undo_retains_updates_and_restores_visibility(self):
+        from src.api.learndl_monitor.model_management import inventory, manage, operation_history, undo_latest
+        from src.proj import PATH
+        self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
+        self.enterContext(patch('src.res.model.util.core.model_path.source_models', return_value=[]))
+        self.enterContext(patch('src.api.learndl_monitor.experiments.Instances.discover', return_value=[]))
+        build = build_identity(self.base, fresh=True)
+        report = self.base / 'results/report.txt'
+        report.write_text('before')
+        self.publish('before', ['results/report.txt'], build)
+        receive(self.rec)
+        library = Library('model_preview', self.rec, self.root / 'monitor')
+        original, = inventory(library).values()
+        for action, value in [('rename', 'new-name@2'), ('archive', None), ('hide', None)]:
+            row, = inventory(library).values()
+            item = dict(id=row['id'], value=value)
+            planned, = manage(library, action, [item])
+            self.assertTrue(planned.get('ok'), planned)
+            result, = manage(library, action, [item | {'target': planned['target']}], apply=True,
+                             entry='cli' if action == 'archive' else 'web')
+            self.assertTrue(result.get('ok'), result)
+        report.write_text('updated')
+        self.publish('updated', ['results/report.txt'], build)
+        receive(self.rec)
+        self.assertEqual(len(operation_history(library)), 3)
+        for _ in range(3):
+            self.assertTrue(undo_latest(library)['ok'])
+            self.assertTrue(undo_latest(library, apply=True)['ok'])
+        row, = inventory(library).values()
+        self.assertEqual(row['path'], original['path'])
+        self.assertFalse(row['hidden'])
+        self.assertEqual((Path(row['path']) / 'results/report.txt').read_text(), 'updated')
+        self.assertTrue(all(batch['undone'] for batch in operation_history(library)))
 
     def test_two_restarts_and_two_retests_keep_one_build_including_replayed_updates(self):
         from src.proj import PATH

@@ -251,10 +251,6 @@ class ModelPath:
             self.log_file.rename(new_full_name)
         
         if self.base.exists():
-            config_file = PATH.read_yaml(self.conf_file('model'))
-            config_file['model.name'] = new_clean_name
-            PATH.dump_yaml(config_file , self.conf_file('model') , overwrite = True)
-
             old_base_path = self.base
             self.full_name_kwargs['model_clean_name'] = new_clean_name
             self.parse_input(new_full_name)

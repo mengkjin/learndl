@@ -1,6 +1,7 @@
 """Publish and receive file updates for stable model builds."""
 from __future__ import annotations
 
+from hashlib import sha256
 import json
 import os
 from uuid import uuid4
@@ -59,26 +60,56 @@ def legacy_target(root, manifest):
     return real_tree(root / safe_path(name))
 
 
-def adopt_history(target, manifest, config, monitor):
+def locate_build(config, manifest, target):
+    """Resolve the receiver's local name and archive location from committed indexes."""
+    host = manifest.get('host') or 'unknown'
+    model = manifest.get('experiment') or manifest['task']
+    fingerprint = manifest.get('model_build', {}).get('fingerprint')
+    matches = [folder for folder, index in archived_builds(config, pending=True)
+               if index['host'] == host and index['model'] == model
+               and (index['build'].get('fingerprint') == fingerprint if fingerprint else folder.name == target.name)]
+    if len(matches) > 1:
+        raise ValueError('Multiple local locations for this build')
+    return matches[0] if matches else target
+
+
+def adopt_history(target, manifest, config, monitor, origin=None):
     """Keep the provisional name pinned until a publisher explicitly claims it."""
     if not manifest.get('adopt_legacy'):
-        return
-    alias = target.parent / ALIAS
-    old = load(alias)
+        return target
+    alias = (origin or target).parent / ALIAS
+    journal = alias.with_name('.legacy-adoption.json')
     build = manifest['model_build']
-    if not old or old == target.name:
-        atomic_json(alias, target.name)
-        return
-    previous = real_tree(target.parent / safe_path(old))
-    current = load(target / INDEX)
+    planned = load(journal)
+    if planned:
+        if planned['fingerprint'] != build['fingerprint']:
+            raise ValueError('Another model build adoption is pending')
+        old = planned['old']
+        previous, target = real_tree(planned['source']), real_tree(planned['target'])
+        current = load(target / INDEX)
+    else:
+        old = load(alias)
+        if not old or old == target.name:
+            atomic_json(alias, target.name)
+            return target
+        previous = locate_build(config, {k: v for k, v in manifest.items() if k != 'model_build'},
+                                real_tree(alias.parent / safe_path(old)))
+        current = load(target / INDEX)
+        if previous.exists() and previous.parent != target.parent:
+            if current is not None:
+                raise ValueError('Formal and legacy builds occupy different local locations')
+            target = previous.with_name(target.name)
+            current = load(target / INDEX)
     if current and current['build'].get('fingerprint') not in (None, build['fingerprint']):
         raise ValueError(f'Formal build has a different fingerprint: {target}')
     if previous.exists():
         historical = load(previous / INDEX)
         if not historical or not historical['build'].get('estimated'):
-            return
+            return target
         if (previous / PENDING).exists() or (target / PENDING).exists():
             raise ValueError('Finish pending updates before adopting model history')
+        atomic_json(journal, {'fingerprint': build['fingerprint'], 'old': old,
+                              'source': str(previous), 'target': str(target)})
         if current is None:
             previous.rename(target)
             fsync_dir(target.parent)
@@ -99,7 +130,16 @@ def adopt_history(target, manifest, config, monitor):
     current['build'] = build | {'legacy_attribution': 'source_and_model_name'}
     atomic_json(target / INDEX, current)
     update_state(config, monitor, {previous: target})
+    marks = monitor / 'model_preview/model_views.json'
+    views = load(marks, {})
+    key = sha256(json.dumps([current['host'], current['model']]).encode()).hexdigest()
+    if old in views.get(key, {}):
+        views[key][target.name] = views[key].pop(old)
+        atomic_json(marks, views)
     atomic_json(alias, target.name)
+    journal.unlink(missing_ok=True)
+    fsync_dir(journal.parent)
+    return target
 
 
 def replace_file(source, destination):
@@ -227,13 +267,15 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
     fsync_dir(target)
 
 
-def archived_builds(config):
-    for path in sorted((config.results / 'external/models').glob('*/*/build*/build.json')):
+def archived_builds(config, *, pending=False):
+    root = config.results / 'external/models'
+    paths = (*root.glob('*/*/build*/build.json'), *(root / 'archive').glob('*/*/build*/build.json'))
+    for path in sorted(paths):
         try:
             index = load(path)
             if not index or path.parent.name != index['build']['name']:
                 continue
-            if (path.parent / PENDING).exists():
+            if not pending and (path.parent / PENDING).exists():
                 continue
             yield path.parent, index
         except (OSError, ValueError, TypeError, KeyError):

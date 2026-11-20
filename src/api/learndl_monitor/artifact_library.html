@@ -9,13 +9,41 @@
 .toolbar[hidden]{display:none}.toolbar,.actions,.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 button,select,input{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px}
 button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55ccb9}a{color:#8de2d3}
+[hidden]{display:none!important}
 .layout{display:grid;grid-template-columns:minmax(290px,2fr) minmax(330px,3fr);gap:18px;margin-top:14px}
 .panel{border:1px solid #293748;border-radius:10px;background:#17212c;padding:14px;min-width:0}
 #items{max-height:68vh;overflow:auto}#items label{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #273544}
 .item{border:0;background:transparent;text-align:left;width:100%;overflow-wrap:anywhere}.item[aria-current=true]{color:#8de2d3;background:#203b3c}
-.model-files{max-height:34vh;overflow:auto;margin:10px 0}
-.model-files label{display:flex;align-items:center;gap:8px;border-bottom:1px solid #273544}
-.model-files .item{font-size:14px}.model-actions{margin-top:10px}
+.model-library{max-width:1540px}
+.model-layout{--sidebar:clamp(168px,var(--sidebar-width,232px),38%);align-items:start;gap:12px 0;
+ grid-template-columns:var(--sidebar) 14px minmax(0,1fr);grid-template-rows:max-content minmax(0,1fr);
+ grid-template-areas:"list split detail" "list split preview"}
+.model-layout[data-layout=right]{grid-template-columns:var(--sidebar) 14px minmax(0,1fr) minmax(0,1.16fr);
+ grid-template-rows:auto;grid-template-areas:"list split detail preview";column-gap:6px}
+.model-layout.collapsed{--sidebar:44px}
+.model-list{grid-area:list;padding:8px}.model-list-header{justify-content:space-between;min-height:32px;margin-bottom:6px}
+.model-layout.collapsed .model-list-header{margin:0}
+#sidebar-toggle{padding:1px 6px;min-height:28px;min-width:26px}
+#model-splitter{grid-area:split;align-self:stretch;cursor:col-resize;touch-action:none;display:grid;justify-items:center}
+#model-splitter::before{content:"";width:2px;height:100%;border-radius:2px;background:#293748}
+#model-splitter:hover::before,#model-splitter:focus-visible::before{background:#55ccb9}
+.model-layout.resizing{user-select:none;cursor:col-resize}
+.model-layout #detail{grid-area:detail}.model-layout #model-file-detail{grid-area:preview}
+.model-layout[data-layout=right] .panel{padding:12px}
+.model-layout.collapsed .model-list{padding:8px}
+.model-layout[data-layout=right] .model-list{padding:8px}
+.model-actions{margin:12px 0 16px}
+.model-section{padding:0 10px;background:#131c26;border:1px solid #293748;border-radius:8px}
+.model-section>summary{font-weight:600;padding:8px 0}
+.model-section details{margin-left:8px}
+.model-files{max-height:40vh;overflow:auto;padding-bottom:6px;scrollbar-gutter:stable}
+.model-layout[data-layout=right] .model-files{max-height:60vh}
+.model-files .item{font-size:14px}.model-files small{overflow-wrap:anywhere}
+.experiment-row{padding:7px 0;border-top:1px solid #293748}
+.experiment-row .actions{margin-top:6px}.experiment-row button{font-size:13px;padding:3px 7px}
+.preview-header h2{margin:0 0 8px}.preview-header .actions{margin:6px 0 12px}
+#model-file-detail>h2{margin:0 0 10px}
+#model-file-detail :is(pre,.sheet){max-height:62vh;overflow:auto}
 .sheet{max-height:48vh;overflow:auto;margin-top:10px}.sheet table{border-collapse:collapse}
 .sheet td{border:1px solid #3b4b60;padding:5px 8px;min-width:85px;max-width:260px;overflow-wrap:anywhere}
 .model-builds{padding-left:20px}.model-heading{justify-content:space-between}.model-heading h2{margin:0}
@@ -24,10 +52,26 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywhere}iframe{width:100%;height:57vh;background:white;border:0;border-radius:4px}
 #notice{color:#f4bd9b;white-space:pre-wrap}details{margin:8px 0;border-bottom:1px solid #293748}summary{cursor:pointer;padding:6px 0}
 @media(max-width:760px){main{margin:20px auto;padding:0 12px}.layout{grid-template-columns:1fr}#items{max-height:42vh}}
+@media(max-width:760px){
+ .model-layout,.model-layout[data-layout=right]{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"list" "detail" "preview";gap:10px}
+ #model-splitter{display:none}
+ .model-layout #items{max-height:34vh}
+}
+.management-table{overflow:auto;margin:12px 0}.management-table table{width:100%;border-collapse:collapse}
+.management-table :is(th,td){padding:8px;text-align:left;border-bottom:1px solid #334155;overflow-wrap:anywhere}
+.management-table input[type=text]{width:9rem}.management-results li{margin:6px 0;overflow-wrap:anywhere}
+header .header-actions{margin-left:auto}
+dialog{background:#17212c;color:inherit;border:1px solid #52667e;border-radius:10px;max-width:90vw;max-height:85vh;overflow:auto}dialog::backdrop{background:#0009}.management-table th{vertical-align:top}.management-table details label{display:block;white-space:nowrap}.management-table{font-size:12px}.management-table :is(th,td){padding:4px 6px;line-height:1.3}
+.management-table td{white-space:nowrap}.management-table td:nth-child(3){max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.management-table input[type=text]{width:100%;min-width:65px;font-size:12px;padding:4px}
+.management-table button{font-size:12px;padding:3px 7px}.column-dropdown{position:relative;min-width:55px}
+.column-menu{position:absolute;z-index:20;top:100%;left:0;min-width:130px;max-height:240px;overflow:auto;background:#202c3a;border:1px solid #52667e;border-radius:6px;padding:7px;box-shadow:0 6px 18px #0008}
+.column-menu label{display:flex;align-items:center;gap:5px;padding:3px;white-space:nowrap}
 </style>
 <main>
-<header class="row"><h1>__TITLE__</h1><select id="language" aria-label="Language">
-<option value="zh">中文</option><option value="en">English</option></select></header>
+<header class="row"><h1>__TITLE__</h1><div class="row header-actions"><select id="language" aria-label="Language">
+<option value="zh">中文</option><option value="en">English</option></select></div></header>
+<div id="preview-page">
 <div class="toolbar">
 <input id="search" type="search">
 <select id="host"></select><select id="status"></select><select id="view"></select>
@@ -36,9 +80,11 @@ small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywher
 <div id="model-filters" class="toolbar" hidden></div>
 <p id="notice" role="status"></p>
 <div class="layout">
-<section class="panel"><div id="actions" class="actions"></div><small id="count" role="status"></small><div id="items"></div></section>
+<section class="panel" id="list-panel"><div id="list-header"><div id="actions" class="actions"></div><small id="count" role="status"></small></div><div id="items"></div></section>
 <section class="panel" id="detail" aria-live="polite"></section>
 </div>
+</div>
+<section id="management" class="panel" hidden></section>
 </main>
 <script>
 const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
@@ -48,6 +94,17 @@ let lang=localStorage.getItem('learndl-language')==='en'?'en':'zh';
 let rows=[], models={}, shown=[], active='', activeModel='', activeBuild=null, version='', blobURL='', loaded=false;
 const tr=(zh,en)=>lang==='en'?en:zh;
 const terms={
+ cancel:['取消','Cancel'], goTo:['转到','Go to'], invert:['反选','Invert selection'], batchRename:['批量改名','Reset selected numbers to 1'],
+ operationHistory:['操作历史','Operation history'], undo:['撤销最近操作','Undo latest operation'], undone:['已撤销','Undone'], invalidDate:['请输入有效日期范围','Enter a valid date range'],
+ manageModels:['管理模型','Manage models'], backPreview:['返回模型预览','Back to model preview'],
+ hide:['隐藏','Hide'], show:['恢复显示','Show'], hidden:['已隐藏','Hidden'], visible:['可见','Visible'],
+ restore_archive:['恢复归档','Restore from archive'], rename:['改名','Rename'], renumber:['修改编号','Renumber'],
+ modelName:['模型名','Model name'], targetValue:['目标名称或编号','New name or number'],
+ reviewChanges:['预览更改','Review changes'], applyChanges:['应用更改','Apply changes'],
+ selectVisible:['勾选当前结果','Select visible builds'], allModels:['全部模型','All models'],
+ managementFilter:['管理筛选','Management filter'], noSelection:['请先选择模型。','Select one or more models.'],
+ resumeMove:['继续未完成的移动','Resume pending move'],
+ done:['成功','Done'], pendingChange:['待处理','Pending'], versionState:['状态','Status'],
  title:modelPage?['模型预览','Model Preview']:['邮件档案','Mail Archive'],
  search:modelPage?['搜索模型或文件','Search models or files']:['搜索主题或脚本','Search subjects or scripts'],
  host:['来源','Source'], allHosts:['全部来源','All sources'], status:['执行状态','Execution status'],
@@ -59,6 +116,14 @@ const terms={
  selectModel:['选择一个模型查看结果。','Select a model to view its results.'],
  noMail:['没有符合条件的记录。','No matching records.'], noModel:['没有符合条件的模型。','No matching models.'],
  selectFile:['选择一个文件预览，或选择 TensorBoard / Optuna 启动。','Select a file to preview or choose TensorBoard / Optuna to launch.'],
+ layout:['布局','Layout'], below:['下方预览','Preview below'], right:['右侧预览','Preview on right'],
+ collapseSidebar:['收起模型列表','Collapse model list'], expandSidebar:['展开模型列表','Expand model list'],
+ resizeSidebar:['调整模型列表宽度','Resize model list'], expandDetails:['全部展开','Expand all'],
+ collapseDetails:['全部折叠','Collapse all'], modelInfo:['模型信息','Model information'],
+ modelFiles:['模型文件','Model files'], filePreview:['预览窗口','Preview'], noRecord:['暂无记录','No record yet'],
+ openFile:['打开文件','Open file'], noPreview:['此文件请使用系统应用打开。','Open this file in its desktop application.'],
+ confirmFile:['在运行本服务的电脑上用系统默认应用打开此文件？','Open this file in the default application on the computer running this service?'],
+ lastTestInfo:['最后测试','Last test'], truncatedModel:['预览已截断，可打开完整文件。','Preview truncated. Open the full file to continue reading.'],
  type:['模型类型','Model type'], module:['架构','Architecture'], stage:['生命周期阶段','Lifecycle stage'],
  short:['短测','Short test'], experiment:['实验产物','Experiment artifacts'], dateField:['日期字段','Date field'],
  from:['开始日期','From date'], to:['结束日期','To date'], unknown:['未知','Unknown'], yes:['是','Yes'], no:['否','No'],
@@ -85,11 +150,10 @@ const terms={
  clear:['清空选择','Clear selection'], selectAll:['全选当前文件','Select all visible files'],
  select:['选择','Select'], restore:['恢复','Restore'], purge:['彻底删除','Permanently delete'],
  archive:['归档','Archive'], unarchive:['取消归档','Unarchive'], delete:['移到回收站','Move to Trash'],
- processed:['已处理','Processed'], download:['下载','Download'], downloadMD:['下载完整 Markdown','Download full Markdown'],
- preview:['预览或下载','Preview or download'], worksheet:['工作表','Worksheet'],
+ processed:['已处理','Processed'], download:['下载','Download'], worksheet:['工作表','Worksheet'],
  loadSheet:['正在加载工作表…','Loading worksheet…'], sheetLimit:['预览最多显示前 40 行、20 列。','Preview limited to the first 40 rows and 20 columns.'],
  related:['查阅相关邮件','View related mail'], runFilter:['当前按关联运行筛选。','Filtered by related run.'],
- noChapters:['没有关联的运行章节。','No matching run chapters.'], truncated:['预览已截断，可下载完整 Markdown。','Preview truncated. Download the full Markdown.'],
+ noChapters:['没有关联的运行章节。','No matching run chapters.'],
  previous:['上一页','Previous'], next:['下一页','Next'], mustRestore:['从回收站恢复后即可查看。','Restore the item from Trash to view it.'],
  modelRun:['模型运行','Model run'], smtp:['SMTP 状态','SMTP status'], missing:['缺失附件','Missing attachments'],
  body:['正文','Body'], original:['原始邮件','Original email'], start:['启动或打开','Start or open'],
@@ -149,18 +213,263 @@ function field(id,key,tag='select'){
 }
 const modelFields={type:'module_type',module:'module',stage:'stage',short:'short_test'};
 const filterLabels={type:'allTypes',module:'allModules',stage:'allStages',short:'short'};
+function setupModelLayout(){
+ const layout=document.querySelector('.layout'), list=$('list-panel'), header=$('list-header');
+ const preference='learndl-model-preview-';
+ const mode=field('preview-layout','layout');
+ mode.append(option('below'),option('right'));
+ mode.value=localStorage.getItem(preference+'layout')==='right'?'right':'below';
+ layout.dataset.layout=mode.value;
+ mode.onchange=()=>{
+  layout.dataset.layout=mode.value;localStorage.setItem(preference+'layout',mode.value);
+ };
+ const modeLabel=element('label');modeLabel.append(label('span','layout'),' ',mode);
+ $('refresh').after(modeLabel);
+ document.querySelector('main').classList.add('model-library');
+ layout.classList.add('model-layout');
+ list.classList.add('model-list');header.className='row model-list-header';
+ $('actions').hidden=true;
+ const preview=element('section');preview.id='model-file-detail';preview.className='panel';preview.hidden=true;
+ layout.append(preview);
+ const splitter=field('model-splitter','resizeSidebar','div');
+ splitter.tabIndex=0;
+ splitter.setAttribute('role','separator');
+ splitter.setAttribute('aria-orientation','vertical');
+ splitter.setAttribute('aria-controls','list-panel');
+ list.after(splitter);
+
+ let width=Number(localStorage.getItem(preference+'width'))||232;
+ const min=168, max=()=>Math.max(min,Math.floor(layout.clientWidth*.38));
+ const setWidth=(next,save=false)=>{
+  width=Math.max(min,Math.min(max(),next));
+  layout.style.setProperty('--sidebar-width',width+'px');
+  splitter.setAttribute('aria-valuemin',min);
+  splitter.setAttribute('aria-valuemax',max());
+  splitter.setAttribute('aria-valuenow',width);
+  if(save)localStorage.setItem(preference+'width',width);
+ };
+ const toggle=button('',()=>setCollapsed(!layout.classList.contains('collapsed')));
+ toggle.id='sidebar-toggle';toggle.setAttribute('aria-controls','items');
+ const toggleText=()=>t(layout.classList.contains('collapsed')?'expandSidebar':'collapseSidebar');
+ localized(toggle,toggleText,'aria-label');localized(toggle,toggleText,'title');
+ header.prepend(toggle);
+ function setCollapsed(collapsed){
+  layout.classList.toggle('collapsed',collapsed);
+  for(const id of ['items','count'])$(id).hidden=collapsed;
+  splitter.hidden=collapsed;
+  toggle.textContent=collapsed?'›':'‹';
+  toggle.setAttribute('aria-expanded',String(!collapsed));
+  for(const update of bindings.get(toggle))update();
+  localStorage.setItem(preference+'collapsed',collapsed?'1':'0');
+ }
+ setWidth(width);
+ setCollapsed(localStorage.getItem(preference+'collapsed')==='1');
+ window.addEventListener('resize',()=>{
+  const saved=Number(localStorage.getItem(preference+'width'))||232;
+  if(!layout.classList.contains('resizing'))setWidth(saved);
+ });
+ splitter.onpointerdown=e=>{
+  if(e.button!==0)return;
+  e.preventDefault();splitter.setPointerCapture(e.pointerId);layout.classList.add('resizing');
+ };
+ splitter.onpointermove=e=>{
+  if(splitter.hasPointerCapture(e.pointerId))setWidth(Math.round(e.clientX-layout.getBoundingClientRect().left));
+ };
+ splitter.onlostpointercapture=()=>{
+  layout.classList.remove('resizing');setWidth(width,true);
+ };
+ splitter.onkeydown=e=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+  e.preventDefault();
+  setWidth({ArrowLeft:width-16,ArrowRight:width+16,Home:min,End:max()}[e.key],true);
+ };
+}
+
+function savePage(){
+ const controls={};
+ for(const el of document.querySelectorAll('input[id],select[id]'))
+  if(!el.id.startsWith('management-'))controls[el.id]=el.type==='checkbox'?el.checked:el.value;
+ history.replaceState({...history.state,controls,active,activeModel,activeBuild,scroll:scrollY,
+  managementFilters,checked:[...managementChecked]},'');
+}
+function restorePage(){
+ const state=history.state||{};
+ active=state.active||filters.get('file')||'';
+ activeModel=filters.get('model')||state.activeModel||'';
+ activeBuild=filters.get('build')||state.activeBuild||null;
+ for(const [id,value] of Object.entries(state.controls||{})){
+  const el=$(id);if(el){if(el.type==='checkbox')el.checked=value;else el.value=value;}
+ }
+ managementFilters=state.managementFilters||{};managementChecked=new Set(state.checked||[]);
+}
+let managementFilters={},managementChecked=new Set();
+async function toggleManagement(){savePage();location.href=location.pathname==='/manage'?'/preview':'/manage';}
+let saveTimer;
+window.addEventListener('scroll',()=>{clearTimeout(saveTimer);saveTimer=setTimeout(savePage,120);});
+document.addEventListener('click',event=>{if(!event.target.closest('.column-dropdown'))for(const menu of document.querySelectorAll('.column-menu'))menu.hidden=true;});
+document.addEventListener('change',()=>{if(modelPage)savePage();});
+window.addEventListener('keydown',event=>{
+ if(event.key==='Backspace'&&!event.repeat&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&
+ !event.target.closest('input,textarea,select,[contenteditable=true]')&&!document.querySelector('dialog[open]')){
+  event.preventDefault();history.back();
+ }
+});
+function modal(title){
+ const node=element('dialog'),body=element('div');node.append(element('h2',title),body);
+ node.append(action('cancel',()=>node.close()));
+ node.onclose=()=>node.remove();document.body.append(node);node.showModal();return {node,body};
+}
+async function confirmOperation(operation,items){
+ const {node,body}=modal(t(operation));
+ const plan=await (await api('/api/action',{action:'plan_models',operation,items})).json();
+ for(const item of plan)body.append(element('p',[item.name,item.source,item.target,item.error].filter(Boolean).join(' → ')));
+ const valid=plan.filter(item=>item.ok).map(item=>({...items.find(row=>row.id===item.id),target:item.target}));
+ const apply=button(()=>t('applyChanges')+' · '+valid.length,async()=>{
+  apply.disabled=true;
+  try{const result=await (await api('/api/action',{action:'apply_models',operation,items:valid})).json();
+   node.close();if(location.pathname==='/manage')await renderManagement();else await refresh();
+   if(result.some(item=>!item.ok))setNotice(result.filter(item=>!item.ok).map(item=>item.error).join('\n'));
+  }catch(error){body.append(element('p',error.message));apply.disabled=false;}
+ });
+ apply.disabled=!valid.length;body.append(apply);
+}
+async function showHistory(){
+ const {body}=modal(t('operationHistory'));
+ const records=await (await api('/api/action',{action:'history_models'})).json();
+ body.append(action('undo',async()=>{
+  const proposed=await (await api('/api/action',{action:'undo_models'})).json();
+  const {node,body:review}=modal(t('undo'));
+  for(const item of proposed.changes)review.append(element('p',[item.source,item.target,item.error].filter(Boolean).join(' → ')));
+  if(proposed.error)review.append(element('p',proposed.error));
+  const apply=action('applyChanges',async()=>{
+   apply.disabled=true;
+   try{const result=await (await api('/api/action',{action:'undo_models',apply:true,operation_id:proposed.id})).json();
+    if(!result.ok)throw Error(result.error||result.changes.map(item=>item.error).filter(Boolean).join('\n'));
+    node.close();await renderManagement();
+   }catch(error){review.append(element('p',error.message));}
+  });apply.disabled=!proposed.ok;review.append(apply);
+ }));
+ for(const row of records.reverse()){
+  const section=element('details');
+  section.append(element('summary',[formatDate(row.time),row.entry,t(row.action),row.changes.length,row.undone?t('undone'):''].join(' · ')));
+  for(const change of row.changes)section.append(element('p',
+   [change.row.host,change.row.build,change.source,change.target,
+    tr('隐藏 ','Hidden ')+change.row.hidden+' → '+change.hidden].join(' · ')));
+  body.append(section);
+ }
+}
+async function renderManagement(){
+ const savedScroll=history.state?.scroll||0;
+ const pane=$('management');
+ const {records}=await (await api('/api/model-management')).json();
+ const table=element('table'),head=table.createTHead(),titles=head.insertRow(),filterRow=head.insertRow(),
+ body=table.createTBody(),scroll=element('div'),toolbar=element('div'),countLabel=element('small');
+ scroll.className='management-table';scroll.append(table);toolbar.className='toolbar';
+ const columns=[['host','host','text'],['name','modelName','text'],['build','build','text'],
+ ['module_type','type','multi'],['module','module','multi'],['stage','stage','multi'],
+ ['short','short','multi'],['started','initial_training','date'],['state','versionState','multi']];
+ titles.append(element('th'));filterRow.insertCell();
+ const controls={};let visible=[];
+ for(const [key,labelKey,type] of columns){
+  const th=localized(element('th'),()=>({modelName:tr('名称','Name'),build:tr('版本','Version'),type:tr('类型','Type'),module:tr('框架','Framework'),stage:tr('阶段','Stage'),initial_training:tr('开始','Started')})[labelKey]||t(labelKey));titles.append(th);const cell=filterRow.insertCell();
+  if(type==='multi'){
+   const disclosure=element('div');disclosure.className='column-dropdown';const dropdown=button(()=>t('any'),()=>{const open=menu.hidden;for(const node of document.querySelectorAll('.column-menu'))node.hidden=true;menu.hidden=!open;});const menu=element('div');menu.className='column-menu';menu.hidden=true;disclosure.append(dropdown,menu);
+   const choices=key==='state'?['visible','hidden','active','archived']:[...new Set(records.map(row=>row[key]||'unknown'))].sort();
+   controls[key]=[];
+   for(const value of choices){
+    const input=element('input');input.type='checkbox';input.value=value;
+    input.checked=(managementFilters[key]||[]).includes(value);
+    input.onchange=()=>{managementFilters[key]=controls[key].filter(el=>el.checked).map(el=>el.value);dropdown.textContent=managementFilters[key].length?managementFilters[key].length+' '+tr('项','selected'):t('any');draw();};
+    const wrapper=element('label');wrapper.append(input,label('span',value));menu.append(wrapper);controls[key].push(input);
+   }
+   cell.append(disclosure);
+  }else{
+   const input=element('input');input.type='text';input.value=managementFilters[key]||'';
+   localized(input,()=>t(labelKey),'aria-label');
+   if(type==='date')input.placeholder='yyyymmdd-yyyymmdd';
+   input.oninput=()=>{managementFilters[key]=input.value;draw();};cell.append(input);controls[key]=input;
+  }
+ }
+ titles.append(label('th','rename'),label('th','goTo'));filterRow.insertCell();filterRow.insertCell();
+ function matches(row){
+  for(const [key,,type] of columns){
+   const value=managementFilters[key];if(!value?.length)continue;
+   if(type==='multi'){
+    if(key==='state'){
+     for(const group of [['visible','hidden'],['active','archived']]){
+      const selected=value.filter(v=>group.includes(v));
+      if(selected.length&&!selected.includes(group[0]==='visible'?(row.hidden?'hidden':'visible'):(row.archived?'archived':'active')))return false;
+     }
+    }else if(!value.includes(row[key]||'unknown'))return false;
+   }else if(type==='date'){
+    const match=value.match(/^(\d{8})?-(\d{8})?$/);
+    const valid=part=>!part||(()=>{const date=new Date(part.slice(0,4)+'-'+part.slice(4,6)+'-'+part.slice(6,8)+'T00:00:00Z');return Number.isFinite(+date)&&date.toISOString().slice(0,10).replaceAll('-','')===part;})();
+    const error=!match||!valid(match[1])||!valid(match[2])||match[1]&&match[2]&&match[1]>match[2];
+    controls[key].setCustomValidity(error?t('invalidDate'):'');controls[key].title=error?t('invalidDate'):'';
+    if(error)return false;
+    const day=row.started?new Date(row.started).toLocaleDateString('sv-SE').replaceAll('-',''):'';
+    if(!day||match[1]&&day<match[1]||match[2]&&day>match[2])return false;
+   }else if(!matchesText([row[key],key==='name'?row.source_name:key==='host'?row.host_display:''],value.toLowerCase()))return false;
+  }return true;
+ }
+ function draw(){
+  body.replaceChildren();visible=records.filter(matches);
+  for(const model of visible){
+   const row=body.insertRow(),checkbox=element('input');checkbox.type='checkbox';checkbox.checked=managementChecked.has(model.id);
+   checkbox.onchange=()=>{if(checkbox.checked)managementChecked.add(model.id);else managementChecked.delete(model.id);savePage();updateCount();};
+   row.insertCell().append(checkbox);
+   for(const [key,,type] of columns){
+    const cell=row.insertCell();
+    if(key==='state'){
+     cell.textContent=(model.hidden?'◌':'●')+' '+(model.archived?'▣':'◇');
+     localized(cell,()=>t(model.hidden?'hidden':'visible')+' · '+t(model.archived?'archived':'active'),'title');
+    }
+    else if(key==='started')cell.textContent=model.started?formatDate(model.started):t('unknown');
+    else if(type==='multi')localized(cell,()=>t(model[key]||'unknown'));
+    else if(key==='name'){cell.textContent=model.short_name;cell.title=model.name;}
+    else if(key==='build'){cell.textContent=model.build.replace(/^build/,'')||'—';cell.title=model.build;}
+    else cell.textContent=(key==='host'?model.host_display:model[key])||model[key]||'—';
+   }
+   const renameButton=action('rename',()=>{
+    const {node,body}=modal(t('rename'));const input=element('input');input.type='text';
+    input.value=model.short_name;
+    body.append(element('p',model.name),input,action('reviewChanges',()=>{node.close();return confirmOperation('rename',[{id:model.id,value:input.value}]);}));
+   });
+   bindings.delete(renameButton);renameButton.textContent='✎';localized(renameButton,()=>t('rename'),'title');localized(renameButton,()=>t('rename'),'aria-label');
+   row.insertCell().append(renameButton);
+   const go=element('a','↗');localized(go,()=>t('goTo'),'title');localized(go,()=>t('goTo'),'aria-label');go.href='/preview?'+new URLSearchParams({model:model.model_id,build:model.build,hidden:'1',archived:model.archived?'1':'0'});
+   go.onpointerdown=savePage;go.onkeydown=savePage;row.insertCell().append(go);
+  }updateCount();savePage();
+ }
+ function updateCount(){countLabel.textContent=tr('已选 ','Selected ')+managementChecked.size+' · '+visible.length+'/'+records.length;}
+ for(const operation of ['hide','show','archive','restore_archive','renumber']){
+  const b=button(()=>t(operation==='renumber'?'batchRename':operation),()=>{
+   if(!managementChecked.size)return;
+   return confirmOperation(operation,[...managementChecked].map(id=>({id,value:operation==='renumber'?'1':undefined})));
+  });toolbar.append(b);
+ }
+ toolbar.append(action('selectVisible',()=>{for(const row of visible)managementChecked.add(row.id);draw();}),
+  action('invert',()=>{for(const row of visible){if(managementChecked.has(row.id))managementChecked.delete(row.id);else managementChecked.add(row.id);}draw();}),
+  action('clear',()=>{managementChecked.clear();draw();}),action('operationHistory',showHistory),countLabel);
+
+ pane.replaceChildren(label('h2','manageModels'),toolbar,scroll);draw();scrollTo(0,savedScroll);
+}
 function setup(){
  localized(document.querySelector('h1'),()=>t('title'));
  localized($('search'),()=>t('search'),'placeholder');
  localized($('search'),()=>t('search'),'aria-label');
  for(const id of ['host','status','view'])localized($(id),()=>t(id),'aria-label');
- $('view').append(...['active','archived','trash'].map(value=>option(value)));
+ $('view').append(...(modelPage?['active','archived']:['active','archived','trash']).map(value=>option(value)));
  options('host',[],'allHosts');options('status',[],'allStatus');
  localized($('refresh'),()=>t('refresh'));
  localized($('count'),()=>t('loading'));
  localized($('detail'),()=>t(modelPage?'selectModel':'selectMail'));
  $('status').hidden=modelPage;
  if(modelPage){
+  setupModelLayout();
+  const navigation=label('a',location.pathname==='/manage'?'backPreview':'manageModels');
+  navigation.href=location.pathname==='/manage'?'/preview':'/manage';navigation.onpointerdown=savePage;navigation.onkeydown=savePage;
+  $('language').before(navigation);
   const bar=$('model-filters');bar.hidden=false;
   for(const id of Object.keys(modelFields))bar.append(field(id,id));
   const experiment=field('experiment','experiment');
@@ -239,8 +548,8 @@ function modelMatches(model){
 function render(){
  if(!loaded)return;
  const query=$('search').value.trim().toLowerCase();
+ if(modelPage){renderModels(rows.filter(r=>!r.trashed),query);return;}
  shown=rows.filter(visibleState);
- if(modelPage){renderModels(shown,query);return;}
  shown=shown.filter(r=>(!$('host').value||r.host===$('host').value)&&
   (!$('status').value||r.metadata?.status===$('status').value)&&
   matchesText([r.label,r.host,r.metadata?.task,r.metadata?.script,r.stamp],query));
@@ -261,9 +570,8 @@ function fileRow(r){
   line.append(check);
  }
  b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
- b.append(localized(element('small'),()=> (modelPage?
-  [r.relative!==r.label?r.relative:'',r.batch?batchDate(r.batch):'']:
-  [r.host,r.metadata?.task,t(r.metadata?.status||''),r.stamp]).filter(Boolean).join(' · ')));
+ b.append(localized(element('small'),()=>
+  [r.host,r.metadata?.task,t(r.metadata?.status||''),r.stamp].filter(Boolean).join(' · ')));
  line.append(b);return line;
 }
 function folder(actionName,id,build){
@@ -286,8 +594,10 @@ function properties(model){
  const details=element('div');
  for(const key of ['initial_training','resume_training','last_test']){
   const record=props[key];
-  if(!record)continue;
   const node=element('details'), values=element('dl');values.className='properties';
+  node.dataset.section=key;
+  const summary=label('summary',key==='last_test'?'lastTestInfo':key);
+  if(!record){node.append(summary,label('p','noRecord'));details.append(node);continue;}
   const field=(key,fn)=>values.append(label('dt',key),localized(element('dd'),fn));
   field('started',()=>time(record,'started_at'));field('finished',()=>time(record,'finished_at'));
   field('propertyStatus',()=>t(record.status||'unknown'));
@@ -300,7 +610,7 @@ function properties(model){
   field('Git HEAD',()=>record.git_head||t('unknown'));
   if(record.source)field('provenance',()=>t(record.source)+(record.finish_source?' · '+t(record.finish_source):''));
   if(record.run_id)field('runId',()=>record.run_id);
-  node.append(label('summary',key),values);details.append(node);
+  node.append(summary,values);details.append(node);
  }
  return [fields,details];
 }
@@ -312,6 +622,7 @@ function renderModels(records,query){
   if(!groups.has(key))groups.set(key,[]);
   groups.get(key).push(row);
  }
+ for(const key of Object.keys(models))if(!groups.has(key))groups.set(key,[]);
  const modelEntries=new Map();
  for(const [key,files] of groups){
   const model=models[key]||{host:files[0].host,name:files[0].model,experiments:[]};
@@ -321,8 +632,8 @@ function renderModels(records,query){
   }
   const builds=all.filter(build=>{
    const candidates=files.filter(r=>(r.build||'')===build.build);
-   return candidates.length&&modelMatches(build)&&
-    matchesText([model.name,model.host,build.build,build.stage,build.module,...candidates.map(r=>r.relative)],query);
+   return (!build.hidden||filters.get('hidden')==='1'&&build.build===activeBuild)&&Boolean(build.physically_archived)===($('view').value==='archived')&&modelMatches(build)&&
+    matchesText([build.name,build.source_name,model.host,build.build,build.stage,build.module,...candidates.map(r=>r.relative)],query);
   });
   if(builds.length)modelEntries.set(key,{model,builds,total:all.length});
  }
@@ -336,16 +647,16 @@ function renderModels(records,query){
  const entries=Array.from(modelEntries,([key,{model,builds,total}])=>{
   const item=element('div');
   const b=button('',()=>{
-   if(activeModel!==key){activeModel=key;activeBuild=null;active='';version='';selected.clear();render();}
+   if(activeModel!==key){activeModel=key;activeBuild=null;active='';version='';render();}
   });
-  b.replaceChildren(element('span',model.name),localized(element('small'),()=>
+  b.replaceChildren(element('span',builds.find(b=>key===activeModel&&b.build===activeBuild)?.name||builds[0].name),localized(element('small'),()=>
    model.host+' · '+count(total,['个版本','build','builds'])));
   b.className='item';b.setAttribute('aria-current',String(key===activeModel));item.append(b);
   if(key===activeModel&&builds.length>1){
    const list=element('div');list.className='model-builds';
    for(const build of builds){
-    const choose=button(()=>build.build||t('history'),()=>{
-     activeBuild=build.build;active='';version='';selected.clear();render();
+    const choose=button(()=>[build.name!==model.name?build.name:'',build.build||t('history')].filter(Boolean).join(' · '),()=>{
+     activeBuild=build.build;active='';version='';render();
     });
     choose.className='item';choose.setAttribute('aria-current',String(build.build===activeBuild));list.append(choose);
    }
@@ -355,14 +666,18 @@ function renderModels(records,query){
  });
  $('items').replaceChildren(...entries);
  bindings.delete($('count'));localized($('count'),()=>count(modelEntries.size,['个模型','model','models']));
- const pane=$('detail');bindings.delete(pane);
- if(!current){localized(pane,()=>t('noModel'));return;}
+ const pane=$('detail'), preview=$('model-file-detail');bindings.delete(pane);
+ preview.hidden=!current;
+ if(!current){
+  resetModelPreview();
+  localized(pane,()=>t('noModel'));return;
+ }
  const m=current.builds.find(build=>build.build===activeBuild);
  const versions=m.versions||[];
  if(!versions.some(v=>v.batch===version))version=versions[0]?.batch??'';
  const snapshot=versions.find(v=>v.batch===version);
  const members=new Set(snapshot?.files||[]);
- const filesForModel=groups.get(activeModel).filter(r=>(r.build||'')===activeBuild);
+ const filesForModel=(groups.get(activeModel)||[]).filter(r=>(r.build||'')===activeBuild);
  const unique=new Map();
  for(const row of filesForModel){
   if(!m.build&&row.relative?.match(/^(configs|logs)\//)&&versions.length&&!members.has(row.id))continue;
@@ -370,16 +685,22 @@ function renderModels(records,query){
   if(!unique.has(path))unique.set(path,row);
  }
  shown=[...unique.values()];
- trimSelection();
- const previous=$('model-file-detail');
- const keep=previous&&shown.some(r=>r.id===active);
- const files=element('div'), actions=element('div'), fileCount=element('small');
- const preview=keep?previous:element('section');
- actions.id='model-actions';actions.className='actions model-actions';fileCount.id='file-count';
- files.className='model-files';preview.id='model-file-detail';
+ if(preview.hidden||!shown.some(r=>r.id===active))resetModelPreview();
+ const identity=JSON.stringify([activeModel,activeBuild]);
+ const previous=pane.dataset.build===identity
+  ?new Map([...pane.querySelectorAll('details[data-section]')].map(node=>[node.dataset.section,node.open]))
+  :new Map();
+ pane.dataset.build=identity;
+ const files=element('div'), actions=element('div');
+ actions.className='actions model-actions';files.className='model-files';
  const heading=element('div');heading.className='row model-heading';
- heading.append(element('h2',m.name+(m.build?' · '+m.build:'')));
- if(models[activeModel])heading.append(action('modelFolder',folder('model_folder',activeModel,activeBuild)));
+ heading.append(element('h2',m.name));
+ const caption=localized(element('small'),()=>m.host+' · '+(m.build||t('history')));
+ const hideBuild=action('hide',async()=>{
+  const data=await (await api('/api/model-management')).json();
+  const entry=data.records.find(row=>row.model_id===(m.id||activeModel)&&row.build===m.build);
+  await confirmOperation('hide',[{id:entry.id}]);
+ });
  const picker=element('div');
  if(!m.build&&versions.some(v=>v.batch)){
   const select=field('metadata-version','history');
@@ -395,17 +716,73 @@ function renderModels(records,query){
  for(const key of ['configurations','logs','results','TensorBoard','Optuna']){
   const items=shown.filter(r=>sectionOf(r)===key);
   if(!items.length)continue;
-  const section=element('details');section.open=true;
-  section.append(localized(element('summary'),()=>t(key)+' · '+items.length),...items.map(fileRow));files.append(section);
+  const section=element('details');section.dataset.section=key;
+  section.append(localized(element('summary'),()=>t(key)+' · '+items.length),...items.map(modelFileRow));files.append(section);
  }
- pane.replaceChildren(heading,element('small',m.host),...properties({...m,experiments:m.experiments||[]}),
-                      picker,actions,fileCount,files,preview);
- if(!keep){active='';localized(preview,()=>t('selectFile'));}
- renderActions();
+ const info=element('details');info.className='model-section';info.dataset.section='modelInfo';
+ info.append(label('summary','modelInfo'),...properties(m));
+ const fileSection=element('details');fileSection.className='model-section';fileSection.dataset.section='modelFiles';
+ fileSection.append(label('summary','modelFiles'),picker,files);
+ pane.replaceChildren(heading,caption,actions,info,fileSection);
+ const sections=[...pane.querySelectorAll('details[data-section]')];
+ for(const section of sections) section.open=previous.get(section.dataset.section)??(section===fileSection);
+ const toggle=button('',()=>{
+  const open=!sections.every(section=>section.open);
+  for(const section of sections)section.open=open;
+  updateToggle();
+ });
+ const updateToggle=()=>{toggle.textContent=t(sections.every(section=>section.open)?'collapseDetails':'expandDetails');};
+ localized(toggle,()=>t(sections.every(section=>section.open)?'collapseDetails':'expandDetails'));
+ for(const section of sections)section.ontoggle=updateToggle;
+ actions.append(toggle);
+ actions.append(action('modelFolder',folder('model_folder',activeModel,activeBuild)),hideBuild);
+}
+function resetModelPreview(){
+ active='';
+ if(blobURL){URL.revokeObjectURL(blobURL);blobURL='';}
+ $('model-file-detail').replaceChildren(label('h2','filePreview'),label('p','selectFile'));
+}
+function modelFileRow(r){
+ const line=element('div');
+ if(['tensorboard','optuna'].includes(r.type)){
+  line.className='experiment-row';
+  const actions=element('div'), status=element('span');
+  actions.className='actions';
+  const start=action('start',async()=>{
+   const data=await (await api('/api/action',{action:'start',id:r.id})).json();
+   const address=data.url||data.instance?.url;
+   if(!address)throw Error(t('ready'));
+   const link=label('a','openInstance');link.href=address;link.target='_blank';link.rel='noopener';
+   status.replaceChildren(link);
+  });
+  const stop=action('stop',async()=>{
+   await api('/api/action',{action:'stop',id:r.id});status.replaceChildren(label('small','stopped'));
+  });
+  actions.append(start,stop,status);
+  line.append(element('span',r.label),actions);return line;
+ }
+ const b=button(r.label,()=>modelFileDetails(r));
+ b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
+ if(r.relative&&r.relative!==r.label)b.append(element('small',r.relative));
+ line.append(b);return line;
+}
+async function modelFileDetails(r){
+ active=r.id;
+ for(const b of document.querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
+ const pane=$('model-file-detail'), header=element('div'), actions=element('div'), preview=element('div');
+ if(blobURL){URL.revokeObjectURL(blobURL);blobURL='';}
+ header.className='preview-header';actions.className='actions';preview.id='preview';
+ actions.append(action('folder',folder('folder',r.id)),action('openFile',async()=>{
+  if(!confirm(t('confirmFile')))return;
+  await api('/api/action',{action:'open_file',id:r.id});
+ }));
+ header.append(element('h2',r.label),actions);pane.replaceChildren(header,preview);
+ if(r.type==='process_log')await chapters(r,0);
+ else if(/\.(md|txt|html|pdf|xlsx|json|jsonl|ya?ml|log|toml)$/i.test(r.label))await file(r,0,r.label);
+ else localized(preview,()=>t('noPreview'));
 }
 function renderActions(){
- const view=$('view').value, countLabel=$(modelPage?'file-count':'count');
- if(!countLabel)return;
+ const view=$('view').value, countLabel=$('count');
  const ops=view==='trash'?['restore','purge']:[view==='archived'?'unarchive':'archive','delete'];
  bindings.delete(countLabel);
  localized(countLabel,()=>items(shown.length)+' · '+tr('已选 ','Selected ')+items(selected.size));
@@ -414,7 +791,7 @@ function renderActions(){
   render();
  });
  pick.disabled=!shown.some(r=>!r.readonly);
- $(modelPage?'model-actions':'actions').replaceChildren(pick,...ops.map(key=>{
+ $('actions').replaceChildren(pick,...ops.map(key=>{
   const b=action(key,async()=>{
    if(['delete','purge'].includes(key)&&!confirm(t(key)+' '+items(selected.size)+'?'))return;
    const result=await (await api('/api/action',{action:key,ids:[...selected]})).json();
@@ -439,6 +816,9 @@ async function file(r,index,name,download=false){
  }
  const blob=await response.blob();
  if(!target.isConnected)return;
+ if(modelPage&&!['text/html','application/pdf'].includes(blob.type)){
+  localized(target,()=>t('noPreview'));return;
+ }
  blobURL=URL.createObjectURL(blob);
  if(!download&&['text/html','application/pdf'].includes(blob.type)){
   const frame=element('iframe');if(blob.type==='text/html')frame.setAttribute('sandbox','');frame.title=name;
@@ -479,7 +859,7 @@ async function chapters(r,page){
   const section=element('details'), idx=c.title.lastIndexOf(' · ');
   section.open=target.children.length===0;
   section.append(element('summary',c.title),link(c.title.slice(idx+3),'related'),element('pre',c.content));
-  if(c.truncated)section.append(label('small','truncated'));
+  if(c.truncated)section.append(label('small','truncatedModel'));
   target.append(section);
  }
  if(page>0)target.append(action('previous',()=>chapters(r,page-1)));
@@ -488,42 +868,30 @@ async function chapters(r,page){
 async function details(r){
  active=r.id;
  for(const b of document.querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
- const pane=$(modelPage?'model-file-detail':'detail'), actions=element('div'), preview=element('div');
+ const pane=$('detail'), actions=element('div'), preview=element('div');
  bindings.delete(pane);actions.className='actions';preview.id='preview';
  pane.replaceChildren(element('h2',r.label),actions,preview);
  if(r.trashed){localized(preview,()=>t('mustRestore'));return;}
  actions.append(action('folder',folder('folder',r.id)));
- if(r.type==='mail'){
-  const m=r.metadata;
-  pane.insertBefore(localized(element('pre'),()=>[m.task,t(m.status||''),m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
-   t('smtp')+' · '+t(m.smtp_status||'unknown'),m.missing_attachments?.length?
-   t('missing')+' · '+m.missing_attachments.join(', '):''].filter(Boolean).join('\n')),actions);
-  for(const id of m.model_runs||[])actions.append(link(id,'modelRun',' '+id.slice(0,8)));
-  r.files.forEach((name,i)=>{
-   actions.append(button(()=>r.mail_parts?.[i]?t(r.mail_parts[i]):name,()=>file(r,i,name)));
-   if(i>0)actions.append(button(()=>t('download')+' '+(r.mail_parts?.[i]?t(r.mail_parts[i]):name),()=>file(r,i,name,true)));
-  });
-  if(r.files.length)await file(r,0,r.files[0]);
- }else if(r.type==='process_log'){
-  actions.append(action('downloadMD',()=>file(r,0,r.label,true)));
-  await chapters(r,0);
- }else if(['tensorboard','optuna'].includes(r.type)){
-  actions.append(action('start',async()=>{
-   const result=await (await api('/api/action',{action:'start',id:r.id})).json();
-   const address=result.url||result.instance?.url;
-   if(!address)throw Error(t('ready'));
-   const a=label('a','openInstance');a.href=address;a.target='_blank';a.rel='noopener';
-   bindings.delete(preview);preview.replaceChildren(a);
-  }),action('stop',async()=>{
-   await api('/api/action',{action:'stop',id:r.id});bindings.delete(preview);localized(preview,()=>t('stopped'));
-  }));
- }else{
-  actions.append(action('preview',()=>file(r,0,r.label)),action('download',()=>file(r,0,r.label,true)));
-  if(r.run&&!r.historical)actions.append(link(r.run,'related'));
-  if(/\.(md|txt|html|pdf|xlsx|json|jsonl|ya?ml|log|toml)$/i.test(r.label))await file(r,0,r.label);
- }
+ const m=r.metadata;
+ pane.insertBefore(localized(element('pre'),()=>[m.task,t(m.status||''),m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
+  t('smtp')+' · '+t(m.smtp_status||'unknown'),m.missing_attachments?.length?
+  t('missing')+' · '+m.missing_attachments.join(', '):''].filter(Boolean).join('\n')),actions);
+ for(const id of m.model_runs||[])actions.append(link(id,'modelRun',' '+id.slice(0,8)));
+ r.files.forEach((name,i)=>{
+  actions.append(button(()=>r.mail_parts?.[i]?t(r.mail_parts[i]):name,()=>file(r,i,name)));
+  if(i>0)actions.append(button(()=>t('download')+' '+(r.mail_parts?.[i]?t(r.mail_parts[i]):name),()=>file(r,i,name,true)));
+ });
+ if(r.files.length)await file(r,0,r.files[0]);
 }
 setup();
-refresh();
+if(modelPage){
+ restorePage();
+ if(filters.has('archived'))$('view').value=filters.get('archived')==='1'?'archived':'active';
+ if(location.pathname==='/manage'){
+  $('preview-page').hidden=true;$('management').hidden=false;
+  renderManagement().then(()=>scrollTo(0,history.state?.scroll||0));
+ }else refresh().then(async()=>{if(active){const row=rows.find(row=>row.id===active);if(row)await modelFileDetails(row);}scrollTo(0,history.state?.scroll||0);});
+}else refresh();
 </script>
 </html>

@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime , timedelta
 from pathlib import Path
 
-from src.proj import MACHINE , PATH , Logger , Proj
+from src.proj import MACHINE , PATH , Logger
 from src.proj.util.cli import AskFor
 from src.api.util.direct_call import DirectCall
 
@@ -23,6 +23,11 @@ __all__ = [
 class ModelArchiveOperations(DirectCall):
     """Manage model archive , including archive / resume / rename / packing."""
     category = 'Files'
+
+    @classmethod
+    def _manage_paths(cls, paths, action, value=None):
+        from src.api.learndl_monitor.model_management import cli_manage
+        cli_manage(paths, action, value)
 
     @classmethod
     def _iter_current_models(cls , parents : tuple[str,...]= ('nn' , 'boost' , 'factor') , print_paths : bool = True) -> list[Path]:
@@ -43,7 +48,6 @@ class ModelArchiveOperations(DirectCall):
 
     @classmethod
     def archive_current_models(cls):
-        from src.res.model.util import ModelPath
         title = f'Which model to archive?'
         paths = cls._iter_current_models(parents = ('nn' , 'boost' , 'factor'))
         if not paths:
@@ -52,12 +56,11 @@ class ModelArchiveOperations(DirectCall):
             paths , confirm = False , multiple=True , title = title , print_options = False , use_checkbox = False,
             help_description='Select one or more model directories to move into PATH.model_archive.',
         ):
-            [ModelPath(path).move_to_archive() for path in flag.results]
+            cls._manage_paths(flag.results, 'archive')
         return AskFor.flag()
 
     @classmethod
     def resume_archived_models(cls):
-        from src.res.model.util import ModelPath
         title = f'Which model to resume from archive?'
         paths = cls._iter_current_models(parents = ('archive' ,))
         if paths:
@@ -66,27 +69,17 @@ class ModelArchiveOperations(DirectCall):
                 help_description='Select archived model folder(s) to restore into active model directories.',
             )
             if flag.results:
-                [ModelPath.resume_from_archive(path.name) for path in flag.results]
+                cls._manage_paths(flag.results, 'restore_archive')
         return AskFor.flag()
 
     @classmethod
     def reindex_all_current_models(cls):
-        from src.res.model.util import ModelPath
         paths = cls._iter_current_models(parents = ('nn' , 'boost') , print_paths = False)
-        reindex_results : dict[str, str] = {}
-        with Proj.silence:
-            for path in paths:
-                new_model_path = ModelPath(path).auto_reindex()
-                if new_model_path is None:
-                    reindex_results[str(PATH.relative(path))] = 'Remains!'
-                else:
-                    reindex_results[str(PATH.relative(path))] = str(PATH.relative(new_model_path.base))
-        Logger.stdout_pairs(reindex_results , title = f'Reindex results:')
+        cls._manage_paths(paths, 'renumber', '1')
         return AskFor.flag()
 
     @classmethod
     def rename_current_models(cls):
-        from src.res.model.util import ModelPath
         title = f'Which model to rename?'
         paths = cls._iter_current_models(parents = ('nn' , 'boost'))
         if paths:
@@ -101,7 +94,7 @@ class ModelArchiveOperations(DirectCall):
                 help_description='New folder name under the same parent directory. Must be unique among current models.',
             )
             if name_flag and name_flag.result:
-                ModelPath(flag.result).rename(name_flag.result)
+                cls._manage_paths([flag.result], 'rename', name_flag.result)
         return AskFor.flag()
 
     @classmethod

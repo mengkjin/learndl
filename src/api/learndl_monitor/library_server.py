@@ -11,7 +11,7 @@ import shutil
 from urllib.parse import parse_qs, quote, urlsplit
 from zipfile import BadZipFile
 
-from .artifact_library import Library, open_folder
+from .artifact_library import Library, open_folder, open_local
 from .services import SERVICES, STATE
 
 
@@ -60,7 +60,12 @@ def main(kind, *, state=STATE):
                 return self.reply({'error': 'Forbidden'}, 403)
             if url.path == '/health':
                 return self.reply({'ok': True})
-            if url.path == '/':
+            if url.path == '/' and kind == 'model_preview':
+                self.send_response(302)
+                self.send_header('Location', '/preview' + ('?' + url.query if url.query else ''))
+                self.end_headers()
+                return
+            if url.path == '/' or kind == 'model_preview' and url.path in ('/preview', '/manage'):
                 page = Path(__file__).with_name('artifact_library.html').read_text()
                 return self.reply(page.replace('__TOKEN__', token).replace('__TITLE__', title)
                                   .replace('__KIND__', kind).replace('__OTHER__', str(other)), html=True)
@@ -75,14 +80,19 @@ def main(kind, *, state=STATE):
                     return self.reply(catalog.listing(param('run')))
                 if url.path == '/api/models' and kind == 'model_preview':
                     return self.reply(catalog.model_listing(param('run')))
+                if url.path == '/api/model-management' and kind == 'model_preview':
+                    from .model_management import MOVE_JOURNAL, inventory
+
+                    return self.reply({'records': list(inventory(catalog).values()),
+                                       'pending': (catalog.state / MOVE_JOURNAL).is_file()})
                 if url.path == '/api/chapters':
-                    row = catalog.rows()[param('id')]
+                    row = catalog.available_row(param('id'))
                     return self.reply(catalog.chapters(row, max(0, int(param('page', '0'))), param('run')))
                 if url.path == '/api/spreadsheet':
-                    row = catalog.rows()[param('id')]
+                    row = catalog.available_row(param('id'))
                     return self.reply(catalog.spreadsheet(row, int(param('index', '0')), param('sheet')))
                 if url.path == '/api/file':
-                    path, name, mime = catalog.file(catalog.rows()[param('id')], int(param('index', '0')))
+                    path, name, mime = catalog.file(catalog.available_row(param('id')), int(param('index', '0')))
                     with path.open('rb') as stream:
                         self.headers_for(200, mime, os.fstat(stream.fileno()).st_size)
                         self.send_header('Content-Disposition', "attachment; filename*=UTF-8''" + quote(name, safe=''))
@@ -105,7 +115,17 @@ def main(kind, *, state=STATE):
                     raise ValueError('Invalid request size')
                 data = json.loads(self.rfile.read(size))
                 action = data['action']
-                if action in ('archive', 'unarchive', 'delete', 'restore', 'purge'):
+                if action in ('history_models', 'undo_models') and kind == 'model_preview':
+                    from .model_management import operation_history, undo_latest
+
+                    return self.reply(operation_history(catalog) if action == 'history_models'
+                                      else undo_latest(catalog, apply=data.get('apply') is True, expected=data.get('operation_id')))
+                if action in ('plan_models', 'apply_models') and kind == 'model_preview':
+                    from .model_management import manage
+
+                    return self.reply(manage(catalog, data['operation'], data['items'],
+                                             apply=action == 'apply_models'))
+                if action in ('archive', 'unarchive', 'delete', 'restore', 'purge') and kind == 'mail_archive':
                     ids = data['ids']
                     if not isinstance(ids, list) or len(ids) > 500 or not all(isinstance(i, str) for i in ids):
                         raise ValueError('Select up to 500 items')
@@ -113,7 +133,10 @@ def main(kind, *, state=STATE):
                 if action == 'model_folder' and kind == 'model_preview':
                     path = catalog.model_folder(data['id'], data.get('build'))
                     return self.reply({'folder': open_folder(path) if data.get('open_locally') is True else str(path)})
-                row = catalog.rows()[data['id']]
+                row = catalog.available_row(data['id'])
+                if action == 'open_file' and kind == 'model_preview':
+                    path, _, _ = catalog.file(row, 0)
+                    return self.reply({'file': open_local(path)})
                 if action == 'folder':
                     if row.get('trashed'):
                         raise ValueError('Restore the item to open it')

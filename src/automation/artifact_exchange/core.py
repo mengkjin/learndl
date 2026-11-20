@@ -656,7 +656,13 @@ def _receive(archive, config):
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
         if previous and (build_update or legacy_update):
-            return _finish_receive(archive, archive_hash, manifest, previous['target'])
+            from .model_builds import locate_build
+
+            stored = real_tree(previous['target'])
+            current = locate_build(config, manifest, stored)
+            if stored != current:
+                atomic_json(receipt, previous | {'target': str(current)})
+            return _finish_receive(archive, archive_hash, manifest, str(current))
         if previous and manifest.get('host') == config.source_host:
             legacy = config.results / 'custom/legacy' / _target(manifest, config).relative_to(config.results)
             if previous['target'] == str(legacy):
@@ -685,17 +691,20 @@ def _receive(archive, config):
                         if inner.testzip() is not None:
                             raise ValueError('Damaged experiment archive')
             if build_update or legacy_update:
-                from .model_builds import adopt_history, apply_update, legacy_target
+                from .model_builds import adopt_history, apply_update, legacy_target, locate_build
 
                 if legacy_update:
-                    target = legacy_target(target.parent, manifest)
-                elif manifest.get('adopt_legacy'):
+                    target = locate_build(config, manifest, legacy_target(target.parent, manifest))
+                else:
+                    origin = target
+                    target = locate_build(config, manifest, origin)
+                if build_update and manifest.get('adopt_legacy'):
                     monitor = ROOT / '.local_resources/learndl_monitor'
                     with contextlib.ExitStack() as stack:
                         for folder in (monitor / 'model_preview', monitor / 'experiments'):
                             if folder.is_dir():
                                 stack.enter_context(_file_lock(folder / 'operations.lock'))
-                        adopt_history(target, manifest, config, monitor)
+                        target = adopt_history(target, manifest, config, monitor, origin)
                 apply_update(target, staging, manifest, mapped, experiments, legacy=legacy_update)
                 atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
                 return _finish_receive(archive, archive_hash, manifest, target)

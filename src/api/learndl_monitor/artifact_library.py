@@ -21,7 +21,7 @@ from .experiments import Instances
 from .services import ROOT, STATE
 
 
-__all__ = ['Library', 'open_folder']
+__all__ = ['Library', 'open_folder', 'open_local']
 
 
 def read_json(path):
@@ -75,6 +75,8 @@ class Library:
         else:
             for folder, index in archived_builds(self.config):
                 common = dict(host=index['host'], model=index['model'], model_root=folder,
+                              display_name=folder.parent.name,
+                              physically_archived=len(folder.relative_to(self.config.results / 'external/models').parts) == 4,
                               lock=None, build=folder.name,
                               historical=index['build'].get('estimated', False))
                 package_runs = {run['package']: run_id for run_id, run in index['runs'].items()}
@@ -137,7 +139,8 @@ class Library:
                 try:
                     build = read_properties(base / PROPERTY_FILE).get('build', {}).get('name', '')
                     common = dict(host=self.config.source_host, model=model.full_name, lock=base,
-                                  model_root=base, archive_stamp=archived, build=build or archived)
+                                  model_root=base, archive_stamp=archived, build=build or archived,
+                                  physically_archived=bool(archived))
                     for relative in ('configs', 'logs', 'run_logs', 'results'):
                         for path in (base / relative).rglob('*'):
                             try:
@@ -224,7 +227,30 @@ class Library:
 
         catalog = self.rows()
         files = self.listing(run, catalog=catalog)
-        return {'files': files, 'models': describe_models(catalog.values(), self.model_id)}
+        models = describe_models(catalog.values(), self.model_id)
+        from .model_management import inventory
+        for entry in inventory(self).values():
+            key = entry['model_id']
+            if key not in models:
+                models[key] = dict(id=key, name=entry['name'], host=entry['host'], builds=[])
+            if not any(build['build'] == entry['build'] for build in models[key]['builds']):
+                models[key]['builds'].append(dict(id=key, name=entry['name'], host=entry['host'],
+                    build=entry['build'], source_name=entry['source_name'], module_type=entry['module_type'],
+                    module=entry['module'], stage=entry['stage'], short_test=entry['short']=='yes',
+                    physically_archived=entry['archived'], experiments=[], versions=[], properties={}))
+        views = self._model_views()
+        for key, model in models.items():
+            for build in model['builds']:
+                status = views.get(key, {}).get(build['build'], 'active')
+                build['hidden'] = status != 'active'
+        return {'files': files, 'models': models}
+
+    def _model_views(self):
+        path = self.state / 'model_views.json'
+        return read_json(path) if path.exists() else {}
+
+    def available_row(self, key):
+        return self.rows()[key]
 
     def chapters(self, row, page, run=''):
         if row['type'] != 'process_log' or row.get('trashed'):
@@ -278,11 +304,12 @@ class Library:
         path, name, _ = self.file(row, index)
         if Path(name).suffix.lower() != '.xlsx':
             raise ValueError('请选择 XLSX 文件')
+        fallback = '，请打开文件查看' if self.kind == 'model_preview' else '，请下载查看'
         if path.stat().st_size > 32 * 1024**2:
-            raise ValueError('工作簿超过预览大小限制，请下载查看')
+            raise ValueError('工作簿超过预览大小限制' + fallback)
         with ZipFile(path) as archive:
             if sum(item.file_size for item in archive.infolist()) > 128 * 1024**2:
-                raise ValueError('工作簿解压后超过预览大小限制，请下载查看')
+                raise ValueError('工作簿解压后超过预览大小限制' + fallback)
         book = load_workbook(path, read_only=True, data_only=True, keep_links=False)
         try:
             names = [worksheet.title for worksheet in book.worksheets]
@@ -394,13 +421,17 @@ class Library:
                                    'pid': instance['pid'], 'created': instance['created']})
 
 
-def open_folder(path):
+def open_local(path):
     import subprocess
     import sys
 
     path = real_tree(path)
-    folder = path if path.is_dir() else path.parent
-    command = ['open', str(folder)] if sys.platform == 'darwin' else ['xdg-open', str(folder)]
+    command = ['open' if sys.platform == 'darwin' else 'xdg-open', str(path)]
     subprocess.Popen(command, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                      stderr=subprocess.DEVNULL)
-    return str(folder)
+    return str(path)
+
+
+def open_folder(path):
+    path = real_tree(path)
+    return open_local(path if path.is_dir() else path.parent)

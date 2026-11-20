@@ -73,7 +73,8 @@ def _describe_builds(rows, identifier):
                                 properties.get('resume_training', {}))
                     if p.get('finished_at') and p.get('status') in ('success', 'estimated')]
         models[key] = {
-            'id': key, 'host': host, 'name': model, 'archive_stamp': row.get('archive_stamp'),
+            'id': key, 'host': host, 'name': row.get('display_name', model), 'source_name': model,
+            'physically_archived': row.get('physically_archived', False), 'archive_stamp': row.get('archive_stamp'),
             'module_type': parts[0] if parts[0] in ('nn', 'boost', 'factor', 'linear') else None,
             'module': parts[1] if len(parts) > 1 else None, 'short_test': short if len(parts) > 1 else None,
             'stage': stage, 'experiments': sorted({r['type'] for r in files} & {'tensorboard', 'optuna'}),
