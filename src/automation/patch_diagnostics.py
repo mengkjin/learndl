@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -13,16 +14,49 @@ __all__ = ['check_open_files', 'failure_summary']
 _EXCEPTION = re.compile(r'^[\w.]+(?:Error|Exception)(?::|$)')
 
 
+_MOUNT_WARNING = re.compile(
+    r"lsof: WARNING: can't stat\(\) fuse\.(?:portal|gvfsd-fuse) file system (/.+)"
+)
+
+
+def _probe_errors(stderr: str, path: Path) -> str:
+    """Remove paired warnings for unrelated Linux desktop mount points."""
+    lines = [line for line in stderr.splitlines() if line.strip()]
+    if not lines:
+        return ''
+    try:
+        selected = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return stderr.strip()
+    errors = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        match = _MOUNT_WARNING.fullmatch(line)
+        if match and index + 1 < len(lines) and lines[index + 1].strip() == 'Output information may be incomplete.':
+            mount = Path(match[1])
+            if (mount.anchor == '/' and '\\' not in match[1] and '..' not in mount.parts
+                    and not selected.is_relative_to(mount)
+                    and not mount.is_relative_to(selected)):
+                index += 2
+                continue
+        errors.append(line)
+        index += 1
+    return '\n'.join(errors)
+
+
 def check_open_files(path: Path, *, timeout: int = 60) -> None:
     """Fail closed on occupied paths and on inconclusive probes."""
     args = ['+D', str(path)] if path.is_dir() else ['--', str(path)]
     try:
         probe = subprocess.run(['lsof', '-nP', '-Fpcn', *args], capture_output=True,
-                               text=True, errors='replace', timeout=timeout, check=False)
+                               text=True, errors='replace', timeout=timeout, check=False,
+                               env={**os.environ, 'LC_ALL': 'C'})
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(f'Could not check open files at {path}: {exc}') from exc
-    if probe.stderr.strip() or probe.returncode not in (0, 1):
-        detail = probe.stderr.strip()[:1000] or f'lsof exited {probe.returncode}'
+    errors = _probe_errors(probe.stderr, path)
+    if errors or probe.returncode not in (0, 1):
+        detail = errors[:1000] or f'lsof exited {probe.returncode}'
         raise RuntimeError(f'Could not check open files at {path}: {detail}')
     if probe.stdout:
         pid, command, holders = '', '', []

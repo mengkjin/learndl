@@ -282,12 +282,19 @@ def _matches_success(patch: Patch, path: str, digest: str) -> bool:
         return False
     if digest == patch.digest:
         return True
-    # The 29da4f5c replacement kept the same transformation and verification,
-    # and changed only temporary file handling and the filesystem helper import.
-    return (patch.id == '0.7.7/001'
-            and patch.relative_path == 'scripts/.version_patch/0.7.7/001_status_logger.py'
-            and patch.digest == 'b68b6b3bec58dbae2541085f28dc8a532c1c237cd8049e64b7628e2644ce8c93'
-            and digest == '8fcdcac45e7b16adf9c0eeefa5f9f097b50f5787cb5e4256d053ba6ce2cb2020')
+    # These exact revisions leave the data transformations and verification
+    # unchanged. They update the open-file probe or temporary-file handling.
+    compatible = {
+        'scripts/.version_patch/0.7.3/001_factor_residual_snapshot.py': (
+            '81ba2996a6f47dfe6329a896fed6e5d7bcb2c9274c7816e378461ae6d6fcd5b1',
+            '56f1a6df899a5828af288265bc85f1f3facbaedebaa50732037c310da54c089b',
+        ),
+        'scripts/.version_patch/0.7.7/001_status_logger.py': (
+            '8fcdcac45e7b16adf9c0eeefa5f9f097b50f5787cb5e4256d053ba6ce2cb2020',
+            'b68b6b3bec58dbae2541085f28dc8a532c1c237cd8049e64b7628e2644ce8c93',
+        ),
+    }
+    return compatible.get(path) == (digest, patch.digest)
 
 
 def inspect(root: Path, runtime: Path, db: sqlite3.Connection | None) -> MigrationStatus:

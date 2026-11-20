@@ -68,6 +68,52 @@ class PatchDiagnosticsTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'permission denied'):
                 patch_diagnostics.check_open_files(self.root)
 
+    def test_unrelated_desktop_mount_warnings_do_not_block_experiment_migration(self):
+        from src.automation.artifact_exchange.core import Config
+        from src.automation.version_patch import load_patch_support
+
+        layout = load_patch_support('0.7.2', 'result_layout')
+        source = self.root / 'snapshot/tensorboard'
+        target = self.root / 'results/tensorboard'
+        source.mkdir(parents=True)
+        (source / 'events.tfevents.1').write_text('events')
+        warnings = ("lsof: WARNING: can't stat() fuse.portal file system /root/.cache/doc\n"
+                    "  Output information may be incomplete.\n"
+                    "lsof: WARNING: can't stat() fuse.gvfsd-fuse file system /root/.cache/gvfs\n"
+                    "  Output information may be incomplete.\n")
+        probe = subprocess.CompletedProcess([], 1, '', warnings)
+        with (patch.object(layout, 'inventory', return_value=([layout.Move(source, target, 'tensorboard')], [])),
+              patch.object(patch_diagnostics.subprocess, 'run', return_value=probe)):
+            config = Config(role='publisher')
+            summary = layout.run(config, self.root, self.root, self.root,
+                                 report=self.backup / 'experiment-results.json')
+        self.assertEqual(summary['moves'][0]['state'], 'migrated')
+        self.assertEqual((target / 'events.tfevents.1').read_text(), 'events')
+
+    def test_desktop_warnings_cannot_hide_open_files_or_probe_errors(self):
+        unrelated = ("lsof: WARNING: can't stat() fuse.portal file system /root/.cache/doc\n"
+                     "  Output information may be incomplete.\n")
+        for name, probe, message in (
+            ('open', subprocess.CompletedProcess([], 0, f'p42\ncpython\nn{self.log}\n', unrelated), 'PID 42'),
+            ('error', subprocess.CompletedProcess([], 1, '', unrelated + 'lsof: permission denied\n'), 'permission denied'),
+            ('parent', subprocess.CompletedProcess([], 1, '', unrelated.replace('/root/.cache/doc', str(self.root.parent))),
+             'Could not check open files'),
+            ('child', subprocess.CompletedProcess([], 1, '', unrelated.replace('/root/.cache/doc', str(self.root / 'mounted'))),
+             'Could not check open files'),
+            ('exit', subprocess.CompletedProcess([], 2, '', unrelated), 'lsof exited 2'),
+        ):
+            with self.subTest(name=name), patch.object(patch_diagnostics.subprocess, 'run', return_value=probe):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    patch_diagnostics.check_open_files(self.root)
+
+    def test_residual_patch_accepts_the_previous_successful_digest(self):
+        from src.automation.version_patch import ROOT, discover
+
+        entry = discover(ROOT, '0.7.7')['0.7.3/001']
+        prior = '81ba2996a6f47dfe6329a896fed6e5d7bcb2c9274c7816e378461ae6d6fcd5b1'
+        self.assertTrue(_matches_success(entry, entry.relative_path, prior))
+        self.assertFalse(_matches_success(entry, entry.relative_path, 'unknown'))
+
     @unittest.skipUnless(shutil.which('lsof'), 'lsof required')
     def test_probe_identifies_actual_open_file(self):
         with self.log.open('w'):

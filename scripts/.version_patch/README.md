@@ -127,6 +127,8 @@ Run from the project checkout with the project's Python environment.
   `0.7.2/001`, the first blocked move in `backup/experiment-results.json` names
   the source and destination. `lsof` diagnostics identify open files and their
   processes, and separately report missing tools, timeouts, and probe errors.
+  Desktop portal or GVFS mount warnings outside the selected tree do not
+  block the move when the probe otherwise reports no holders.
 - After fixing the cause, run
   `python -m src.automation.version_patch retry 0.7.2/001` using the reported
   patch ID. The same command resumes an interrupted attempt.
@@ -170,7 +172,8 @@ interface recovery after fixing the reported condition.
   inspect `recent-mail.json` for missing or unverifiable packages.
 - **0.7.3/001** moves factor residual intermediates to model snapshots.
   Already moved source directories disappear from the next discovery.
-  Two existing copies are preserved for inspection.
+  Two existing copies are preserved for inspection. Both released entry
+  point fingerprints are accepted after the open-file probe update.
 - **0.7.4/001** uses a persistent move journal and per-tree fingerprints to
   resume after renames. Check destination conflicts and preserve the journal
   when investigating a partially applied layout migration.

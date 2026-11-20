@@ -3,9 +3,8 @@
 # email: False
 # mode: os
 
-import subprocess
-
 from src.automation.artifact_exchange.core import Config, atomic_json, category_root, fsync_dir, locked, real_tree
+from src.automation.patch_diagnostics import check_open_files
 
 
 def candidates(models, results):
@@ -28,9 +27,7 @@ def _move(source, root):
     for entry in source.rglob('*'):
         if not real_tree(entry).is_dir() and not entry.is_file():
             raise ValueError(f'Unexpected special file: {entry}')
-    probe = subprocess.run(['lsof', '-Fn', '+D', str(source)], capture_output=True, timeout=60, check=False)
-    if probe.returncode != 1 or probe.stdout or probe.stderr:
-        raise RuntimeError(f'Open files or uncertain lsof result: {source}')
+    check_open_files(source)
     target.parent.mkdir(parents=True, exist_ok=True)
     source.rename(target)
     fsync_dir(source.parent)
@@ -49,7 +46,7 @@ def apply(ctx):
         for source in candidates(PATH.model, config.results):
             try:
                 moved.append(_move(source, ctx.root))
-            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            except (OSError, ValueError, RuntimeError) as exc:
                 atomic_json(report, {'moved': moved, 'blocked': str(exc)})
                 raise
             atomic_json(report, {'moved': moved})
