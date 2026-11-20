@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 

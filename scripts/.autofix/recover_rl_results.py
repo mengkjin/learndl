@@ -17,7 +17,7 @@
 #     default: false
 #     desc: 只读核验，不创建结果包和补发结果附件
 
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 

@@ -7,9 +7,11 @@ import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from src.file_ops import fsync_dir, real_tree
-from src.model_provenance import KINDS, PROPERTY_FILE, read_properties
+from src.shared.file_ops import fsync_dir, real_tree
+from src.shared.model_provenance import KINDS, PROPERTY_FILE, read_properties
 from .training_history import now
+
+__all__ = ['write_properties', 'coverage', 'Phase', 'track_phase']
 
 def write_properties(path, records):
     path = real_tree(path)

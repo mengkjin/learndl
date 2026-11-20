@@ -8,7 +8,7 @@ from unittest.mock import patch
 from src.api.learndl_monitor.artifact_library import Library
 from src.automation.artifact_exchange.core import ArtifactSpec, Config, atomic_json, publish_artifacts, receive
 from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, metadata_specs
-from src.model_provenance import read_properties
+from src.shared.model_provenance import read_properties
 from src.res.model.util.model_properties import Phase
 from src.automation.version_patch import load_patch_support
 

@@ -1,10 +1,13 @@
 """Staged maintenance installation with rollback journal and source checks."""
+from __future__ import annotations
 import hashlib
 import json
 import os
 import shutil
 from pathlib import Path
 from uuid import uuid4
+
+__all__ = ['digest', 'copy_path', 'remove_path', 'install']
 
 def digest(path):
     path = Path(path)

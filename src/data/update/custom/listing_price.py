@@ -1,7 +1,10 @@
 """Registered updater for the full listing-reference table."""
+from __future__ import annotations
 from src.proj import Base
 from src.data.util.prices.listing import update_listing_prices
 from .basic import BasicCustomUpdater
+
+__all__ = ['ListingPriceUpdater']
 
 class ListingPriceUpdater(BasicCustomUpdater):
     START_DATE = 19970101

@@ -14,7 +14,7 @@ from src.automation.artifact_exchange.core import (
 from src.automation.artifact_exchange.model_metadata import (
     BACKFILL_TASK, DIRECTORIES, metadata_baseline, metadata_specs,
 )
-from src.model_provenance import PROPERTY_FILE, read_properties
+from src.shared.model_provenance import PROPERTY_FILE, read_properties
 from src.res.model.util.core.model_path import source_models
 from src.res.model.util.model_properties import coverage, write_properties
 

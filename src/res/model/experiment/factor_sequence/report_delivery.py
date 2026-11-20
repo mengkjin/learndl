@@ -1,6 +1,9 @@
 """Explicit publication recovery for completed factor-sequence experiments."""
+from __future__ import annotations
 import json
 from pathlib import Path
+
+__all__ = ['recover_reports']
 
 def recover_reports(roots, run_id):
     """Retry only these experiments; preserve outbox identities and server originals."""

@@ -8,6 +8,16 @@ from pathlib import Path
 
 from .core import ArtifactSpec, atomic_json, component, digest, real_tree
 
+__all__ = [
+    'DIRECTORIES',
+    'INVENTORY',
+    'BACKFILL_TASK',
+    'metadata_files',
+    'read_inventory',
+    'metadata_baseline',
+    'metadata_specs',
+]
+
 DIRECTORIES = {
     'configs': {'.yaml', '.yml', '.json', '.toml'},
     'logs': {'.log', '.txt', '.json', '.jsonl', '.md', '.html', '.yaml', '.yml'},

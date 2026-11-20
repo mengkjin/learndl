@@ -5,6 +5,8 @@ from collections import Counter
 from src.proj import PATH
 from src.res.model.util.training_history import file_revision
 
+__all__ = ['git_time', 'load', 'revision_for']
+
 
 def git_time(path):
     result = subprocess.run(['git', '--no-optional-locks', '-C', str(PATH.main), 'log', '-1',

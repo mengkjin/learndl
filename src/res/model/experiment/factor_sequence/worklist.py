@@ -11,7 +11,7 @@ def resolve_schedule(source, model, name, mode=None):
     from src.proj import PATH, CALENDAR
     from src.data.preprocess.factor_sequence.bundle import load
     from src.res.model.experiment.factor_sequence.schedule_training import schedule_config, variants
-    from src.result_paths import relocated_result
+    from src.shared.result_paths import relocated_result
 
     if not re.fullmatch(r"[A-Za-z0-9_-]+", source):
         raise ValueError("Invalid factor sequence source suite")

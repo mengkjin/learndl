@@ -15,7 +15,7 @@ from src.automation.artifact_exchange.core import (
     Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
 from src.automation.artifact_exchange.model_builds import archived_builds
-from src.model_provenance import LOG_PHASES, PROPERTY_FILE, read_properties
+from src.shared.model_provenance import LOG_PHASES, PROPERTY_FILE, read_properties
 from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY
 from .experiments import Instances
 from .services import ROOT, STATE

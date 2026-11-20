@@ -1,9 +1,12 @@
 """Non-interactive schedule worklist execution shared by CLI and automation."""
+from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 from src.proj import MACHINE, PATH, Logger
 from src.proj.util.cli.script_session import as_script_main
 from .worklists import load as load_worklists, revision_for
+
+__all__ = ['ScheduleWorklist']
 
 class ScheduleWorklist:
     """Carry out training of a predefined schedule model list."""

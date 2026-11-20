@@ -26,7 +26,7 @@ import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 from .bundle import _sha256

@@ -1,7 +1,10 @@
 """Registered adjusted-price update; calculations live in the price service."""
+from __future__ import annotations
 from src.proj import Base, DB
 from src.data.util.prices.adjusted import ensure_adjprices, START_DATE
 from .basic import BasicCustomUpdater
+
+__all__ = ['AdjPriceUpdater']
 
 class AdjPriceUpdater(BasicCustomUpdater):
     START_DATE = START_DATE

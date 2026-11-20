@@ -1,6 +1,9 @@
 """Normalize the renamed status callback without changing unrelated YAML values."""
+from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
+
+__all__ = ['OLD', 'NEW', 'rename_status_callback']
 
 OLD = 'StatusDisplay'
 NEW = 'StatusLogger'

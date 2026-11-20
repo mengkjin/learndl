@@ -6,12 +6,27 @@ import os
 from uuid import uuid4
 
 from .core import _copy, atomic_json, digest, fsync_dir, real_tree, safe_path
-from src.model_provenance import PROPERTY_FILE, validate_build
+from src.shared.model_provenance import LOG_PHASES, PROPERTY_FILE, validate_build
 from .model_metadata import INVENTORY
+
+__all__ = [
+    'ALIAS',
+    'INDEX',
+    'PENDING',
+    'LEGACY_LOG_MEMBERS',
+    'load',
+    'legacy_target',
+    'adopt_history',
+    'merge_legacy_log',
+    'apply_update',
+    'archived_builds',
+    'validate_model_members',
+]
 
 INDEX = 'build.json'
 ALIAS = '.legacy-build.json'
 PENDING = '.build-pending.json'
+LEGACY_LOG_MEMBERS = frozenset(f'run-log/{phase}.md' for phase in LOG_PHASES)
 
 
 def load(path, default=None):
@@ -120,8 +135,10 @@ def merge_legacy_log(destination, source):
         try:
             with temporary.open('x', encoding='utf-8') as stream:
                 stream.write(old)
-                for part in additions:
-                    stream.write('\n' + part)
+                for position, part in enumerate(additions):
+                    if old or position:
+                        stream.write('\n')
+                    stream.write(part)
                 stream.flush()
                 os.fsync(stream.fileno())
             temporary.replace(destination)
@@ -159,7 +176,7 @@ def apply_update(target, staging, manifest, mapped, experiments, *, legacy=False
         if (not source.is_file() or relative == INVENTORY or relative.startswith('snapshot/')
                 or any(part.startswith('.') for part in safe_path(relative).parts)):
             continue
-        fragment = legacy and relative.startswith('run-log/') and relative.split('/')[-1] in ('train.md', 'test.md')
+        fragment = legacy and relative in LEGACY_LOG_MEMBERS
         if fragment:
             relative = 'logs/' + relative.split('/')[-1]
         elif legacy and relative.split('/', 1)[0] not in ('configs', 'logs', 'results', 'html'):

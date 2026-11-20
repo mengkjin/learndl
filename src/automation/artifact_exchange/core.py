@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from src.file_ops import atomic_json, fsync_dir, real_tree
+from src.shared.file_ops import atomic_json, fsync_dir, real_tree
 
 __all__ = [
     'MAX_BYTES',
@@ -297,7 +297,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
     declaration = [] if category == 'mail_archive' else [asdict(s) | {'source': str(s.source)} for s in specs]
     identity = [2, config.source_host, task, run_id, category, experiment, declaration]
     if build is not None:
-        from src.model_provenance import validate_build
+        from src.shared.model_provenance import validate_build
 
         validate_build(build)
         if category != 'model_training':
@@ -513,7 +513,7 @@ def archive_target(manifest, config):
         experiment = component(manifest.get('experiment') or manifest['task'])
     root = real_tree(config.results / 'external' / archive_category(manifest['category']) / host / experiment)
     if 'model_build' in manifest:
-        from src.model_provenance import validate_build
+        from src.shared.model_provenance import validate_build
 
         if manifest['category'] != 'model_training' or type(manifest.get('build_sequence')) is not int or manifest['build_sequence'] < 1:
             raise ValueError('Invalid model build update')
@@ -599,8 +599,6 @@ def _receive(archive, config):
             raise ValueError('Unsupported schema')
         target = archive_target(manifest, config)
         build_update = 'model_build' in manifest
-        legacy_update = (manifest['category'] == 'model_training' and not build_update
-                         and (config.state / 'model_builds_ready.json').is_file())
         if build_update:
             from .model_builds import validate_model_members
 
@@ -621,6 +619,12 @@ def _receive(archive, config):
             if item['path'].casefold() == 'source.json' or item['path'] in listed:
                 raise ValueError('Reserved or duplicate manifest member')
             listed[item['path']] = item
+        legacy_update = False
+        if manifest['category'] == 'model_training' and not build_update:
+            from .model_builds import LEGACY_LOG_MEMBERS
+
+            legacy_update = (bool(LEGACY_LOG_MEMBERS.intersection(listed))
+                             or (config.state / 'model_builds_ready.json').is_file())
         mapped = {name: received_member(manifest, name, experiments) for name in listed}
         paths = {str(p).casefold() for p in mapped.values()}
         if len(paths) != len(mapped) or any(str(parent).casefold() in paths
@@ -633,7 +637,7 @@ def _receive(archive, config):
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
         if previous and (build_update or legacy_update):
-            return _finish_receive(archive, archive_hash, manifest, previous['target'], build_archive=True)
+            return _finish_receive(archive, archive_hash, manifest, previous['target'])
         if previous and manifest.get('host') == config.source_host:
             legacy = config.results / 'custom/legacy' / _target(manifest, config).relative_to(config.results)
             if previous['target'] == str(legacy):
@@ -670,7 +674,7 @@ def _receive(archive, config):
                     adopt_history(target, manifest)
                 apply_update(target, staging, manifest, mapped, experiments, legacy=legacy_update)
                 atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
-                return _finish_receive(archive, archive_hash, manifest, target, build_archive=True)
+                return _finish_receive(archive, archive_hash, manifest, target)
             atomic_json(staging / 'source.json', manifest)
             for directory in sorted((p for p in staging.rglob('*') if p.is_dir()), reverse=True):
                 fsync_dir(directory)
@@ -680,31 +684,11 @@ def _receive(archive, config):
             else:
                 staging.rename(target)
                 fsync_dir(target.parent)
-        if manifest['schema_version'] == 2 and manifest['category'] == 'model_training':
-            from .model_logs import append_received
-
-            append_received(config, target, manifest)
         atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
     return _finish_receive(archive, archive_hash, manifest, target)
 
 
-def _finish_receive(archive, archive_hash, manifest, target, *, build_archive=False):
-    if not build_archive and manifest['schema_version'] == 2 and manifest.get('category') == 'model_training':
-        fragments = {'run-log/train.md', 'run-log/test.md'}
-        members = {item['path'] for item in manifest['files']}
-        for name in members & fragments:
-            real_tree(target / name).unlink(missing_ok=True)
-        folder = target / 'run-log'
-        with contextlib.suppress(FileNotFoundError):
-            if members & fragments and not any(folder.iterdir()):
-                folder.rmdir()
-                fsync_dir(target)
-        if members and members <= fragments:
-            with contextlib.suppress(FileNotFoundError):
-                real_tree(target / 'source.json').unlink(missing_ok=True)
-                if not any(target.iterdir()):
-                    target.rmdir()
-                    fsync_dir(target.parent)
+def _finish_receive(archive, archive_hash, manifest, target):
     if digest(archive) != archive_hash:
         raise ValueError('Package changed before cleanup')
     archive.unlink()

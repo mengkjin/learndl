@@ -13,7 +13,7 @@
 #     default: false
 #     desc: 只诊断，不打包或提交恢复请求
 
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 

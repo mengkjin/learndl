@@ -15,7 +15,7 @@ import re
 import shutil
 import numpy as np
 import pandas as pd
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from src.data.preprocess.factor_sequence.bundle import file_digest, load, write_json
 
 

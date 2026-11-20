@@ -1,9 +1,12 @@
 """Derive model attributes and configuration versions from the file catalog."""
+from __future__ import annotations
 from collections import defaultdict
 from contextlib import suppress
 
 from src.automation.artifact_exchange.model_metadata import read_inventory
-from src.model_provenance import PROPERTY_FILE, read_properties
+from src.shared.model_provenance import PROPERTY_FILE, read_properties
+
+__all__ = ['describe_models']
 
 
 def versions(rows):

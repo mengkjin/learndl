@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psutil
 
-from src.result_paths import storage_reports
+from src.shared.result_paths import storage_reports
 from .services import STATE, SERVICES
 
 __all__ = ['main']

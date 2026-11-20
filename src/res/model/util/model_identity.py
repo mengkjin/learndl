@@ -1,4 +1,5 @@
 """Stable identity for one incarnation of a source model directory."""
+from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 import shutil
@@ -9,9 +10,11 @@ from uuid import uuid4
 
 import portalocker
 
-from src.file_ops import atomic_json, fsync_dir, real_tree
-from src.model_provenance import PROPERTY_FILE, read_properties, validate_build
+from src.shared.file_ops import atomic_json, fsync_dir, real_tree
+from src.shared.model_provenance import PROPERTY_FILE, read_properties, validate_build
 from .model_properties import write_properties
+
+__all__ = ['build_identity', 'preserve_build']
 
 def build_identity(base, *, fresh=False, reset=False):
     from src.proj import PATH

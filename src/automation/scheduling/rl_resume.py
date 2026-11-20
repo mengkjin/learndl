@@ -12,7 +12,7 @@ __all__ = [
 import hashlib
 import json
 import re
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 import portalocker

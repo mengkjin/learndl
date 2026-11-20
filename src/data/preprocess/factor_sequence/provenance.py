@@ -1,5 +1,8 @@
 """Logical component names for reproducible source fingerprints."""
+from __future__ import annotations
 from pathlib import Path
+
+__all__ = ['COMPONENTS', 'component_paths']
 
 COMPONENTS = {
     '__init__.py': 'src/data/preprocess/factor_sequence/__init__.py',

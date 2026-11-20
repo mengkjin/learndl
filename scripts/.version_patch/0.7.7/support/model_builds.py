@@ -14,7 +14,7 @@ from src.automation.artifact_exchange.model_builds import (
 )
 from src.automation.artifact_exchange.research import model_result_specs
 from src.automation.version_patch import load_patch_support
-from src.model_provenance import LOG_PHASES
+from src.shared.model_provenance import LOG_PHASES
 from src.res.model.util.core.model_path import source_models
 from src.res.model.util.model_identity import build_identity
 

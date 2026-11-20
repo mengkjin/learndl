@@ -1,9 +1,12 @@
 """Persisted model properties and build identity shared with lightweight receivers."""
+from __future__ import annotations
 from contextlib import suppress
 import json
 import re
 
-from src.file_ops import real_tree
+from .file_ops import real_tree
+
+__all__ = ['KINDS', 'PROPERTY_FILE', 'LOG_PHASES', 'read_properties', 'validate_build']
 
 
 KINDS = ('build', 'initial_training', 'resume_training', 'last_test')

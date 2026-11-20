@@ -15,7 +15,7 @@ __all__ = [
 import itertools
 import json
 import shutil
-from src.result_paths import relocated_result
+from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 import numpy as np

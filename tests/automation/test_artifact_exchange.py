@@ -57,7 +57,7 @@ class ExchangeTest(unittest.TestCase):
 
     def test_model_log_merge_survives_receipt_failure_and_replay(self):
         from src.automation.artifact_exchange import core
-        from src.automation.artifact_exchange.model_logs import log_root
+        from src.automation.artifact_exchange.model_builds import archived_builds
 
         fragment = self.source / 'train.md'
         fragment.write_text('## 2026-11-01 · run-one\n\n- epoch 0\n')
@@ -73,9 +73,11 @@ class ExchangeTest(unittest.TestCase):
 
         with patch.object(core, 'atomic_json', side_effect=crash):
             self.assertEqual(receive(self.rec)[0]['status'], 'failed')
-        log = log_root(self.rec, self.pub.source_host, 'nn@test') / 'train.md'
+        (target, _), = archived_builds(self.rec)
+        log = target / 'logs/train.md'
         self.assertEqual(log.read_text(), fragment.read_text())
-        target = Path(receive(self.rec)[0]['target'])
+        self.assertEqual(Path(receive(self.rec)[0]['target']), target)
+        self.assertFalse((target.parent / 'run_logs').exists())
         self.assertFalse((target / 'run-log').exists())
         self.assertEqual(log.read_text(), fragment.read_text())
         removed = log.with_suffix('.deleted')

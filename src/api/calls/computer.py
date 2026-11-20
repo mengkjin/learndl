@@ -20,7 +20,7 @@ class ProjectStorageReport(DirectCall):
     category = 'Computer'
 
     def run(self):
-        from src.result_paths import storage_reports
+        from src.shared.result_paths import storage_reports
         from pathlib import Path
         from src.proj.util.cli.prompts import prompt_confirm
         from src.proj.util.filesys.storage_report import generate_report, format_size

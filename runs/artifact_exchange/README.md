@@ -350,7 +350,7 @@ TensorBoard 和 Optuna。XLSX 预览可切换工作表，每张显示前 40 行�
 项目结果目录固定为 `test`、`trade`、`factor`、`gp`、`custom`、`external`。
 本机生成的通用报告、运维诊断和研究工作目录写入 `results/custom/<用途>/`。
 项目代码用 `PATH.rslt_custom`，显式扫描其他项目根目录的工具用
-`src.result_paths.custom_results(root)`。磁盘报告的 HTML 和同名 SQLite 索引一起保存在
+`src.shared.result_paths.custom_results(root)`。磁盘报告的 HTML 和同名 SQLite 索引一起保存在
 `custom/storage_reports/`。服务器的 RL 工作目录是 `custom/rl_experimental/`。
 
 接收端使用 `external/<类别>/<来源电脑>/<实验>/<批次>/`。模型的投递类别仍填写

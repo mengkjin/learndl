@@ -1,7 +1,10 @@
 """Process memory measurements without tensor or data dependencies."""
+from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
+
+__all__ = ['fmt_bytes', 'rss_bytes', 'hwm_bytes']
 
 def fmt_bytes(n : int | float) -> str:
     """Format a byte count as ``12.3G`` / ``512M``."""
