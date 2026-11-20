@@ -427,7 +427,7 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(len(received), 3)
         self.assertTrue(all(r['status'] == 'received' for r in received), received)
         first = Path(next(r['target'] for r in received if '/model/server/' in r['target']))
-        self.assertEqual(first.parent, self.rec.results/'external/model/server/nn@modelAAA')
+        self.assertEqual(first.parent, self.rec.results/'external/models/server/nn@modelAAA')
         self.assertTrue((first/'results/full.feather').exists())
         self.assertTrue((first/'results/report.zip').exists())
         sources = synced_sources(self.rec.results)

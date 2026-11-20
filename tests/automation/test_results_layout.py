@@ -33,7 +33,7 @@ class ResultsLayoutTest(unittest.TestCase):
             replay = old_route.read_bytes()
             outcome, = core.receive(rec)
             new = Path(outcome['target'])
-            self.assertEqual(new.parent, rec.results/'external/model/server/nn@gru')
+            self.assertEqual(new.parent, rec.results/'external/models/server/nn@gru')
             old = core._target(row['manifest'], rec)
             old.parent.mkdir(parents=True)
             new.rename(old)

@@ -23,7 +23,7 @@ def now():
 
 
 def log_root(config, host, model):
-    return real_tree(config.results / 'external/model' / component(host) / component(model) / 'run_logs')
+    return real_tree(config.results / 'external/models' / component(host) / component(model) / 'run_logs')
 
 
 def append_received(config, target, manifest):

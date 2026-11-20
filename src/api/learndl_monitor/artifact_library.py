@@ -88,7 +88,7 @@ class Library:
                             run=manifest['run_id'], stamp=manifest.get('created_at', ''), batch=folder.name,
                             relative=path.relative_to(folder).as_posix(), lock=None)
 
-            for identity in self.config.results.glob('external/model/*/*/run_logs/model.json'):
+            for identity in self.config.results.glob('external/models/*/*/run_logs/model.json'):
                 try:
                     meta = read_json(identity)
                     for phase in STAGES:

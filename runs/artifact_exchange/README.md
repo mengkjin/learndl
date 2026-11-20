@@ -22,7 +22,7 @@
 本机目标：
 
 ```text
-results/external/model/server/nn@modelAAA/<UTC时间>__<UUID>/
+results/external/models/server/nn@modelAAA/<UTC时间>__<UUID>/
   results/                 # 模型分析报告
     tensorboard/<名称>.zip
     optuna/<名称>.zip
@@ -241,7 +241,7 @@ AutoRunTask 的统一收尾顺序为：等待异步保存 → 发布已登记产
 
 没有待投递产物、发布未启用、receiver 角色和 autofix 的正常跳过保持静默，也不在邮件正文重复提示。内部逐包投递记录仍保留；实际发布、失败、异步保存未完成，以及已准备包被阻止发送均计入任务汇总。邮件正文也仅展示汇总。
 
-每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `external/model/<host>/<experiment>` 下增加批次子目录，不覆盖旧批次。汇总展示不改变快照保留机制，也不会复制模型权重。
+每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `external/models/<host>/<experiment>` 下增加批次子目录，不覆盖旧批次。汇总展示不改变快照保留机制，也不会复制模型权重。
 
 快照准备中断后可以通过 CLI retry 发布；定时接收不负责服务器投递。投递失败使用 warning 记录，不加入研究任务的 error conclusions。
 
@@ -296,7 +296,7 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 - 档案含逻辑通知的 EML、正文、SMTP 附件与产物交接前的原附件。邮件及附件长期保留。
   归档只改变列表显示。删除进入本机应用回收站，恢复或彻底删除在该视图操作。
 - 模型本地 `run_logs/` 下保存固定两份 `train.md` 和 `test.md`，按阶段实际使用；
-  本机接收的累计文件位于 `results/external/model/<来源电脑>/<模型>/run_logs/`。同步只携带正在归档的运行章节，
+  本机接收的累计文件位于 `results/external/models/<来源电脑>/<模型>/run_logs/`。同步只携带正在归档的运行章节，
   接收器按主机、模型、运行身份和阶段合并。没有自动过期规则。
 - 显式训练、手动恢复训练和独立测试保存本次模型 HTML。自动模型更新和
   `resume_testing` 仍可由父脚本保存一份任务 HTML，模型调用只写 Markdown。
@@ -356,7 +356,7 @@ TensorBoard 和 Optuna。XLSX 预览可切换工作表，每张显示前 40 行�
 接收端使用 `external/<类别>/<来源电脑>/<实验>/<批次>/`。模型的投递类别仍填写
 `model_training`，新共享包放入 `artifact_exchange/model/<完整模型名>/`。
 RL 批次归入 `rl_experiment`，因子序列修复批次归入 `factor_sequence`。
-模型运行日志累计在模型目录下的 `run_logs/`。未能确认来源的历史材料保存在 `custom/legacy/`。
+模型归档目录为 `external/models/`，已有归档由 0.7.5 补丁迁移。模型运行日志累计在模型目录下的 `run_logs/`。未能确认来源的历史材料保存在 `custom/legacy/`。
 
 先在接收机更新，再更新服务器。在两端的项目根目录预检并走现有版本补丁流程：
 

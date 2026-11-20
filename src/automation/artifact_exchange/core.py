@@ -197,7 +197,7 @@ def exchange_category(category: str) -> str:
 
 
 def archive_category(category: str) -> str:
-    return {'model_training': 'model', 'rl': 'rl_experiment',
+    return {'model_training': 'models', 'model': 'models', 'rl': 'rl_experiment',
             'factor_sequence_fixes': 'factor_sequence'}.get(category, category)
 
 
