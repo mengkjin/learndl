@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import itertools
 import gc
-from time import monotonic
 import torch
 import numpy as np
 
@@ -23,6 +22,7 @@ from .future_utils import FutureUtils
 from ..training_history import TrainingRun, record_training
 
 if TYPE_CHECKING:
+    from src.res.model.callback.monitor.display import StatusLogger
     from src.automation.artifact_exchange.model_properties import Phase as ModelPropertyPhase
 
 
@@ -316,10 +316,12 @@ class BaseTrainer(BasePipeline):
                 self.stage_data()
 
             if 'fit' in self.queue_of_stages:
-                self.stage_fit()
+                with self.model_phase_log('train'):
+                    self.stage_fit()
 
             if 'test' in self.queue_of_stages:
-                self.stage_test()
+                with self.model_phase_log('test'):
+                    self.stage_test()
 
             self.stage_summary()
 
@@ -348,14 +350,18 @@ class BaseTrainer(BasePipeline):
                 self.training_run.configured(self.config)
             self.print_out()
 
-    def write_process_log(self, phase: str, message: str):
-        log = getattr(self, 'process_log', None)
-        if log is not None:
-            try:
-                log.write(phase, message)
-            except OSError as exc:
-                self.logger.warning(f'Model process log write failed: {exc}', vb_level=0)
-                self.process_log = None
+    status_log: StatusLogger | None = None
+
+    def model_phase_log(self, phase):
+        from contextlib import nullcontext
+        from src.res.model.callback.monitor.display import StatusLogger
+
+        callback = next((cb for cb in self.callback.callbacks if isinstance(cb, StatusLogger)), None)
+        return callback.log_phase(phase) if callback else nullcontext()
+
+    def write_status_message(self, message):
+        if self.status_log is not None:
+            self.status_log.write(message)
 
     def stage_data(self):
         """stage of loading model data"""
@@ -419,8 +425,8 @@ class BaseTrainer(BasePipeline):
             except Exception as exc:
                 if not self.callback.request_fit_restart(exc):
                     raise
-                if getattr(self, 'process_log', None) is not None:
-                    self.write_process_log('train', f'{self.texts.model_key}: restarting after {type(exc).__name__}: {exc}')
+                if getattr(self, 'status_log', None) is not None:
+                    self.write_status_message(f'{self.texts.model_key}: restarting after {type(exc).__name__}: {exc}')
                 # Do not retain the exception/traceback across cleanup or retry.
             else:
                 return
@@ -473,8 +479,6 @@ class BaseTrainer(BasePipeline):
                 if self.status.model_num == 0:
                     self.on_test_model_date_start()
                 self.on_test_model_start()
-                if self.data.no_date_to_test:
-                    self.write_process_log('test', f'{self.texts.model_key}: no new dates')
                 self.model.test()
                 self.on_test_model_end()
                 if self.status.model_num == self.config.model_num_list[-1]:
@@ -514,7 +518,7 @@ class BaseTrainer(BasePipeline):
             iter_info += f'resuming {num_all_models - sum(condition)} models, {sum(condition)} to go!'
         else:
             iter_info += f'{num_all_models} to go!'
-        self.write_process_log('train' if self.is_fitting else 'test', iter_info)
+        self.write_status_message(iter_info)
         self.logger.note(iter_info , vb = 1)
         return model_iter
 
@@ -530,19 +534,14 @@ class BaseTrainer(BasePipeline):
             yield self.status
             self.on_test_submodel_end()
             if not self.status.deposition_loading_status:
-                self.write_process_log('test', f'{self.texts.model_str}: skipped, model file unavailable')
+                self.write_status_message(f'{self.texts.model_str}: skipped, model file unavailable')
         
     def iter_fit_epoches(self):
         while not self.status.loop_end:
-            started = monotonic()
             self.on_fit_epoch_start()
             yield self.status
             self.on_fit_epoch_end_before()
             self.on_fit_epoch_end()
-            if getattr(self, 'process_log', None) is not None:
-                self.write_process_log('train', f'{self.texts.model_key} · {self.texts.progress} · {monotonic() - started:.2f}s')
-                for event in self.status.current.events:
-                    self.write_process_log('train', f'{self.status.epoch_key} · {event.info}')
 
     def iter_dataloader(self):
         for idx , batch_input in enumerate(self.dataloader):
@@ -568,8 +567,6 @@ class BaseTrainer(BasePipeline):
             yield self.batch_idx , self.batch_input
             self.on_validation_batch_end()
         self.on_validation_epoch_end()
-        if self.config.module_type == 'boost' and getattr(self, 'process_log', None) is not None:
-            self.write_process_log('train', f'{self.texts.model_key} · {self.texts.progress}')
 
     def iter_test_dataloader(self , given_loader = None):
         self.dataloader = self.data.test_dataloader() if given_loader is None else given_loader

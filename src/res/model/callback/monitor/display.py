@@ -1,20 +1,21 @@
 """
 Callback to display information of trainer
 - CallbackTimer : time cost of callback hooks
-- StatusDisplay : display epoch and event information
+- StatusLogger : display epoch and event information
 """
 from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from datetime import datetime
+from contextlib import contextmanager
+from datetime import datetime, timezone
 from functools import cached_property
 from typing import Any
 
 from src.proj import Base , Proj
 from src.res.model.util import BaseCallBack , BatchInputLoader
 
-__all__ = ['CallbackTimer' , 'StatusDisplay']
+__all__ = ['CallbackTimer' , 'StatusLogger']
 
 class CallbackTimer(BaseCallBack):
     """Time Cost of Callback Hooks"""
@@ -46,7 +47,7 @@ class CallbackTimer(BaseCallBack):
             if not df.empty:
                 self.logger.display(df , title = 'Table: Callback Time Costs:')  
             
-class StatusDisplay(BaseCallBack):
+class StatusLogger(BaseCallBack):
     """Display Epoch and Event Information"""
     CB_ORDER : int = 100
 
@@ -55,6 +56,45 @@ class StatusDisplay(BaseCallBack):
         self.show_info_step = [0,10,5,3,2,1][min(Proj.vb.vb // 2 , 5)]
         self.dataloader_info = Proj.vb.is_max_level
         
+    @contextmanager
+    def log_phase(self, phase):
+        from src.automation.artifact_exchange.model_identity import build_identity
+
+        trainer = self.trainer
+        if trainer.training_run is None:
+            yield
+            return
+        self.log_path = self.config.base_path('logs', f'{phase}.md')
+        self.log_available = True
+        build = build_identity(self.config.base_path.base)['name']
+        run = trainer.training_run.run_id
+        operation = getattr(trainer, 'run_operation', 'internal')
+        at = datetime.now(timezone.utc).isoformat()
+        self._append(f'\n## {at} · {operation} · {build} · {run}\n\n')
+        trainer.status_log = self
+        try:
+            yield
+        except BaseException as exc:
+            self.write(f'{phase} failed ({type(exc).__name__}): {exc}')
+            raise
+        else:
+            self.write(f'{phase} completed')
+        finally:
+            trainer.status_log = None
+
+    def _append(self, text):
+        if not self.log_available:
+            return
+        try:
+            with self.log_path.open('a', encoding='utf-8') as stream:
+                stream.write(text)
+        except OSError as exc:
+            self.logger.warning(f'Model phase log write failed: {exc}', vb_level=0)
+            self.log_available = False
+
+    def write(self, message):
+        self._append('- ' + ' '.join(str(message).splitlines()) + '\n')
+
     @property
     def dataloader(self) -> BatchInputLoader | Any : 
         return self.trainer.dataloader
@@ -68,6 +108,8 @@ class StatusDisplay(BaseCallBack):
         )
         
     def on_validation_epoch_end(self):
+        if self.config.module_type == 'boost' and getattr(self.trainer, 'status_log', None) is self:
+            self.write(f'{self.texts.model_key} · {self.texts.progress}')
         if not self.display_progress:
             return
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
@@ -79,7 +121,12 @@ class StatusDisplay(BaseCallBack):
         self.model.logger.note(f'model {self.texts.model_str} fit start' , vb_level = 'max')
     
     def on_fit_epoch_end(self):
-        for event in self.status.current.events: 
+        in_log = getattr(self.trainer, 'status_log', None) is self
+        if in_log:
+            self.write(f'{self.texts.model_key} · {self.status.epoch_key} · {self.texts.progress}')
+        for event in self.status.current.events:
+            if in_log:
+                self.write(f'{self.status.epoch_key} · {event.info}')
             if Proj.verbose(event.vb_level) and (Proj.vb.is_max_level or self.status.total_models <= self.config.model_num):
                 self.logger.stdout(f'Epoch Event : {event.info}' , color = 'cyan' , add_prefix = False)
             else:
@@ -89,17 +136,29 @@ class StatusDisplay(BaseCallBack):
         self.model.logger.note(f'model {self.texts.model_str} fit done' , vb_level = 'max')
         model_summary = self.texts.model_summary
         if model_summary:
-            self.trainer.write_process_log('train', model_summary)
+            if getattr(self.trainer, 'status_log', None) is self:
+                self.write(model_summary)
             self.logger.remark(model_summary , add_prefix = False , vb_level = 2)
 
     def on_fit_end_after(self):  
         if self.texts.fit_summary:
+            if getattr(self.trainer, 'status_log', None) is self:
+                self.write(self.texts.fit_summary)
             self.logger.note(f'In Stage [{self.status.stage}], Finish All Process! {self.texts.fit_summary}')
 
     def on_test_model_start(self):
+        if getattr(self.trainer, 'status_log', None) is self:
+            self.test_dates = set()
+            dates = self.trainer.data.model_test_dates
+            span = f'{dates[0]}–{dates[-1]} · {len(dates)} dates' if len(dates) else 'no new dates'
+            self.write(f'{self.texts.model_str} test start · {span}')
         self.model.logger.note(f'model {self.texts.model_str} test start' , vb_level = 'max')
 
     def on_test_model_end(self):
+        if getattr(self.trainer, 'status_log', None) is self:
+            dates = self.test_dates
+            span = f'{min(dates)}–{max(dates)} · {len(dates)} dates' if dates else 'no new dates'
+            self.write(f'{self.texts.model_str} test done · {span}')
         self.model.logger.note(f'model {self.texts.model_str} test done' , vb_level = 'max')
     
     def on_test_end_before(self): 
@@ -132,6 +191,8 @@ class StatusDisplay(BaseCallBack):
         else:
             self.logger.log_only(dump_info)
 
-    def on_test_batch_end(self):         
+    def on_test_batch_end(self):
+        if getattr(self.trainer, 'status_log', None) is self and not self.trainer.batch_output.empty:
+            self.test_dates.add(int(self.trainer.batch_dates[self.batch_idx]))
         if self.dataloader_info: 
             self.dataloader.display(f'Test {self.status.model_submodel} {self.trainer.batch_dates[self.batch_idx]}')

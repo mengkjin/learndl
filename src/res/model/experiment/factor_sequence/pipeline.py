@@ -125,7 +125,7 @@ def train_overrides(dataset, name, model, split, model_date, research=False, see
         'train.trainer.learn_rate':{'base':.001,'transfer_multiplier':{}},
         'train.trainer.scheduler':{'name':'step','param':{'step_size':1000,'gamma':1.}},
         'env.random_seed':seed, 'env.short_test':False, 'env.mem_storage':False,
-        'train.callbacks':['StatusDisplay','SummaryWriter','BasicTestResult','EarlyStoppage','CallbackTimer'],
+        'train.callbacks':['StatusLogger','SummaryWriter','BasicTestResult','EarlyStoppage','CallbackTimer'],
         'callbacks.EarlyStoppage':{'peak_patience':5 if research else 100,'converge_patience':100},
     }
 

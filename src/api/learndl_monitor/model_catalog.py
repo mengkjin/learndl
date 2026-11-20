@@ -40,7 +40,7 @@ def versions(rows):
                'files': [r['id'] for r in current.values()], 'missing': missing}, current
 
 
-def describe_models(rows, identifier):
+def _describe_builds(rows, identifier):
     groups = defaultdict(list)
     for row in rows:
         if row.get('model') and not row.get('trashed'):
@@ -78,3 +78,20 @@ def describe_models(rows, identifier):
             'versions': [public for public, _ in reversed(available)],
         }
     return models
+
+
+def describe_models(rows, identifier):
+    by_build = _describe_builds(rows, lambda row: (identifier(row), row.get('build', '')))
+    grouped = defaultdict(list)
+    for (model_id, build), description in by_build.items():
+        grouped[model_id].append(description | {'id': model_id, 'build': build})
+
+    def order(description):
+        prefix, _, suffix = description['build'].rpartition('.')
+        return (prefix, int(suffix) if suffix.isdigit() else -1, description['build'])
+
+    result = {}
+    for model_id, builds in grouped.items():
+        builds.sort(key=order, reverse=True)
+        result[model_id] = builds[0] | {'builds': builds}
+    return result

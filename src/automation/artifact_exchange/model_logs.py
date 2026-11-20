@@ -6,13 +6,10 @@ import hashlib
 import json
 import os
 from datetime import datetime, timezone
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from uuid import uuid4
 
 from .core import atomic_json, component, fsync_dir, real_tree
 
-__all__ = ['STAGES', 'now', 'log_root', 'append_received', 'capture_run', 'record_skipped']
+__all__ = ['STAGES', 'now', 'log_root', 'append_received', 'capture_run']
 
 
 STAGES = ('train', 'test')
@@ -79,101 +76,31 @@ def append_received(config, target, manifest):
             fsync_dir(folder)
 
 
-class RunLog:
-    def __init__(self, folder: Path, fragments: Path, run_id: str, task_id, operation: str):
-        self.folder = folder
-        self.fragments = fragments
-        self.run_id = run_id
-        self.task_id = task_id
-        self.operation = operation
-        self.started = now()
-        self.phases: set[str] = set()
-        self.html: Path | None = None
-
-    def write(self, phase: str, message: str):
-        header = ''
-        if phase not in self.phases:
-            header = f'\n## {self.started} · {self.run_id}\n\n任务 `{self.task_id or "独立运行"}` · {self.operation}\n\n'
-            self.phases.add(phase)
-        self.folder.mkdir(parents=True, exist_ok=True)
-        line = header + '- ' + message.replace('\n', ' ') + '\n'
-        for folder in (self.folder, self.fragments):
-            with (folder / f'{phase}.md').open('a', encoding='utf-8') as stream:
-                stream.write(line)
-                stream.flush()
-                if folder == self.folder:
-                    os.fsync(stream.fileno())
-
-
 @contextmanager
 def capture_run(trainer):
+    """Keep optional HTML capture and collection scoped to a single invocation."""
+    from types import SimpleNamespace
     from .research import CURRENT_TASK, model_run
+    from src.proj import Save
 
     owner = CURRENT_TASK.get()
-    run_id = uuid4().hex
-    base = trainer.config.base_path
-    operation = getattr(trainer, 'run_operation', 'internal')
-    with TemporaryDirectory(prefix='learndl-model-log-') as work:
-        log = RunLog(base('run_logs'), Path(work).resolve(), run_id, getattr(owner, 'task_run_id', None), operation)
-        if owner is not None:
-            owner._model_run_ids.append(run_id)
-        trainer.process_log = log
-        catcher = nullcontext()
-        if title := getattr(trainer, 'model_html_title', None):
-            from src.proj.util.catcher import HtmlCatcher
+    run_id = trainer.training_run.run_id
+    log = SimpleNamespace(run_id=run_id, html=None)
+    if owner is not None:
+        owner._model_run_ids.append(run_id)
+    catcher = nullcontext()
+    if title := getattr(trainer, 'model_html_title', None):
+        from src.proj.util.catcher import HtmlCatcher
 
-            log.html = base('run_logs', 'html', f'{run_id}.html')
-            html_catcher = HtmlCatcher(title=title)
-            html_catcher.set_export_files(log.html)
-            catcher = html_catcher
-        state = 'completed'
+        log.html = trainer.base_path('run_logs', 'html', f'{run_id}.html')
+        catcher = HtmlCatcher(title=title)
+        catcher.set_export_files(log.html)
+    with model_run(trainer, log):
         try:
-            with model_run(trainer, log):
-                try:
-                    for stage, phase in (('fit', 'train'), ('test', 'test')):
-                        if stage in trainer.queue_of_stages:
-                            trainer.write_process_log(phase, f'{now()} · planned')
-                    with catcher:
-                        yield
-                        from src.proj import Save
-                        Save.async_wait_all(caller_name='model_run_log')
-                except BaseException as exc:
-                    state = f'failed ({type(exc).__name__}): {exc}'
-                    raise
-                finally:
-                    if log.html is not None and log.html.is_file() and owner is not None:
-                        from src.proj import Proj
-                        Proj.exit_files.append(log.html)
-                    for stage in ('fit', 'test'):
-                        if stage in trainer.queue_of_stages:
-                            trainer.write_process_log('train' if stage == 'fit' else 'test', f'{now()} · run {state}')
+            with catcher:
+                yield
+                Save.async_wait_all(caller_name='model_run_log')
         finally:
-            trainer.process_log = None
-
-
-def record_skipped(base, operation, phase, reason):
-    """Log an operation rejected by the recent-run guard without invoking the trainer."""
-    from portalocker.exceptions import LockException
-
-    from .core import ArtifactSpec
-    from .research import CURRENT_TASK, publish_safe
-    from src.res.model.util.lifecycle import ModelLifecycle
-    from src.proj import Logger
-
-    owner = CURRENT_TASK.get()
-    run_id = uuid4().hex
-    try:
-        with ModelLifecycle(base.base).lock(), TemporaryDirectory(prefix='learndl-model-log-') as work:
-            log = RunLog(base('run_logs'), Path(work).resolve(), run_id,
-                         getattr(owner, 'task_run_id', None), operation)
-            for name in phase:
-                log.write(name, reason)
-                log.write(name, f'{now()} · run skipped')
-            if owner is not None:
-                owner._model_run_ids.append(run_id)
-            publish_safe('model_training', run_id, [
-                ArtifactSpec(log.fragments, category='model_training',
-                             experiment=base.full_name, destination='run-log')
-            ], status='skipped')
-    except (OSError, RuntimeError, LockException) as exc:
-        Logger.warning(f'Could not record skipped model run: {exc}', vb_level=0)
+            if log.html is not None and log.html.is_file() and owner is not None:
+                from src.proj import Proj
+                Proj.exit_files.append(log.html)

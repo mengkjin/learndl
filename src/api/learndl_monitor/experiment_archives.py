@@ -15,8 +15,10 @@ __all__ = ['unpack_experiment']
 
 def unpack_experiment(kind: str, archive: Path, cache: Path) -> Path:
     """Reuse immutable imports; reject unsafe paths, links and oversized archives."""
-    stamp = archive.stat()
-    key = hashlib.sha256(f'{archive}:{stamp.st_size}:{stamp.st_mtime_ns}:{kind}'.encode()).hexdigest()
+    from src.automation.artifact_exchange.core import digest
+
+    checksum = digest(archive)
+    key = hashlib.sha256(f'{archive}:{checksum}:{kind}'.encode()).hexdigest()
     target = cache / key
     marker = target / 'source.json'
     if marker.exists():
@@ -42,6 +44,8 @@ def unpack_experiment(kind: str, archive: Path, cache: Path) -> Path:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with package.open(item) as source, destination.open('xb') as output:
                     shutil.copyfileobj(source, output)
+        if digest(archive) != checksum:
+            raise ValueError('Experiment ZIP changed during import; try again')
         if kind == 'tensorboard':
             if not any(p.is_file() for p in logs.rglob('*tfevents*')):
                 raise ValueError('No TensorBoard event files in ZIP')

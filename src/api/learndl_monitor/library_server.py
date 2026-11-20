@@ -111,7 +111,7 @@ def main(kind, *, state=STATE):
                         raise ValueError('Select up to 500 items')
                     return self.reply(catalog.manage(action, ids))
                 if action == 'model_folder' and kind == 'model_preview':
-                    path = catalog.model_folder(data['id'])
+                    path = catalog.model_folder(data['id'], data.get('build'))
                     return self.reply({'folder': open_folder(path) if data.get('open_locally') is True else str(path)})
                 row = catalog.rows()[data['id']]
                 if action == 'folder':

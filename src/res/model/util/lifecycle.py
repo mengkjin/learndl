@@ -18,6 +18,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 import portalocker
 import yaml
 
+from src.res.model.util.config.status_logger import rename_status_callback
+
 __all__ = ['ModelLifecycle']
 
 
@@ -53,6 +55,11 @@ def _digest(value: object) -> str:
 def _checksum(path: Path) -> str:
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def _target_digest(target: Mapping) -> str:
+    # The logger rename is operational and must preserve existing approvals.
+    return _digest(rename_status_callback(target, legacy=True))
 
 
 class ModelLifecycle:
@@ -103,7 +110,7 @@ class ModelLifecycle:
         if module in ('nn', 'boost'):
             module = str(model.get(f'model.module.{module}', module))
         model['model.module'] = module.split('@')[-1]
-        return {'model': model, 'algo': snapshot['algo'], 'boost_head': snapshot.get('boost_head'),
+        return {'model': rename_status_callback(model, legacy=True), 'algo': snapshot['algo'], 'boost_head': snapshot.get('boost_head'),
                 'dependencies': snapshot.get('dependencies', {})}
 
     @classmethod
@@ -121,7 +128,7 @@ class ModelLifecycle:
         if manager.state:
             path = config.base_path.conf_file('model')
             if not path.exists() or kwargs.get('overwrite'):
-                _write(path, _read(manager.target_file)['model'])
+                _write(path, rename_status_callback(_read(manager.target_file)['model']))
         else:
             config.model_config.Param.dump_yaml(config.base_path.conf_file('model'), **kwargs)
 
@@ -197,7 +204,7 @@ class ModelLifecycle:
             target = cls.snapshot(config)
             _write(manager.target_file, target)
             manager.save(schema_version=1, stage='exploration', status='legacy' if legacy else 'pending',
-                         legacy=legacy, short_test=config.short_test, target_version=_digest(target),
+                         legacy=legacy, short_test=config.short_test, target_version=_target_digest(target),
                          budget={'enabled': not legacy and not config.short_test,
                                  'mode': ('quick' if config.module_type == 'nn' else 'sparse') if not legacy and not config.short_test else 'full',
                                  'max_epoch': 20, 'window': 1200, 'step': 2})
@@ -450,7 +457,7 @@ class ModelLifecycle:
                     model = target['model']
                     start = int(registration.get('start', model['model.beg_date']))
                     end = min(int(registration.get('end', model['model.end_date'])), int(CALENDAR.update_to()))
-                    target_version = _digest(target)
+                    target_version = _target_digest(target)
                     dependency_config = ModelConfig(ModelPath(manager.base), stage=2, resume=1, selection=0,
                                                     override=model, short_test=False, vb_level='never')
                     dependencies = cls.dependencies(dependency_config, production=True)
@@ -541,14 +548,14 @@ class ModelLifecycle:
             raise ValueError('Production target requires model and algo mappings')
         with self.lock():
             _write(self.target_file, target)
-            self.save(target_version=_digest(target), status='needs_training', accepted_request=None,
+            self.save(target_version=_target_digest(target), status='needs_training', accepted_request=None,
                       repair_generation=int(self.state.get('repair_generation', 0)) + 1, force_retrain=retrain)
 
     def repair(self, request: Mapping, run: Callable[..., Any]) -> None:
         """Build an isolated existing-index run, then atomically publish its reference."""
         from src.res.model.util.core import ModelPath
         target = _read(self.target_file)
-        if _digest(target) != request['target_version']:
+        if _target_digest(target) != request['target_version']:
             raise ValueError('Lifecycle target changed; repair request is stale')
         with self.lock():
             state = self.state
@@ -631,7 +638,7 @@ class ModelLifecycle:
                 if not expected or any(not staged.compatible(trainer.config, n, d) for d, n in expected):
                     raise ValueError('Production artifact coverage is incomplete')
                 self._validate_predictions(candidate, trainer, expected)
-                if _digest(_read(self.target_file)) != request['target_version']:
+                if _target_digest(_read(self.target_file)) != request['target_version']:
                     raise ValueError('Target changed during repair')
                 if self.dependencies(trainer.config, production=True) != request.get('dependencies', {}):
                     raise ValueError('Upstream dependencies changed during repair')

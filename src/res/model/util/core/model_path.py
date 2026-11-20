@@ -267,6 +267,9 @@ class ModelPath:
             Logger.error(f'{self} is resumable and not a short test model, cannot clear , you have to delete it manually')
             return
         else:
+            from src.automation.artifact_exchange.model_identity import preserve_build
+
+            preserve_build(self)
             [shutil.rmtree(folder , ignore_errors=True) for folder in [self.archive() , self.conf() , self.rslt() , self.snapshot()]]
             self.log_operation('clear_model_path')
     

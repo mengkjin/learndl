@@ -18,7 +18,7 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .model-files .item{font-size:14px}.model-actions{margin-top:10px}
 .sheet{max-height:48vh;overflow:auto;margin-top:10px}.sheet table{border-collapse:collapse}
 .sheet td{border:1px solid #3b4b60;padding:5px 8px;min-width:85px;max-width:260px;overflow-wrap:anywhere}
-.model-heading{justify-content:space-between}.model-heading h2{margin:0}
+.model-builds{padding-left:20px}.model-heading{justify-content:space-between}.model-heading h2{margin:0}
 #model-filters{margin-top:8px}.properties{margin:12px 0;display:grid;grid-template-columns:max-content 1fr;gap:3px 12px}
 .properties dt{color:#a6b8cc}.properties dd{margin:0;overflow-wrap:anywhere}
 small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywhere}iframe{width:100%;height:57vh;background:white;border:0;border-radius:4px}
@@ -45,7 +45,7 @@ const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
 const modelPage=kind==='model_preview', $=id=>document.getElementById(id);
 const filters=new URLSearchParams(location.search), selected=new Set(), bindings=new WeakMap();
 let lang=localStorage.getItem('learndl-language')==='en'?'en':'zh';
-let rows=[], models={}, shown=[], active='', activeModel='', version='', blobURL='', loaded=false;
+let rows=[], models={}, shown=[], active='', activeModel='', activeBuild=null, version='', blobURL='', loaded=false;
 const tr=(zh,en)=>lang==='en'?en:zh;
 const terms={
  title:modelPage?['模型预览','Model Preview']:['邮件档案','Mail Archive'],
@@ -80,7 +80,7 @@ const terms={
  modelFolder:['打开模型文件夹','Open model folder'], folder:['打开所在文件夹','Open containing folder'],
  confirmFolder:['在运行本服务的电脑打开文件夹？选择取消可查看路径。','Open the folder on the computer running this service? Choose Cancel to display its path.'],
  configurations:['配置','Configuration'], logs:['日志','Logs'], results:['结果文件','Result files'],
- history:['配置与日志版本','Configuration and log version'], latest:['最新','Latest'],
+ history:['旧配置与日志批次','Legacy configuration and log batch'], build:['模型版本','Model build'], latest:['最新','Latest'],
  backfill:['历史补投','Historical backfill'], incomplete:['部分文件尚未到达','Some files have yet to arrive'],
  clear:['清空选择','Clear selection'], selectAll:['全选当前文件','Select all visible files'],
  select:['选择','Select'], restore:['恢复','Restore'], purge:['彻底删除','Permanently delete'],
@@ -265,10 +265,10 @@ function fileRow(r){
   [r.host,r.metadata?.task,t(r.metadata?.status||''),r.stamp]).filter(Boolean).join(' · ')));
  line.append(b);return line;
 }
-function folder(actionName,id){
+function folder(actionName,id,build){
  return async()=>{
   const locally=confirm(t('confirmFolder'));
-  const data=await (await api('/api/action',{action:actionName,id,open_locally:locally})).json();
+  const data=await (await api('/api/action',{action:actionName,id,build,open_locally:locally})).json();
   setNotice(data.folder);
  };
 }
@@ -311,34 +311,61 @@ function renderModels(records,query){
   if(!groups.has(key))groups.set(key,[]);
   groups.get(key).push(row);
  }
- for(const [key,files] of [...groups]){
-  const m=models[key]||{host:files[0].host,name:files[0].model,experiments:[]};
-  if(!modelMatches(m)||!matchesText([m.name,m.host,m.stage,m.module,...files.map(r=>r.relative)],query))groups.delete(key);
- }
- if(!groups.has(activeModel)){
-  activeModel=groups.keys().next().value||'';active='';version='';
- }
- const entries=Array.from(groups,([key,files])=>{
-  const m=models[key]||{host:files[0].host,name:files[0].model};
-  const b=button('',()=>{
-   if(activeModel!==key){activeModel=key;active='';version='';selected.clear();render();}
+ const modelEntries=new Map();
+ for(const [key,files] of groups){
+  const model=models[key]||{host:files[0].host,name:files[0].model,experiments:[]};
+  const all=model.builds||[{...model,build:files[0].build||''}];
+  const builds=all.filter(build=>{
+   const candidates=files.filter(r=>(r.build||'')===build.build);
+   return candidates.length&&modelMatches(build)&&
+    matchesText([model.name,model.host,build.build,build.stage,build.module,...candidates.map(r=>r.relative)],query);
   });
-  const title=localized(element('span'),()=>m.name+(m.archive_stamp?' · '+t('archived')+' '+m.archive_stamp:''));
-  b.replaceChildren(title,localized(element('small'),()=>m.host+' · '+items(files.length)));
-  b.className='item';b.setAttribute('aria-current',String(key===activeModel));
-  return b;
+  if(builds.length)modelEntries.set(key,{model,builds,total:all.length});
+ }
+ if(!modelEntries.has(activeModel)){
+  activeModel=modelEntries.keys().next().value||'';activeBuild=null;active='';version='';
+ }
+ const current=modelEntries.get(activeModel);
+ if(current&&!current.builds.some(b=>b.build===activeBuild)){
+  activeBuild=current.builds[0].build;active='';version='';
+ }
+ const entries=Array.from(modelEntries,([key,{model,builds,total}])=>{
+  const item=element('div');
+  const b=button('',()=>{
+   if(activeModel!==key){activeModel=key;activeBuild=null;active='';version='';selected.clear();render();}
+  });
+  b.replaceChildren(element('span',model.name),localized(element('small'),()=>
+   model.host+' · '+count(total,['个版本','build','builds'])));
+  b.className='item';b.setAttribute('aria-current',String(key===activeModel));item.append(b);
+  if(key===activeModel&&builds.length>1){
+   const list=element('div');list.className='model-builds';
+   for(const build of builds){
+    const choose=button(()=>build.build||t('history'),()=>{
+     activeBuild=build.build;active='';version='';selected.clear();render();
+    });
+    choose.className='item';choose.setAttribute('aria-current',String(build.build===activeBuild));list.append(choose);
+   }
+   item.append(list);
+  }
+  return item;
  });
  $('items').replaceChildren(...entries);
- bindings.delete($('count'));localized($('count'),()=>count(groups.size,['个模型','model','models']));
+ bindings.delete($('count'));localized($('count'),()=>count(modelEntries.size,['个模型','model','models']));
  const pane=$('detail');bindings.delete(pane);
- if(!activeModel){localized(pane,()=>t('noModel'));return;}
- const m=models[activeModel]||{name:groups.get(activeModel)[0].model,host:groups.get(activeModel)[0].host};
+ if(!current){localized(pane,()=>t('noModel'));return;}
+ const m=current.builds.find(build=>build.build===activeBuild);
  const versions=m.versions||[];
  if(!versions.some(v=>v.batch===version))version=versions[0]?.batch??'';
  const snapshot=versions.find(v=>v.batch===version);
  const members=new Set(snapshot?.files||[]);
- const filesForModel=groups.get(activeModel);
- shown=filesForModel.filter(r=>!r.relative?.match(/^(configs|logs)\//)||!versions.length||members.has(r.id));
+ const filesForModel=groups.get(activeModel).filter(r=>(r.build||'')===activeBuild);
+ const unique=new Map();
+ for(const row of filesForModel){
+  if(!m.build&&row.relative?.match(/^(configs|logs)\//)&&versions.length&&!members.has(row.id))continue;
+  const path=row.relative||row.label;
+  if(!unique.has(path))unique.set(path,row);
+ }
+ shown=[...unique.values()];
  trimSelection();
  const previous=$('model-file-detail');
  const keep=previous&&shown.some(r=>r.id===active);
@@ -347,10 +374,10 @@ function renderModels(records,query){
  actions.id='model-actions';actions.className='actions model-actions';fileCount.id='file-count';
  files.className='model-files';preview.id='model-file-detail';
  const heading=element('div');heading.className='row model-heading';
- heading.append(localized(element('h2'),()=>m.name+(m.archive_stamp?' · '+t('archived')+' '+m.archive_stamp:'')));
- if(models[activeModel])heading.append(action('modelFolder',folder('model_folder',activeModel)));
+ heading.append(element('h2',m.name+(m.build?' · '+m.build:'')));
+ if(models[activeModel])heading.append(action('modelFolder',folder('model_folder',activeModel,activeBuild)));
  const picker=element('div');
- if(versions.some(v=>v.batch)){
+ if(!m.build&&versions.some(v=>v.batch)){
   const select=field('metadata-version','history');
   select.append(...versions.map((v,i)=>localized(new Option('',v.batch),()=>
    [i===0?t('latest'):'',v.batch?batchDate(v.batch):'',v.historical?t('backfill'):''].filter(Boolean).join(' · '))));

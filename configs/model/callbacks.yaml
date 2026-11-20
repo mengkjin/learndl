@@ -2,7 +2,7 @@ LearnRateReset:     {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 1. , '
 CallbackTimer:      {}
 EarlyStoppage:      {'peak_patience' : 20 , 'converge_patience' : 5 , 'converge_dataset' : 'valid'}
 BadAttemptRetrain:  {'early_exit' : 10 , 'moderate_early_exit' : 20 , 'moderate_min_ic' : 0.1 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.3 , 0.1 , 0.03 , 0.01]}
-StatusDisplay:      {}
+StatusLogger:      {}
 SummaryWriter:      {}
 DetailedAlphaAnalysis:  {'t50_backend': 'auto', 'analysis_snapshot': 'auto'} # array T50 when supported; legacy is the reference path
 MemoryOptimization: {'batch_interval' : 20}

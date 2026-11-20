@@ -54,12 +54,8 @@ class ModelTrainer(BaseTrainer):
         if base_path and check_operation:
             last_time , time_elapsed , skip = base_path.check_last_operation(check_operation)
             if skip:
-                from src.automation.artifact_exchange.model_logs import record_skipped
-
                 reason = f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago.'
                 trainer.logger.skipping(reason)
-                phases = ('test',) if check_operation == 'resume_testing' else ('train', 'test')
-                record_skipped(base_path, check_operation, phases, reason)
                 return trainer
             elif last_time:
                 trainer.logger.alert1(f'{title} operated {time_elapsed.total_seconds() / 3600:.1f} hours ago, will run.' , vb_level = 'max')

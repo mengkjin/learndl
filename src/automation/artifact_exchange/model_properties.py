@@ -10,7 +10,7 @@ from tempfile import NamedTemporaryFile
 from .core import fsync_dir, real_tree
 from .model_logs import now
 
-KINDS = ('initial_training', 'resume_training', 'last_test')
+KINDS = ('build', 'initial_training', 'resume_training', 'last_test')
 PROPERTY_FILE = 'logs/property.jsonl'
 
 

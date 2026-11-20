@@ -2,9 +2,8 @@
 from __future__ import annotations
 import contextvars
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 from dataclasses import replace
-from datetime import datetime, timezone
 import uuid
 from typing import Any
 import json
@@ -74,7 +73,7 @@ def _visible_result(record):
     """Routine opt-out is quiet; failed work and blocked prepared packages remain visible."""
     reason = str(record.get('reason', ''))
     return not (record.get('status') == 'skipped' and not record.get('id') and
-                (reason in {'autofix', 'publisher disabled', 'publisher disabled or autofix'} or
+                (reason in {'autofix', 'publisher disabled', 'publisher disabled or autofix'} or reason == 'model files unchanged' or
                  reason.startswith('publisher inactive:')))
 
 
@@ -98,7 +97,7 @@ def log_results(records, owner=None):
         delivery_log(text, failed=record.get('status') in ('failed', 'skipped'), owner=owner)
 
 
-def publish_safe(task, run_id, artifacts, status='success'):
+def publish_safe(task, run_id, artifacts, status='success', *, build=None):
     owner = CURRENT_TASK.get()
     queue = task_delivery(owner)
     config = None
@@ -108,7 +107,7 @@ def publish_safe(task, run_id, artifacts, status='success'):
         else:
             config = Config.load()
             records = publish_artifacts(task, run_id, artifacts, status, config=config,
-                                        prepare_only=queue is not None and not queue.flushing)
+                                        prepare_only=queue is not None and not queue.flushing, build=build)
     except Exception as exc:
         records = [{'status': 'failed', 'error': str(exc)}]
     fresh = records
@@ -326,39 +325,38 @@ def register_report(source, run_id):
         delivery_log(f'report registration failed: {exc}', failed=True)
 
 
+def model_result_specs(base, name):
+    from .model_metadata import DIRECTORIES, metadata_files
+
+    specs = []
+    results = base / 'results'
+    members = tuple(path.relative_to(results).as_posix() for path in sorted(results.rglob('*'))
+                    if path.is_file() and not path.is_symlink()
+                    and not any(part.startswith('.') for part in path.relative_to(results).parts)
+                    and path.relative_to(results).parts[0] not in ('optuna', 'tensorboard', 'factor_residual')
+                    and path.name not in {'fitting_output.html', 'testing_output.html', 'fitting_testing_output.html'})
+    if members:
+        specs.append(ArtifactSpec(results, category='model_training', members=members))
+    events = results / 'tensorboard'
+    if any(events.rglob('*tfevents*')):
+        specs.append(ArtifactSpec(events, kind='tensorboard', category='model_training', name=name))
+    for path in sorted((results / 'optuna').glob('*.sqlite3')):
+        if path.is_file() and not path.is_symlink():
+            specs.append(ArtifactSpec(path, kind='optuna', category='model_training'))
+    files = [relative for _, relative in metadata_files(base)]
+    for directory in DIRECTORIES:
+        members = tuple(name.split('/', 1)[1] for name in files if name.startswith(directory + '/'))
+        if members:
+            specs.append(ArtifactSpec(base / directory, category='model_training', members=members, destination=directory))
+    return specs
+
+
 @contextmanager
 def model_run(trainer, log=None):
-    """Collect one model invocation, including standalone and resumed trainers."""
+    """Freeze one invocation's closed writers while the model lock is held."""
     specs = []
     status = 'success'
-    run_id = log.run_id if log is not None else datetime.now(timezone.utc).isoformat() + '__' + uuid.uuid4().hex
-
-    def inventory(folder):
-        signatures = {}
-        for path in folder.rglob('*'):
-            try:
-                if not path.is_symlink() and path.is_file():
-                    stat = path.stat()
-                    signatures[path] = (stat.st_size, stat.st_mtime_ns, stat.st_ino)
-            except FileNotFoundError:
-                continue
-        return signatures
-
-    def reports(folder):
-        return {p: signature for p, signature in inventory(folder).items()
-                if p.relative_to(folder).parts[0] not in ('optuna', 'tensorboard', 'factor_residual')}
-
-    before_results, before_events = {}, {}
-    config = None
-    preparation_error = None
-    try:
-        config = None if sandboxed() else Config.load()
-        if log is not None and config is not None and config.enabled and config.role == 'publisher':
-            base = trainer.config.base_path
-            before_results = reports(base.rslt())
-            before_events = inventory(base.rslt('tensorboard'))
-    except Exception as exc:
-        preparation_error = str(exc)
+    run_id = log.run_id if log is not None else uuid.uuid4().hex
     token = MODEL_ARTIFACTS.set(specs)
     try:
         yield
@@ -368,45 +366,36 @@ def model_run(trainer, log=None):
     finally:
         MODEL_ARTIFACTS.reset(token)
         try:
-            if preparation_error is not None:
-                raise RuntimeError(preparation_error)
+            config = None if sandboxed() else Config.load()
             if config is not None and config.enabled and config.role == 'publisher':
-                # On failure, close still-open writers before considering diagnostics.
                 for callback in trainer.callback.callbacks:
                     close = getattr(callback, 'reset_writer', None)
                     if close is not None:
                         close()
                 from src.proj import Save
+                from .model_identity import build_identity
+
                 Save.async_wait_all(caller_name='artifact_exchange')
                 base = trainer.config.base_path
-                results = base.rslt()
-                after_results = reports(results)
-                members = tuple(str(p.relative_to(results)) for p in after_results
-                                if p.name not in {'fitting_output.html', 'testing_output.html', 'fitting_testing_output.html'})
-                if members and (log is None or before_results != after_results):
-                    specs.append(ArtifactSpec(results, category='model_training', members=members))
+                build = build_identity(base()) if log is not None else None
                 if log is not None:
-                    if any(log.fragments.glob('*.md')):
-                        specs.append(ArtifactSpec(log.fragments, category='model_training', destination='run-log'))
+                    specs.extend(model_result_specs(base(), base.full_name))
                     if log.html is not None and log.html.is_file():
                         specs.append(ArtifactSpec(log.html, category='model_training', destination='html'))
-                events = base.rslt('tensorboard')
-                if any(events.rglob('*tfevents*')) and (log is None or before_events != inventory(events)):
-                    specs.append(ArtifactSpec(events, kind='tensorboard', category='model_training', name=base.full_name))
-                from .core import atomic_json
-                from .model_metadata import metadata_specs
-
-                snapshot = (metadata_specs(config, base(), base.full_name) if log is not None
-                            else nullcontext(([], None, {})))
-                with snapshot as (metadata, baseline, metadata_inventory):
-                    specs.extend(metadata)
-                    specs = [replace(s, category='model_training', experiment=base.full_name, run_id=run_id) for s in specs]
-                    # Studies may be registered once per date; one final SQLite snapshot suffices.
-                    specs = list({(s.source, s.kind, s.destination): s for s in specs}.values())
-                    if specs:
-                        outcomes = publish_safe('model_training', run_id, specs, status)
-                        if baseline is not None and metadata and outcomes and outcomes[0]['status'] in ('prepared', 'published'):
-                            atomic_json(baseline, metadata_inventory)
+                else:
+                    results = base.rslt()
+                    members = tuple(p.relative_to(results).as_posix() for p in results.rglob('*') if p.is_file())
+                    if members:
+                        specs.append(ArtifactSpec(results, category='model_training', members=members))
+                    events = base.rslt('tensorboard')
+                    if any(events.rglob('*tfevents*')):
+                        specs.append(ArtifactSpec(events, kind='tensorboard', category='model_training', name=base.full_name))
+                unique = {}
+                for spec in specs:
+                    key = (spec.source, spec.kind) if spec.kind == 'optuna' else (spec.source, spec.kind, spec.destination)
+                    unique.setdefault(key, replace(spec, category='model_training', experiment=base.full_name, run_id=run_id))
+                if unique:
+                    publish_safe('model_training', run_id, list(unique.values()), status, build=build)
             else:
                 reason = 'autofix' if config is None else f'publisher inactive: enabled={config.enabled}, role={config.role}'
                 record = {'status': 'skipped', 'reason': reason}

@@ -89,9 +89,10 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(receive(self.rec)[0]['status'], 'received')
         self.assertEqual(log.read_text(), fragment.read_text())
 
-    def test_model_snapshot_uses_only_current_html_and_log_increment(self):
+    def test_model_snapshot_uses_only_current_html_and_complete_log(self):
         from types import SimpleNamespace
-        from src.automation.artifact_exchange.model_logs import capture_run, log_root
+        from src.automation.artifact_exchange.model_logs import capture_run
+        from src.proj import PATH
 
         class BasePath:
             full_name = 'nn@test'
@@ -124,31 +125,29 @@ class ExchangeTest(unittest.TestCase):
         base = BasePath()
         base.rslt().mkdir(parents=True)
         (base.rslt() / 'testing_output.html').write_text('stale HTML')
-        trainer = SimpleNamespace(config=SimpleNamespace(base_path=base), queue_of_stages=['test'],
+        trainer = SimpleNamespace(config=SimpleNamespace(base_path=base), base_path=base,
                                   model_html_title='Test', callback=SimpleNamespace(callbacks=[]))
-
-        def write(phase, text):
-            trainer.process_log.write(phase, text)
-
-        trainer.write_process_log = write
-        with patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
+        first, second = '1' * 32, '2' * 32
+        with patch.object(PATH, 'lc_machine', self.root / 'machine'), \
+                patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
                 patch('src.proj.util.catcher.HtmlCatcher', Catcher), patch('src.proj.Save.async_wait_all'):
+            trainer.training_run = SimpleNamespace(run_id=first)
             with capture_run(trainer):
-                first = trainer.process_log.run_id
-                write('test', '20261116–20261117')
+                log = base('logs', 'test.md')
+                log.parent.mkdir(exist_ok=True)
+                log.write_text(f'## test · {first}\n20261116–20261117\n')
             trainer.model_html_title = None
-            with capture_run(trainer):
-                second = trainer.process_log.run_id
-                write('test', 'no new dates')
+            trainer.training_run = SimpleNamespace(run_id=second)
+            with capture_run(trainer), log.open('a') as stream:
+                stream.write(f'## test · {second}\nno new dates\n')
         received = receive(self.rec)
         self.assertEqual([row['status'] for row in received], ['received', 'received'])
-        files = [path for row in received for path in Path(row['target']).rglob('*.html')]
+        self.assertEqual(received[0]['target'], received[1]['target'])
+        target = Path(received[0]['target'])
+        files = list(target.rglob('*.html'))
         self.assertEqual([path.name for path in files], [first + '.html'])
         self.assertEqual(files[0].read_text(), 'current HTML')
-        merged = log_root(self.rec, self.pub.source_host, base.full_name) / 'test.md'
-        for run in (first, second):
-            self.assertEqual(merged.read_text().count(run), 1)
-        self.assertEqual(merged.read_text(), base('run_logs', 'test.md').read_text())
+        self.assertEqual((target / 'logs/test.md').read_text(), log.read_text())
 
     def test_self_contained_mail_archive_and_trash(self):
         from datetime import datetime

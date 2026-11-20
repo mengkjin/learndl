@@ -96,7 +96,7 @@ callbacks.LearnRateReset: {'num_reset' : 2 , 'trigger' : 40 , 'recover_level' : 
 callbacks.CallbackTimer: {}
 callbacks.EarlyStoppage: {'peak_patience' : 20 , 'converge_patience' : 5 , 'converge_dataset' : 'valid'}
 callbacks.BadAttemptRetrain: {'early_exit' : 10 , 'moderate_early_exit' : 20 , 'moderate_min_ic' : 0.1 , 'min_ic' : 0.05 , 'max_attempt' : 4 , 'max_nan_redo' : 4 , 'lr_multiplier':[1 , 0.3 , 0.1 , 0.03 , 0.01]}
-callbacks.StatusDisplay: {}
+callbacks.StatusLogger: {}
 callbacks.SummaryWriter: {}
 callbacks.MemoryOptimization: {'batch_interval' : 20}
 callbacks.ActivationCheckpointing: {'enabled': false}

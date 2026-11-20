@@ -3,7 +3,7 @@ batch_size: 10000
 skip_horizon:  20 # must be larger than span of labels 
 fitting_step:  5
 callbacks:
-  - StatusDisplay
+  - StatusLogger
   - SummaryWriter
   - BasicTestResult
   - DetailedAlphaAnalysis

@@ -193,7 +193,7 @@ def component(value):
 
 
 def exchange_category(category: str) -> str:
-    return 'model' if category == 'model_training' else category
+    return 'models' if category in ('model_training', 'model') else category
 
 
 def archive_category(category: str) -> str:
@@ -257,7 +257,7 @@ def _snapshot(spec, payload, config):
         if snap.stat().st_size > config.max_bytes:
             raise ValueError('Database exceeds limit')
         with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
-            z.write(snap, 'study.sqlite3')
+            _write_zip_member(z, snap, 'study.sqlite3')
         return
     sources = ([source / safe_path(n) for n in spec.members] if spec.members else
                sorted(source.rglob('*')) if source.is_dir() else [source])
@@ -288,10 +288,17 @@ def _snapshot(spec, payload, config):
         with zipfile.ZipFile(payload / (component(spec.name or source.name) + '.zip'), 'w', zipfile.ZIP_DEFLATED) as z:
             for p in sorted(work.rglob('*')):
                 if p.is_file():
-                    z.write(p, 'tensorboard/' + p.relative_to(work).as_posix())
+                    _write_zip_member(z, p, 'tensorboard/' + p.relative_to(work).as_posix())
 
 
-def publish_artifacts(task, run_id, artifacts, status='success', *, config=None, prepare_only=False) -> list[dict[str, Any]]:
+def _write_zip_member(archive, source, name):
+    entry = zipfile.ZipInfo(name)
+    entry.compress_type = zipfile.ZIP_DEFLATED
+    with source.open('rb') as stream, archive.open(entry, 'w', force_zip64=True) as output:
+        shutil.copyfileobj(stream, output, 1024 * 1024)
+
+
+def publish_artifacts(task, run_id, artifacts, status='success', *, config=None, prepare_only=False, build=None, adopt_legacy=False) -> list[dict[str, Any]]:
     if sandboxed():
         return [{'status': 'skipped', 'reason': 'autofix'}]
     config = config or Config.load()
@@ -305,7 +312,7 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None,
         atomic_json(config.state / 'source_host.json', {'source_host': config.source_host})
         for (category, experiment, group_run), specs in groups.items():
             try:
-                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category, experiment, prepare_only))
+                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category, experiment, prepare_only, build, adopt_legacy))
             except Exception as exc:
                 failure = {'status': 'failed', 'sources': [str(s.source) for s in specs], 'error': str(exc)}
                 atomic_json(config.state / 'failures' / (uuid.uuid4().hex + '.json'), failure)
@@ -313,11 +320,19 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None,
     return outcomes
 
 
-def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False) -> dict[str, Any]:
+def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False, build=None, adopt_legacy=False) -> dict[str, Any]:
     # Mail callers use private temporary directories. The notification ID
     # identifies the logical message even when it is retried from a new directory.
     declaration = [] if category == 'mail_archive' else [asdict(s) | {'source': str(s.source)} for s in specs]
-    key = hashlib.sha256(json.dumps([2, config.source_host, task, run_id, category, experiment, declaration], sort_keys=True).encode()).hexdigest()
+    identity = [2, config.source_host, task, run_id, category, experiment, declaration]
+    if build is not None:
+        from .model_identity import validate_build
+
+        validate_build(build)
+        if category != 'model_training':
+            raise ValueError('Model build updates require model_training')
+        identity = [2, config.source_host, task, run_id, category, experiment, build['fingerprint']]
+    key = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     ledger = config.state / 'outbox' / key / 'delivery.json'
     if ledger.exists():
         record = json.loads(ledger.read_text())
@@ -336,7 +351,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
             part.mkdir(parents=True)
             _snapshot(spec, part, config)
             destination = spec.destination or ('results' if spec.kind == 'reports' else spec.kind)
-            if category == 'model_training' and task == 'model_training' and spec.kind != 'reports' and not spec.destination:
+            if category == 'model_training' and (build is not None or task == 'model_training') and spec.kind != 'reports' and not spec.destination:
                 destination = f'results/{spec.kind}'
             safe_path(destination)
             paths = []
@@ -360,11 +375,31 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
         batch = stamp + '__' + package_id
         files = [{'path': p.relative_to(payload).as_posix(), 'size': p.stat().st_size, 'sha256': digest(p)}
                  for p in sorted(payload.rglob('*')) if p.is_file()]
+        if build is not None:
+            state_path = real_tree(config.state / 'model_updates' / component(config.source_host) /
+                                   component(experiment) / (build['fingerprint'] + '.json'))
+            state = json.loads(state_path.read_text()) if state_path.exists() else {'sequence': 0, 'files': {}}
+            # Persist sequence reservations before preparing the immutable outbox.
+            # A crash can resend unchanged files but can never reuse a sequence.
+            files = [item for item in files
+                     if adopt_legacy or state['files'].get(item['path']) != item['sha256']]
+            if not files:
+                return {'status': 'skipped', 'reason': 'model files unchanged'}
+            members = {item['path'] for item in files}
+            artifacts = [artifact | {'paths': [p for p in artifact['paths'] if p in members]}
+                         for artifact in artifacts if any(p in members for p in artifact['paths'])]
+            state['sequence'] += 1
+            atomic_json(state_path, state)
         manifest = {'schema_version': 2, 'id': package_id, 'task': str(task),
                     'run_id': str(run_id), 'batch': batch, 'created_at': stamp, 'category': category,
                     'experiment': experiment, 'experiment_dir': component(experiment),
                     'status': status, 'host': config.source_host, 'host_dir': component(config.source_host),
                     'artifacts': artifacts, 'files': files}
+        if build is not None:
+            from .model_builds import validate_model_members
+
+            manifest.update(model_build=build, build_sequence=state['sequence'], adopt_legacy=adopt_legacy)
+            validate_model_members(manifest)
         filename = batch + '.transfer.zip'
         archive = ledger.parent / 'package.zip'
         with zipfile.ZipFile(work / 'package.zip', 'w', zipfile.ZIP_STORED, allowZip64=True) as z:
@@ -380,6 +415,9 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
                   'route': (Path(exchange_category(category)) / component(experiment)).as_posix(), 'sha256': digest(archive),
                   'sources': [str(s.source) for s in specs], 'source_files': source_files, 'manifest': manifest}
         atomic_json(ledger, record)
+        if build is not None:
+            state['files'].update((item['path'], item['sha256']) for item in files)
+            atomic_json(state_path, state)
     return record if prepare_only else _send(record, ledger, config)
 
 
@@ -502,8 +540,14 @@ def archive_target(manifest, config):
     else:
         host = component(manifest.get('host') or 'unknown')
         experiment = component(manifest.get('experiment') or manifest['task'])
-    return real_tree(config.results / 'external' / archive_category(manifest['category']) /
-                     host / experiment / manifest['batch'])
+    root = real_tree(config.results / 'external' / archive_category(manifest['category']) / host / experiment)
+    if 'model_build' in manifest:
+        from .model_identity import validate_build
+
+        if manifest['category'] != 'model_training' or type(manifest.get('build_sequence')) is not int or manifest['build_sequence'] < 1:
+            raise ValueError('Invalid model build update')
+        return real_tree(root / validate_build(manifest['model_build'])['name'])
+    return real_tree(root / manifest['batch'])
 
 
 def archived_batches(config, category=None):
@@ -583,12 +627,21 @@ def _receive(archive, config):
         if manifest['schema_version'] not in (1, 2):
             raise ValueError('Unsupported schema')
         target = archive_target(manifest, config)
+        build_update = 'model_build' in manifest
+        legacy_update = (manifest['category'] == 'model_training' and not build_update
+                         and (config.state / 'model_builds_ready.json').is_file())
+        if build_update:
+            from .model_builds import validate_model_members
+
+            validate_model_members(manifest)
         experiments = experiment_members(manifest)
         expected_route = (Path(manifest['category']) / manifest['experiment_dir'] if manifest['schema_version'] == 2
                           else route(manifest['kind'], manifest['category']))
         routes = {expected_route}
         if manifest['schema_version'] == 2:
             routes.add(Path(exchange_category(manifest['category'])) / manifest['experiment_dir'])
+            if manifest['category'] == 'model_training':
+                routes.add(Path('model') / manifest['experiment_dir'])
         if archive.parent.relative_to(config.inbox) not in routes:
             raise ValueError('Route mismatch')
         listed = {}
@@ -608,6 +661,8 @@ def _receive(archive, config):
         previous = json.loads(receipt.read_text()) if receipt.exists() else None
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
+        if previous and (build_update or legacy_update):
+            return _finish_receive(archive, archive_hash, manifest, previous['target'], build_archive=True)
         if previous and manifest.get('host') == config.source_host:
             legacy = config.results / 'custom/legacy' / _target(manifest, config).relative_to(config.results)
             if previous['target'] == str(legacy):
@@ -635,6 +690,16 @@ def _receive(archive, config):
                         checked_entries(inner, config)
                         if inner.testzip() is not None:
                             raise ValueError('Damaged experiment archive')
+            if build_update or legacy_update:
+                from .model_builds import adopt_history, apply_update, legacy_target
+
+                if legacy_update:
+                    target = legacy_target(target.parent, manifest)
+                else:
+                    adopt_history(target, manifest)
+                apply_update(target, staging, manifest, mapped, experiments, legacy=legacy_update)
+                atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
+                return _finish_receive(archive, archive_hash, manifest, target, build_archive=True)
             atomic_json(staging / 'source.json', manifest)
             for directory in sorted((p for p in staging.rglob('*') if p.is_dir()), reverse=True):
                 fsync_dir(directory)
@@ -651,8 +716,8 @@ def _receive(archive, config):
     return _finish_receive(archive, archive_hash, manifest, target)
 
 
-def _finish_receive(archive, archive_hash, manifest, target):
-    if manifest['schema_version'] == 2 and manifest.get('category') == 'model_training':
+def _finish_receive(archive, archive_hash, manifest, target, *, build_archive=False):
+    if not build_archive and manifest['schema_version'] == 2 and manifest.get('category') == 'model_training':
         fragments = {'run-log/train.md', 'run-log/test.md'}
         members = {item['path'] for item in manifest['files']}
         for name in members & fragments:

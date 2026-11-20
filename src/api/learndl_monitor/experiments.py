@@ -58,6 +58,23 @@ def synced_sources(results, *, timestamps=False):
                     result[kind].append({'path': str(path), 'label': label + ' · ' + name, '_stamp': stamp})
         except (ValueError, KeyError, TypeError, OSError):
             continue
+    from src.automation.artifact_exchange.model_builds import archived_builds
+
+    for folder, index in archived_builds(config):
+        for row in index['files'].values():
+            kind = row['kind']
+            if kind not in result:
+                continue
+            try:
+                path = real_tree(folder / row['path'])
+                stamp = row['stamp']
+                datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ')
+                if path.is_file() and str(path) not in seen:
+                    seen.add(str(path))
+                    label = ' · '.join([index['host'], index['model'], folder.name, row['path']])
+                    result[kind].append({'path': str(path), 'label': label, '_stamp': stamp})
+            except (ValueError, OSError):
+                continue
     for items in result.values():
         items.sort(key=lambda item: (item['_stamp'], item['path']), reverse=True)
         for item in items:
@@ -200,9 +217,6 @@ class Instances:
             from src.api.learndl_monitor.experiment_archives import unpack_experiment
 
             archive_source = str(source)
-            active = next((row for row in rows if row['kind'] == kind and row.get('archive_source') == archive_source), None)
-            if active:
-                return {'instance': active, 'reused': True}
             source = unpack_experiment(kind, source, self.state / 'imports')
         if (kind == 'tensorboard' and not source.is_dir()) or (kind == 'optuna' and not source.is_file()):
             raise ValueError('Select a log directory or SQLite file')

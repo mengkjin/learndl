@@ -21,6 +21,7 @@ from src.proj.util.functional.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
 
+from src.res.model.util.config.status_logger import rename_status_callback
 from src.res.model.util.label_spec import LabelSpec, parse_labels
 from src.res.model.util.core import ModelPath , model_module_type, is_null_module_type
 
@@ -41,10 +42,9 @@ def get_config_dict(input: dict | Path | list[Path] | Base.FlattenDict | None) -
                         'train.criterion.loss' , 'train.criterion.accuracy' , 'train.criterion.multilosses' ,
                         'train.boost.param' , 'train.boost.weight' , 'train.boost.valid_metric')
         return (k.endswith(exclude_keys) or not k.islower())
-    if isinstance(input, Base.FlattenDict):
-        return input
-    else:
-        return Base.FlattenDict.from_input(input , keep_nested = keep_nested)
+    config = input if isinstance(input, Base.FlattenDict) else Base.FlattenDict.from_input(input, keep_nested=keep_nested)
+    renamed = rename_status_callback(dict(config))
+    return config if renamed == dict(config) else Base.FlattenDict.from_input(renamed, keep_nested=keep_nested)
 
 class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
     """load schedule config from config/schedule/current or .local_resources/shared/schedule_model/schedule or the model's base_path"""
@@ -124,7 +124,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         self.start_with_none = not self.base_path
         self.force_module = module
         self.schedule_name = schedule_name
-        self.override = (override or {}) | kwargs
+        self.override = rename_status_callback((override or {}) | kwargs)
         self.load_params()
         self.override_params()
         self.check_validity()
@@ -1073,6 +1073,8 @@ class ModelConfig(BaseModelConfig):
         ModelLifecycle.validate_entry(self)
         if not self.lifecycle_repair:
             validate_resume(self)
+        existed = self.base_path.base.exists()
+        reset = "fit" in self.queue_of_stages and not self.is_resuming and existed
         if "fit" in self.queue_of_stages and not self.is_resuming:
             if self.base_path.base.exists():
                 if (not self.short_test and not self.base_path.is_null_model and self.base_path.is_resumable):
@@ -1085,6 +1087,9 @@ class ModelConfig(BaseModelConfig):
             prepare_linear_run(self)
         ModelLifecycle.prepare(self)
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
+        from src.automation.artifact_exchange.model_identity import build_identity
+
+        build_identity(self.base_path.base, fresh=not existed, reset=reset)
         dump_kwargs = {'overwrite': self.short_test or self.module_type == 'linear', 'vb_level': 'never'}
         ModelLifecycle.dump_training_config(self, dump_kwargs)
         self.schedule_config.Param.dump_yaml(self.base_path.conf_file("schedule") , **dump_kwargs)

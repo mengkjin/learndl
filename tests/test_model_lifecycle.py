@@ -12,7 +12,7 @@ import torch
 from src.proj import PATH
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.core import ModelPath
-from src.res.model.util.lifecycle import ModelLifecycle, _read, _write, _digest
+from src.res.model.util.lifecycle import ModelLifecycle, _read, _write, _digest, _target_digest
 
 
 class ModelLifecycleTest(unittest.TestCase):
@@ -144,7 +144,10 @@ class ModelLifecycleTest(unittest.TestCase):
         target['model']['train.max_epoch'] = 300
         manager.update_target(target)
         self.assertIsNone(manager.state['accepted_request'])
-        self.assertEqual(manager.state['target_version'], _digest(target))
+        from src.res.model.util.config.status_logger import rename_status_callback
+
+        self.assertEqual(manager.state['target_version'], _target_digest(target))
+        self.assertEqual(_target_digest(target), _digest(rename_status_callback(target, legacy=True)))
 
     def test_no_partial_json_on_replace(self):
         manager = ModelLifecycle(self.root / 'atomic')

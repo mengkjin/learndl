@@ -14,7 +14,9 @@ import portalocker
 from src.automation.artifact_exchange.core import (
     Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
+from src.automation.artifact_exchange.model_builds import archived_builds
 from src.automation.artifact_exchange.model_logs import STAGES
+from src.automation.artifact_exchange.model_properties import PROPERTY_FILE, read_properties
 from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY, source_models
 from .experiments import Instances
 from .services import ROOT, STATE
@@ -72,6 +74,24 @@ class Library:
                 except (OSError, ValueError, KeyError, TypeError):
                     continue
         else:
+            for folder, index in archived_builds(self.config):
+                common = dict(host=index['host'], model=index['model'], model_root=folder,
+                              lock=None, build=folder.name, runs=list(index['runs']),
+                              historical=index['build'].get('estimated', False))
+                for item in index['files'].values():
+                    name = item['path']
+                    if name.startswith('snapshot/'):
+                        continue
+                    try:
+                        path = existing(folder, name)
+                    except (OSError, ValueError):
+                        continue
+                    if path:
+                        kind = ('process_log' if name in ('logs/train.md', 'logs/test.md') else
+                                'file' if item['kind'] == 'reports' else item['kind'])
+                        add(path, path.name, type=kind, relative=name, stamp=item['stamp'],
+                            readonly=name.startswith(('configs/', 'logs/')), **common)
+
             for folder, manifest in self._batches('model_training'):
                 host = manifest.get('host') or 'unknown'
                 model = manifest.get('experiment') or manifest['task']
@@ -110,8 +130,9 @@ class Library:
             studies = list(PATH.optuna.glob('*/*.sqlite3'))
             for model, base, archived in source_models(PATH.model):
                 try:
+                    build = read_properties(base / PROPERTY_FILE).get('build', {}).get('name', '')
                     common = dict(host=self.config.source_host, model=model.full_name, lock=base,
-                                  model_root=base, archive_stamp=archived)
+                                  model_root=base, archive_stamp=archived, build=build or archived)
                     for relative in ('configs', 'logs', 'run_logs', 'results'):
                         for path in (base / relative).rglob('*'):
                             try:
@@ -121,7 +142,7 @@ class Library:
                                     continue
                                 if not path.is_file() or any(part.startswith('.') for part in path.relative_to(base).parts):
                                     continue
-                                phase_log = path in (base / 'run_logs/train.md', base / 'run_logs/test.md')
+                                phase_log = path.parent.name in ('run_logs', 'logs') and path.name in ('train.md', 'test.md')
                                 html = path.parent == base / 'run_logs/html' and path.suffix == '.html'
                                 add(path, path.name, type='process_log' if phase_log else 'file',
                                     run=path.stem if html else '', relative=path.relative_to(base).as_posix(),
@@ -160,11 +181,11 @@ class Library:
                 if self.kind == 'mail_archive':
                     if run not in row['metadata'].get('model_runs', []):
                         continue
-                elif row.get('run') != run and (
+                elif row.get('run') != run and run not in row.get('runs', ()) and (
                         row['type'] != 'process_log' or row.get('trashed') or not self.chapters(row, 0, run)['pages']):
                     continue
             public = {k: v for k, v in row.items()
-                      if k not in ('path', 'files', 'lock', 'original', 'model_root', 'sha')}
+                      if k not in ('path', 'files', 'lock', 'original', 'model_root', 'sha', 'runs')}
             if row.get('model'):
                 public['model_id'] = self.model_id(row)
             files = row.get('files', [])
@@ -183,12 +204,13 @@ class Library:
 
     @staticmethod
     def model_id(row):
-        return sha256(json.dumps([row.get('host'), row.get('model'), row.get('archive_stamp') or ''])
+        return sha256(json.dumps([row.get('host'), row.get('model')])
                       .encode()).hexdigest()
 
-    def model_folder(self, key):
+    def model_folder(self, key, build=None):
         for row in self.rows().values():
-            if row.get('model_root') and not row.get('trashed') and self.model_id(row) == key:
+            if (row.get('model_root') and not row.get('trashed') and self.model_id(row) == key
+                    and (build is None or row.get('build', '') == build)):
                 return real_tree(row['model_root'])
         raise ValueError('Model folder unavailable')
 
@@ -362,7 +384,7 @@ class Library:
                       if str(row['path']) in (r.get('source'), r.get('archive_source'))]
         if not candidates:
             raise ValueError('This source has no running instance')
-        instance = candidates[0]
+        instance = max(candidates, key=lambda item: item['created'])
         return self.instances.act({'action': 'stop', 'kind': instance['kind'],
                                    'pid': instance['pid'], 'created': instance['created']})
 
