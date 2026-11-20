@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
+from src.result_paths import relocated_result
 from pathlib import Path
 
 from .bundle import _sha256
@@ -59,7 +60,7 @@ def inspect_resume(run, root):
     """Distinguish missing work from corrupt completed work before enqueueing."""
     run, root = Path(run).resolve(), Path(root).resolve()
     config = read_json(run/'config.json')
-    if Path(config['output']).resolve() != run:
+    if relocated_result(config['output'], root, 'rl_experimental') != run:
         raise ValueError('Original output path does not match the requested run')
     identity, system, plan = [read_json(run/name) for name in ('identity.json', 'system.json', 'plan.json')]
     files = git_sources(root, system['git_revision'])
@@ -172,6 +173,14 @@ def resume_suite(run, root, attempt):
             # including a full panel contract after loading the snapshot.
             if engine.code_fingerprint() != plan['code_fingerprint']:
                 raise ValueError('Exported source fingerprint mismatch')
+            # Redirect only filesystem operands of the isolated historical engine.
+            # Its fingerprint and config.json still use the original path strings.
+            config = read_json(run/'config.json')
+            paths = {str(config[key]): relocated_result(config[key], root, 'rl_experimental')
+                     for key in ('panel', 'output', 'profile_report') if config.get(key)}
+            setattr(engine, 'Path', lambda value: paths.get(str(value), Path(value)))
+            load_panel = engine.PanelData.load_npz
+            engine.PanelData.load_npz = staticmethod(lambda value: load_panel(paths.get(str(value), value)))
             experiment = importlib.import_module(PREFIX+'.experiment')
             setattr(experiment, '_system_info', lambda: baseline_system)
             phase = {'quarter': None, 'replay': None}

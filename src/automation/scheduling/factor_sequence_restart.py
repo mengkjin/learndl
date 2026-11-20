@@ -123,16 +123,16 @@ def execute(request_id, module):
     from .factor_sequence_recovery import original_inactive
     from src.data.preprocess.factor_sequence.bundle import write_json
     from src.proj.util.web.task_mail import TaskResultMail
-    destination=PATH.result/'factor_sequence_diagnostics'/request_id
+    destination=PATH.rslt_custom/'factor_sequence_diagnostics'/request_id
     destination.mkdir(parents=True,exist_ok=False)
     journal=destination/'cleanup.json'
     try:
         with FitLockNN.guard():
-            targets=plan_cleanup(PATH.model_nn,PATH.result/'factor_sequence')
+            targets=plan_cleanup(PATH.model_nn,PATH.rslt_custom/'factor_sequence')
             evidence={}
             for run_id in LEGACY_RUNS:
-                if (PATH.result/'factor_sequence'/run_id).exists() or any(t['run_id']==run_id for t in targets):
-                    evidence[run_id]=collect(PATH.result/'factor_sequence',runtime_dir(),run_id,isolated=False)
+                if (PATH.rslt_custom/'factor_sequence'/run_id).exists() or any(t['run_id']==run_id for t in targets):
+                    evidence[run_id]=collect(PATH.rslt_custom/'factor_sequence',runtime_dir(),run_id,isolated=False)
                     write_json(destination/'progress.json',evidence)
                     if not original_inactive(evidence[run_id]):
                         raise RuntimeError(f'Original task is still alive: {run_id}; no folders deleted')
@@ -140,7 +140,7 @@ def execute(request_id, module):
                     if any(row.get('phase') in ('queued','starting') for row in evidence[run_id]['scheduler']):
                         raise RuntimeError(f'Original task can still start: {run_id}; no folders deleted')
             delete_planned(targets,journal)
-            if plan_cleanup(PATH.model_nn,PATH.result/'factor_sequence'):
+            if plan_cleanup(PATH.model_nn,PATH.rslt_custom/'factor_sequence'):
                 raise RuntimeError('Legacy model directories remain; training will not start')
         # Same one-shot worker, after exclusive NN cleanup lock is released.
         # The suite itself sequentially invokes the normal schedule script for the six models.

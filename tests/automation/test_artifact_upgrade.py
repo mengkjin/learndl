@@ -43,11 +43,18 @@ class ArtifactUpgradeTest(unittest.TestCase):
         canonical.rename(legacy)
         before = (target / 'source.json').read_bytes()
         self.assertEqual(synced_sources(self.rec.results)['tensorboard'][0]['path'], str(legacy))
+        from src.automation.artifact_exchange.core import _target
+        current = target
+        target = _target(json.loads((current/'source.json').read_text()), self.rec)
+        target.parent.mkdir(parents=True)
+        current.rename(target)
         models = self.root / 'models'
         args = (self.rec, models, models / 'archive', self.root / 'optuna')
         with patch.object(result_layout, '_idle'):
             result_layout.run(*args, report=self.root / 'moves.json')
             result_layout.run(*args, report=self.root / 'moves.json')
+        target.rename(current)
+        target = current
         self.assertEqual((target / 'source.json').read_bytes(), before)
         self.assertTrue(canonical.is_file())
         self.assertFalse(legacy.exists())
@@ -129,6 +136,12 @@ class ArtifactUpgradeTest(unittest.TestCase):
         _verify_target(batch, json.loads(manifest))
 
         # Also emulate the layout of a batch received before updating.
+        from src.automation.artifact_exchange.core import _target
+        current = batch
+        batch = _target(json.loads((current/'source.json').read_text()), self.rec)
+        batch.parent.mkdir(parents=True)
+        current.rename(batch)
+        snapshot = batch / 'snapshot/factor_residual'
         legacy = batch / 'results/factor_residual'
         legacy.parent.mkdir()
         snapshot.rename(legacy)

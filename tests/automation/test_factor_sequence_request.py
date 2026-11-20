@@ -58,7 +58,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
             )
             argv = sys.argv
             with (
-                patch("src.proj.PATH.result", root),
+                patch("src.proj.PATH.rslt_custom", root),
                 patch("src.automation.scheduling.recovery.record") as handoff,
                 patch("src.proj.util.script.FitLock.is_held", return_value=False),
                 patch("src.proj.util.script.FitLock.guard") as guard,

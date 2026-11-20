@@ -185,7 +185,7 @@ def build_figures(result):
 def export_report(result, output_dir=None):
     from src.proj import PATH, Save
     if output_dir is None:
-        output_dir = PATH.result / 'model_compare' / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        output_dir = PATH.rslt_custom / 'model_compare' / datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     directory = Path(output_dir).resolve()
     directory.mkdir(parents=True, exist_ok=True)
     excel, pdf = directory / 'comparison.xlsx', directory / 'comparison.pdf'

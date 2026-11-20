@@ -11,7 +11,7 @@ def resolve_schedule(source, model, name, mode=None):
     from src.proj import PATH, CALENDAR
     from src.data.preprocess.factor_sequence.bundle import load
     from src.res.model.experiment.factor_sequence.schedule_training import schedule_config, variants
-    from pathlib import Path
+    from src.result_paths import relocated_result
 
     if not re.fullmatch(r"[A-Za-z0-9_-]+", source):
         raise ValueError("Invalid factor sequence source suite")
@@ -20,9 +20,9 @@ def resolve_schedule(source, model, name, mode=None):
     if source.startswith("repaired_"):
         from src.res.model.experiment.factor_sequence.repaired_schedule import resolve_repaired
         return resolve_repaired(source, model, name, mode)
-    suite = PATH.result / "factor_sequence" / source
+    suite = PATH.rslt_custom / "factor_sequence" / source
     report = json.loads((suite / "suite.json").read_text())
-    dataset = Path(report["dataset"])
+    dataset = relocated_result(report["dataset"], PATH.production, "factor_sequence")
     manifest = load(dataset)
     audit = json.loads((dataset / "audit.json").read_text())
     if (

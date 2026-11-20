@@ -45,6 +45,8 @@ __all__ = [
     'send_prepared',
     'retry',
     'category_root',
+    'archive_target',
+    'archived_batches',
     'experiment_members',
     'received_member',
     'receive',
@@ -188,6 +190,15 @@ def component(value):
     value = str(value)
     clean = re.sub(r'[^a-zA-Z0-9_.@-]+', '_', value).strip('._-')[:96] or 'unnamed'
     return clean if clean == value else clean + '_' + hashlib.sha256(value.encode()).hexdigest()[:10]
+
+
+def exchange_category(category: str) -> str:
+    return 'model' if category == 'model_training' else category
+
+
+def archive_category(category: str) -> str:
+    return {'model_training': 'model', 'rl': 'rl_experiment',
+            'factor_sequence_fixes': 'factor_sequence'}.get(category, category)
 
 
 def route(kind, category):
@@ -366,7 +377,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
         with archive.open('rb') as f:
             os.fsync(f.fileno())
         record = {'id': package_id, 'status': 'prepared', 'filename': filename, 'outbox_key': key,
-                  'route': (Path(category) / component(experiment)).as_posix(), 'sha256': digest(archive),
+                  'route': (Path(exchange_category(category)) / component(experiment)).as_posix(), 'sha256': digest(archive),
                   'sources': [str(s.source) for s in specs], 'source_files': source_files, 'manifest': manifest}
         atomic_json(ledger, record)
     return record if prepare_only else _send(record, ledger, config)
@@ -454,7 +465,7 @@ def category_root(results, category):
     return real_tree(root)
 
 
-def _target(manifest, config):
+def _validate_identity(manifest):
     if not re.fullmatch('[0-9a-f]{32}', manifest['id']):
         raise ValueError('Invalid package ID')
     if manifest['schema_version'] == 2:
@@ -466,13 +477,48 @@ def _target(manifest, config):
                 not re.fullmatch(r'[0-9]{8}T[0-9]{12}Z', manifest['created_at']) or
                 manifest['batch'] != manifest['created_at'] + '__' + manifest['id']):
             raise ValueError('Invalid experiment identity')
-        return real_tree(category_root(config.results, manifest['category']) /
-                         (manifest['host_dir'] + '__' + manifest['experiment_dir']) / manifest['batch'])
+        return
+    if manifest['schema_version'] != 1:
+        raise ValueError('Unsupported schema')
     route(manifest['kind'], manifest['category'])
     if slug(manifest['task']) != manifest['task'] or manifest['batch'] != slug(manifest['run_id']) + '__' + manifest['id']:
         raise ValueError('Invalid task/batch')
+
+
+def _target(manifest, config):
+    """Historical target, also used by immutable pre-0.7.4 version patches."""
+    _validate_identity(manifest)
+    if manifest['schema_version'] == 2:
+        return real_tree(category_root(config.results, manifest['category']) /
+                         (manifest['host_dir'] + '__' + manifest['experiment_dir']) / manifest['batch'])
     base = config.results / ('reports' if manifest['kind'] == 'reports' else 'model_experiments')
     return real_tree(base / (manifest['category'] if manifest['kind'] == 'reports' else manifest['kind']) / manifest['task'] / manifest['batch'])
+
+
+def archive_target(manifest, config):
+    _validate_identity(manifest)
+    if manifest['schema_version'] == 2:
+        host, experiment = manifest['host_dir'], manifest['experiment_dir']
+    else:
+        host = component(manifest.get('host') or 'unknown')
+        experiment = component(manifest.get('experiment') or manifest['task'])
+    return real_tree(config.results / 'external' / archive_category(manifest['category']) /
+                     host / experiment / manifest['batch'])
+
+
+def archived_batches(config, category=None):
+    """Discover canonical batches only, excluding staged or relocated copies."""
+    external = real_tree(config.results / 'external')
+    pattern = (archive_category(category) if category else '*') + '/*/*/*/source.json'
+    for source in sorted(external.glob(pattern), reverse=True):
+        try:
+            manifest = json.loads(real_tree(source).read_text())
+            if category is not None and manifest['category'] != category:
+                continue
+            if archive_target(manifest, config) == source.parent:
+                yield source.parent, manifest
+        except (OSError, ValueError, TypeError, KeyError):
+            continue
 
 
 def experiment_members(manifest):
@@ -536,11 +582,14 @@ def _receive(archive, config):
         manifest = json.loads(z.read('manifest.json'))
         if manifest['schema_version'] not in (1, 2):
             raise ValueError('Unsupported schema')
-        target = _target(manifest, config)
+        target = archive_target(manifest, config)
         experiments = experiment_members(manifest)
         expected_route = (Path(manifest['category']) / manifest['experiment_dir'] if manifest['schema_version'] == 2
                           else route(manifest['kind'], manifest['category']))
-        if archive.parent.relative_to(config.inbox) != expected_route:
+        routes = {expected_route}
+        if manifest['schema_version'] == 2:
+            routes.add(Path(exchange_category(manifest['category'])) / manifest['experiment_dir'])
+        if archive.parent.relative_to(config.inbox) not in routes:
             raise ValueError('Route mismatch')
         listed = {}
         for item in manifest['files']:
@@ -559,6 +608,10 @@ def _receive(archive, config):
         previous = json.loads(receipt.read_text()) if receipt.exists() else None
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
+        if previous and manifest.get('host') == config.source_host:
+            legacy = config.results / 'custom/legacy' / _target(manifest, config).relative_to(config.results)
+            if previous['target'] == str(legacy):
+                target = real_tree(legacy)
         if previous and manifest['schema_version'] == 2 and manifest.get('category') in ('model_training', 'mail_archive'):
             return _finish_receive(archive, archive_hash, manifest, target)
         target.parent.mkdir(parents=True, exist_ok=True)

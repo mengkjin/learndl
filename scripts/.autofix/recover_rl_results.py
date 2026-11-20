@@ -10,13 +10,14 @@
 #     desc: 需要核验的自动 RL 运行 ID
 #   run_directory:
 #     type: str
-#     default: results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
+#     default: results/custom/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
 #     desc: 相对项目根目录的已有实验目录
 #   dry_run:
 #     type: bool
 #     default: false
 #     desc: 只读核验，不创建结果包和补发结果附件
 
+from src.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 
@@ -26,15 +27,15 @@ from src.proj.util.script import ScriptTool, AutoRunTask
 
 @ScriptTool('autofix_recover_rl_results')
 def main(run_id: str = '5d17935c80694717a8df5fbd055791d4',
-         run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4',
+         run_directory: str = 'results/custom/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4',
          dry_run: bool = False, **kwargs):
     from src.res.rl_experimental.bundle import bundle_attachments
     from src.res.rl_experimental.recover_results import audit_suite, recover_suite, read_json
     from src.proj.util.web.task_mail import TaskResultMail
 
     root = Path(PATH.main).resolve()
-    run = (root/run_directory).resolve()
-    allowed = (root/'results/rl_experimental').resolve()
+    run = relocated_result(run_directory, root, 'rl_experimental')
+    allowed = (root/'results/custom/rl_experimental').resolve()
     if allowed not in run.parents or run.name != run_id or not run.is_dir():
         raise ValueError(f'Invalid or missing original RL run: {run}')
     logs = list((root/'.local_resources').glob(f'*/runtime/scheduling/idle_worklist/{run_id}.log'))

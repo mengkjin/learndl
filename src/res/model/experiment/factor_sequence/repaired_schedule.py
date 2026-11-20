@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from src.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 
@@ -142,8 +143,9 @@ def resolve_repaired(source, model, name, mode):
         dataset, source_report = Path(pinned["dataset"]), pinned["source_report"]
     else:
         dataset, source_report = _latest_completed(
-            PATH.result / "factor_sequence_fixes"
+            PATH.rslt_custom / "factor_sequence_fixes"
         )
+    dataset = relocated_result(dataset, PATH.production, "factor_sequence_fixes")
     manifest = load_repaired_manifest(dataset)
     _validate_contract(manifest)
     manifest_hash = file_digest(dataset / "manifest.json")

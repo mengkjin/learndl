@@ -328,7 +328,7 @@ def _run_repair(
     )
     if not re.fullmatch(r"[A-Za-z0-9_-]+", run_id):
         raise ValueError("Unsafe run ID")
-    folder = PATH.result / "factor_sequence_fixes" / run_id
+    folder = PATH.rslt_custom / "factor_sequence_fixes" / run_id
     reports = folder / "reports"
     reports.mkdir(parents=True, exist_ok=True)
     status: dict[str, Any] = dict(

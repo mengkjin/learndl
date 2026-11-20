@@ -47,7 +47,9 @@ class RecoveryTests(unittest.TestCase):
             self.assertEqual(json.loads(p.read_text())["schema_version"], 2)
             store = Mock()
             store.owned.return_value = []
-            self.assertEqual(queue.observe(store)["revisions"]["resume_from"], "old")
+            request = queue.observe(store)
+            assert request is not None
+            self.assertEqual(request["revisions"]["resume_from"], "old")
             self.assertEqual(queue.submit("new", resume_from="old"), p)
             with self.assertRaises(ValueError):
                 queue.submit("new", resume_from="other")
@@ -211,7 +213,7 @@ class RecoveryTests(unittest.TestCase):
             module = Mock()
             module.main.return_value = 0
             with (
-                patch("src.proj.PATH.result", Path(tmp)),
+                patch("src.proj.PATH.rslt_custom", Path(tmp)),
                 patch(
                     "src.automation.scheduling.factor_sequence_progress.collect",
                     return_value=report,

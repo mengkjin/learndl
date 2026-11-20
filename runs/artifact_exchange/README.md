@@ -10,7 +10,7 @@
 
 ```text
 ~/workspace/Syncthing/artifact_exchange/
-  model_training/<完整模型名称>/<UTC时间>__<UUID>.transfer.zip
+  model/<完整模型名称>/<UTC时间>__<UUID>.transfer.zip
   model_compare/<实验名称>/<UTC时间>__<UUID>.transfer.zip
   factor_sequence/<实验名称>/<UTC时间>__<UUID>.transfer.zip
   rl/<实验名称>/<UTC时间>__<UUID>.transfer.zip
@@ -22,7 +22,7 @@
 本机目标：
 
 ```text
-results/model_training/server__nn@modelAAA/<UTC时间>__<UUID>/
+results/external/model/server/nn@modelAAA/<UTC时间>__<UUID>/
   results/                 # 模型分析报告
     tensorboard/<名称>.zip
     optuna/<名称>.zip
@@ -30,11 +30,11 @@ results/model_training/server__nn@modelAAA/<UTC时间>__<UUID>/
   source.json
 ```
 
-其他研究也遵循 `results/<研究类型>/<来源电脑>__<实验名称>/<批次>/`。没有产出的角色目录不创建。每个运行、每个实验一个包，包含各角色的成员大小和 SHA-256；一个任务有多个模型时分别发布。同一批次声明的源路径、目标路径、来源身份及运行 ID 构成不可变发布身份；修改内容后必须使用新 run_id。重试复用已准备的快照。直接写入共享区的普通文件不会被消费，手工材料也请使用 publish CLI。
+其他研究也遵循 `results/external/<研究类型>/<来源电脑>/<实验名称>/<批次>/`。没有产出的角色目录不创建。每个运行、每个实验一个包，包含各角色的成员大小和 SHA-256；一个任务有多个模型时分别发布。同一批次声明的源路径、目标路径、来源身份及运行 ID 构成不可变发布身份；修改内容后必须使用新 run_id。重试复用已准备的快照。直接写入共享区的普通文件不会被消费，手工材料也请使用 publish CLI。
 
 `source_host` 是发布端配置中的稳定电脑名，init 默认取当时主机名，可指定 `--source-host server`。不要跟随 Wi-Fi 的 DHCP 主机名修改它。旧配置未包含该字段时首次发布把主机名保存在私有 state/source_host.json，后续继续使用；建议显式补入配置。
 
-实验面板新增“同步研究实验”，依据已提交批次的 source.json 识别 TensorBoard/Optuna ZIP，展示电脑、研究类型、实验、批次时间和状态。普通报告 ZIP 不进入实验列表。本机模型、数据库、旧 `results/model_experiments/` ZIP 仍可打开；缺少来源信息的旧 ZIP 显示“来源未知”。新接收器仍接收 schema v1 并保持其旧归档路径，不重新搬动历史文件。
+实验面板新增“同步研究实验”，依据已提交批次的 source.json 识别 TensorBoard/Optuna ZIP，展示电脑、研究类型、实验、批次时间和状态。普通报告 ZIP 不进入实验列表。本机模型、数据库、旧 `results/custom/legacy/model_experiments/` ZIP 仍可打开；缺少来源信息的旧 ZIP 显示“来源未知”。接收器接受 schema v1 和 v2，并将旧路由的在途包归入 external。
 
 默认每层 ZIP 解压限制为 4 GiB、50,000 成员，配置的 `max_bytes` / `max_files` 同时用于接收与面板导入，外层清单计入限制。需要更大产物时两端同步调整配置并检查磁盘空间。包内已登记的所有文件完整归档，不按扩展名二次过滤。
 
@@ -241,15 +241,15 @@ AutoRunTask 的统一收尾顺序为：等待异步保存 → 发布已登记产
 
 没有待投递产物、发布未启用、receiver 角色和 autofix 的正常跳过保持静默，也不在邮件正文重复提示。内部逐包投递记录仍保留；实际发布、失败、异步保存未完成，以及已准备包被阻止发送均计入任务汇总。邮件正文也仅展示汇总。
 
-每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `<host>__<experiment>` 下增加批次子目录，不覆盖旧批次。汇总展示不改变快照保留机制，也不会复制模型权重。
+每日 resume_testing 沿用模型 full_name 和服务器 results 目录；每次调用仍产生独立 run_id，接收端在同一 `external/model/<host>/<experiment>` 下增加批次子目录，不覆盖旧批次。汇总展示不改变快照保留机制，也不会复制模型权重。
 
 快照准备中断后可以通过 CLI retry 发布；定时接收不负责服务器投递。投递失败使用 warning 记录，不加入研究任务的 error conclusions。
 
 只有成功发布的对应分析附件才从当次邮件移除。HTML 执行报告和日志继续发送；RL 的分析交接记录会替代旧大 bundle 附件，原始 bundle 仍留服务器。发布失败保留邮件原行为，不改变任务业务状态。已准备的历史邮件重试记录不重写。
 
-## 7. 历史报告迁移
+## 7. 0.7.4 之前的历史报告迁移
 
-只在 Mac receiver 配置下运行。关闭正在写这些报告的本地任务：
+以下为旧版本操作记录。当前版本请使用第 12 节的版本补丁。
 
 ```bash
 .venv/bin/python -m src.automation.artifact_exchange migrate-results plan
@@ -296,7 +296,7 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 - 档案含逻辑通知的 EML、正文、SMTP 附件与产物交接前的原附件。邮件及附件长期保留。
   归档只改变列表显示。删除进入本机应用回收站，恢复或彻底删除在该视图操作。
 - 模型本地 `run_logs/` 下保存固定两份 `train.md` 和 `test.md`，按阶段实际使用；
-  本机接收的累计文件位于 `results/model_run_logs/`。同步只携带正在归档的运行章节，
+  本机接收的累计文件位于 `results/external/model/<来源电脑>/<模型>/run_logs/`。同步只携带正在归档的运行章节，
   接收器按主机、模型、运行身份和阶段合并。没有自动过期规则。
 - 显式训练、手动恢复训练和独立测试保存本次模型 HTML。自动模型更新和
   `resume_testing` 仍可由父脚本保存一份任务 HTML，模型调用只写 Markdown。
@@ -343,3 +343,30 @@ TensorBoard 和 Optuna。XLSX 预览可切换工作表，每张显示前 40 行�
 数据直接写入 snapshot。旧版在途包在接收时映射到新路径，原收据和校验清单仍然有效。
 如果目标已存在或相关文件仍被占用，补丁停止并在报告中指出该目录；处理后用版本
 补丁的 retry 命令继续。升级后重启模型预览服务，以启用 XLSX 预览接口。
+
+
+## 12. 0.7.4 两端 results 目录
+
+项目结果目录固定为 `test`、`trade`、`factor`、`gp`、`custom`、`external`。
+本机生成的通用报告、运维诊断和研究工作目录写入 `results/custom/<用途>/`。
+项目代码用 `PATH.rslt_custom`，显式扫描其他项目根目录的工具用
+`src.result_paths.custom_results(root)`。磁盘报告的 HTML 和同名 SQLite 索引一起保存在
+`custom/storage_reports/`。服务器的 RL 工作目录是 `custom/rl_experimental/`。
+
+接收端使用 `external/<类别>/<来源电脑>/<实验>/<批次>/`。模型的投递类别仍填写
+`model_training`，新共享包放入 `artifact_exchange/model/<完整模型名>/`。
+RL 批次归入 `rl_experiment`，因子序列修复批次归入 `factor_sequence`。
+模型运行日志累计在模型目录下的 `run_logs/`。未能确认来源的历史材料保存在 `custom/legacy/`。
+
+先在接收机更新，再更新服务器。在两端的项目根目录预检并走现有版本补丁流程：
+
+```bash
+PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.4/support/results.py
+.venv/bin/python -m src.automation.version_patch plan
+.venv/bin/python -m src.automation.version_patch apply
+```
+
+迁移清单逐项记录源路径、目标和内容校验值，并更新接收回执和面板恢复路径。
+出现冲突时先核对两处文件，保留需要的副本，再用
+`python -m src.automation.version_patch retry 0.7.4/001` 继续。升级后重启模型预览、
+实验、邮件和存储面板。旧 RL 请求、配置、身份文件使用原字节进行校验。

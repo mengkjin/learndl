@@ -99,7 +99,7 @@ class RestartTests(unittest.TestCase):
             )
             module = Mock()
             with (
-                patch("src.proj.PATH.result", result_root),
+                patch("src.proj.PATH.rslt_custom", result_root),
                 patch("src.proj.PATH.model_nn", models),
                 patch(
                     "src.proj.util.script.FitLockNN.guard", return_value=nullcontext()
@@ -225,7 +225,7 @@ class RestartTests(unittest.TestCase):
 
             module.main.side_effect = start
             with (
-                patch("src.proj.PATH.result", result_root),
+                patch("src.proj.PATH.rslt_custom", result_root),
                 patch("src.proj.PATH.model_nn", models),
                 patch(
                     "src.proj.util.script.FitLockNN.guard", return_value=nullcontext()

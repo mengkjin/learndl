@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 from string import Template
 
+from src.result_paths import custom_results
 from src.proj.core import strPath
 
 from .machine import MACHINE
@@ -82,6 +83,10 @@ class PATH:
     fmp_acc     = export.joinpath('factor_model_account')
     trade_port  = export.joinpath('trading_portfolio')
 
+    rslt_custom = custom_results(production)
+    rslt_external = result / 'external'
+    rslt_test = result / 'test'
+    rslt_gp = result / 'gp'
     rslt_factor = result.joinpath('factor')
     rslt_trade  = result.joinpath('trade')
 

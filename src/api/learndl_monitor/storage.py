@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psutil
 
+from src.result_paths import storage_reports
 from .services import STATE, SERVICES
 
 __all__ = ['main']
@@ -87,7 +88,7 @@ def main():
         threading.Thread(target=target, daemon=True).start()
         return True
 
-    for report in sorted((PATH.production / 'results/storage_reports').glob('*.html'), key=lambda p: p.stat().st_mtime, reverse=True):
+    for report in sorted(storage_reports(PATH.production).glob('*.html'), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
             server = StorageReportServer(report)
             root = server.connection.execute(

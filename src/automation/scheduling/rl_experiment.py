@@ -86,12 +86,22 @@ def parse_config(content: str, *, yaml_format: bool = True) -> dict:
     elif config.get('kind') == 'walk_forward':
         raise ValueError('single configuration cannot use kind=walk_forward')
     config['recipient'] = result['recipient']
-    result['experiment'] = config
+    result['experiment'] = relocated_config(config)
     try:
         json.dumps(result, allow_nan=False)
     except (TypeError, ValueError) as exc:
         raise ValueError('RL parameters must contain finite JSON-compatible values; quote date strings') from exc
     return result
+
+
+def relocated_config(config):
+    adapted = dict(config)
+    # Historic checked-in declarations identify queued work by their exact bytes.
+    for key in ('output', 'output_root', 'panel', 'snapshot_dir', 'profile_report'):
+        path = adapted.get(key)
+        if isinstance(path, str) and Path(path).is_relative_to('results/rl_experimental'):
+            adapted[key] = str(Path('results/custom') / Path(path).relative_to('results'))
+    return adapted
 
 
 def read_config(path: str | Path) -> dict:
@@ -280,7 +290,7 @@ def execute(request: dict, store) -> int:
             return 75
         folder = runtime_dir() / 'rl_experiment' / request['id']
         folder.mkdir(parents=True, exist_ok=True)
-        config = dict(request['config']['experiment'])
+        config = relocated_config(request['config']['experiment'])
         output_key = 'output' if request['config']['mode'] == 'walk_forward' else 'output_root'
         config[output_key] = str(Path(config[output_key]).expanduser().resolve() / 'automatic' / request['id'])
         config['scheduling_provenance'] = dict(run_id=request['id'], version=request['version'],

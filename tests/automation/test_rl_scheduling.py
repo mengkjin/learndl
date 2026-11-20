@@ -74,7 +74,7 @@ class RLSchedulingTest(unittest.TestCase):
     def resume_request(self, name='resume-one'):
         import hashlib
         from src.automation.scheduling.rl_resume import submit
-        run = self.root/'results/rl_experimental/old-run'
+        run = self.root.resolve()/'results/custom/rl_experimental/old-run'
         run.mkdir(parents=True, exist_ok=True)
         for file in ('config.json', 'identity.json'):
             (run/file).write_text('{}')

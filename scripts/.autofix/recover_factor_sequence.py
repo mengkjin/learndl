@@ -30,10 +30,10 @@ def main(run_id='20261031_factor_sequence_verify_02', dry_run=False, **kwargs):
     from src.automation.scheduling.maintenance_gate import sandbox_request
     context=sandbox_request()
     request_id=context['id'] if context else 'manual_recover_'+uuid4().hex
-    destination=PATH.result/'factor_sequence_diagnostics'/request_id
+    destination=PATH.rslt_custom/'factor_sequence_diagnostics'/request_id
     destination.mkdir(parents=True,exist_ok=False)
     AutoRunTask._instances[-1].email_sender=TaskResultMail(destination/'mail')
-    report=collect(PATH.result/'factor_sequence',runtime_dir(),run_id,isolated=bool(context))
+    report=collect(PATH.rslt_custom/'factor_sequence',runtime_dir(),run_id,isolated=bool(context))
     path=destination/'progress.json'
     path.write_text(json.dumps(report,ensure_ascii=False,indent=2))
     Proj.email_attachments.append(path)

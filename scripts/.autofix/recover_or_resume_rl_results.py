@@ -6,13 +6,14 @@
 # parameters:
 #   run_directory:
 #     type: str
-#     default: results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
+#     default: results/custom/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4
 #     desc: 原季度实验目录
 #   dry_run:
 #     type: bool
 #     default: false
 #     desc: 只诊断，不打包或提交恢复请求
 
+from src.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 
@@ -21,7 +22,7 @@ from src.proj.util.script import ScriptTool, AutoRunTask
 
 
 @ScriptTool('autofix_recover_or_resume_rl_results')
-def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4',
+def main(run_directory: str = 'results/custom/rl_experimental/walk_forward/gru_v1_low_turnover_v1/automatic/5d17935c80694717a8df5fbd055791d4',
          dry_run: bool = False, **kwargs):
     from src.res.rl_experimental.recover_results import recover_suite, audit_suite, read_json
     from src.res.rl_experimental.resume import inspect_resume
@@ -30,8 +31,8 @@ def main(run_directory: str = 'results/rl_experimental/walk_forward/gru_v1_low_t
     from src.automation.scheduling.rl_resume import submit
     from src.automation.scheduling.maintenance_gate import sandbox_request
     root = Path(PATH.main).resolve()
-    run = (root/run_directory).resolve()
-    if not run.is_relative_to(root/'results/rl_experimental') or not run.is_dir():
+    run = relocated_result(run_directory, root, 'rl_experimental')
+    if not run.is_relative_to(root/'results/custom/rl_experimental') or not run.is_dir():
         raise ValueError('Invalid existing RL run directory')
     if dry_run:
         audit = audit_suite(run, project_root=root)

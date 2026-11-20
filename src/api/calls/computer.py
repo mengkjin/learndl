@@ -20,6 +20,7 @@ class ProjectStorageReport(DirectCall):
     category = 'Computer'
 
     def run(self):
+        from src.result_paths import storage_reports
         from pathlib import Path
         from src.proj.util.cli.prompts import prompt_confirm
         from src.proj.util.filesys.storage_report import generate_report, format_size
@@ -36,7 +37,7 @@ class ProjectStorageReport(DirectCall):
                 return None
         root = Path(root or PATH.production).expanduser().resolve(strict=True)
         if output is None:
-            output = root / 'results' / 'storage_reports' / f'storage_{datetime.now():%Y%m%d_%H%M%S_%f}.html'
+            output = storage_reports(root) / f'storage_{datetime.now():%Y%m%d_%H%M%S_%f}.html'
         else:
             output = Path(output).expanduser()
             if not output.is_absolute():

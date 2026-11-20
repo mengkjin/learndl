@@ -338,7 +338,7 @@ def main():
     if not re.fullmatch('[A-Za-z0-9_-]+',args.run_id):
         parser.error('Invalid run ID')
     from src.proj import PATH, CALENDAR
-    folder=PATH.result/'factor_sequence'/args.run_id
+    folder=PATH.rslt_custom/'factor_sequence'/args.run_id
     folder.mkdir(parents=True,exist_ok=True)
     stages=['build','audit','smoke','compare'] if args.stage=='all' else [args.stage]
     dataset=args.dataset

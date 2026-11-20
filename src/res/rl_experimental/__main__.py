@@ -42,7 +42,7 @@ def parser() -> argparse.ArgumentParser:
 
     for name in ("demo", "train", "train-suite"):
         command = sub.add_parser(name)
-        command.add_argument("--output", type=Path, default=Path("results/rl_experimental"))
+        command.add_argument("--output", type=Path, default=Path("results/custom/rl_experimental"))
         command.add_argument("--timesteps", type=int, default=100_000 if name == "train-suite" else 4_096)
         command.add_argument("--device", default="cpu")
         command.add_argument("--seed", type=int, default=7)
@@ -67,7 +67,7 @@ def parser() -> argparse.ArgumentParser:
     evaluate = sub.add_parser("evaluate")
     evaluate.add_argument("data", type=Path)
     evaluate.add_argument("checkpoint", type=Path)
-    evaluate.add_argument("--output", type=Path, default=Path("results/rl_experimental/evaluation"))
+    evaluate.add_argument("--output", type=Path, default=Path("results/custom/rl_experimental/evaluation"))
 
     run = sub.add_parser("run-experiment", help="prepare, train, report, bundle and optionally email one experiment")
     run.add_argument("config", type=Path)

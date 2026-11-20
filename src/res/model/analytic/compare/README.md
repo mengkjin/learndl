@@ -10,7 +10,7 @@
 CLI 菜单入口：运行 `python cli.py`，选择 **Research Operations → Compare Models**。
 先多选至少两个已有 `results/detailed_alpha_data.xlsx` 的模型，再确认是否使用默认参数；
 选择自定义时可调整日期、分期、模板、基准/策略、相关方法、pred/hidden 开关及采样上限等。
-确认参数后直接计算、展示重点结果并导出 Excel/PDF；默认保存到 `results/model_compare/<时间戳>/`。
+确认参数后直接计算、展示重点结果并导出 Excel/PDF；默认保存到 `results/custom/model_compare/<时间戳>/`。
 在选择或参数步骤退出不会启动计算。
 
 ## Python
@@ -25,7 +25,7 @@ result = compare_models(
     [CompareModelSpec('results/a.xlsx', name='A'),
      CompareModelSpec('results/b.xlsx', name='B')],
     config=CompareConfig(start=20200101, end=20260807),
-    output_dir='results/model_compare/example',
+    output_dir='results/custom/model_compare/example',
 )
 
 # 使用真实训练目录；报告路径默认是目录下的 results/detailed_alpha_data.xlsx。
@@ -42,7 +42,7 @@ result = compare_models(
 )
 result.display()
 print(result.summary, result.output_paths)
-result.export('results/model_compare/example_copy')
+result.export('results/custom/model_compare/example_copy')
 ```
 
 将历史 Excel 与推理目录关联时，显式设置

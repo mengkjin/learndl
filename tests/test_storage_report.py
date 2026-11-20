@@ -168,6 +168,7 @@ class StorageReportTest(unittest.TestCase):
                     send.return_value = outcome
                 result = ProjectStorageReport.go(root=self.root)
                 assert result is not None
+                self.assertEqual(result['report'].parent, self.root.resolve()/'results/custom/storage_reports')
                 self.assertTrue(result['report'].is_file())
                 self.assertTrue(result['report'].with_suffix('.sqlite3').is_file())
                 self.assertEqual(result['email_sent'], outcome is True)

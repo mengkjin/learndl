@@ -30,7 +30,7 @@ def main(argv=None):
     pub.add_argument('--task', required=True)
     pub.add_argument('--run-id', required=True)
     pub.add_argument('--kind', choices=['reports', 'tensorboard', 'optuna'], default='reports')
-    pub.add_argument('--category', default='custom')
+    pub.add_argument('--category', default='custom', help='Research category; model_training publishes under model/')
     pub.add_argument('--name', default='')
     pub.add_argument('--experiment', required=True)
     pub.add_argument('--destination', default='')
@@ -39,7 +39,7 @@ def main(argv=None):
     rec.add_argument('--once', action='store_true', required=True)
     for name in ('retry', 'status', 'doctor'):
         commands.add_parser(name)
-    m = commands.add_parser('migrate-results')
+    m = commands.add_parser('migrate-results', help='Historical pre-0.7.4 report migration')
     m.add_argument('action', choices=['plan', 'apply', 'rollback'])
     s = commands.add_parser('service')
     s.add_argument('action', choices=['plan', 'install', 'status', 'uninstall'])

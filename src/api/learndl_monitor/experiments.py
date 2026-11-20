@@ -35,7 +35,7 @@ def argument(args, name, default=''):
 def synced_sources(results, *, timestamps=False):
     """Only committed v2 manifests can advertise synchronized experiment ZIPs."""
     from src.automation.artifact_exchange.core import (
-        Config, _target, category_root, experiment_members, real_tree, received_member, valid_category,
+        Config, archived_batches, experiment_members, real_tree, received_member,
     )
     result = {'tensorboard': [], 'optuna': []}
     seen = set()
@@ -43,32 +43,21 @@ def synced_sources(results, *, timestamps=False):
     config = Config(results=results)
     if not results.exists():
         return result
-    for category in sorted(results.iterdir()):
-        if not valid_category(category.name):
+    for folder, manifest in archived_batches(config):
+        if manifest['schema_version'] != 2:
             continue
         try:
-            root = category_root(results, category.name)
-        except ValueError:
+            members = experiment_members(manifest)
+            stamp = manifest.get('created_at', '')
+            date = datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ').strftime('%Y-%m-%d %H:%M:%S UTC')
+            label = ' · '.join([manifest['host'], manifest['category'], manifest['experiment'], date, manifest['status']])
+            for name, kind in members.items():
+                path = real_tree(folder / received_member(manifest, name, members, folder=folder))
+                if path.is_file() and str(path) not in seen:
+                    seen.add(str(path))
+                    result[kind].append({'path': str(path), 'label': label + ' · ' + name, '_stamp': stamp})
+        except (ValueError, KeyError, TypeError, OSError):
             continue
-        for source in root.glob('*/*/source.json'):
-            try:
-                real_tree(source)
-                manifest = json.loads(source.read_text())
-                if manifest.get('schema_version') != 2 or manifest['category'] != category.name:
-                    continue
-                if _target(manifest, config) != source.parent:
-                    continue
-                members = experiment_members(manifest)
-                stamp = manifest['created_at']
-                date = datetime.strptime(stamp, '%Y%m%dT%H%M%S%fZ').strftime('%Y-%m-%d %H:%M:%S UTC')
-                label = ' · '.join([manifest['host'], manifest['category'], manifest['experiment'], date, manifest['status']])
-                for name, kind in members.items():
-                    path = real_tree(source.parent / received_member(manifest, name, members, folder=source.parent))
-                    if path.is_file() and str(path) not in seen:
-                        seen.add(str(path))
-                        result[kind].append({'path': str(path), 'label': label + ' · ' + name, '_stamp': stamp})
-            except (ValueError, KeyError, TypeError, OSError):
-                continue
     for items in result.values():
         items.sort(key=lambda item: (item['_stamp'], item['path']), reverse=True)
         for item in items:
@@ -211,6 +200,9 @@ class Instances:
             from src.api.learndl_monitor.experiment_archives import unpack_experiment
 
             archive_source = str(source)
+            active = next((row for row in rows if row['kind'] == kind and row.get('archive_source') == archive_source), None)
+            if active:
+                return {'instance': active, 'reused': True}
             source = unpack_experiment(kind, source, self.state / 'imports')
         if (kind == 'tensorboard' and not source.is_dir()) or (kind == 'optuna' and not source.is_file()):
             raise ValueError('Select a log directory or SQLite file')
@@ -295,7 +287,9 @@ class Instances:
             return str(path.relative_to(PATH.optuna) if path.is_relative_to(PATH.optuna)
                        else path.relative_to(PATH.model))
 
-        synchronized = synced_sources(ROOT / 'results', timestamps=True)
+        from src.automation.artifact_exchange.core import Config, archived_batches, experiment_members, real_tree
+        config = Config.load()
+        synchronized = synced_sources(config.results, timestamps=True)
 
         def latest(kind, local):
             candidates = local + [(item['_timestamp'], option(item['path'], item['label']))
@@ -328,11 +322,18 @@ class Instances:
             return host + ' · ' + str(path.relative_to(folder))
 
         def downloaded(kind):
-            folder = ROOT / 'results' / 'model_experiments' / kind
+            folder = config.results / 'custom/legacy/model_experiments' / kind
             packages = sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.zip'),
                               key=lambda p: (-p.stat().st_mtime, str(p)))
+            received = []
+            for batch, manifest in archived_batches(config):
+                if manifest['schema_version'] == 1 and manifest['kind'] == kind:
+                    for name in experiment_members(manifest):
+                        path = real_tree(batch / name)
+                        if path.is_file():
+                            received.append(option(path, legacy_label(path, batch)))
             return {'zh': '下载的实验压缩包', 'en': 'Downloaded experiment ZIPs',
-                    'items': [option(p, legacy_label(p, folder)) for p in packages]}
+                    'items': [option(p, legacy_label(p, folder)) for p in packages] + received}
         groups = {
             'tensorboard': [
                 {'zh': '最近训练', 'en': 'Latest training', 'items': recent},

@@ -21,7 +21,9 @@ class ResidualTests(unittest.TestCase):
                 y.square().mean().backward()
                 optim.step()
             self.assertTrue(all(torch.isfinite(p).all() for p in m.parameters()))
-            self.assertGreater(m.head[0].weight.grad.abs().sum().item(), 0)
+            layer = m.head[0]
+            assert isinstance(layer, torch.nn.Linear) and layer.weight.grad is not None
+            self.assertGreater(layer.weight.grad.abs().sum().item(), 0)
             clone = FactorResidual(dims, mode=mode, dropout=0)
             clone.load_state_dict(m.state_dict())
             torch.testing.assert_close(m(x)[0], clone(x)[0])
@@ -76,7 +78,7 @@ class CompactScheduleTests(unittest.TestCase):
             ]
             (suite / "walk_forward.json").write_text(json.dumps({"folds": folds}))
             with (
-                patch("src.proj.PATH.result", root),
+                patch("src.proj.PATH.rslt_custom", root),
                 patch("src.proj.CALENDAR.td", side_effect=lambda d, n: int(d) + n),
                 patch(
                     "src.data.preprocess.factor_sequence.bundle.load",

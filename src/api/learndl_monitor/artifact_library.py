@@ -12,7 +12,7 @@ from uuid import uuid4
 import portalocker
 
 from src.automation.artifact_exchange.core import (
-    Config, _target, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
+    Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
 from src.automation.artifact_exchange.model_logs import STAGES
 from .experiments import Instances
@@ -42,15 +42,9 @@ class Library:
         self.instances = Instances(state) if kind == 'model_preview' else None
 
     def _batches(self, category):
-        for path in sorted((self.config.results / category).glob('*/*/source.json'), reverse=True):
-            try:
-                manifest = read_json(path)
-                if (manifest['schema_version'] == 2 and manifest['category'] == category
-                        and _target(manifest, self.config) == path.parent
-                        and (self.config.state / 'received' / (manifest['id'] + '.json')).is_file()):
-                    yield path.parent, manifest
-            except (OSError, ValueError, KeyError, TypeError):
-                continue
+        for folder, manifest in archived_batches(self.config, category):
+            if (self.config.state / 'received' / (manifest['id'] + '.json')).is_file():
+                yield folder, manifest
 
     def rows(self):
         catalog = {}
@@ -78,7 +72,8 @@ class Library:
                     continue
         else:
             for folder, manifest in self._batches('model_training'):
-                host, model = manifest['host'], manifest['experiment']
+                host = manifest.get('host') or 'unknown'
+                model = manifest.get('experiment') or manifest['task']
                 experiments = experiment_members(manifest)
                 for item in manifest['files']:
                     relative = item['path']
@@ -90,10 +85,10 @@ class Library:
                         continue
                     if path:
                         add(path, path.name, type=experiments.get(relative, 'file'), host=host, model=model,
-                            run=manifest['run_id'], stamp=manifest['created_at'], batch=folder.name,
+                            run=manifest['run_id'], stamp=manifest.get('created_at', ''), batch=folder.name,
                             relative=path.relative_to(folder).as_posix(), lock=None)
 
-            for identity in self.config.results.glob('model_run_logs/*/*/model.json'):
+            for identity in self.config.results.glob('external/model/*/*/run_logs/model.json'):
                 try:
                     meta = read_json(identity)
                     for phase in STAGES:

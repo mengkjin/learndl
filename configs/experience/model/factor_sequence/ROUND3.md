@@ -14,7 +14,7 @@ recording, report and mail lifecycle; no custom training launcher is added.
 
 All three schedules use the campaign key `repaired_20261117`. On its first schedule
 resolution, select the completed repair run with the latest `affected_end` (then the
-most recently written completion summary), from `results/factor_sequence_fixes`.
+most recently written completion summary), from `results/custom/factor_sequence_fixes`.
 The run must have `status: completed` and `reports/dataset.json`. Failed, unfinished
 and dry-run entries do not qualify. Verify the repaired bundle's checksums and exact
 frozen factor/feature order; a corrupt selected bundle is an error, not a reason to

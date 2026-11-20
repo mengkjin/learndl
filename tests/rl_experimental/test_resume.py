@@ -71,6 +71,10 @@ class ResumeTest(unittest.TestCase):
                 with patch.object(experiment, '_system_info', return_value=original_info | {'git_revision': revision}):
                     engine.run_walk_forward(config_path)
             self.assertTrue(audit_suite(run)['complete'])
+            moved = root/'results/custom/rl_experimental'
+            moved.parent.mkdir()
+            run.parent.rename(moved)
+            run = moved/'run'
             # New logging/source code must not force completed models to retrain.
             (source/'progress.py').write_text('# changed logging\n'+(source/'progress.py').read_text())
             git('add', 'src')

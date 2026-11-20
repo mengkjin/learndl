@@ -224,7 +224,7 @@ def rebuild_microcap(start: int | np.integer = MicroCap_400.START_DATE, end=None
             f"Require {MicroCap_400.START_DATE} <= start <= end <= latest confirmed trading date"
         )
     run_id = "microcap_" + uuid4().hex
-    folder = PATH.result / "microcap_repair" / run_id
+    folder = PATH.rslt_custom / "microcap_repair" / run_id
     reports = folder / "reports"
     reports.mkdir(parents=True)
     stages = folder / "staged"
@@ -370,7 +370,7 @@ def repair_price_inputs(validate_only=False):
     dates = DB.dates('trade_ts', 'day')
     if dates.empty:
         raise ValueError('Cannot repair prices: trade_ts/day is empty')
-    folder = PATH.result / 'microcap_repair' / ('prices_' + uuid4().hex)
+    folder = PATH.rslt_custom / 'microcap_repair' / ('prices_' + uuid4().hex)
     stage_dir = folder / 'staged'
     stage_dir.mkdir(parents=True)
     replacements = []

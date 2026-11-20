@@ -4,7 +4,7 @@
 
 ## 手动训练六个因子时序模型
 
-六个 `factorseq_*_verify` 已直接登记到 `configs/schedule/worklist.yaml`，由普通闲时训练启动，无需准备脚本。对应 schedule 在训练启动时读取服务器 `results/factor_sequence/20261031_factor_sequence_verify_01` 的已审计数据和冻结历史切分，每个候选一个模型根目录，固定种子 17、每期 3 epoch。缺少源数据、审计或切分时明确失败。日期沿用该运行，不自动延长至今天。已有其他 worklist 项保留。
+六个 `factorseq_*_verify` 已直接登记到 `configs/schedule/worklist.yaml`，由普通闲时训练启动，无需准备脚本。对应 schedule 在训练启动时读取服务器 `results/custom/factor_sequence/20261031_factor_sequence_verify_01` 的已审计数据和冻结历史切分，每个候选一个模型根目录，固定种子 17、每期 3 epoch。缺少源数据、审计或切分时明确失败。日期沿用该运行，不自动延长至今天。已有其他 worklist 项保留。
 
 以下是另行手动运行整套验证的旧入口，worklist 路线不需要执行：
 
@@ -18,7 +18,7 @@ bash runs/train_factor_sequence.sh
 先运行离线测试、数据构建、审计，再依次训练 MLP、GRU、M1、M2、Mask、Gate。
 默认固定种子 17，每个历史训练周期 3 epoch；这是流程验证预算。
 所有训练复用 `2_schedule_model.py`，每个候选模型一个根目录，邮件沿用普通 schedule 的完整模型训练结果粒度。
-任一步失败即停止，日志及配置保存在 `results/factor_sequence/<run_id>/`；本入口不删除旧目录，不重试旧 autofix，也不修改 worklist。
+任一步失败即停止，日志及配置保存在 `results/custom/factor_sequence/<run_id>/`；本入口不删除旧目录，不重试旧 autofix，也不修改 worklist。
 
 脚本前台执行；远程长时间运行可在 tmux 会话内启动。可选参数：
 
@@ -33,7 +33,7 @@ bash runs/train_factor_sequence.sh --help
 
 ## 项目磁盘占用报告
 
-在项目 CLI 中选择 **Non-Research Operations → Project Storage Report**，默认扫描生产项目目录，报告保存到 `results/storage_reports/`，不再询问路径。扫描开始前仅询问是否在报告准备好后本地打开；报告交互提示和页面内容使用英文。
+在项目 CLI 中选择 **Non-Research Operations → Project Storage Report**，默认扫描生产项目目录，报告保存到 `results/custom/storage_reports/`，不再询问路径。扫描开始前仅询问是否在报告准备好后本地打开；报告交互提示和页面内容使用英文。
 
 也可在项目根目录运行（默认发送邮件附件）：
 
@@ -41,7 +41,7 @@ bash runs/train_factor_sequence.sh --help
 uv run --frozen python -c 'from src.api.calls.computer import ProjectStorageReport; ProjectStorageReport.go(root=".")'
 ```
 
-`root` 支持绝对路径；`output` 可指定 HTML 文件路径，相对路径基于扫描根目录。默认输出到 `results/storage_reports/storage_<timestamp>.html`，已有文件不会覆盖。传入 `email=False` 可只保存本地报告；`recipient="you@example.com"` 可覆盖默认收件人，否则沿用项目邮箱配置（发送给发件邮箱）。发送失败仍保留报告，并沿用现有邮件队列的重试机制。
+`root` 支持绝对路径；`output` 可指定 HTML 文件路径，相对路径基于扫描根目录。默认输出到 `results/custom/storage_reports/storage_<timestamp>.html`，已有文件不会覆盖。传入 `email=False` 可只保存本地报告；`recipient="you@example.com"` 可覆盖默认收件人，否则沿用项目邮箱配置（发送给发件邮箱）。发送失败仍保留报告，并沿用现有邮件队列的重试机制。
 
 报告可离线浏览，支持目录折叠、路径搜索和同级排序。数据库展示到数据集、模型展示到模型名称，中间数据和导出分别展示到子用途和因子/模型/组合；更深层文件仍计入合计。按实际分配磁盘块统计，包含隐藏目录，不跟随软链接，硬链接只计一次；出现读取错误时会标记不完整。仅支持提供 `st_blocks` 的系统（如 Linux/macOS）。扫描期间文件可能变化，报告不是文件系统快照，也不会删除任何文件。
 

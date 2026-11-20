@@ -192,13 +192,13 @@ class RecoveryTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
-            parent = root / "results/factor_sequence_fixes/old"
+            parent = root / "results/custom/factor_sequence_fixes/old"
             parent_checkpoint(parent, root / "factor")
             raw = root / "db"
             raw.mkdir()
             original = raw / "source.feather"
             pd.DataFrame({"v": [1]}).to_feather(original)
-            path = SimpleNamespace(result=root / "results", db=raw)
+            path = SimpleNamespace(rslt_custom=root / "results/custom", db=raw)
 
             def run(
                 mode, start, end, run_id, dry_run, batch_size, *, recovery, snapshot
@@ -224,7 +224,7 @@ class RecoveryTests(unittest.TestCase):
                 )
             report = json.loads(
                 (
-                    root / "results/factor_sequence_fixes/new/reports/raw_snapshot.json"
+                    root / "results/custom/factor_sequence_fixes/new/reports/raw_snapshot.json"
                 ).read_text()
             )
             self.assertEqual(report["files"], 1)
@@ -375,7 +375,7 @@ class RecoveryTests(unittest.TestCase):
             stack.callback(snapshot.close)
             stack.enter_context(snapshot.activate())
             fake_path = SimpleNamespace(
-                result=root / "results",
+                rslt_custom=root / "results/custom",
                 db=raw,
                 srcs=root / "src",
                 interim=root / "interim",

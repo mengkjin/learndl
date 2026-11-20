@@ -52,13 +52,13 @@ NPZ 可以用 `PanelData.save_npz()` 和 `PanelData.load_npz()` 读写。checkpo
 离线数据训练：
 
 ```bash
-.venv/bin/python -m src.res.rl_experimental train panel.npz --output results/rl_experimental/run-01
+.venv/bin/python -m src.res.rl_experimental train panel.npz --output results/custom/rl_experimental/run-01
 ```
 
 重新加载最佳 checkpoint 并导出测试期确定性权重：
 
 ```bash
-.venv/bin/python -m src.res.rl_experimental evaluate panel.npz results/rl_experimental/run-01/best_model.zip --output results/rl_experimental/run-01/export
+.venv/bin/python -m src.res.rl_experimental evaluate panel.npz results/custom/rl_experimental/run-01/best_model.zip --output results/custom/rl_experimental/run-01/export
 ```
 
 结果包括模型、归一化参数、时间切分、依赖版本、TensorBoard 日志、验证及测试轨迹，以及 alpha 前 50 等权和 robust top50 两条基线。两条基线与 RL 共用成交内核；robust top50 的隔离实现逐项复刻项目生成器的缓冲、换手和行业槽位规则，并用实际成交后的持仓生成下一日目标。
@@ -72,7 +72,7 @@ NPZ 可以用 `PanelData.save_npz()` 和 `PanelData.load_npz()` 读写。checkpo
 ```bash
 .venv/bin/python -m src.res.rl_experimental prepare-real \
   --alpha pred@<预测名称> --start 20180101 --end 20250421 \
-  --output results/rl_experimental/snapshots/<实验名> --dry-run
+  --output results/custom/rl_experimental/snapshots/<实验名> --dry-run
 ```
 
 检查通过后去掉 `--dry-run`。输出包含 `panel.npz`、`manifest.json` 和 `quality_report.json`。默认要求 alpha 每个交易日严格存在；低频信号必须显式传入 `--max-alpha-staleness`。`--alpha-lag` 用于人为滞后 alpha，`--alpha-sample-status` 记录它是样本外、样本内或未知；未知数据会标记为工程实验。
@@ -81,24 +81,24 @@ NPZ 可以用 `PanelData.save_npz()` 和 `PanelData.load_npz()` 读写。checkpo
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental replay-baselines \
-  results/rl_experimental/snapshots/<实验名>/panel.npz \
-  --output results/rl_experimental/baselines/<实验名>
+  results/custom/rl_experimental/snapshots/<实验名>/panel.npz \
+  --output results/custom/rl_experimental/baselines/<实验名>
 ```
 
 再在项目主环境进行短训练：
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental train \
-  results/rl_experimental/snapshots/<实验名>/panel.npz \
-  --output results/rl_experimental/runs/<实验名>-smoke --timesteps 4096 --device cpu
+  results/custom/rl_experimental/snapshots/<实验名>/panel.npz \
+  --output results/custom/rl_experimental/runs/<实验名>-smoke --timesteps 4096 --device cpu
 ```
 
 正式三随机种子入口默认每个种子训练 100,000 步：
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental train-suite \
-  results/rl_experimental/snapshots/<实验名>/panel.npz \
-  --output results/rl_experimental/runs/<实验名>-suite --device cuda
+  results/custom/rl_experimental/snapshots/<实验名>/panel.npz \
+  --output results/custom/rl_experimental/runs/<实验名>-suite --device cuda
 ```
 
 默认按时间 60%/20%/20% 切分；可用 `--train-end-date` 和 `--valid-end-date` 固定边界。
@@ -129,13 +129,13 @@ reward = RewardConfig(
 
 质量报告的 `valuation` 记录来源、冲突和连续缺失区间；轨迹增加 `carried_holdings`、`missing_data_carried_holdings`、`max_held_stale_days`。承接天数从载入的历史窗口开始累计，更早的停牌时长未知。价格来源冲突时优先 day 的真实复权收盘并告警。所有估值处理只在 RL 内存中进行。
 
-升级后需将实验 JSON 的 `rebuild_snapshot` 临时设为 `true`（或使用新的快照目录）生成 v4 快照，后续可改回 `false`。旧快照/checkpoint 仍可按原契约回放，但新实验入口不会静默沿用旧估值逻辑。建议先运行 `replay-baselines <快照目录>/panel.npz --split valid --train-end-date 20230101 --valid-end-date 20250101 --output results/rl_experimental/valuation_check`，确认验证基线通过，再运行服务器训练脚本。
+升级后需将实验 JSON 的 `rebuild_snapshot` 临时设为 `true`（或使用新的快照目录）生成 v4 快照，后续可改回 `false`。旧快照/checkpoint 仍可按原契约回放，但新实验入口不会静默沿用旧估值逻辑。建议先运行 `replay-baselines <快照目录>/panel.npz --split valid --train-end-date 20230101 --valid-end-date 20250101 --output results/custom/rl_experimental/valuation_check`，确认验证基线通过，再运行服务器训练脚本。
 
 RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风格暴露和 alpha 的日期/证券重复键，以及上市记录与行业资料的对应键。发现重复时输出 `WARNING`，按源读取顺序保留最后一行；内容冲突时额外报告冲突键数量，这不代表识别出了最新修订值。处理仅发生在内存，不改写数据库；清理记录写入 manifest 的 `audit.duplicate_cleanup` 和 `quality_report.json`。缺失整日数据和非法价格仍按原规则报错。复用已有快照时不会重读源表，如需重新检查源数据请重建快照。
 
 终端、notebook 和 HtmlCatcher 会实时显示带时间戳的 `[RL/阶段]` 输出，包括每批 128 个日期的数据读取、特征和资格构建、快照保存、实际时间切分、每轮 PPO 采样/更新、验证净值与最佳轮次、测试基线、报告及打包。数据和训练期间的输出同时进入运行目录的 stdout/stderr 日志。
 
-如需修复数据库本身，可在项目 CLI 的 `2_data` 中选择 `Repair Day Limit Duplicates`。先以 `dry_run=True` 检查，再以 `dry_run=False` 修复；`end` 需包含最后决策日的下一交易日。该独立脚本只合并整行完全相同的记录，冲突文件保留原样并报错。逐日审计报告和原始备份位于 `results/data_repairs/day_limit/<运行时间>/`。修复时不要同时运行该表的数据更新任务。
+如需修复数据库本身，可在项目 CLI 的 `2_data` 中选择 `Repair Day Limit Duplicates`。先以 `dry_run=True` 检查，再以 `dry_run=False` 修复；`end` 需包含最后决策日的下一交易日。该独立脚本只合并整行完全相同的记录，冲突文件保留原样并报错。逐日审计报告和原始备份位于 `results/custom/data_repairs/day_limit/<运行时间>/`。修复时不要同时运行该表的数据更新任务。
 
 项目脚本只发送一封任务邮件，统一附带 HtmlCatcher 日志、实验 ZIP（或全部分卷）和 JSON 清单；失败运行同样附带已生成的诊断包。邮件遵循项目的 `MACHINE.emailable` 设置及标准发送失败队列。分卷不会降低这封邮件的总附件大小。
 
@@ -159,14 +159,14 @@ RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风�
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental resend-bundle \
-  results/rl_experimental/server_runs/bundles/<run>.parts.json
+  results/custom/rl_experimental/server_runs/bundles/<run>.parts.json
 ```
 
 在本机把 `.parts.json` 和全部 ZIP/分卷放在同一目录，然后校验及安全解包：
 
 ```bash
 .venv/bin/python -m src.res.rl_experimental analyze-bundle \
-  /path/to/<run>.parts.json --output results/rl_experimental/received
+  /path/to/<run>.parts.json --output results/custom/rl_experimental/received
 ```
 
 解包后的 `report.html` 可离线打开，Notebook 06 提供训练曲线、reward 分解和 TensorBoard 入口。分析过程不访问数据库，也不加载模型；checkpoint 重放仍需与数据契约匹配的原始 `panel.npz`。失败实验也会发送诊断包，但 `analyze-bundle` 会明确返回失败状态，不能当成成功结果。
@@ -176,7 +176,7 @@ RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风�
 从项目根目录启动，然后打开 http://localhost:6006；notebook 05 也提供训练前启动的内嵌入口：
 
 ```bash
-.venv/bin/python -m tensorboard.main --logdir results/rl_experimental/runs --host localhost --port 6006
+.venv/bin/python -m tensorboard.main --logdir results/custom/rl_experimental/runs --host localhost --port 6006
 ```
 
 在 Runs 中选择一个或多个实验。日志保存在各次输出目录的 `tensorboard/PPO_1/` 中。Scalars 里的横轴是累计环境步数，每个更新点对应一批 rollout 完成全部 PPO 优化；默认每轮 4 × 128 = 512 条经验。第 0 轮仅记录初始验证，不参与最佳模型选择。
@@ -222,7 +222,7 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s tests/rl_
 .venv/bin/python -m ipykernel install --user --name learndl --display-name "Python (learndl)"
 ```
 
-04、05 默认使用 2025-01-02 至 2025-02-28 的决策日期，输出位于 `results/rl_experimental/`。依次运行即可完成数据准备；日期、alpha 方向/滞后及样本外状态均可在配置单元修改。默认每个 alpha 日期必须存在，行情需要覆盖特征回看期和最后决策日的下一交易日。dry-run 只审计 alpha 与预计数组内存，正式导出才完整检查行情及其他数据。
+04、05 默认使用 2025-01-02 至 2025-02-28 的决策日期，输出位于 `results/custom/rl_experimental/`。依次运行即可完成数据准备；日期、alpha 方向/滞后及样本外状态均可在配置单元修改。默认每个 alpha 日期必须存在，行情需要覆盖特征回看期和最后决策日的下一交易日。dry-run 只审计 alpha 与预计数组内存，正式导出才完整检查行情及其他数据。
 
 两本 notebook 共享默认快照位置；复用前检查配置、文件指纹和数据契约。源数据库变化不会自动重建快照，设置 `REBUILD_SNAPSHOT=True` 才会覆盖导出。05 每次训练创建独立运行目录，默认为 CPU；4090 可改为 `DEVICE="cuda"`。此短实验的 alpha 样本外状态默认未知，结果标记为工程实验。
 
@@ -254,8 +254,8 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s tests/rl_
 
 # 先测量本机/服务器环境；有 CUDA 时自动同时测 CPU 与 CUDA
 .venv/bin/python -m src.res.rl_experimental profile-env \
-  results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz \
-  --output results/rl_experimental/profile --steps 512 --train-steps 512
+  results/custom/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz \
+  --output results/custom/rl_experimental/profile --steps 512 --train-steps 512
 
 # 可分两阶段，也可省略 --stage 一次串联
 .venv/bin/python -m src.res.rl_experimental run-walk-forward \

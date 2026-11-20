@@ -12,6 +12,7 @@ __all__ = [
 import hashlib
 import json
 import re
+from src.result_paths import relocated_result
 from pathlib import Path
 
 import portalocker
@@ -27,8 +28,8 @@ def validate_request(doc, root):
         raise ValueError('Resume request must be a mapping')
     if doc.get('schema_version') != 1 or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', doc.get('request_id', '')):
         raise ValueError('Invalid resume request ID/schema')
-    run = Path(doc['run_directory']).resolve()
-    if not run.is_relative_to(Path(root).resolve()/'results/rl_experimental'):
+    run = relocated_result(doc['run_directory'], root, 'rl_experimental')
+    if not run.is_relative_to(Path(root).resolve()/'results/custom/rl_experimental'):
         raise ValueError('Resume target must be inside project RL results')
     for field in ('config_sha256', 'identity_sha256'):
         if not re.fullmatch(r'[a-f0-9]{64}', doc.get(field, '')):
@@ -37,7 +38,7 @@ def validate_request(doc, root):
         raise ValueError('Invalid original source commit')
     if type(doc.get('no_email')) is not bool or (doc.get('recipient') is not None and not isinstance(doc['recipient'], str)):
         raise ValueError('Invalid resume mail settings')
-    return doc
+    return dict(doc, run_directory=str(run))
 
 
 def submit(root, request_id, plan):
@@ -51,7 +52,7 @@ def submit(root, request_id, plan):
     path = directory/f'{request_id}.json'
     with portalocker.Lock(directory/'.requests.lock', timeout=0):
         if path.exists():
-            if json.loads(path.read_text()) != doc:
+            if validate_request(json.loads(path.read_text()), root) != validate_request(doc, root):
                 raise ValueError('Resume request is immutable; use a new request ID')
         else:
             temporary = path.with_suffix('.tmp')

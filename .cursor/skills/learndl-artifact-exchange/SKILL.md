@@ -47,7 +47,12 @@ Syncthing shares `$HOME/workspace/Syncthing`; this feature consumes only complet
 under its `artifact_exchange/` child. Ordinary files placed there are not ready notifications:
 manual materials must also use the publish CLI. Keep state and temporary files outside the share.
 
-Archive under `results/<category>/<source_host>__<experiment>/<batch>/`. Use the configured
+Write local research and operational output under `results/custom/<purpose>/` on all machines.
+Use `PATH.rslt_custom` or `src.result_paths.custom_results(project_root)` for project results.
+Preserve the dedicated test, trade, factor and gp roots.
+Archive received batches under `results/external/<category>/<source_host>/<experiment>/<batch>/`.
+Publish model_training via `artifact_exchange/model/<experiment>/`; logical categories in manifests
+remain stable. Store cumulative model logs beside the batches under `run_logs/`. Use the configured
 stable source_host, not a fresh Wi-Fi-dependent hostname. Server originals remain; only a checked,
 committed package with durable receipt is removed. Existing protocol v1 packets and legacy panel
 ZIPs remain supported. Do not move historical directories when adding a new research producer.

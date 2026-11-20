@@ -45,13 +45,13 @@ def recover(run_id, resume_from, module):
     from src.data.preprocess.factor_sequence.bundle import write_json
     from src.res.model.experiment.factor_sequence.server_suite import send_result
     from src.proj.util.web.task_mail import TaskResultMail, retry_delivery
-    diagnostic = PATH.result/'factor_sequence_diagnostics'/run_id/'host'
+    diagnostic = PATH.rslt_custom/'factor_sequence_diagnostics'/run_id/'host'
     diagnostic.mkdir(parents=True,exist_ok=True)
-    report = collect(PATH.result/'factor_sequence',runtime_dir(),resume_from,isolated=False)
+    report = collect(PATH.rslt_custom/'factor_sequence',runtime_dir(),resume_from,isolated=False)
     write_json(diagnostic/'progress.json',report)
     if not original_inactive(report):
         return 75
-    source = PATH.result/'factor_sequence'/resume_from
+    source = PATH.rslt_custom/'factor_sequence'/resume_from
     # Send whatever the original attempt actually produced before trying recovery.
     # Old attempts do not contain isolated model logs; label the shared fold log honestly.
     mails=[]  # Legacy per-fold messages are never backfilled.

@@ -1,8 +1,8 @@
 {
   "kind": "walk_forward",
   "stage": "all",
-  "panel": "results/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz",
-  "output": "results/rl_experimental/walk_forward/gru_v1_low_turnover_v1",
+  "panel": "results/custom/rl_experimental/snapshots/pred_gru_day_V1_20170101_20251230/panel.npz",
+  "output": "results/custom/rl_experimental/walk_forward/gru_v1_low_turnover_v1",
   "alpha_sample_status": "unknown",
   "screen": {"start": 20170101, "valid_start": 20210101, "end": 20230101},
   "first_quarter": "2023Q1",
@@ -17,7 +17,7 @@
   "screen_steps": 30000,
   "quarter_steps": 100000,
   "training": {"device": "cuda"},
-  "profile_report": "results/rl_experimental/profile/profile.json",
+  "profile_report": "results/custom/rl_experimental/profile/profile.json",
   "bundle_max_mb": 20,
   "recipient": null
 }

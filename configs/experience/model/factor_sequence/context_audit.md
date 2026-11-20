@@ -13,7 +13,7 @@
 该脚本。`--start YYYYMMDD --end YYYYMMDD` 可限定报告期；`--no-email` 同时禁止邮件和
 对外投递，适合本机检查。脚本不持有训练锁，但全期分钟数据审计有显著磁盘 I/O，建议在闲时执行。
 
-结果保存在 `results/factor_sequence/context_audit_<UTC>_<UUID>/`，每次独立目录。
+结果保存在 `results/custom/factor_sequence/context_audit_<UTC>_<UUID>/`，每次独立目录。
 邮件沿用 TaskResultMail，包含摘要和完整日度 CSV ZIP；发布先于邮件，服务器保留原件。
 机器关闭邮件会明确记录 skipped，不能视作已发送。部分失败也保存结果并发送不完整摘要。
 

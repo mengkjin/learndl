@@ -41,7 +41,7 @@
 - 20241213：5,377 行，5,373 个有效因子值。
 
 原文件备份、前后 SHA256、逐项状态及可复现修复脚本保存在
-`results/factor_sequence/factorseq_repair_20261031/`。修复后的 16 项离线测试全部通过。
+`results/custom/factor_sequence/factorseq_repair_20261031/`。修复后的 16 项离线测试全部通过。
 下文首次构建失败记录保留为历史，不能视为这 4 个文件仍未修复。
 
 修复后的真实构建 `factorseq_v1_20261031_after_repair` 已通过（约 153 秒），新数据版本为
@@ -79,7 +79,7 @@ factorseq / factorperf / factormarket 分别为 330 / 2454 / 26 个通道，公�
 
 ## 真实数据状态
 
-结果目录：`results/factor_sequence/`。
+结果目录：`results/custom/factor_sequence/`。
 
 - `factorseq_v1_20261030_01`：build 失败。部分 btop 文件使用命名 secid 索引、
   其他文件使用 secid 列，原批量加载合并时丢失索引。已在新适配器中改为逐文件整理后合并，

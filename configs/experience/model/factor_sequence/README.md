@@ -125,7 +125,7 @@ audit 输出覆盖率 CSV、原始/标准化分位点、退化比例、公共指
 
 ## 实验记录与评价
 
-结果在 `PATH.result/factor_sequence/<run-id>`；阶段状态包含调用参数和失败堆栈。
+结果在 `PATH.rslt_custom/factor_sequence/<run-id>`；阶段状态包含调用参数和失败堆栈。
 training 目录保存冻结切分、标签、真实未来收益、模型目录、每项状态与实际配置、
 源码/数据哈希、模型路径、用时、进程峰值 RSS（累计进程指标，不是独立模型增量内存）。
 

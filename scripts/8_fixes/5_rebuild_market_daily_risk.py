@@ -105,7 +105,7 @@ def rebuild(start=None, end=None, validate_only=False):
         + "_"
         + uuid4().hex[:8]
     )
-    folder = PATH.result / "market_risk_rebuild" / run_id
+    folder = PATH.rslt_custom / "market_risk_rebuild" / run_id
     reports = folder / "reports"
     reports.mkdir(parents=True, exist_ok=False)
     target = DB.path("market_daily", "risk")

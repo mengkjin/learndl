@@ -426,8 +426,8 @@ class ExchangeTest(unittest.TestCase):
         received = receive(self.rec)
         self.assertEqual(len(received), 3)
         self.assertTrue(all(r['status'] == 'received' for r in received), received)
-        first = Path(next(r['target'] for r in received if 'server__' in r['target']))
-        self.assertEqual(first.parent.name, 'server__nn@modelAAA')
+        first = Path(next(r['target'] for r in received if '/model/server/' in r['target']))
+        self.assertEqual(first.parent, self.rec.results/'external/model/server/nn@modelAAA')
         self.assertTrue((first/'results/full.feather').exists())
         self.assertTrue((first/'results/report.zip').exists())
         sources = synced_sources(self.rec.results)
@@ -453,7 +453,7 @@ class ExchangeTest(unittest.TestCase):
     def test_legacy_v1_packet_and_migration_alias(self):
         import json
         import hashlib
-        from src.automation.artifact_exchange.core import _target
+        from src.automation.artifact_exchange.core import archive_target
         pid = 'a' * 32
         data = b'legacy report'
         manifest = dict(schema_version=1, id=pid, task='old', run_id='run',
@@ -467,7 +467,7 @@ class ExchangeTest(unittest.TestCase):
             z.writestr('payload/report.txt', data)
         received = receive(self.rec)[0]
         self.assertEqual(received['status'], 'received', received)
-        self.assertEqual(Path(received['target']), _target(manifest, self.rec))
+        self.assertEqual(Path(received['target']), archive_target(manifest, self.rec))
         legacy = self.rec.results/'reports/model_compare/legacy/model_compare'
         legacy.mkdir(parents=True)
         (legacy/'old.pdf').write_bytes(b'old')
@@ -556,7 +556,7 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(receive(self.rec)[0]['status'], 'received')
         rows = migration('plan', self.rec)
         row = next(r for r in rows if r['source'] == str(self.rec.results/'model_compare'))
-        self.assertIn('Contains received experiment batches', row['error'])
+        self.assertEqual(row['status'], 'absent')
 
     def test_task_context_resets_even_when_cleanup_fails(self):
         from types import SimpleNamespace

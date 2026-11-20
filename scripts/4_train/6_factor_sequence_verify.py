@@ -75,7 +75,7 @@ def main(run_id=None, test_start=20170101, test_end=None,
     config=Path(data_config)
     if not config.is_absolute():
         config=PATH.main/config
-    folder,report=run_suite(PATH.main,PATH.result/'factor_sequence',run_id,config,
+    folder,report=run_suite(PATH.main,PATH.rslt_custom/'factor_sequence',run_id,config,
         test_start,test_end,research,ablations,resume_from=resume_from,
         training_email=not no_email,recipient=recipient)
     if no_email:

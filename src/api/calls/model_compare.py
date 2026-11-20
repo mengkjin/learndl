@@ -35,7 +35,7 @@ def comparison_schema():
         'sample_num_corr': 'Maximum prediction sample dates',
         'sample_num_hidden': 'Maximum hidden sample dates',
         'hidden_model_num': 'Hidden replica number for each selected model',
-        'output_dir': 'Output directory; None creates results/model_compare/<timestamp>/',
+        'output_dir': 'Output directory; None creates results/custom/model_compare/<timestamp>/',
     }
     params = []
     for name, value in defaults.items():

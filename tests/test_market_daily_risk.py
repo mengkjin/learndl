@@ -143,7 +143,7 @@ class RebuildIntegrationTests(unittest.TestCase):
             old = calc_market_daily_risk(20200101, inputs=self.data())
             old.to_feather(target)
             with ExitStack() as stack:
-                stack.enter_context(patch("src.proj.PATH.result", root / "results"))
+                stack.enter_context(patch("src.proj.PATH.rslt_custom", root / "results"))
                 stack.enter_context(patch("src.proj.DB.path", return_value=target))
                 stack.enter_context(
                     patch(

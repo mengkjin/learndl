@@ -95,7 +95,7 @@ def run_recovery(
         raise ValueError(
             "Use a new recovery run ID; the original checkpoint is preserved"
         )
-    root = PATH.result / "factor_sequence_fixes"
+    root = PATH.rslt_custom / "factor_sequence_fixes"
     source = RecoverySource(root / source_run)
     snapshot = None
     try:

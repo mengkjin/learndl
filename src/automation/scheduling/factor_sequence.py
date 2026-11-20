@@ -103,7 +103,7 @@ def execute(request, store):
                     invoke(run_id=request['request_id'])
             finally:
                 # Keep confirmed receipts for audit and legacy notification compatibility.
-                receipt = PATH.result / 'factor_sequence' / request['request_id'] / 'mail_status.json'
+                receipt = PATH.rslt_custom / 'factor_sequence' / request['request_id'] / 'mail_status.json'
                 if receipt.exists() and json.loads(receipt.read_text()).get('status') == 'sent':
                     from .runtime import record_script_email
                     suite = json.loads((receipt.parent / 'suite.json').read_text())

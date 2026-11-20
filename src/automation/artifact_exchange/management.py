@@ -81,6 +81,8 @@ def migration(action, config):
         raise ValueError('Migration is local receiver-only')
     output = []
     with locked(config, 'receive'):
+        if (config.state / 'migrations/results-0.7.4.json').exists():
+            return [{'status': 'superseded', 'patch': '0.7.4/001'}]
         for name, category in MIGRATIONS.items():
             src = config.results / name
             dst = config.results / 'reports' / category / 'legacy' / name

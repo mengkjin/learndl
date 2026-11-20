@@ -264,7 +264,7 @@ LEARNDL_AUTOFIX_SANDBOX_TESTS=1 python -m unittest tests.automation.test_autofix
 完整多年份滚动验证可能耗时较长。正式执行期间占用共享训练插槽，不阻塞数据更新通道。
 
 请求在 `.local_resources/<主机>/factor_sequence/requests/`；结果在
-`results/factor_sequence/20261031_factor_sequence_verify_01/`。
+`results/custom/factor_sequence/20261031_factor_sequence_verify_01/`。
 提交邮件只表示排队，最终成功或失败由脚本发送附件；有成功送达回执时不重复发普通完成告警。
 运行失败不会自动重试，须新 ID；不清理旧失败记录。此增量无需修改 systemd 单元，
 但需服务器同步全部代码与清单；Git 推送不代表服务器已经领取任务。
@@ -280,7 +280,7 @@ Optimizer 的六模型更新测试。使用新 ID `20261031_factor_sequence_veri
 直接在 autofix 中读取 suite/各段模型状态、只读调度账本与错误证据、最近四份阶段日志及
 对应 worker 日志的有界尾部、结果邮件状态。既有账本缺失时不创建，不重启或重复提交训练。
 PID 隔离中将宿主进程存活性标为未知，不能用不可见 PID 或日志陈旧直接认定任务死亡。
-结果及可靠邮件账本在 `results/factor_sequence_diagnostics/20261031_factor_sequence_progress_01/`，
+结果及可靠邮件账本在 `results/custom/factor_sequence_diagnostics/20261031_factor_sequence_progress_01/`，
 邮件附 `progress.json`。这是诊断成功通知，正文会单独说明被检查实验状态。
 三个离线测试和 autofix 清单校验通过；未在本机发信。
 服务器必须先同步此提交；若 Git 更新正在等现有代码读取锁释放，本检查也会延迟发布，
@@ -303,8 +303,8 @@ restore the existing control state”模板；现对这类已排队和新产生�
 历史标签、完整模型集合、预测与模型保存记录一致后复用完整折；未完成折全部重新训练，
 不是 epoch/checkpoint 续训。旧失败记录及结果文件不覆盖，恢复使用新 run ID。
 
-诊断位于 `results/factor_sequence_diagnostics/20261101_factor_sequence_recover_03/`，
-新实验位于 `results/factor_sequence/20261101_factor_sequence_recover_03/`。
+诊断位于 `results/custom/factor_sequence_diagnostics/20261101_factor_sequence_recover_03/`，
+新实验位于 `results/custom/factor_sequence/20261101_factor_sequence_recover_03/`。
 原记录缺失、产物损坏、科学代码或历史标签变更时，保留诊断并失败，不自动扩大日期或重建数据。
 恢复原范围后若要验证更新日期，应另建新实验。
 
@@ -346,7 +346,7 @@ factor_sequence 验证。确认前后核对 scheduler ID、PID、创建时间及
 无法核对、符号链接/挂载、目录身份变化、旧进程仍存活会阻止删除和训练；不使用宽泛
 `fs_*` 删除。模型文件永久删除，不备份；结果报告、数据块、其他模型及调度账本不删除。
 精确目录清单、每项删除进度和检查失败原因写在
-`results/factor_sequence_diagnostics/20261103_factor_sequence_schedules_04/cleanup.json`，并邮件报告。
+`results/custom/factor_sequence_diagnostics/20261103_factor_sequence_schedules_04/cleanup.json`，并邮件报告。
 
 清理完成后以新 ID 验证 2017 年至最新成熟标签，按 MLP → GRU → M1 → M2 → Mask → Gate
 顺序调用正常 schedule 训练接口，各 3 epoch/历史周期、单种子，不加消融，不修改日常
