@@ -58,7 +58,7 @@ class StatusLogger(BaseCallBack):
         
     @contextmanager
     def log_phase(self, phase):
-        from src.automation.artifact_exchange.model_identity import build_identity
+        from src.res.model.util.model_identity import build_identity
 
         trainer = self.trainer
         if trainer.training_run is None:

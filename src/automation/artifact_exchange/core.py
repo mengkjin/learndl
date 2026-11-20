@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from src.file_ops import atomic_json, fsync_dir, real_tree
+
 __all__ = [
     'MAX_BYTES',
     'MAX_FILES',
@@ -59,29 +61,6 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_CONFIG = ROOT / '.local_resources/artifact_exchange/config.json'
 
 
-def atomic_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name('.' + path.name + uuid.uuid4().hex)
-    try:
-        with tmp.open('x') as f:
-            json.dump(value, f, ensure_ascii=False, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, path)
-        fsync_dir(path.parent)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-def fsync_dir(path):
-    fd = os.open(path, os.O_RDONLY)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
-
-
 def digest(path):
     h = hashlib.sha256()
     with Path(path).open('rb') as f:
@@ -101,14 +80,6 @@ def safe_path(value):
 
 def slug(value):
     return re.sub(r'[^a-zA-Z0-9_.-]+', '_', str(value)).strip('._-')[:64] or 'unnamed'
-
-
-def real_tree(path):
-    path = Path(path).absolute()
-    for p in (path, *path.parents):
-        if p.is_symlink():
-            raise ValueError(f'Symbolic link refused: {p}')
-    return path
 
 
 @dataclass
@@ -326,7 +297,7 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
     declaration = [] if category == 'mail_archive' else [asdict(s) | {'source': str(s.source)} for s in specs]
     identity = [2, config.source_host, task, run_id, category, experiment, declaration]
     if build is not None:
-        from .model_identity import validate_build
+        from src.model_provenance import validate_build
 
         validate_build(build)
         if category != 'model_training':
@@ -542,7 +513,7 @@ def archive_target(manifest, config):
         experiment = component(manifest.get('experiment') or manifest['task'])
     root = real_tree(config.results / 'external' / archive_category(manifest['category']) / host / experiment)
     if 'model_build' in manifest:
-        from .model_identity import validate_build
+        from src.model_provenance import validate_build
 
         if manifest['category'] != 'model_training' or type(manifest.get('build_sequence')) is not int or manifest['build_sequence'] < 1:
             raise ValueError('Invalid model build update')
@@ -709,8 +680,9 @@ def _receive(archive, config):
             else:
                 staging.rename(target)
                 fsync_dir(target.parent)
-        from .model_logs import append_received
-        if manifest['schema_version'] == 2:
+        if manifest['schema_version'] == 2 and manifest['category'] == 'model_training':
+            from .model_logs import append_received
+
             append_received(config, target, manifest)
         atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, 'target': str(target)})
     return _finish_receive(archive, archive_hash, manifest, target)

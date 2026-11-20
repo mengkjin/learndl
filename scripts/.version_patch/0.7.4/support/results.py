@@ -12,7 +12,6 @@ from src.automation.artifact_exchange.core import (
     Config, _target, archive_target, atomic_json, component, digest, fsync_dir, locked, real_tree,
 )
 from src.automation.artifact_exchange.management import MIGRATIONS
-from src.automation.artifact_exchange.model_logs import log_root
 
 KEEP = {'test', 'trade', 'factor', 'gp', 'external', 'custom'}
 LOCAL = {'rl_experimental', 'factor_sequence', 'factor_sequence_fixes', 'factor_sequence_diagnostics',
@@ -93,7 +92,7 @@ def discover(config, monitor) -> Plan:
         info = read(ident)
         if ident.parent != root / 'model_run_logs' / component(info['host']) / component(info['model']):
             raise ValueError(f'Unexpected model log location: {ident}')
-        add(ident.parent, log_root(config, info['host'], info['model']))
+        add(ident.parent, root / 'external/models' / ident.parent.parent.name / ident.parent.name / 'run_logs')
 
     for item in monitor.glob('*/trash/*/item.json'):
         original = Path(read(item)['original'])
@@ -138,7 +137,7 @@ def discover(config, monitor) -> Plan:
             redirects.setdefault(folder.parent, dest.parent)
     for ident in (root / 'model_run_logs').glob('*/*/model.json'):
         host, model = ident.parent.parent.name, ident.parent.name
-        redirects[root / 'model_training' / (host + '__' + model)] = root / 'external/model' / host / model
+        redirects[root / 'model_training' / (host + '__' + model)] = root / 'external/models' / host / model
     for receipt in (config.state / 'received').glob('*.json'):
         target = Path(read(receipt)['target'])
         if not target.exists() and remap(target, redirects) == target:

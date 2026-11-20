@@ -12,6 +12,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Any
 
+from src.file_ops import real_tree
 from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load , Dates
 from src.proj.core import as_int_array
 from src.proj.bases import ModuleType
@@ -263,7 +264,7 @@ class ModelPath:
 
     def clear_model_path(self):
         """Preserve published results and start a new build on the next fit."""
-        from src.automation.artifact_exchange.model_identity import preserve_build
+        from src.res.model.util.model_identity import preserve_build
         from src.res.model.util.lifecycle import ModelLifecycle
 
         with ModelLifecycle(self.base).lock():
@@ -424,6 +425,23 @@ class ModelPath:
         Logger.success(f'{PATH.relative(source)} has been reverted from archive {PATH.relative(target)}')
         model_path.log_operation('resume_from_archive')
         return model_path
+
+def source_models(root):
+    """Yield complete identities and actual paths, including archived copies."""
+    for base in sorted(root.glob('*/*')):
+        try:
+            real_tree(base)
+            if not base.is_dir() or base.name.startswith('.'):
+                continue
+            if base.parent.name == 'archive':
+                name, _, stamp = base.name.rpartition('.')
+                if len(stamp) == 14 and stamp.isdigit() and (model := ModelPath(name)):
+                    yield model, base, stamp
+            elif model := ModelPath(base):
+                yield model, base, ''
+        except (AssertionError, OSError, ValueError):
+            continue
+
 
 class PredictorPath(ModelPath , Base.BoundLogger):
     """

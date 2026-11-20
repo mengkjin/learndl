@@ -60,6 +60,21 @@ class ArtifactUpgradeTest(unittest.TestCase):
         self.assertFalse(legacy.exists())
         self.assertEqual(synced_sources(self.rec.results)['tensorboard'][0]['path'], str(canonical))
 
+    def test_results_patch_moves_legacy_model_logs_and_log_only_receipt(self):
+        layout = load_patch_support('0.7.4', 'results')
+        old_log_root = self.rec.results / 'model_run_logs/server/nn@test'
+        original = self.rec.results / 'model_training/server__nn@test/removed-log-only-batch'
+        receipt = self.rec.state / 'received/old-run.json'
+        atomic_json(old_log_root / 'model.json', {'host': 'server', 'model': 'nn@test'})
+        atomic_json(receipt, {'target': str(original)})
+        (old_log_root / 'train.md').write_text('## original run\n')
+
+        layout.apply(self.rec, self.root / 'monitor', self.root / 'attempt.json')
+        target = self.rec.results / 'external/models/server/nn@test'
+        self.assertEqual((target / 'run_logs/train.md').read_text(), '## original run\n')
+        self.assertEqual(json.loads(receipt.read_text())['target'], str(target / original.name))
+        self.assertFalse(layout.discover(self.rec, self.root / 'monitor')['moves'])
+
     def test_sqlite_backup_preserves_wal_and_conflict(self):
         source = self.root / 'original.sqlite3'
         target = self.root / 'results/optuna/copied.sqlite3'

@@ -8,7 +8,8 @@ from unittest.mock import patch
 from src.api.learndl_monitor.artifact_library import Library
 from src.automation.artifact_exchange.core import ArtifactSpec, Config, atomic_json, publish_artifacts, receive
 from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, metadata_specs
-from src.automation.artifact_exchange.model_properties import Phase, read_properties
+from src.model_provenance import read_properties
+from src.res.model.util.model_properties import Phase
 from src.automation.version_patch import load_patch_support
 
 
@@ -56,7 +57,7 @@ class ModelMetadataTest(unittest.TestCase):
         self.assertNotIn('configs/model.yaml', {f['path'] for f in after['manifest']['files']})
         self.assertIsNone(self.publish_metadata('unchanged'))
 
-        with patch('src.api.learndl_monitor.artifact_library.source_models', return_value=[]):
+        with patch('src.res.model.util.core.model_path.source_models', return_value=[]):
             self.assertEqual(receive(self.rec)[0]['status'], 'received')
             model = next(iter(self.library.model_listing()['models'].values()))
             self.assertEqual(model['versions'][0]['missing'], 1)

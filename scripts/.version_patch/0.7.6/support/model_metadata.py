@@ -12,11 +12,11 @@ from src.automation.artifact_exchange.core import (
     Config, atomic_json, digest, publish_artifacts, real_tree, send_prepared,
 )
 from src.automation.artifact_exchange.model_metadata import (
-    BACKFILL_TASK, DIRECTORIES, metadata_baseline, metadata_specs, source_models,
+    BACKFILL_TASK, DIRECTORIES, metadata_baseline, metadata_specs,
 )
-from src.automation.artifact_exchange.model_properties import (
-    PROPERTY_FILE, coverage, read_properties, write_properties,
-)
+from src.model_provenance import PROPERTY_FILE, read_properties
+from src.res.model.util.core.model_path import source_models
+from src.res.model.util.model_properties import coverage, write_properties
 
 
 def read(path):

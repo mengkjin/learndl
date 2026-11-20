@@ -91,7 +91,7 @@ class ExchangeTest(unittest.TestCase):
 
     def test_model_snapshot_uses_only_current_html_and_complete_log(self):
         from types import SimpleNamespace
-        from src.automation.artifact_exchange.model_logs import capture_run
+        from src.automation.artifact_exchange.research import model_run
         from src.proj import PATH
 
         class BasePath:
@@ -132,13 +132,13 @@ class ExchangeTest(unittest.TestCase):
                 patch('src.automation.artifact_exchange.core.Config.load', return_value=self.pub), \
                 patch('src.proj.util.catcher.HtmlCatcher', Catcher), patch('src.proj.Save.async_wait_all'):
             trainer.training_run = SimpleNamespace(run_id=first)
-            with capture_run(trainer):
+            with model_run(trainer):
                 log = base('logs', 'test.md')
                 log.parent.mkdir(exist_ok=True)
                 log.write_text(f'## test · {first}\n20261116–20261117\n')
             trainer.model_html_title = None
             trainer.training_run = SimpleNamespace(run_id=second)
-            with capture_run(trainer), log.open('a') as stream:
+            with model_run(trainer), log.open('a') as stream:
                 stream.write(f'## test · {second}\nno new dates\n')
         received = receive(self.rec)
         self.assertEqual([row['status'] for row in received], ['received', 'received'])

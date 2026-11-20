@@ -15,9 +15,8 @@ from src.automation.artifact_exchange.core import (
     Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
 from src.automation.artifact_exchange.model_builds import archived_builds
-from src.automation.artifact_exchange.model_logs import STAGES
-from src.automation.artifact_exchange.model_properties import PROPERTY_FILE, read_properties
-from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY, source_models
+from src.model_provenance import LOG_PHASES, PROPERTY_FILE, read_properties
+from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY
 from .experiments import Instances
 from .services import ROOT, STATE
 
@@ -117,7 +116,7 @@ class Library:
             for identity in self.config.results.glob('external/models/*/*/run_logs/model.json'):
                 try:
                     meta = read_json(identity)
-                    for phase in STAGES:
+                    for phase in LOG_PHASES:
                         if path := existing(identity.parent, f'{phase}.md'):
                             add(path, path.name, type='process_log', lock=None, model_root=identity.parent.parent,
                                 relative=f'run_logs/{phase}.md', host=meta['host'], model=meta['model'])
@@ -125,6 +124,7 @@ class Library:
                     continue
 
             from src.proj import PATH
+            from src.res.model.util.core.model_path import source_models
             from src.api.pkgs.dashboard import model_tensorboard
 
             studies = list(PATH.optuna.glob('*/*.sqlite3'))

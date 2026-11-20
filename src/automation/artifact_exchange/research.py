@@ -2,7 +2,7 @@
 from __future__ import annotations
 import contextvars
 from collections.abc import Callable, Iterable
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 import uuid
 from typing import Any
@@ -357,19 +357,41 @@ def model_result_specs(base, name):
 
 
 @contextmanager
-def model_run(trainer, log=None):
-    """Freeze one invocation's closed writers while the model lock is held."""
+def model_run(trainer):
+    """Capture and freeze one invocation’s artifacts while the model lock is held."""
     specs = []
     status = 'success'
-    run_id = log.run_id if log is not None else uuid.uuid4().hex
+    run = getattr(trainer, 'training_run', None)
+    run_id = run.run_id if run is not None else uuid.uuid4().hex
+    owner = CURRENT_TASK.get()
+    html = None
+    catcher = nullcontext()
+    if run is not None:
+        if owner is not None:
+            owner._model_run_ids.append(run_id)
+        if title := getattr(trainer, 'model_html_title', None):
+            from src.proj.util.catcher import HtmlCatcher
+
+            html = trainer.base_path('run_logs', 'html', f'{run_id}.html')
+            catcher = HtmlCatcher(title=title)
+            catcher.set_export_files(html)
     token = MODEL_ARTIFACTS.set(specs)
     try:
-        yield
+        with catcher:
+            yield
+            if run is not None:
+                from src.proj import Save
+
+                Save.async_wait_all(caller_name='model_run_log')
     except BaseException:
         status = 'failed'
         raise
     finally:
         MODEL_ARTIFACTS.reset(token)
+        if html is not None and html.is_file() and owner is not None:
+            from src.proj import Proj
+
+            Proj.exit_files.append(html)
         try:
             config = None if sandboxed() else Config.load()
             if config is not None and config.enabled and config.role == 'publisher':
@@ -378,12 +400,12 @@ def model_run(trainer, log=None):
                     if close is not None:
                         close()
                 from src.proj import Save
-                from .model_identity import build_identity
+                from src.res.model.util.model_identity import build_identity
 
                 Save.async_wait_all(caller_name='artifact_exchange')
                 base = trainer.config.base_path
-                build = build_identity(base()) if log is not None else None
-                if log is not None:
+                build = build_identity(base()) if run is not None else None
+                if run is not None:
                     specs.extend(model_result_specs(base(), base.full_name))
                 else:
                     results = base.rslt()

@@ -12,10 +12,11 @@ from src.automation.artifact_exchange.core import (
 from src.automation.artifact_exchange.model_builds import (
     ALIAS, INDEX, apply_update, legacy_target, load, merge_legacy_log,
 )
-from src.automation.artifact_exchange.model_identity import PHASES, build_identity
-from src.automation.artifact_exchange.model_metadata import source_models
 from src.automation.artifact_exchange.research import model_result_specs
 from src.automation.version_patch import load_patch_support
+from src.model_provenance import LOG_PHASES
+from src.res.model.util.core.model_path import source_models
+from src.res.model.util.model_identity import build_identity
 
 
 def move(source, target):
@@ -33,7 +34,7 @@ def move(source, target):
 
 
 def merge_source_logs(base, backup):
-    for phase in PHASES:
+    for phase in LOG_PHASES:
         original = real_tree(base / 'run_logs' / f'{phase}.md')
         if original.is_file():
             merge_legacy_log(real_tree(base / 'logs' / original.name), original)
@@ -55,7 +56,7 @@ def migrate_receiver(config, root, backup):
         target_name = load(path.parent / ALIAS)
         if not target_name:
             info = load(path / 'model.json')
-            if not info or not any((path / f'{phase}.md').is_file() for phase in PHASES):
+            if not info or not any((path / f'{phase}.md').is_file() for phase in LOG_PHASES):
                 continue
             target = legacy_target(path.parent, {})
             target.mkdir(exist_ok=True)
@@ -67,7 +68,7 @@ def migrate_receiver(config, root, backup):
             index = load(target / INDEX)
             if index is None:
                 raise ValueError(f'Missing build index at {target}')
-        for phase in PHASES:
+        for phase in LOG_PHASES:
             original = real_tree(path / f'{phase}.md')
             relative = f'logs/{phase}.md'
             if not original.is_file() or index['files'].get(relative, {}).get('sequence', 0):

@@ -1087,7 +1087,7 @@ class ModelConfig(BaseModelConfig):
             prepare_linear_run(self)
         ModelLifecycle.prepare(self)
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
-        from src.automation.artifact_exchange.model_identity import build_identity
+        from src.res.model.util.model_identity import build_identity
 
         build_identity(self.base_path.base, fresh=not existed, reset=reset)
         dump_kwargs = {'overwrite': self.short_test or self.module_type == 'linear', 'vb_level': 'never'}

@@ -1,22 +1,14 @@
-"""Append-only model logs and idempotent receiver commits."""
+"""Compatibility for the pre-0.7.7 receiver’s Markdown fragments."""
 from __future__ import annotations
 
-from contextlib import contextmanager, nullcontext
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
 
+from src.model_provenance import LOG_PHASES
 from .core import atomic_json, component, fsync_dir, real_tree
 
-__all__ = ['STAGES', 'now', 'log_root', 'append_received', 'capture_run']
-
-
-STAGES = ('train', 'test')
-
-
-def now():
-    return datetime.now(timezone.utc).isoformat()
+__all__ = ['log_root', 'append_received']
 
 
 def log_root(config, host, model):
@@ -31,7 +23,7 @@ def append_received(config, target, manifest):
     if manifest.get('category') != 'model_training':
         return
     folder = log_root(config, manifest['host'], manifest['experiment'])
-    for phase in STAGES:
+    for phase in LOG_PHASES:
         name = f'run-log/{phase}.md'
         if not any(item['path'] == name for item in manifest['files']):
             continue
@@ -74,33 +66,3 @@ def append_received(config, target, manifest):
                 db.execute('INSERT INTO runs VALUES (?, ?, ?)', (*key, sha))
             pending.unlink()
             fsync_dir(folder)
-
-
-@contextmanager
-def capture_run(trainer):
-    """Keep optional HTML capture and collection scoped to a single invocation."""
-    from types import SimpleNamespace
-    from .research import CURRENT_TASK, model_run
-    from src.proj import Save
-
-    owner = CURRENT_TASK.get()
-    run_id = trainer.training_run.run_id
-    log = SimpleNamespace(run_id=run_id, html=None)
-    if owner is not None:
-        owner._model_run_ids.append(run_id)
-    catcher = nullcontext()
-    if title := getattr(trainer, 'model_html_title', None):
-        from src.proj.util.catcher import HtmlCatcher
-
-        log.html = trainer.base_path('run_logs', 'html', f'{run_id}.html')
-        catcher = HtmlCatcher(title=title)
-        catcher.set_export_files(log.html)
-    with model_run(trainer, log):
-        try:
-            with catcher:
-                yield
-                Save.async_wait_all(caller_name='model_run_log')
-        finally:
-            if log.html is not None and log.html.is_file() and owner is not None:
-                from src.proj import Proj
-                Proj.exit_files.append(log.html)

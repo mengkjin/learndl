@@ -6,7 +6,7 @@ from unittest.mock import patch
 from src.api.learndl_monitor.artifact_library import Library
 from src.automation.artifact_exchange.core import ArtifactSpec, Config, atomic_json, publish_artifacts, receive
 from src.automation.artifact_exchange.model_builds import archived_builds, load, INDEX, PENDING
-from src.automation.artifact_exchange.model_identity import build_identity
+from src.res.model.util.model_identity import build_identity
 
 MODEL = 'nn@gru@build-test'
 
@@ -99,7 +99,7 @@ class ModelBuildTest(unittest.TestCase):
         self.assertEqual(set(rows), {first['name'], second['name']})
         self.assertIn('legacy', rows[first['name']]['runs'])
         library = Library('model_preview', self.rec, self.root / 'monitor')
-        with patch('src.api.learndl_monitor.artifact_library.source_models', return_value=[]):
+        with patch('src.res.model.util.core.model_path.source_models', return_value=[]):
             model, = library.model_listing()['models'].values()
             self.assertEqual(len(model['builds']), 2)
             self.assertEqual(library.model_folder(model['id'], first['name']).name, first['name'])

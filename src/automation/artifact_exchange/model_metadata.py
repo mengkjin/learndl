@@ -16,25 +16,6 @@ INVENTORY = '.model-metadata/inventory.json'
 BACKFILL_TASK = 'model_metadata_backfill'
 
 
-def source_models(root):
-    """Yield complete identities and actual paths, including archived copies."""
-    from src.res.model.util import ModelPath
-
-    for base in sorted(root.glob('*/*')):
-        try:
-            real_tree(base)
-            if not base.is_dir() or base.name.startswith('.'):
-                continue
-            if base.parent.name == 'archive':
-                name, _, stamp = base.name.rpartition('.')
-                if len(stamp) == 14 and stamp.isdigit() and (model := ModelPath(name)):
-                    yield model, base, stamp
-            elif model := ModelPath(base):
-                yield model, base, ''
-        except (AssertionError, OSError, ValueError):
-            continue
-
-
 def metadata_files(base):
     for directory, suffixes in DIRECTORIES.items():
         folder = base / directory

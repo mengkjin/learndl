@@ -1,7 +1,6 @@
 """Stable identity for one incarnation of a source model directory."""
 from datetime import datetime, timedelta, timezone
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -10,19 +9,9 @@ from uuid import uuid4
 
 import portalocker
 
-from .core import atomic_json, fsync_dir, real_tree
-from .model_properties import PROPERTY_FILE, read_properties, write_properties
-
-BUILD_NAME = re.compile(r'build[0-9]{8}\.[0-9]{6}\.[0-9]+')
-PHASES = ('train', 'test')
-
-
-def validate_build(value):
-    if (not isinstance(value, dict) or not BUILD_NAME.fullmatch(value.get('name', ''))
-            or not re.fullmatch(r'[0-9a-f]{32}', value.get('fingerprint', ''))):
-        raise ValueError('Invalid model build identity')
-    return value
-
+from src.file_ops import atomic_json, fsync_dir, real_tree
+from src.model_provenance import PROPERTY_FILE, read_properties, validate_build
+from .model_properties import write_properties
 
 def build_identity(base, *, fresh=False, reset=False):
     from src.proj import PATH

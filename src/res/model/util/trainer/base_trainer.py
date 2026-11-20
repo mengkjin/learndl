@@ -23,7 +23,7 @@ from ..training_history import TrainingRun, record_training
 
 if TYPE_CHECKING:
     from src.res.model.callback.monitor.display import StatusLogger
-    from src.automation.artifact_exchange.model_properties import Phase as ModelPropertyPhase
+    from src.res.model.util.model_properties import Phase as ModelPropertyPhase
 
 
 __all__ = ['BaseTrainer']
@@ -305,10 +305,10 @@ class BaseTrainer(BasePipeline):
         self.stage_setup()
 
         from src.proj.util.memory_tracker import ProcessMemoryTracker
-        from src.automation.artifact_exchange.model_logs import capture_run
+        from src.automation.artifact_exchange.research import model_run
         tracker_label = self.config.model_name or self.config.full_module_name
         from src.res.model.util.lifecycle import ModelLifecycle
-        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, capture_run(self):
+        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
             self.data.memory_tracker = self.memory_tracker
             self.memory_tracker.mark('trainer_setup_complete')
 
@@ -392,7 +392,7 @@ class BaseTrainer(BasePipeline):
     def stage_fit(self):
         """stage of fitting"""
         self.memory_tracker.mark('stage_fit_start')
-        from src.automation.artifact_exchange.model_properties import track_phase
+        from src.res.model.util.model_properties import track_phase
 
         with FitLock.guard(), FitLockNN.guard(try_cuda=self.config.try_cuda), track_phase(self, 'initial_training'):
             with self.logger.paragraph('Stage [Fit]' , 2):
@@ -469,7 +469,7 @@ class BaseTrainer(BasePipeline):
         """stage of testing"""
         self.memory_tracker.mark('stage_test_start')
         self.config.apply_inference_device('test')
-        from src.automation.artifact_exchange.model_properties import track_phase
+        from src.res.model.util.model_properties import track_phase
 
         with self.logger.paragraph('Stage [Test]' , 2), track_phase(self, 'last_test'):
             self.config.log_operation('test' , 'start')

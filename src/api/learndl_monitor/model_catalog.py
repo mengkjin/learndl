@@ -3,7 +3,7 @@ from collections import defaultdict
 from contextlib import suppress
 
 from src.automation.artifact_exchange.model_metadata import read_inventory
-from src.automation.artifact_exchange.model_properties import PROPERTY_FILE, read_properties
+from src.model_provenance import PROPERTY_FILE, read_properties
 
 
 def versions(rows):

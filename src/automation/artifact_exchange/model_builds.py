@@ -6,8 +6,7 @@ import os
 from uuid import uuid4
 
 from .core import _copy, atomic_json, digest, fsync_dir, real_tree, safe_path
-from .model_identity import validate_build
-from .model_properties import PROPERTY_FILE
+from src.model_provenance import PROPERTY_FILE, validate_build
 from .model_metadata import INVENTORY
 
 INDEX = 'build.json'

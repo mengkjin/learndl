@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 from tempfile import TemporaryDirectory
@@ -72,7 +73,6 @@ def freeze_task_attachments(owner):
 
 def archive_message(message, *, override=None, main_task=False, notification_id=None):
     from .research import CURRENT_TASK, delivery_log
-    from .model_logs import now
 
     owner = CURRENT_TASK.get()
     try:
@@ -82,7 +82,7 @@ def archive_message(message, *, override=None, main_task=False, notification_id=
         from src.proj.util.cli.session import git_head
 
         metadata = {
-            'notification_id': notification_id or uuid4().hex, 'created_at': now(),
+            'notification_id': notification_id or uuid4().hex, 'created_at': datetime.now(timezone.utc).isoformat(),
             'task': owner.task_name if owner is not None else 'script_mail',
             'status': owner.execution_status if owner is not None else 'unknown',
             'task_run_id': getattr(owner, 'task_run_id', None),

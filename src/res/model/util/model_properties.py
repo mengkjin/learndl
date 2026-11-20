@@ -1,25 +1,15 @@
 """Bounded summaries of actual training and testing, stored with the source model."""
 from __future__ import annotations
 
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from .core import fsync_dir, real_tree
-from .model_logs import now
-
-KINDS = ('build', 'initial_training', 'resume_training', 'last_test')
-PROPERTY_FILE = 'logs/property.jsonl'
-
-
-def read_properties(path):
-    with suppress(FileNotFoundError):
-        return {row['kind']: row for line in real_tree(path).read_text().splitlines() if line.strip()
-                for row in [json.loads(line)] if row['kind'] in KINDS}
-    return {}
-
+from src.file_ops import fsync_dir, real_tree
+from src.model_provenance import KINDS, PROPERTY_FILE, read_properties
+from .training_history import now
 
 def write_properties(path, records):
     path = real_tree(path)
