@@ -18,5 +18,7 @@ class AdjPriceUpdater(BasicCustomUpdater):
         dates = DB.dates('trade_ts', 'day')
         selected = [int(date) for date in dates
                     if (start is None or date >= start) and (end is None or date <= end)]
+        if not overwrite:
+            selected = [date for date in selected if not DB.path('trade_ts', 'adjprice', date).exists()]
         changed = ensure_adjprices(selected, force=overwrite, reason='custom') if selected else False
         return Base.UpdateFlag.SUCCESS if changed else Base.UpdateFlag.SKIPPED

@@ -106,7 +106,7 @@ class TradeDataAccess(DateDataAccess):
 
     def get_adjprice_with_ensure(self, date, secid, field=None) -> pd.DataFrame:
         """Repair only when requested holdings lack adjusted-price rows."""
-        from src.data.util.prices.adjusted import ensure_adjprice
+        from src.data.util.prices.adjusted import ensure_adjprice, recent_listing_ids
         ids = Base.ensure_secid(secid)
         if ids is None:
             raise ValueError('Explicit holdings are required for adjusted-price repair')
@@ -118,7 +118,8 @@ class TradeDataAccess(DateDataAccess):
 
         if len(missing(frame)):
             try:
-                ensure_adjprice(int(date), force=not snapshot_active(), reason='holdings-query')
+                if recent_listing_ids(int(date), missing(frame)):
+                    ensure_adjprice(int(date), force=not snapshot_active(), reason='holdings-query')
             except (ValueError, OSError) as exc:
                 Logger.warning(f'adjprice date={date} repair unavailable: {exc}')
             if not snapshot_active():

@@ -17,6 +17,21 @@ from src.data.maintenance.repair_microcap import check_prices
 __all__ = ['AdjpriceCoverageTest']
 
 class AdjpriceCoverageTest(unittest.TestCase):
+    def test_query_repair_requires_recent_known_listing(self):
+        frame = pd.DataFrame({'secid': [1], 'close': [10.]})
+        fake: Any = SimpleNamespace(get=Mock(return_value=frame), get_adjprice=Mock(return_value=frame))
+        # Age is measured in calendar days at the requested price date.
+        for listed, eligible in ((20250101, False), (20250102, True),
+                                 (20260101, True), (20260102, False), (0, False)):
+            desc = pd.DataFrame({'secid': [2], 'list_dt': [listed], 'delist_dt': [99991231]})
+            with (self.subTest(listed=listed),
+                  patch.object(adjprice, 'listing_description', return_value=desc),
+                  patch.object(adjprice, 'ensure_adjprice') as ensure,
+                  patch('src.data.loader.trade_data.Logger.warning')):
+                TradeDataAccess.get_adjprice_with_ensure(fake, 20260101, [1, 2, 3])
+                self.assertEqual(ensure.call_count, int(eligible))
+                self.assertNotIn(3, adjprice.recent_listing_ids(20260101, [3]))
+
     def test_frozen_prices_bypass_live_cache_in_both_directions(self):
         trade = object.__new__(TradeDataAccess)
         live = pd.DataFrame({'secid': [1], 'close': [20.]})
@@ -47,6 +62,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         for failure in (None, ValueError('missing source')):
             for price in ('close', 'open'):
                 with (self.subTest(failure=failure, price=price),
+                      patch.object(adjprice, 'recent_listing_ids', return_value={2}),
                       patch.object(adjprice, 'ensure_adjprice', side_effect=failure),
                       patch('src.data.loader.trade_data.Logger.warning') as warning):
                     result = DataVendor.get_quote_ret(vendor, 20041231, 20050104, 'close', price, [1, 2])
@@ -129,6 +145,7 @@ class AdjpriceCoverageTest(unittest.TestCase):
         fake: Any = SimpleNamespace(get=Mock(side_effect=get), get_trd=Mock(return_value=day))
         fake.get_adjprice = lambda date: TradeDataAccess.get_adjprice(fake, date)
         with (patch.object(adjprice, 'listing_description', return_value=pd.DataFrame(columns=['secid', 'list_dt', 'delist_dt'])),
+              patch.object(adjprice, 'recent_listing_ids', return_value={2}),
               patch.object(adjprice, 'ensure_adjprice') as update):
             result = TradeDataAccess.get_adjprice_with_ensure(fake, 20261029, [1, 2], ['secid', 'close'])
             TradeDataAccess.get_adjprice(fake, 20261029)

@@ -60,6 +60,23 @@ def exclude_inactive(frame: pd.DataFrame, date: int) -> pd.DataFrame:
     return frame.loc[~frame.secid.isin(inactive)].copy()
 
 
+def recent_listing_ids(date: int, secids) -> set[int]:
+    """Eligible query repairs: known, active listings aged 0..364 calendar days."""
+    desc = listing_description()
+    listed = pd.to_datetime(desc.list_dt.astype(str), format='%Y%m%d', errors='coerce')
+    age = (pd.to_datetime(str(int(date)), format='%Y%m%d') - listed).dt.days
+    valid = age.ge(0) & age.lt(365) & ((desc.delist_dt <= 0) | (desc.delist_dt > date) | desc.delist_dt.isna())
+    return set(desc.loc[valid & desc.secid.isin(secids), 'secid'].astype(int))
+
+
+def log_summary(reason, actions):
+    if actions:
+        counts = {kind: sum(action == kind for _, action in actions)
+                  for kind in ('create', 'replace', 'unchanged')}
+        Logger.stdout(f'adjprice trigger={reason} dates={min(d for d, _ in actions)}..'
+                      f'{max(d for d, _ in actions)} processed={len(actions)} counts={counts}', vb_level=1)
+
+
 def covers_day(adj: pd.DataFrame, day: pd.DataFrame, date: int) -> bool:
     """Check valid daily price cells, without requiring unavailable raw prices."""
     if day is None or day.empty or not {'secid', 'adjfactor'}.issubset(day.columns):
@@ -199,7 +216,7 @@ def validate_day(day: pd.DataFrame | None, date: int) -> None:
 
 
 def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
-                     verified: set[int] | None = None) -> bool:
+                     verified: set[int] | None = None, actions: list | None = None) -> bool:
     boundary = first_date()
     if date < boundary or int(CALENDAR.td(date).as_int()) != date:
         raise ValueError(f'Invalid adjprice trading date {date}; first date is {boundary}')
@@ -231,9 +248,14 @@ def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
         path = DB.path('trade_ts', 'adjprice', current)
         inputs = dependencies(current)
         candidate = calc_adjprice(current)
-        action = 'replace' if path.exists() else 'create'
-        atomic_frame(candidate, path)
-        DBPath('trade_ts', 'adjprice').clear_date_cache()
+        old = DB.load('trade_ts', 'adjprice', current, vb_level='never')
+        same = (path.exists() and set(old.columns) == set(candidate.columns)
+                and old.sort_values('secid').reset_index(drop=True).equals(
+                    candidate.reindex(columns=old.columns).sort_values('secid').reset_index(drop=True)))
+        action = 'unchanged' if same else 'replace' if path.exists() else 'create'
+        if not same:
+            atomic_frame(candidate, path)
+            DBPath('trade_ts', 'adjprice').clear_date_cache()
         receipt = path.with_suffix('.source.json')
         temp = receipt.with_name(f'.{receipt.name}.{uuid4().hex}')
         try:
@@ -242,8 +264,9 @@ def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
         finally:
             temp.unlink(missing_ok=True)
         verified.add(current)
-        changed = True
-        Logger.stdout(f'adjprice date={current} trigger={reason} action={action} inputs={inputs}', vb_level=1)
+        changed = changed or not same
+        if actions is not None:
+            actions.append((current, action))
     return changed
 
 
@@ -258,7 +281,10 @@ def ensure_adjprice(date: int, *, force: bool = False, reason: str = 'query') ->
             raise ValueError(f'Incomplete frozen adjprice at {date}; repair inputs before creating a snapshot')
         return False
     with price_lock():
-        return _ensure_adjprice(int(date), force, reason)
+        actions: list = []
+        changed = _ensure_adjprice(int(date), force, reason, actions=actions)
+        log_summary(reason, actions)
+        return changed
 
 
 def ensure_adjprices(dates, *, force: bool = False, reason: str = 'custom') -> bool:
@@ -266,13 +292,22 @@ def ensure_adjprices(dates, *, force: bool = False, reason: str = 'custom') -> b
     changed = False
     with price_lock():
         verified: set[int] = set()
+        actions: list = []
         for date in sorted(set(map(int, dates))):
-            changed = _ensure_adjprice(date, force, reason, verified) or changed
+            # Recheck under the writer lock in case another worker filled it.
+            if reason == 'custom' and not force and DB.path('trade_ts', 'adjprice', date).exists():
+                continue
+            changed = _ensure_adjprice(date, force, reason, verified, actions) or changed
+        log_summary(reason, actions)
     return changed
 
 
-def publish_day(day: pd.DataFrame, date: int) -> bool:
-    """Publish valid raw quotes before deriving prices under the same writer lock."""
+def publish_day(day: pd.DataFrame, date: int, *, repair_history: bool = False) -> bool:
+    """Publish raw quotes and fill absent prices; historical propagation is opt-in.
+
+    Use ``repair_history=True`` for an explicit historical correction, or run
+    ``ensure_adjprices(..., force=True)`` over the affected historical range.
+    """
     date = int(date)
     validate_day(day, date)
     with price_lock():
@@ -286,9 +321,13 @@ def publish_day(day: pd.DataFrame, date: int) -> bool:
         Logger.stdout(f'day date={date} trigger=download action={action if changed else "skip"} '
                       f'source={stamp(path)}', vb_level=1)
         verified: set[int] = set()
-        _ensure_adjprice(date, reason='download', verified=verified)
+        actions: list = []
+        if repair_history or not DB.path('trade_ts', 'adjprice', date).exists():
+            _ensure_adjprice(date, force=repair_history, reason='download', verified=verified, actions=actions)
         # A corrected historical close can propagate through halted holdings.
-        for later in DB.dates('trade_ts', 'adjprice'):
-            if later > date:
-                _ensure_adjprice(int(later), reason='source-revision', verified=verified)
+        if repair_history:
+            for later in DB.dates('trade_ts', 'adjprice'):
+                if later > date:
+                    _ensure_adjprice(int(later), reason='source-revision', verified=verified, actions=actions)
+        log_summary('history-repair' if repair_history else 'download', actions)
         return changed

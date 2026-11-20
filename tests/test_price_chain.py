@@ -11,6 +11,33 @@ from src.proj import Dates
 
 
 class PriceChainTest(unittest.TestCase):
+    def test_equal_recalculation_preserves_price_stamp_and_summarizes(self):
+        self.raw(20041230)
+        prices.ensure_adjprice(20041230)
+        path = self.path('trade_ts', 'adjprice', 20041230)
+        original = prices.stamp(path)
+        with patch.object(prices.Logger, 'stdout') as output:
+            self.assertFalse(prices.ensure_adjprices([20041230], force=True))
+            output.assert_called_once()
+            self.assertIn("'unchanged': 1", output.call_args.args[0])
+        self.assertEqual(prices.stamp(path), original)
+
+    def test_daily_update_ignores_stale_existing_prices_and_fills_missing(self):
+        from src.data.update.custom.adjprice import AdjPriceUpdater
+        self.raw(20041230)
+        prices.ensure_adjprice(20041230)
+        path = self.path('trade_ts', 'adjprice', 20041230)
+        original = path.read_bytes(), prices.stamp(path)
+        path.with_suffix('.source.json').unlink()
+        self.raw(20041231)
+        AdjPriceUpdater.proceed_update(20041230, 20041231)
+        self.assertEqual((path.read_bytes(), prices.stamp(path)), original)
+        self.assertTrue(self.path('trade_ts', 'adjprice', 20041231).exists())
+        prices.publish_day(self.raw(20041230, values=(30.,)), 20041230)
+        self.assertEqual((path.read_bytes(), prices.stamp(path)), original)
+        AdjPriceUpdater.proceed_update(20041230, 20041231, overwrite=True)
+        self.assertEqual(pd.read_feather(path).close.item(), 30.)
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -59,7 +86,7 @@ class PriceChainTest(unittest.TestCase):
             results = list(pool.map(prices.ensure_adjprice, [20041231,20041231]))
         self.assertEqual(sorted(results),[False,True])
         revised = self.raw(20041230, (1,2), (10.,30.))
-        prices.publish_day(revised,20041230)
+        prices.publish_day(revised,20041230, repair_history=True)
         result = pd.read_feather(self.path('trade_ts','adjprice',20041231)).set_index('secid')
         self.assertEqual(result.loc[2,'close'],30.)
 
