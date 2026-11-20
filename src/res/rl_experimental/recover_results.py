@@ -15,13 +15,13 @@ __all__ = [
 import itertools
 import json
 import shutil
-from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .bundle import _sha256, create_bundle
+from src.proj import PATH
 from src.proj.util.web.task_mail import save_json
 
 ARMS = ('original', 'penalty', 'retention')
@@ -82,7 +82,7 @@ def audit_suite(run, *, project_root=None, log_path=None):
         summary = read_json(run/'summary/summary.json')
         if set(summary['metrics']) != set(keys):
             errors.append('Summary metrics do not match all configured strategy/seed/cost paths')
-        panel = relocated_result(config['panel'], project_root or Path.cwd(), 'rl_experimental')
+        panel = PATH.relocated_result(config['panel'], project_root or Path.cwd(), 'rl_experimental')
         # Loading two small members of the NPZ does not deserialize any model.
         with np.load(panel, allow_pickle=False) as snapshot:
             ds, es = snapshot['decision_dates'], snapshot['return_end_dates']

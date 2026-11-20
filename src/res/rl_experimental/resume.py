@@ -26,12 +26,12 @@ import shutil
 import subprocess
 import sys
 from contextlib import contextmanager
-from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 from .bundle import _sha256
 from .progress import progress, quiet_output
 from .recover_results import read_json
+from src.proj import PATH
 from src.proj.util.web.task_mail import save_json
 
 PREFIX = 'src.res.rl_experimental'
@@ -60,7 +60,7 @@ def inspect_resume(run, root):
     """Distinguish missing work from corrupt completed work before enqueueing."""
     run, root = Path(run).resolve(), Path(root).resolve()
     config = read_json(run/'config.json')
-    if relocated_result(config['output'], root, 'rl_experimental') != run:
+    if PATH.relocated_result(config['output'], root, 'rl_experimental') != run:
         raise ValueError('Original output path does not match the requested run')
     identity, system, plan = [read_json(run/name) for name in ('identity.json', 'system.json', 'plan.json')]
     files = git_sources(root, system['git_revision'])
@@ -176,7 +176,7 @@ def resume_suite(run, root, attempt):
             # Redirect only filesystem operands of the isolated historical engine.
             # Its fingerprint and config.json still use the original path strings.
             config = read_json(run/'config.json')
-            paths = {str(config[key]): relocated_result(config[key], root, 'rl_experimental')
+            paths = {str(config[key]): PATH.relocated_result(config[key], root, 'rl_experimental')
                      for key in ('panel', 'output', 'profile_report') if config.get(key)}
             setattr(engine, 'Path', lambda value: paths.get(str(value), Path(value)))
             load_panel = engine.PanelData.load_npz

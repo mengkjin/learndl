@@ -8,12 +8,20 @@ from pathlib import Path
 from typing import Any
 from string import Template
 
-from src.shared.result_paths import custom_results
 from src.proj.core import strPath
 
 from .machine import MACHINE
 
-__all__ = ['PATH']
+__all__ = ['PATH', 'custom_results', 'storage_reports']
+
+
+def custom_results(project_root: strPath) -> Path:
+    return Path(project_root) / 'results' / 'custom'
+
+
+def storage_reports(project_root: strPath) -> Path:
+    return custom_results(project_root) / 'storage_reports'
+
 
 class PATH:
     """
@@ -96,6 +104,16 @@ class PATH:
     model_factor  = model.joinpath('factor')
     model_st      = model.joinpath('st')
     model_archive = model.joinpath('archive')
+
+    @staticmethod
+    def relocated_result(path: strPath, project_root: strPath, category: str) -> Path:
+        """Resolve a stored pre-0.7.4 result path without changing the stored value."""
+        root = Path(project_root).resolve()
+        path = (root / Path(path).expanduser()).resolve()
+        old = root / 'results' / category
+        if path.is_relative_to(old):
+            return (custom_results(root) / category / path.relative_to(old)).resolve()
+        return path
 
     @classmethod
     def relative(cls , path : strPath) -> Path:

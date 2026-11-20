@@ -17,7 +17,6 @@
 #     default: false
 #     desc: 只读核验，不创建结果包和补发结果附件
 
-from src.shared.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 
@@ -34,7 +33,7 @@ def main(run_id: str = '5d17935c80694717a8df5fbd055791d4',
     from src.proj.util.web.task_mail import TaskResultMail
 
     root = Path(PATH.main).resolve()
-    run = relocated_result(run_directory, root, 'rl_experimental')
+    run = PATH.relocated_result(run_directory, root, 'rl_experimental')
     allowed = (root/'results/custom/rl_experimental').resolve()
     if allowed not in run.parents or run.name != run_id or not run.is_dir():
         raise ValueError(f'Invalid or missing original RL run: {run}')

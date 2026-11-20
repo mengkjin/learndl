@@ -15,7 +15,7 @@ import re
 import shutil
 import numpy as np
 import pandas as pd
-from src.shared.result_paths import relocated_result
+from src.proj import PATH
 from src.data.preprocess.factor_sequence.bundle import file_digest, load, write_json
 
 
@@ -26,7 +26,7 @@ def inspect_resume(root, results_root, run_id):
     source = results_root/run_id
     report = json.loads((source/'suite.json').read_text())
     plan = json.loads((source/'walk_forward.json').read_text())
-    dataset = relocated_result(report['dataset'], root, 'factor_sequence')
+    dataset = PATH.relocated_result(report['dataset'], root, 'factor_sequence')
     manifest = load(dataset)
     if manifest['version'] != report['data_version']:
         raise ValueError('Frozen dataset version changed')

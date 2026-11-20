@@ -13,7 +13,6 @@
 #     default: false
 #     desc: 只诊断，不打包或提交恢复请求
 
-from src.shared.result_paths import relocated_result
 from pathlib import Path
 from uuid import uuid4
 
@@ -31,7 +30,7 @@ def main(run_directory: str = 'results/custom/rl_experimental/walk_forward/gru_v
     from src.automation.scheduling.rl_resume import submit
     from src.automation.scheduling.maintenance_gate import sandbox_request
     root = Path(PATH.main).resolve()
-    run = relocated_result(run_directory, root, 'rl_experimental')
+    run = PATH.relocated_result(run_directory, root, 'rl_experimental')
     if not run.is_relative_to(root/'results/custom/rl_experimental') or not run.is_dir():
         raise ValueError('Invalid existing RL run directory')
     if dry_run:

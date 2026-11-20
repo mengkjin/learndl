@@ -48,7 +48,7 @@ under its `artifact_exchange/` child. Ordinary files placed there are not ready 
 manual materials must also use the publish CLI. Keep state and temporary files outside the share.
 
 Write local research and operational output under `results/custom/<purpose>/` on all machines.
-Use `PATH.rslt_custom` or `src.shared.result_paths.custom_results(project_root)` for project results.
+Use `PATH.rslt_custom` or `src.proj.env.path.custom_results(project_root)` for project results.
 Preserve the dedicated test, trade, factor and gp roots.
 Archive received batches under `results/external/<category>/<source_host>/<experiment>/<batch>/`.
 Publish model_training via `artifact_exchange/model/<experiment>/`; logical categories in manifests

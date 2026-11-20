@@ -12,7 +12,6 @@ __all__ = [
 import hashlib
 import json
 import re
-from src.shared.result_paths import relocated_result
 from pathlib import Path
 
 import portalocker
@@ -28,7 +27,9 @@ def validate_request(doc, root):
         raise ValueError('Resume request must be a mapping')
     if doc.get('schema_version') != 1 or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', doc.get('request_id', '')):
         raise ValueError('Invalid resume request ID/schema')
-    run = relocated_result(doc['run_directory'], root, 'rl_experimental')
+    from src.proj import PATH
+
+    run = PATH.relocated_result(doc['run_directory'], root, 'rl_experimental')
     if not run.is_relative_to(Path(root).resolve()/'results/custom/rl_experimental'):
         raise ValueError('Resume target must be inside project RL results')
     for field in ('config_sha256', 'identity_sha256'):

@@ -11,7 +11,6 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import psutil
 
-from src.shared.result_paths import storage_reports
 from .services import STATE, SERVICES
 
 __all__ = ['main']
@@ -19,6 +18,7 @@ __all__ = ['main']
 
 def main():
     from src.proj import PATH
+    from src.proj.env.path import storage_reports
     from src.api.calls.computer import ProjectStorageReport
     from src.proj.util.filesys.storage_browser import StorageReportServer
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)

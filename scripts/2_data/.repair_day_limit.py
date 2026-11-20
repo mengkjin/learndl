@@ -90,7 +90,7 @@ def main(start: int = 20170101, end: int = 20251231, dry_run: bool = True, **kwa
     if start > end:
         raise ValueError('start must not exceed end')
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
-    from src.shared.result_paths import custom_results
+    from src.proj.env.path import custom_results
     output = custom_results(PATH.main) / 'data_repairs' / 'day_limit' / stamp
     output.mkdir(parents=True, exist_ok=False)
     report = output / 'report.json'
