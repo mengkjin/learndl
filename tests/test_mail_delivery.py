@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 
 from src.proj.util.web import emailer, mail_package as package
 from src.proj.util.web.mail_queue import inspect_queue, read_json
+from src.shared.file_ops import atomic_json
 
 Email = emailer.Email
 
@@ -191,7 +192,7 @@ class QueueTest(unittest.TestCase):
             if not folder.exists():
                 folder.mkdir(parents=True)
                 (folder/'message.eml').write_bytes(msg.as_bytes())
-                package.atomic_json(folder/'meta.json', {'attempts': 0})
+                atomic_json(folder/'meta.json', {'attempts': 0})
                 stored, _ = Email._read_outbox(folder)
                 # The previous CRLF-body-only fix still fails on these real names.
                 self.assertNotEqual(package.fingerprint(stored, normalize_body_newlines=True),
@@ -234,7 +235,7 @@ class QueueTest(unittest.TestCase):
         folder = self.root/'.external'/key
         folder.mkdir(parents=True)
         (folder/'message.eml').write_bytes(incoming.as_bytes())
-        package.atomic_json(folder/'meta.json', {'attempts': 0, 'subject': 'report'})
+        atomic_json(folder/'meta.json', {'attempts': 0, 'subject': 'report'})
         stored = message_from_bytes((folder/'message.eml').read_bytes())
         self.assertNotEqual(package.fingerprint(incoming), package.fingerprint(stored))
         self.assertTrue(Email.send_with_smtplib(incoming, delivery_id='old-failed-delivery'))
@@ -397,7 +398,7 @@ class QueueTest(unittest.TestCase):
     def test_corrupt_prepared_manifest_isolated_without_blocking_others(self):
         folder = self.enqueue(message('corrupt'))
         Email._queue().prepare_folder(folder)
-        package.atomic_json(folder/'payload/manifest.json', {'messages': []})
+        atomic_json(folder/'payload/manifest.json', {'messages': []})
         self.enqueue(message('good'))
         Email.retry_pending()
         self.assertTrue((self.root/'dead'/folder.name/'message.eml').exists())
@@ -481,7 +482,7 @@ class QueueTest(unittest.TestCase):
             for _ in range(18000):
                 stream.write(block)
             stream.write(b'\n--boundary--\n')
-        package.atomic_json(folder/'meta.json', {'attempts': 0})
+        atomic_json(folder/'meta.json', {'attempts': 0})
         code = """
 import json,resource,sys
 from pathlib import Path

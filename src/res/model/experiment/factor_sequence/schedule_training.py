@@ -67,7 +67,7 @@ def train(
 ):
     from src.proj import PATH, CALENDAR, Save
     from src.proj.util.cli.script_session import as_script_main
-    from src.proj.util.filesys.dynamic_import import dynamic_modules
+    from src.shared.dynamic_import import dynamic_modules
     from src.res.model.util.schedule_resume import find_schedule_runs
 
     suite_folder = Path(suite_folder)

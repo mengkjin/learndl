@@ -52,7 +52,7 @@ class ScheduleWorklist:
         return 'Carry out training of the configured schedule work list and requested schedules.'
     @classmethod
     def _load_schedule_main(cls) -> Callable[..., Any]:
-        from src.proj.util.filesys.dynamic_import import dynamic_modules
+        from src.shared.dynamic_import import dynamic_modules
         for module in dynamic_modules(cls.SCHEDULE_SCRIPT):
             return module.main
         raise FileNotFoundError(f'Schedule model script not found: {cls.SCHEDULE_SCRIPT}')

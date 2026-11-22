@@ -457,7 +457,7 @@ This means adding a short-history block will trim dates from all other blocks. B
 - `preprocess/factor_sequence/repaired_bundle.py` owns streaming construction and legacy repair-manifest validation. The research source adapter passes explicit factor sources and readers; loading a bundle never imports maintenance or research registration modules.
 - An existing predecessor file is the reconstruction boundary. Batch custom checks verify requested dates in order under one lock. Invalid replacement sources leave existing derived files intact.
 - Snapshot reads bypass the live adjusted-price cache. Explicit validation reports incomplete frozen panels, and forced publication is rejected inside a snapshot.
-- Resource headroom/RSS live in `src/proj/util/resource`, with tensor/DataBlock probes in `src/data/util/mem_trace.py`.
+- Resource headroom and RSS measurements live in `src/shared/resource/memory.py`. Data allocation policy lives in `src/data/util/memory_guard.py`, and tensor/DataBlock probes live in `src/data/util/mem_trace.py`.
 - Software tests live under root `tests/`; callback `test` remains the production model evaluation stage.
 
 Migration requires a coordinated source/entrypoint upgrade; old Python scheduling and factor-sequence command paths are not forwarding aliases. Do not migrate historical manifests, run IDs, ledgers or output directories. Existing manifests retain their recorded hashes; newly built datasets record current code using explicit logical component paths.

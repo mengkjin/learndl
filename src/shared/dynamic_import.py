@@ -6,11 +6,9 @@ import importlib.util
 from pathlib import Path
 from collections.abc import Callable
 
-from src.proj.core import strPath
-
 __all__ = ['dynamic_modules' , 'dynamic_members']
 
-def dynamic_modules(path : strPath):
+def dynamic_modules(path : str | Path):
     """Yield executed module objects for ``path`` (file or directory of ``*.py``)."""
     if isinstance(path , str): 
         path = Path(path)
@@ -23,7 +21,7 @@ def dynamic_modules(path : strPath):
         yield module
 
 def dynamic_members(
-    path : strPath , 
+    path : str | Path ,
     predicate : Callable | None = lambda x: inspect.isclass(x) or inspect.isfunction(x) ,
     subclass_of : type | None = None ,
     ignore_imported_members = True

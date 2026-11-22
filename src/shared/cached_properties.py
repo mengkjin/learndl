@@ -101,6 +101,6 @@ class CachedProperties:
         """
         grouped cached properties for the module
         Will store properties in miscellaneous groups. Use '' as group name for properties that only calucate once
-        e.g. 'pipeline_hooks' , 'model_start' , 'data_module' , etc.
+        For example, use a group for cached results that share an invalidation policy.
         """
         return GroupedCachedProperties()

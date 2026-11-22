@@ -1,6 +1,8 @@
 """Keep data kernels and shared services independent of their callers."""
 import ast
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch, Mock
@@ -14,6 +16,7 @@ class PackageBoundaryTest(unittest.TestCase):
             ('src/data/preprocess', ('src.res', 'src.automation', 'src.data.maintenance')),
             ('src/data/util/prices', ('src.data.loader', 'src.data.preprocess', 'src.data.update')),
             ('src/automation/artifact_exchange', ('src.res.rl_experimental',)),
+            ('src/shared', ('src.proj', 'src.data', 'src.res', 'src.automation', 'src.api')),
         ]
         for directory, forbidden in rules:
             for path in (ROOT / directory).rglob('*.py'):
@@ -22,6 +25,21 @@ class PackageBoundaryTest(unittest.TestCase):
                     for name in names:
                         if name:
                             self.assertFalse(name.startswith(forbidden), f'{path}: {name}')
+
+    def test_shared_bootstrap_is_lightweight(self):
+        subprocess.run([sys.executable, '-c', """
+import sys
+import src.shared.cached_properties
+import src.shared.duration
+import src.shared.dynamic_import
+import src.shared.file_ops
+import src.shared.filtered
+import src.shared.resource.memory
+import src.shared.singleton
+for namespace in ('numpy', 'torch', 'pandas', 'scipy', 'statsmodels', 'psutil',
+                  'src.proj', 'src.data', 'src.res', 'src.api', 'src.automation'):
+    assert namespace not in sys.modules, namespace
+"""], cwd=ROOT, check=True, timeout=30)
 
     def test_software_tests_are_outside_runtime_packages(self):
         for path in (ROOT / 'src').rglob('*.py'):

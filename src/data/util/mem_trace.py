@@ -11,7 +11,7 @@ from typing import Any , Callable , cast
 
 import numpy as np
 import torch
-from src.proj.util.resource.memory import fmt_bytes, rss_bytes, hwm_bytes
+from src.shared.resource.memory import fmt_bytes, rss_bytes, hwm_bytes
 
 __all__ = ['fmt_bytes', 'rss_bytes', 'hwm_bytes', 'nbytes_of', 'describe', 'mesh4d_bytes', 'log_mem']
 

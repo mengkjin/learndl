@@ -235,7 +235,7 @@ def run_script_interactive(
 ) -> AskFlag[dict[str, Any]]:
     """Load a pipeline script, prompt for kwargs, execute when valid."""
     from src.api.util.backend import ScriptRunner
-    from src.proj.util.filesys.dynamic_import import dynamic_modules
+    from src.shared.dynamic_import import dynamic_modules
 
     runner = ScriptRunner.from_key(script_key)
     resolved_main = main

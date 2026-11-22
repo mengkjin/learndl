@@ -1,6 +1,6 @@
-from .cached_properties import CachedProperties as CacheProps
+from src.shared.cached_properties import CachedProperties as CacheProps
 from .bound_logger import BoundLogger
-from .filtered import FilteredIterable
+from src.shared.filtered import FilteredIterable
 from .flatten_dict import FlattenDict
 from .updater import BasicUpdater
 from .selective_update import (

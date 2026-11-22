@@ -365,7 +365,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                 if chunk_years > 0 and extentions:
                     prev = extentions.pop()
                     if self.MaxAllocationBytes is not None:
-                        from src.proj.util.resource.memory_guard import check_allocation
+                        from src.data.util.memory_guard import check_allocation
                         union_shape = (len(np.union1d(prev.secid, ext.secid)), len(np.union1d(prev.date, ext.date)),
                                        int(prev.shape[2]), len(np.union1d(prev.feature, ext.feature)))
                         union_bytes = int(np.prod(union_shape)) * prev.values.element_size()
@@ -406,7 +406,7 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         if chunk_years > 0:
             if self.ChunkFillNan is not None:
                 if self.MaxAllocationBytes is not None:
-                    from src.proj.util.resource.memory_guard import check_allocation
+                    from src.data.util.memory_guard import check_allocation
                     check_allocation(block.values.numel() * block.values.element_size(),
                                      f'{self.key} final fill', limit=self.MaxAllocationBytes)
                 if self.MemTrace:

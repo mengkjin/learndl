@@ -58,7 +58,7 @@ class ScheduleTests(unittest.TestCase):
                     side_effect=[[], [SimpleNamespace(base=root / "single_model")]],
                 ),
                 patch(
-                    "src.proj.util.filesys.dynamic_import.dynamic_modules",
+                    "src.shared.dynamic_import.dynamic_modules",
                     return_value=[SimpleNamespace(main=main)],
                 ),
                 patch.object(schedule, "load", return_value={"version": "v"}),
@@ -92,7 +92,7 @@ class ScheduleTests(unittest.TestCase):
                     return_value=[SimpleNamespace(base=root / "single_model")],
                 ),
                 patch(
-                    "src.proj.util.filesys.dynamic_import.dynamic_modules",
+                    "src.shared.dynamic_import.dynamic_modules",
                     return_value=[SimpleNamespace(main=main)],
                 ),
                 patch.object(schedule, "load", return_value={"version": "v"}),

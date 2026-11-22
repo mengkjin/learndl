@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 import polars as pl
 
 from src.data.preprocess.minchars_input import load_selected, validate_keys
-from src.proj.util.resource.memory_guard import available_bytes, check_allocation
+from src.data.util.memory_guard import check_allocation
+from src.shared.resource.memory import available_bytes
 
 
 class MinCharsInputTest(unittest.TestCase):
@@ -44,10 +46,13 @@ class MinCharsInputTest(unittest.TestCase):
 
 class MemoryGuardTest(unittest.TestCase):
     def test_large_union_fails_before_torch_allocation(self):
-        with patch('src.proj.util.resource.memory_guard.available_bytes', return_value=100 * 1024**3):
+        with patch('src.data.util.memory_guard.available_bytes', return_value=100 * 1024**3):
             with self.assertRaisesRegex(MemoryError, '47312.*refusing'):
                 check_allocation(85 * 1024**3, 'minc union=(47312,3156,1,152)')
             check_allocation(4 * 1024**3, 'small merge')
+            check_allocation(8 * 1024**3, 'within processor cap', limit=8 * 1024**3)
+            with self.assertRaisesRegex(MemoryError, 'capped at 8 GiB'):
+                check_allocation(9 * 1024**3, 'above processor cap', limit=8 * 1024**3)
 
     def test_parent_cgroup_limit_is_respected(self):
         values = {'/proc/self/cgroup': '0::/user.slice/job.scope\n',
@@ -59,8 +64,38 @@ class MemoryGuardTest(unittest.TestCase):
             if str(path) not in values:
                 raise FileNotFoundError(str(path))
             return values[str(path)]
-        with patch('src.proj.util.resource.memory_guard.psutil.virtual_memory', return_value=SimpleNamespace(available=5000)), patch.object(Path, 'read_text', read):
+        with patch('psutil.virtual_memory', return_value=SimpleNamespace(available=5000)), patch.object(Path, 'read_text', read):
             self.assertEqual(available_bytes(), 300)
+
+    def test_chunked_processor_checks_budget_before_merge_only_when_enabled(self):
+        from src.data.preprocess.core import PreProcessor
+        from src.data.util import DataBlock
+
+        def block(date):
+            return DataBlock(np.ones((1, 1, 1, 1), dtype=np.float32), secid=[1], date=[date], feature=['value'])
+
+        for cap in (1, None):
+            with self.subTest(cap=cap):
+                processor = SimpleNamespace(
+                    key='budget_test', load_start=20201231, load_end=20210104,
+                    DateChunkYears=1, CalculationWindow=1, ChunkFillNan=None,
+                    MaxAllocationBytes=cap, MemTrace=False,
+                    logger=Mock(timer=lambda *args, **kwargs: nullcontext()),
+                    load_dump=Mock(return_value=DataBlock()),
+                    pre_process=Mock(side_effect=[block(20201231), block(20210104)]),
+                )
+                with patch('src.data.util.memory_guard.available_bytes', return_value=1000) as available, patch.object(
+                    DataBlock, 'merge', wraps=DataBlock.merge
+                ) as merge:
+                    if cap is not None:
+                        with self.assertRaisesRegex(MemoryError, 'year merge'):
+                            PreProcessor.load_with_extension(processor)
+                        merge.assert_not_called()
+                    else:
+                        result = PreProcessor.load_with_extension(processor)
+                        merge.assert_called()
+                        available.assert_not_called()
+                        self.assertEqual(result.date.tolist(), [20201231, 20210104])
 
 
 if __name__ == '__main__':

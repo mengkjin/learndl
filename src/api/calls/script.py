@@ -98,7 +98,7 @@ class RunPipelineScript(DirectCall):
 
     @staticmethod
     def _load_main(runner: ScriptRunner) -> Callable[..., Any]:
-        from src.proj.util.filesys.dynamic_import import dynamic_modules
+        from src.shared.dynamic_import import dynamic_modules
 
         for module in dynamic_modules(runner.script):
             return module.main

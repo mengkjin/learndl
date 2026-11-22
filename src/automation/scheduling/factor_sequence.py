@@ -65,7 +65,7 @@ def execute(request, store):
     from src.proj import PATH
     from src.proj.util.script import FitLock
     from src.proj.util.cli.script_session import as_script_main
-    from src.proj.util.filesys.dynamic_import import dynamic_modules
+    from src.shared.dynamic_import import dynamic_modules
     from .recovery import record
     if FitLock.is_held():
         return 75

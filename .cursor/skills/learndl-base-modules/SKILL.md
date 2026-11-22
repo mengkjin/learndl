@@ -56,9 +56,15 @@ Use this file as a route map only; behavior and APIs live in source and module d
 - **`log/`**: `Logger`, `LogFile`; prefer `src.proj.Logger` in app code.
 - **`cal/`**: `CALENDAR`, `TradeDate`, etc.—start here for session/backtest dates.
 - **`db/`**: low-level access and mappers; not the same as `src/data` vendor loaders.
-- **`core/`**: `Silence`, `Duration`, `singleton`, small shared abstractions.
+- **`core/`**: project logging controls, output helpers and trading types.
 - **`util/`**: general utilities—**not** `src/func`.
 - **`util/func/`**: engineering helpers (parallel, disk, shell)—**not** the math package `src/func`.
+
+## Lightweight shared utilities
+
+- `src/shared/file_ops.py`: atomic file publication and directory sync.
+- `src/shared/resource/memory.py`: process memory measurements, cgroup headroom and budget calculation. Data block allocation policy lives in `src/data/util/memory_guard.py`.
+- `src/shared/duration.py`, `dynamic_import.py`, `cached_properties.py`, `singleton.py`, `filtered.py`: standalone timing, module loading and Python primitives.
 
 ## `src/func` layout
 

@@ -41,7 +41,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
     def test_busy_slot_does_not_start(self):
         with (
             patch("src.proj.util.script.FitLock.is_held", return_value=True),
-            patch("src.proj.util.filesys.dynamic_import.dynamic_modules") as modules,
+            patch("src.shared.dynamic_import.dynamic_modules") as modules,
         ):
             self.assertEqual(queue.execute({"request_id": "test"}, Mock()), 75)
             modules.assert_not_called()
@@ -63,7 +63,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
                 patch("src.proj.util.script.FitLock.is_held", return_value=False),
                 patch("src.proj.util.script.FitLock.guard") as guard,
                 patch(
-                    "src.proj.util.filesys.dynamic_import.dynamic_modules",
+                    "src.shared.dynamic_import.dynamic_modules",
                     return_value=[module],
                 ),
                 patch(
@@ -82,7 +82,7 @@ class FactorSequenceRequestTests(unittest.TestCase):
         with (
             patch("src.proj.util.script.FitLock.is_held", return_value=False),
             patch("src.proj.util.script.FitLock.guard"),
-            patch("src.proj.util.filesys.dynamic_import.dynamic_modules", side_effect=ImportError('broken script')),
+            patch("src.shared.dynamic_import.dynamic_modules", side_effect=ImportError('broken script')),
             patch("src.automation.scheduling.recovery.record") as handoff,
         ):
             with self.assertRaises(ImportError):

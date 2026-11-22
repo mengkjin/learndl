@@ -1,6 +1,7 @@
-"""Thread-safe singleton decorator and metaclasses."""
+"""Metaclasses for singletons and non-instantiable classes."""
 from __future__ import annotations
 from abc import ABCMeta
+from threading import Lock
 
 __all__ = ['NoInstanceMeta' , 'SingletonMeta' , 'SingletonABCMeta']
 
@@ -15,18 +16,10 @@ class SingletonMeta(type):
     """First ``__call__`` constructs the instance; later calls return the same object (thread-safe)."""
 
     _instances = {}
-    _singleton_meta_lock = None
-
-    @classmethod
-    def _get_singleton_meta_lock(cls):
-        """get the lock for the once"""
-        from threading import Lock
-        if cls._singleton_meta_lock is None:
-            cls._singleton_meta_lock = Lock()
-        return cls._singleton_meta_lock
+    _singleton_meta_lock = Lock()
 
     def __call__(cls, *args, **kwargs):
-        with cls._get_singleton_meta_lock():
+        with cls._singleton_meta_lock:
             if cls not in cls._instances:
                 instance = super().__call__(*args, **kwargs)
                 cls._instances[cls] = instance

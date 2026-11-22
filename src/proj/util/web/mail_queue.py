@@ -24,7 +24,9 @@ from email import message_from_bytes, policy
 from pathlib import Path
 from typing import Any
 
-from .mail_package import atomic_bytes, atomic_json, digest, fingerprint, fsync_dir, prepare, serialization_differences
+from src.shared.file_ops import atomic_bytes, atomic_json, fsync_dir
+
+from .mail_package import digest, fingerprint, prepare, serialization_differences
 
 DELAYS = (60, 300, 900, 3600)
 

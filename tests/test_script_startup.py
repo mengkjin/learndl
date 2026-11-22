@@ -130,7 +130,7 @@ OptionsDefinition.available_linear_schedules()
         runner = SimpleNamespace(script=TRAIN_SCRIPT)
         with patch('src.api.util.backend.ScriptRunner.from_key', return_value=runner), \
              patch('src.proj.util.cli.script_params.prompt_script_kwargs', return_value=AskFlag('exit')), \
-             patch('src.proj.util.filesys.dynamic_import.dynamic_modules') as load:
+             patch('src.shared.dynamic_import.dynamic_modules') as load:
             run_script_interactive('4_train/1_train_model.py')
         load.assert_not_called()
 
@@ -142,7 +142,7 @@ OptionsDefinition.available_linear_schedules()
         flag = AskFlag('valid').set_result([{'short_test': True}])
         with patch('src.api.util.backend.ScriptRunner.from_key', return_value=runner), \
              patch('src.proj.util.cli.script_params.prompt_script_kwargs', return_value=flag), \
-             patch('src.proj.util.filesys.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=main)]) as load:
+             patch('src.shared.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=main)]) as load:
             run_script_interactive('4_train/1_train_model.py')
         load.assert_called_once_with(TRAIN_SCRIPT)
         main.assert_called_once_with(short_test=True)

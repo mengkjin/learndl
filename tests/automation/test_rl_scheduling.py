@@ -119,7 +119,7 @@ class RLSchedulingTest(unittest.TestCase):
             return SimpleNamespace(success=True, execution_success=True)
 
         with patch.object(rl, 'fit_guard'), \
-             patch('src.proj.util.filesys.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=main)]):
+             patch('src.shared.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=main)]):
             self.assertEqual(rl.execute(request, self.store), 0)
         self.assertEqual(called[0]['request_path'], str(path))
         self.assertEqual(evidence(self.store, request['id'])['output_directory'], plan['run'])
@@ -244,7 +244,7 @@ class RLSchedulingTest(unittest.TestCase):
         main = Mock(return_value=SimpleNamespace(success=True, execution_success=False))
         with patch.object(rl, 'fit_guard'), \
              patch('src.proj.util.cli.script_session.as_script_main'), \
-             patch('src.proj.util.filesys.dynamic_import.dynamic_modules',
+             patch('src.shared.dynamic_import.dynamic_modules',
                    return_value=[SimpleNamespace(main=main)]):
             self.assertEqual(rl.execute(request, self.store), 1)
         path = Path(main.call_args.kwargs['config_path'])
@@ -260,7 +260,7 @@ class RLSchedulingTest(unittest.TestCase):
             self.assertEqual(rl.execute(request, self.store), 75)
         self.doc['rerun_mark'] = 'changed'
         self.commit()
-        with patch.object(rl, 'fit_guard'), patch('src.proj.util.filesys.dynamic_import.dynamic_modules') as load:
+        with patch.object(rl, 'fit_guard'), patch('src.shared.dynamic_import.dynamic_modules') as load:
             self.assertEqual(rl.execute(request, self.store), 75)
             load.assert_not_called()
 
@@ -287,7 +287,7 @@ class RLSchedulingTest(unittest.TestCase):
                     return [SimpleNamespace(main=main)]
 
                 with patch.object(sys, 'argv', worker_args), patch.object(rl, 'fit_guard'), \
-                     patch('src.proj.util.filesys.dynamic_import.dynamic_modules', side_effect=load):
+                     patch('src.shared.dynamic_import.dynamic_modules', side_effect=load):
                     if fail:
                         with self.assertRaisesRegex(RuntimeError, 'experiment failed'):
                             rl.execute(request, self.store)
@@ -393,7 +393,7 @@ class RLSchedulingTest(unittest.TestCase):
         import inspect
         from src.proj import Proj
         from src.proj.util.cli.script_session import as_script_main
-        from src.proj.util.filesys.dynamic_import import dynamic_modules
+        from src.shared.dynamic_import import dynamic_modules
         from src.res.rl_experimental.data import make_synthetic_panel
         from src.res.rl_experimental import experiment
         script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
@@ -418,7 +418,7 @@ class RLSchedulingTest(unittest.TestCase):
             return SimpleNamespace(success=result['status'] == 'success', execution_success=True)
 
         with patch.object(rl, 'fit_guard'), \
-             patch('src.proj.util.filesys.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=call)]), \
+             patch('src.shared.dynamic_import.dynamic_modules', return_value=[SimpleNamespace(main=call)]), \
              patch.object(module, 'script_tool', SimpleNamespace(autorun_task=fake_task)), \
              patch.object(Proj, 'email_attachments', []), \
              patch.object(experiment, '_snapshot', return_value=(make_synthetic_panel(70, 24, 4, seed=5), snapshot)):

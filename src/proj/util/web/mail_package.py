@@ -6,9 +6,6 @@ __all__ = [
     'MAX_ATTACHMENT_BYTES',
     'BODY_BYTES',
     'wire',
-    'atomic_json',
-    'atomic_bytes',
-    'fsync_dir',
     'digest',
     'decoded',
     'fingerprint',
@@ -24,7 +21,6 @@ import base64
 import hashlib
 import io
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -34,6 +30,8 @@ from email import policy
 from email.message import EmailMessage, Message
 from pathlib import Path
 from typing import Any
+
+from src.shared.file_ops import atomic_bytes, atomic_json
 
 MAX_BYTES = 30_000_000
 MAX_ATTACHMENT_BYTES = 20_000_000
@@ -51,33 +49,6 @@ def wire(message: Message) -> bytes:
         if name in result:
             del result[name]
     return result.as_bytes(policy=policy.SMTP)
-
-
-def atomic_json(path: Path, value) -> None:
-    atomic_bytes(path, json.dumps(value, ensure_ascii=False, indent=2).encode('utf-8'))
-
-
-def atomic_bytes(path: Path, value: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f'.{path.name}.{uuid.uuid4().hex}.tmp')
-    try:
-        with tmp.open('wb') as stream:
-            stream.write(value)
-            stream.flush()
-            os.fsync(stream.fileno())
-        tmp.replace(path)
-        fsync_dir(path.parent)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-def fsync_dir(path: Path) -> None:
-    if os.name == 'posix':
-        fd = os.open(path, os.O_RDONLY)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
 
 
 def digest(data: bytes) -> str:

@@ -248,7 +248,7 @@ def execute(request: dict, store) -> int:
     """Called only inside the isolated worker child, with a committed snapshot."""
     from src.proj import PATH
     from src.proj.util.cli.script_session import as_script_main
-    from src.proj.util.filesys.dynamic_import import dynamic_modules
+    from src.shared.dynamic_import import dynamic_modules
     from .recovery import record
     with ExitStack() as guards:
         try:

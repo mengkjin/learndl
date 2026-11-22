@@ -499,7 +499,7 @@ def _channel_update(root, options):
     from .config import installed_config
     from src.automation import version_patch as version
     from src.automation.patch_services import PatchServices
-    from src.proj.util.web.mail_package import atomic_json
+    from src.shared.file_ops import atomic_json
 
     store = Store(state_dir())
     directory = runtime_dir()
@@ -595,7 +595,7 @@ def _channel_update(root, options):
 def main():
     from .config import installed_config
     from . import channels
-    from src.proj.util.web.mail_package import atomic_json
+    from src.shared.file_ops import atomic_json
     config = installed_config() or {}
     if not channels.enabled():
         return 0

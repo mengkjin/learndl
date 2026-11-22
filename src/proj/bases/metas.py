@@ -2,9 +2,9 @@
 Basic metaclasses for the project
 """
 from __future__ import annotations
-from src.proj.core.singleton import SingletonMeta as Singleton 
-from src.proj.core.singleton import SingletonABCMeta as SingletonABC
-from src.proj.core.singleton import NoInstanceMeta as NoInstance
+from src.shared.singleton import SingletonMeta as Singleton
+from src.shared.singleton import SingletonABCMeta as SingletonABC
+from src.shared.singleton import NoInstanceMeta as NoInstance
 
 __all__ = ['Singleton' , 'SingletonABC' , 'NoInstance']
 

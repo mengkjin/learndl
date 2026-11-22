@@ -101,7 +101,7 @@ class _MinCharsPreProcessor(MicellaneousPreProcessor):
                 union = n * t * i * f * 4 ,
                 mesh4d = mesh4d_bytes(n , t , i , f) ,
             )
-        from src.proj.util.resource.memory_guard import check_allocation
+        from src.data.util.memory_guard import check_allocation
         union_n = len(np.unique(np.concatenate([b.secid for b in blocks])))
         union_t = len(np.unique(np.concatenate([b.date for b in blocks])))
         union_f = len(np.unique(np.concatenate([b.feature for b in blocks])))

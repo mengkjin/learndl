@@ -21,7 +21,8 @@ from pathlib import Path
 
 import portalocker
 
-from src.proj.util.web.mail_package import MAX_BYTES, atomic_json, prepare
+from src.proj.util.web.mail_package import MAX_BYTES, prepare
+from src.shared.file_ops import atomic_json
 
 
 def _sha256(path):
