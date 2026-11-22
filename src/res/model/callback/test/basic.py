@@ -134,7 +134,7 @@ class BasicTestResult(BaseCallBack):
                 mean().reset_index().rename(columns={'model_date':'entry'})
 
             col_cats = {
-                'submodel' : ['best' , 'swalast' , 'swabest'],
+                'submodel' : list(dict.fromkeys([*self.config.submodels, *df_model['submodel'].unique()])),
                 'stat' : self.stat_cols,
                 'entry' : [md for md in df_model['entry'].unique()] + ['Avg' , 'Sum' , 'Std' , 'T' , 'IR']
             }

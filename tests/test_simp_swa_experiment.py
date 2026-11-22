@@ -21,7 +21,7 @@ class PairedSwaTests(unittest.TestCase):
     def test_effective_configs_only_change_identity_and_submodels(self):
         for variant in ('learned', 'pearson'):
             name = f'resnet_gru_simp_15m_{variant}'
-            folder = ROOT / 'configs/schedule/current'
+            folder = ROOT / 'configs/schedule/current/resnet_gru'
             original = yaml.safe_load((folder / f'{name}.yaml').read_text())
             paired = yaml.safe_load((folder / f'{name}_swa.yaml').read_text())
             self.assertEqual(paired['model'].pop('name'), name + '_swa')
@@ -59,6 +59,7 @@ class PairedSwaTests(unittest.TestCase):
                                   np.array([1]), np.arange(6)) for _ in range(2)]
             trainer = Mock()
             trainer.device = torch.device('cpu')
+            trainer.callback.callbacks = []
             trainer.model.persist_net.return_value = net
             trainer.data.train_dataloader.return_value = batches
             untouched = deepcopy(net.state_dict())

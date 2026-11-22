@@ -54,6 +54,8 @@ input.verify.x.autofill:
 
 train.dataloader.sample_method: sequential
 train.label_normalization: standardize
+train.swa.epochs: 5
+train.swa.lr_ratio: 0.05
 train.dataloader.shuffle_option: epoch
 train.dataloader.train_ratio: 0.8
 train.trainer.transfer: false

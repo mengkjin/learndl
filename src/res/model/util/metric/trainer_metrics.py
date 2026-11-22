@@ -6,16 +6,18 @@ Trainer metrics for the project , includes:
 from __future__ import annotations
 import numpy as np
 
+from copy import copy, deepcopy
 from functools import cached_property
+import torch
 from torch import nn
 from typing import Any
 
 from src.proj import Base
-from src.res.model.util.core import BatchData
+from src.res.model.util.core import BatchData, BatchOutput
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.trainer import BaseTrainer , TrainerPipeline
 
-from .functions import LossFunction , AccuracyFunction , RankICFunction
+from .functions import LossFunction, AccuracyFunction, RankICFunction, NonFiniteAccuracyError
 from .aggregator import MetricAggregator , AggregatorType
 from .metric_result import EpochMetricResult
 from .fast_metrics import FastBatchMetrics, FastEpochMetrics, ReusingAccuracyFunction
@@ -30,6 +32,19 @@ def _get_net(model : nn.Module | Any) -> nn.Module | None:
         return getattr(model , 'net')
     else:
         return None
+def copy_metric_function(function, net):
+    """Copy mutable metric state and bind any network references to the candidate."""
+    original = function.net
+    memo = {}
+    if original is not None and net is not None:
+        for source, target in ((original.named_modules(), net.named_modules()),
+                               (original.named_parameters(), net.named_parameters()),
+                               (original.named_buffers(), net.named_buffers())):
+            by_name = dict(target)
+            memo.update({id(value): by_name[name] for name, value in source})
+    return deepcopy(function, memo)
+
+
 class TrainerMetrics(TrainerPipeline):
     """calculator of batch output"""
     
@@ -231,6 +246,61 @@ class TrainerMetrics(TrainerPipeline):
     def collect_attempt(self):
         self.model_metrics.append(self.attempt_metrics)
         self.attempt_metrics.close()
+
+    def evaluate_split(self, net, forward, dataset, *, loss_function, loss_weights):
+        """Measure a candidate without changing live metrics, model modes, or RNG."""
+        from src.res.model.util.trainer.phase_transition import (
+            auxiliary_batch, evaluate_batches, preserve_module_modes, preserve_rng,
+        )
+
+        trainer = self.trainer
+        evaluator = copy(self)
+        evaluator.stage_metrics = {}
+        evaluator.aggregator = MetricAggregator()
+        evaluator.aggregator.inject('loss', loss_weights)
+        evaluator.aggregator.inject('accuracy', self.model_metrics.accuracy_verdict)
+        evaluator.loss_function = copy_metric_function(loss_function, net)
+        evaluator.accuracy_function = copy_metric_function(self.accuracy_function, net)
+
+        def batch_data(batch):
+            batch = auxiliary_batch(trainer, batch, training=False)
+            return BatchData(batch, BatchOutput(forward(batch) if len(batch) else None))
+
+        if dataset == 'train':
+            loader, epoch_metrics = trainer.data.train_dataloader, evaluator.epoch_train_metrics
+        else:
+            loader, epoch_metrics = trainer.data.val_dataloader, evaluator.epoch_valid_metrics
+        with preserve_rng(), preserve_module_modes(net), torch.no_grad():
+            if net is not None:
+                net.eval()
+            result = evaluate_batches(trainer, evaluator, loader(), batch_data, dataset=dataset,
+                                      epoch_metrics=epoch_metrics)
+            return result.metrics_dict
+
+    def evaluate_submodel(self, predictor, submodel, source_epochs, ensembler=None):
+        anchor = getattr(ensembler, 'best_epoch', None)
+        record = {'attempt': self.status.attempt_key, 'submodel': submodel, 'source_epochs': source_epochs,
+                  'anchor_epoch': anchor.epoch if anchor is not None else None,
+                  'anchor_phase': anchor.phase if anchor is not None else None}
+        record.update(getattr(ensembler, 'continuation', {}))
+        loss_function = getattr(ensembler, 'loss_function', None) or self.loss_function
+        loss_aggregator = getattr(ensembler, 'loss_aggregator', None)
+        record['loss_objective'] = 'anchor' if loss_aggregator is not None else 'attempt_end'
+        record['loss_weights'] = deepcopy((loss_aggregator or self.aggregator.loss_aggregator()).aggregator)
+        record['loss_criteria'] = deepcopy(loss_function.criterions)
+        for dataset in ('train', 'valid'):
+            try:
+                result = self.evaluate_split(predictor.net, predictor.forward, dataset,
+                                             loss_function=loss_function, loss_weights=record['loss_weights'])
+            except NonFiniteAccuracyError as exc:
+                record.update(score=float('nan'), invalid_reason=f'{dataset}: {exc}')
+                return record
+            record.update(result)
+        record['score'] = self.aggregator.total_accuracy(
+            record['valid_accuracies'], self.model_metrics.accuracy_verdict or {})
+        record['train_eval_score'] = self.aggregator.total_accuracy(
+            record['train_accuracies'], self.model_metrics.accuracy_verdict or {})
+        return record
 
     def collect_model(self):
         self.model_metrics.close()

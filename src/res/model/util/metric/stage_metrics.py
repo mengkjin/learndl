@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+import json
+import math
 from collections import defaultdict
 from torch import Tensor
 from typing import Any  , Literal , TypeAlias 
@@ -346,6 +348,8 @@ class ModelMetrics(AggregatedMetrics):
         assert stage in ['fit' , 'test'] , f'[{stage}] stage is not allowed to be used for model metrics'
         super().new(stage = stage , model_num = model_num , model_date = model_date , submodel = submodel)
         self.attempt_metric_results : list[EpochMetricResult | None] = []
+        self.submodel_attempts: dict[tuple[str, str], dict[str, Any]] = {}
+        self.selected_submodel_attempts: dict[str, str] = {}
         self.accuracy_verdict : dict[str, float] | Callable[[dict[str, float]], float] | None = None
 
     def append(self , attempt : AttemptMetrics):
@@ -389,10 +393,28 @@ class ModelMetrics(AggregatedMetrics):
         assert metrics is not None , 'best attempt metric result is None'
         return metrics
 
+    def select_submodel_attempts(self, submodels):
+        selected = {}
+        for submodel in submodels:
+            candidates = [record for (_, name), record in self.submodel_attempts.items()
+                          if name == submodel and record['status'] == 'stacked' and math.isfinite(record['score'])]
+            if not candidates:
+                raise ValueError(f'No valid stacked attempt for {submodel}')
+            selected[submodel] = max(candidates, key=lambda record: record['score'])['attempt']
+        self.selected_submodel_attempts = selected
+        return selected
+
     def export(self , export_path : Path):
         assert self.collected , f'{self} is not collected before exporting, please call close() first'
         export_path.mkdir(parents = True , exist_ok = True)
         export_path = export_path.joinpath(f'model.{self.key["model_num"]}.{self.key["model_date"]}.xlsx')
         assert export_path.suffix == '.xlsx' , f'{export_path} is not a valid excel file'
         dfs = {name:self.get_table(name).reset_index(drop = False).drop(columns = ['stage' , 'model_date' , 'model_num' , 'submodel']) for name in self.tables}
+        if self.submodel_attempts:
+            dfs['submodel_attempts'] = pd.DataFrame([
+                {**{key: json.dumps(value, default=str) if isinstance(value, (dict, list)) else value
+                    for key, value in record.items()},
+                 'selected': self.selected_submodel_attempts.get(name) == attempt}
+                for (attempt, name), record in self.submodel_attempts.items()
+            ])
         Save.dfs(dfs , export_path , async_save = True)

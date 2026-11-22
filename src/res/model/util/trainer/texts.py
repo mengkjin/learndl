@@ -57,6 +57,13 @@ class TrainerTexts(TrainerPipeline):
         best_attempt = self.metrics.model_metrics.best_attempt()
         best_metrics = self.metrics.model_metrics.best_attempt_metrics()
         final_metrics = f'BestAttempt {best_attempt} TrainIC{best_metrics.train_rankic: .4f} ValidIC{best_metrics.valid_rankic: .4f}'
+        history = self.metrics.model_metrics
+        for submodel, attempt in history.selected_submodel_attempts.items():
+            record = history.submodel_attempts[attempt, submodel]
+            points = ','.join(f'Ph{phase} Ep{ep}' for ep, phase in record['source_epochs'])
+            components = ', '.join(f'{key}={value:.4f}' for key, value in record['valid_accuracies'].items())
+            final_metrics += (f'|{submodel} {attempt} [{points}] TrainEvalIC {record["train_rankic"]:.4f}'
+                              f' ValidIC {record["valid_rankic"]:.4f} Score {record["score"]:.4f} ({components})')
         final_time = f'Cost{model_time_cost / 60:5.1f}Min,{per_epoch:5.1f}Sec/Ep'
         return f'{self.model_key}|{self.attempt_key} {self.model_epoch} {self.exit}|{final_metrics}|{final_time}'
     @property

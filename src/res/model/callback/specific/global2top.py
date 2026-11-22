@@ -216,15 +216,13 @@ class SpecificCB_Global2Top(BaseCallBack):
             # Reassess preserved phase0 candidates using exactly the phase1 score.
             aggregator = aggregator_factory('top', glb_climax=self.global_climax_level)
             self.metrics.aggregator.inject('accuracy', aggregator)
-            submodel = getattr(self.model, 'submodels', {}).get('best')
+            submodels = getattr(self.model, 'submodels', {})
             records = self.metrics.attempt_metrics.epoch_metric_results
-            if submodel is not None and records:
+            if records and 'best' in submodels:
                 best = max(records, key=lambda row: aggregator(row.valid_accuracies))
-                old = submodel.best_epoch
-                self.checkpoint.join(submodel, best.epoch, best.phase)
-                submodel.best_epoch = best
-                if old is not None and (old.epoch, old.phase) != (best.epoch, best.phase):
-                    self.checkpoint.disjoin(submodel, old.epoch, old.phase)
+                for name in ('best', 'swa'):
+                    if name in submodels:
+                        submodels[name].select_best(best, self.metrics)
             for ep, ph in self.pinned_epochs:
                 self.checkpoint.disjoin(self, ep, ph)
             self.pinned_epochs.clear()

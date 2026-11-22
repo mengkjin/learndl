@@ -195,7 +195,7 @@ class Device(BoundLogger):
     @staticmethod
     def send_to(x : Any , device = None , copy = False) -> Any:
         """Module-level ``send_to`` bound for convenience."""
-        return _send_to(x , device)
+        return _send_to(x , device, copy)
 
     @staticmethod
     def get_device(obj : torch.Module | torch.Tensor | list | tuple | dict | Any) -> torch.device:

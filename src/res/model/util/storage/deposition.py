@@ -45,6 +45,11 @@ class Deposition:
             path.rename(new_path)
         self.clear_stacked_models(model_num , model_date , submodel)
 
+    def discard_stacked_attempt(self, attempt_key: str, model_num, model_date, submodel: str):
+        path = self.model_path(model_num, model_date, submodel) / self.shrink_key(attempt_key)
+        if path.is_dir():
+            shutil.rmtree(path)
+
     def clear_stacked_models(self , model_num , model_date , submodel = 'best'):
         model_path = self.model_path(model_num , model_date , submodel)
         if not model_path.exists():

@@ -303,9 +303,30 @@ class SummaryWriter(BaseCallBack):
             self.writer.add_scalar(f'01.FittingEvents/State/{name}', getattr(self.status, name), self.step_epoch)
         self.writer.flush()
 
+    def on_swa_continuation_end(self, record: dict):
+        """Use the current attempt's writer and a local SWA step axis."""
+        writer = self.writer
+        writer.add_scalar('SWA/AnchorEpoch', record['anchor_epoch'], 0)
+        writer.add_scalar('SWA/AnchorPhase', record['anchor_phase'], 0)
+        for point in record['swa_trace']:
+            step = point['step']
+            writer.add_scalar('SWA/ValidIC', point['valid_rankic'], step)
+            if 'train_loss' in point:
+                writer.add_scalar('SWA/TrainLoss', point['train_loss'], step)
+        if 'valid_rankic' in record:
+            writer.add_scalar('SWA/AveragedValidIC', record['valid_rankic'], record['swa_epochs'] + 1)
+        writer.flush()
+
     def on_fit_model_end(self):
         if self.texts.model_summary:
             self.writer.add_text('Model Info' , self.texts.model_summary)
+        history = self.metrics.model_metrics
+        for submodel, attempt in history.selected_submodel_attempts.items():
+            record = history.submodel_attempts[attempt, submodel]
+            tag = f'SubmodelSelection/{submodel}'
+            self.writer.add_scalar(f'{tag}/TrainEvalIC', record['train_rankic'], self.step_epoch)
+            self.writer.add_scalar(f'{tag}/ValidIC', record['valid_rankic'], self.step_epoch)
+            self.writer.add_scalar(f'{tag}/Score', record['score'], self.step_epoch)
         self.reset_writer()
 
     def on_fit_end_after(self):

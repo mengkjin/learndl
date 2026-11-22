@@ -4,12 +4,66 @@ from __future__ import annotations
 import math
 import random
 from typing import Any
+from contextlib import contextmanager
 from copy import copy, deepcopy
+from dataclasses import replace
 
 import numpy as np
 import torch
 
 __all__ = ['PhaseCyclicLR']
+
+@contextmanager
+def preserve_rng():
+    python_rng, numpy_rng = random.getstate(), np.random.get_state()
+    mps = torch.mps.get_rng_state() if torch.backends.mps.is_available() else None
+    try:
+        with torch.random.fork_rng(devices=None if torch.cuda.is_initialized() else []):
+            yield
+    finally:
+        random.setstate(python_rng)
+        np.random.set_state(numpy_rng)
+        if mps is not None:
+            torch.mps.set_rng_state(mps)
+
+
+@contextmanager
+def preserve_module_modes(net):
+    modes = [(module, module.training) for module in net.modules()] if net is not None else []
+    try:
+        yield
+    finally:
+        for module, training in modes:
+            module.training = training
+
+
+def auxiliary_batch(trainer, batch, *, training):
+    """Prepare model kwargs without calling Trainer hooks or mutating its current batch."""
+    if not len(batch):
+        return batch
+    kwargs = dict(batch.kwargs)
+    for callback in trainer.callback.callbacks:
+        prepare = getattr(callback, 'auxiliary_batch_kwargs', None)
+        if prepare is not None:
+            kwargs.update(prepare(batch, training=training))
+    return replace(batch, kwargs=kwargs)
+
+
+def evaluate_batches(trainer, metrics, batches, forward, *, dataset, epoch_metrics):
+    epoch_metrics.new(dataset)
+    for index, batch in enumerate(batches):
+        if index < trainer.batch_warm_up or index >= trainer.batch_aftermath:
+            continue
+        data = forward(batch)
+        if data.output.empty:
+            continue
+        # Evaluate the fit objective on both splits, without building gradients.
+        metrics.calculate('valid', index, data)
+        _ = metrics.batch_metrics.total_loss
+        epoch_metrics.append(metrics.batch_metrics)
+        metrics.batch_metrics.close()
+    return epoch_metrics
+
 
 def validate_recalled_model(trainer):
     """Evaluate raw metrics without training hooks, histories, or scheduler steps."""
@@ -17,31 +71,13 @@ def validate_recalled_model(trainer):
     metrics.stage_metrics = {}
     metrics.aggregator = deepcopy(metrics.aggregator)
     metrics.accuracy_function = copy(metrics.accuracy_function)
-    metrics.epoch_valid_metrics.new('valid')
     net = trainer.model.net
-    modes = [(module, module.training) for module in net.modules()]
-    python_rng, numpy_rng = random.getstate(), np.random.get_state()
-    try:
-        with torch.random.fork_rng(), torch.no_grad():
-            net.eval()
-            for index, batch in enumerate(trainer.data.val_dataloader()):
-                if index < trainer.batch_warm_up or index >= trainer.batch_aftermath:
-                    continue
-                data = trainer.model.get_batch_data(batch)
-                if data.output.empty:
-                    continue
-                metrics.calculate('valid', index, data)
-                # Materialize loss before appending (same as normal batch logging).
-                _ = metrics.batch_metrics.total_loss
-                metrics.epoch_valid_metrics.append(metrics.batch_metrics)
-                metrics.batch_metrics.close()
-            return (metrics.epoch_valid_metrics.accuracies_dict,
-                    metrics.epoch_valid_metrics.losses_dict)
-    finally:
-        random.setstate(python_rng)
-        np.random.set_state(numpy_rng)
-        for module, training in modes:
-            module.training = training
+    with preserve_rng(), preserve_module_modes(net), torch.no_grad():
+        net.eval()
+        epoch = evaluate_batches(trainer, metrics, trainer.data.val_dataloader(),
+                                 trainer.model.get_batch_data, dataset='valid',
+                                 epoch_metrics=metrics.epoch_valid_metrics)
+        return epoch.accuracies_dict, epoch.losses_dict
 
 
 class PhaseCyclicLR(torch.optim.lr_scheduler.LRScheduler):

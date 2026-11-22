@@ -15,14 +15,18 @@ class SpecificCB_TRA(BaseCallBack):
     @property
     def net(self) -> torch.nn.Module: 
         return getattr(self.model , 'net')
-    def fill_batch_data(self):
-        self.i0 = self.batch_input.i[:,0].cpu()
-        self.i1 = self.batch_input.i[:,1].cpu()
-        y = self.batch_input.y
+    def auxiliary_batch_kwargs(self, batch, *, training):
+        i0, i1 = batch.i[:, 0].cpu(), batch.i[:, 1].cpu()
         hl = self.data.buffer['hist_loss']
-        rw = getattr(self.net , 'hist_loss_seq_len')
-        hist_loss = torch.stack([hl[self.i0 , self.i1 + j + 1 - rw] for j in range(rw)],dim=-2)
-        self.batch_input.kwargs = {'y': y , 'hist_loss' : hist_loss.to(y.device)}
+        rw = getattr(self.net, 'hist_loss_seq_len')
+        hist_loss = torch.stack([hl[i0, i1 + j + 1 - rw] for j in range(rw)], dim=-2)
+        return {'y': batch.y, 'hist_loss': hist_loss.to(batch.y.device)}
+
+    def fill_batch_data(self):
+        self.i0 = self.batch_input.i[:, 0].cpu()
+        self.i1 = self.batch_input.i[:, 1].cpu()
+        self.batch_input.kwargs = self.auxiliary_batch_kwargs(self.batch_input, training=True)
+
     def init_buffer(self):
         hist_loss_shape = list(self.data.y_std.shape)
         hist_loss_shape[2] = getattr(self.net , 'num_states')

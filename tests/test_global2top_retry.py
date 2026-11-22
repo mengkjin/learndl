@@ -9,6 +9,7 @@ import torch
 from src.proj.bases import FittingEventType
 from src.res.model.callback.fit.retrain import BadAttemptRetrain
 from src.res.model.callback.specific.global2top import SpecificCB_Global2Top
+from src.res.model.model_module.util.swa import EnsembleBestOne, EnsembleSWA
 from src.res.model.util.trainer.base_trainer import BaseTrainer
 
 
@@ -39,6 +40,32 @@ def set_valid_history(trainer, global_values, top_values):
 
 
 class Global2TopRetryTest(TestCase):
+    def test_phase_reassessment_moves_both_anchors_and_restores_swa_loss_weights(self):
+        trainer, callback = make_callback(verify_recall=False)
+        peak = SimpleNamespace(epoch=0, phase=0, valid_accuracies={'global.spearman': .2, 'top.long_avg': 0.})
+        top = SimpleNamespace(epoch=1, phase=0, valid_accuracies={'global.spearman': .18, 'top.long_avg': .4})
+        trainer.metrics.loss_function = SimpleNamespace(net=None)
+        trainer.checkpoint.load.side_effect = lambda epoch, phase: {
+            'swa_loss_weights': {'top.soft_topk': .25 * epoch},
+        }
+        best, swa = EnsembleBestOne(trainer.checkpoint), EnsembleSWA(trainer.checkpoint)
+        for submodel in (best, swa):
+            submodel.select_best(peak, trainer.metrics)
+        trainer.model.submodels = {'best': best, 'swa': swa}
+        trainer.metrics.attempt_metrics.epoch_metric_results = [peak, top]
+        callback.global_plateaued = True
+        callback.global_climax_epoch = peak.epoch
+        callback.global_climax_level = .2
+
+        callback.recall_global_climax()
+
+        self.assertEqual(best.source_epochs(), [(1, 0)])
+        self.assertEqual(swa.source_epochs(), best.source_epochs())
+        assert swa.loss_aggregator is not None
+        self.assertEqual(swa.loss_aggregator.aggregator, {'top.soft_topk': .25})
+        trainer.checkpoint.join.assert_any_call(swa, 1, 0)
+        trainer.checkpoint.disjoin.assert_any_call(swa, 0, 0)
+
     def test_quality_retry_and_nan_redo_restart_global_without_erasing_model_history(self):
         for event in (FittingEventType.NEW_ATTEMPT, FittingEventType.REDO_ATTEMPT):
             with self.subTest(event=event):

@@ -26,8 +26,12 @@ class SpecificCB_VAE(BaseCallBack):
         else:
             return torch.randn((numel,)).to(object_tensor)
         
+    def auxiliary_batch_kwargs(self, batch, *, training):
+        if not training:
+            return {}
+        y = batch.y
+        return {'y': y, 'alpha_noise': self.reparameterize(y),
+                'factor_noise': self.reparameterize(y, getattr(self.net, 'factor_num'))}
+
     def on_train_batch_start(self):
-        y = self.batch_input.y
-        self.batch_input.kwargs = {
-            'y': y , 'alpha_noise' : self.reparameterize(y) , 'factor_noise' : self.reparameterize(y , getattr(self.net , 'factor_num')) ,
-        }
+        self.batch_input.kwargs = self.auxiliary_batch_kwargs(self.batch_input, training=True)

@@ -1,0 +1,8 @@
+fit:
+  - gru/gru_day_new_best
+  - gru/gru_day_new_swa
+
+mode: sparse
+resume: false
+force: false
+rerun_mark: 1

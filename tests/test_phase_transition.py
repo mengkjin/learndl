@@ -55,8 +55,30 @@ class SummaryLifecycleTest(TestCase):
         self.assertEqual(factory.call_count, 1)
         _ = callback.writer
         self.assertIn('ac_restart1', str(factory.call_args))
+        callback.trainer.metrics.model_metrics.selected_submodel_attempts = {}
         callback.on_fit_model_end()
         self.assertNotIn('_writer', callback.__dict__)
+
+    @patch('src.res.model.callback.monitor.summary.TsboardWriter')
+    def test_swa_uses_attempt_writer_and_local_steps(self, factory):
+        trainer, callback = self.make_writer()
+        record = {
+            'anchor_epoch': 3, 'anchor_phase': 1, 'swa_epochs': 5, 'valid_rankic': .24,
+            'swa_trace': [{'step': 0, 'valid_rankic': .2}]
+            + [{'step': step, 'valid_rankic': .22, 'train_loss': 1.1} for step in range(1, 6)],
+        }
+        callback.on_swa_continuation_end(record)
+        writer = factory.return_value
+        writer.add_scalar.assert_any_call('SWA/AnchorEpoch', 3, 0)
+        writer.add_scalar.assert_any_call('SWA/AnchorPhase', 1, 0)
+        writer.add_scalar.assert_any_call('SWA/ValidIC', .2, 0)
+        writer.add_scalar.assert_any_call('SWA/AveragedValidIC', .24, 6)
+        self.assertEqual([call.args[2] for call in writer.add_scalar.call_args_list
+                          if call.args[0] == 'SWA/TrainLoss'], list(range(1, 6)))
+        trainer.status.attempt_key = 'Trial1-0'
+        callback.on_swa_continuation_end(record)
+        self.assertIn('Trial1-0', str(factory.call_args))
+        self.assertEqual(factory.call_count, 2)
 
     @patch('src.res.model.callback.monitor.summary.TsboardWriter')
     def test_terminal_metrics_use_epoch_not_reset_attempt(self, factory):

@@ -3,7 +3,9 @@ Base Predictor model class for trainer
 """
 from __future__ import annotations
 
+import math
 import torch
+from copy import copy, deepcopy
 
 from abc import abstractmethod
 from functools import cached_property
@@ -232,24 +234,86 @@ class PredictorModel(TrainerPipeline):
         self.reload_model(*args , **kwargs)
         return self
     
+    def candidate_predictor(self, model_dict: ModelDict):
+        """Isolated eager predictor loaded with the same payload sent to deposition."""
+        candidate = copy(self)
+        setattr(candidate, 'torch_compile', None)
+        if model_dict.state_dict is not None:
+            device = self.device
+            if isinstance(device, Device):
+                device = device.device
+            candidate.net = deepcopy(self.persist_net()).to(device)
+            candidate.net.load_state_dict(model_dict.state_dict)
+        boost = model_dict.boost_head if model_dict.boost_head is not None else model_dict.boost_dict
+        if boost is not None:
+            from src.res.algo.boost.booster.general import GeneralBoostModel
+            setattr(candidate, 'boost', GeneralBoostModel.from_dict(deepcopy(boost)))
+        return candidate
+
     def stack_model(self):
-        """temporaly save self to somewhere"""
+        """Evaluate and stack a candidate for each submodel of this attempt."""
+        from .phase_transition import preserve_rng
+
         self.metrics.collect_attempt()
         if self.metrics.epoch_train_metrics.nanloss:
-            # skip saving model when nan loss is encountered
             return
         self.trainer.on_before_stack_model()
-        for _ in self.trainer.iter_model_submodels_on_save():
-            model_dict = self.collect(self.model_submodel)
-            self.deposition.stack_model(model_dict , self.status.attempt_key , self.model_num , self.model_date , self.model_submodel) 
+        history = self.metrics.model_metrics
+        attempt = self.status.attempt_key
+        original_submodel = self.status.model_submodel
+        records = {}
+        stacked = []
+        try:
+            for _ in self.trainer.iter_model_submodels_on_save():
+                submodel = self.model_submodel
+                with preserve_rng():
+                    model_dict = self.collect(submodel)
+                    ensembler = getattr(self, 'submodels', {}).get(submodel)
+                    source_epochs = ensembler.source_epochs() if ensembler is not None else []
+                    candidate = self.candidate_predictor(model_dict)
+                    record = self.metrics.evaluate_submodel(candidate, submodel, source_epochs, ensembler)
+                    del candidate
+                if submodel == 'best' and (original := history.attempt_metric_results[-1]) is not None:
+                    verdict = history.accuracy_verdict or {}
+                    previous = self.metrics.aggregator.total_accuracy(original.valid_accuracies, verdict)
+                    record['historical_score'] = previous
+                    record['historical_epoch'] = original.epoch_key
+                    record['score_change'] = record['score'] - previous
+                    if not math.isclose(record['score'], previous, abs_tol=1e-6):
+                        self.trainer.write_status_message(
+                            f'{attempt} best re-evaluation: {previous:.6f} -> {record["score"]:.6f}')
+                if math.isfinite(record['score']):
+                    stacked.append(submodel)
+                    self.deposition.stack_model(model_dict, attempt, self.model_num, self.model_date, submodel)
+                    record['status'] = 'stacked'
+                else:
+                    record['status'] = 'nonfinite'
+                    self.trainer.write_status_message(f'{attempt} {submodel}: invalid validation score')
+                if submodel == 'swa':
+                    if 'valid_rankic' in record:
+                        self.trainer.write_status_message(f'{attempt} SWA averaged + BN ValidIC={record["valid_rankic"]:.6f}')
+                    self.trainer.on_swa_continuation_end(record)
+                records[attempt, submodel] = record
+        except Exception:
+            for submodel in stacked:
+                self.deposition.discard_stacked_attempt(attempt, self.model_num, self.model_date, submodel)
+            raise
+        finally:
+            self.status.model_submodel = original_submodel
+        history.submodel_attempts.update(records)
 
     def dump_model(self):
-        """dump model to somewhere"""
+        history = self.metrics.model_metrics
+        selected = history.select_submodel_attempts(self.config.submodels)
         self.metrics.collect_model()
         self.trainer.on_before_dump_model()
-        best_attempt = self.metrics.model_metrics.best_attempt()
-        for _ in self.trainer.iter_model_submodels_on_save():
-            self.deposition.dump_stacked_model(best_attempt , self.model_num , self.model_date , self.model_submodel) 
+        original_submodel = self.status.model_submodel
+        try:
+            for _ in self.trainer.iter_model_submodels_on_save():
+                submodel = self.model_submodel
+                self.deposition.dump_stacked_model(selected[submodel], self.model_num, self.model_date, submodel)
+        finally:
+            self.status.model_submodel = original_submodel
 
     def test(self):
         """test the model inside"""

@@ -185,7 +185,9 @@ class StatusLogger(BaseCallBack):
     def on_before_dump_model(self):
         if not self.display_progress:
             return
-        dump_info = f'Dump model {self.texts.model_str} with best attempt {self.metrics.model_metrics.best_attempt()}'
+        selections = self.metrics.model_metrics.selected_submodel_attempts
+        attempts = ', '.join(f'{name}={attempt}' for name, attempt in selections.items())
+        dump_info = f'Dump model {self.texts.model_str} with attempts {attempts}'
         if Proj.vb.is_max_level or self.status.total_models <= self.config.model_num:
             self.logger.stdout(dump_info , color = 'cyan')
         else:

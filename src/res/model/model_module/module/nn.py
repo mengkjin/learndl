@@ -65,13 +65,22 @@ class NNPredictor(PredictorModel):
     
     def ckpt_state_dict(self):
         """state dict of model at epoch to be saved in checkpoint"""
-        return {
-            'epoch' : self.status.epoch,
-            'phase' : self.status.phase,
-            'net' : self.persist_net().state_dict() ,
-            'optimizer' : self.optimizer.optimizer.state_dict() ,
-            'scheduler' : self.optimizer.scheduler.state_dict() ,
+        net = self.persist_net()
+        optimizer = self.optimizer.optimizer
+        state = {
+            'epoch': self.status.epoch,
+            'phase': self.status.phase,
+            'net': net.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': self.optimizer.scheduler.state_dict(),
         }
+        if 'swa' in self.submodels:
+            names = {id(param): name for name, param in net.named_parameters()}
+            state['optimizer_param_names'] = [
+                [names[id(param)] for param in group['params']] for group in optimizer.param_groups
+            ]
+            state['swa_loss_weights'] = self.metrics.aggregator.loss_aggregator().aggregator
+        return state
 
     def load_state_dict(self , state_dict : dict):
         self.persist_net().load_state_dict(state_dict['net'])
@@ -92,8 +101,9 @@ class NNPredictor(PredictorModel):
         """model object that can be called to forward"""
         if len(batch_input) == 0: 
             return None
-        x = batch_input.x if isinstance(batch_input , BatchInput) else batch_input
-        return self.run_net(x , *args , **kwargs)
+        if isinstance(batch_input, BatchInput):
+            return self.run_net(batch_input.x, *args, **(batch_input.kwargs | kwargs))
+        return self.run_net(batch_input, *args, **kwargs)
 
     def fit(self):
         for _ in self.trainer.iter_fit_epoches():

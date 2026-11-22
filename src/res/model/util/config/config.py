@@ -269,9 +269,14 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         replace_scheduler = (requested_scheduler.get('name') is not None and
                              requested_scheduler['name'] != previous_scheduler.get('name'))
         self.Param.update(self.override)
-        explicit_activation = get_config_dict(self.override)
-        if activation_key in explicit_activation:
-            self.Param.update({activation_key: explicit_activation[activation_key]}, relevant_only=False)
+        explicit = get_config_dict(self.override)
+        if activation_key in explicit:
+            self.Param.update({activation_key: explicit[activation_key]}, relevant_only=False)
+        for key in ('train.swa.epochs', 'train.swa.lr_ratio'):
+            if key in explicit:
+                self.Param.update({key: explicit[key]}, relevant_only=False)
+            elif key in self.schedule_config.Param:
+                self.Param.update({key: self.schedule_config[key]}, relevant_only=False)
         if replace_scheduler:
             prefix = 'train.trainer.scheduler'
             for key in list(self.Param.flattened):
@@ -336,7 +341,13 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         if nn_datatype:
             self.input_data_types = nn_datatype
 
-        # check submodels is set correctly
+        # Validate SWA before non-neural configurations normalize their submodel list.
+        if 'swa' in self.submodels:
+            if (self.module_type != 'nn' or self.boost_head or nn_category == 'tra'
+                    or self.trainer_optimizer['name'] not in ('Adam', 'AdamW', 'SGD')):
+                raise ValueError('swa requires a stateless NN and an Adam, AdamW or SGD optimizer')
+            _ = self.swa_settings
+
         if self.module_type != "nn" or self.boost_head:
             self["model.submodels"] = ["best"]
         if "best" not in self.submodels:
@@ -510,6 +521,16 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
     @property
     def labels(self) -> list[str]:
         return [spec.name for spec in parse_labels(self["model.labels"])]
+
+    @property
+    def swa_settings(self) -> tuple[int, float]:
+        epochs = self.Param.get('train.swa.epochs', 5)
+        ratio = self.Param.get('train.swa.lr_ratio', 0.05)
+        if type(epochs) is not int or epochs < 1:
+            raise ValueError('train.swa.epochs must be a positive integer')
+        if type(ratio) not in (int, float) or not 0 < ratio <= 1:
+            raise ValueError('train.swa.lr_ratio must be in (0, 1]')
+        return epochs, float(ratio)
 
     @property
     def submodels(self) -> list[str]:
@@ -1011,6 +1032,8 @@ class ModelConfig(BaseModelConfig):
             base_path, module=module, schedule_name=schedule_name, override=override,
             resume_saved_config=resume == 1, indent=indent , vb_level=vb_level, **kwargs)
         self.algo_config = self.model_config.generate_algo_config()
+        if 'swa' in self.submodels and self.algo_config.max_num_output > 1:
+            raise ValueError('swa continuation supports single-output objectives')
         assert self.base_path, self.base_path
         assert self.model_config.base_path is self.base_path, \
             f"{self.model_config.base_path} != {self.base_path}"

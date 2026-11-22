@@ -17,11 +17,13 @@ class SpecificCB_DSize(BaseCallBack):
         if self.size_block is None: 
             self.size_block = BlockLoader('models', 'tushare_cne5_exp', ['size'] , vb_level = 'never').load()
         self.data.buffer['size'] = self.size_block.align(self.data.y_secid , self.data.y_date).values.squeeze()
+    def auxiliary_batch_kwargs(self, batch, *, training):
+        i0, i1 = batch.i[:, 0].cpu(), batch.i[:, 1].cpu()
+        size = self.data.buffer['size'][i0, i1].reshape(-1, 1).nan_to_num(0).to(batch.y.device)
+        return {'size': size}
+
     def fill_batch_data(self):
-        i0 = self.batch_input.i[:,0].cpu()
-        i1 = self.batch_input.i[:,1].cpu()
-        size = self.data.buffer['size'][i0 , i1].reshape(-1,1).nan_to_num(0).to(self.batch_input.y.device)
-        self.batch_input.kwargs = {'size': size}
+        self.batch_input.kwargs = self.auxiliary_batch_kwargs(self.batch_input, training=True)
 
     def on_fit_model_start(self):           
         self.init_buffer()

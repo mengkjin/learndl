@@ -1,4 +1,6 @@
 max_epoch:  200
+swa.epochs: 5
+swa.lr_ratio: 0.05
 batch_size: 10000
 skip_horizon:  20 # must be larger than span of labels 
 fitting_step:  5
