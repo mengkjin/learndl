@@ -8,6 +8,7 @@ import torch
 from torch import nn
 
 from .residual import FactorResidual
+from .contextual_v4 import FactorContextualV4
 
 CHANNELS = ('value', 'valid', 'observed', 'gap', 'never', 'change',
             'change_valid', 'source_age', 'source_age_valid', 'degenerate')
@@ -138,6 +139,45 @@ CATALOG = {name: {'status':'implemented','version':1,'mode':model.mode,
                   'experiment':'configs/experience/model/factor_sequence/README.md'}
            for name,model in MODELS.items()}
 CATALOG['factorseq_residual'].update(version=2, channels=['value','valid','gap','never'])
+CATALOG['factorseq_residual']['variants'] = {
+    'contextual_v4': {
+        'version': 4,
+        'status': 'legacy',
+        'streams': ['factorseq', 'factorperf'],
+        'windows': [60, 120],
+        'shared_streams': ['factorperf'],
+        'gate_target': 'current linear factor contributions',
+        'gate_hidden_dim': 8,
+        'gate_half_lives': [5.0, 20.0, 60.0],
+        'gate_scale': 0.2,
+        'gate_min_observations': 20,
+        'gate_penalty': 0.01,
+        'schedule': 'configs/schedule/archive/factorseq_v4_contextual.yaml',
+        'experiment': 'configs/experience/model/factor_sequence/contextual_v4.md',
+    }
+}
+for _suffix, _parameters in [('market', 22506), ('events', 22551)]:
+    CATALOG['factorseq_residual']['variants'][f'contextual_v4_{_suffix}'] = {
+        **CATALOG['factorseq_residual']['variants']['contextual_v4'],
+        'streams': ['factorseq', 'factorperf', 'factormarket'],
+        'windows': [60, 120, 1],
+        'shared_streams': ['factorperf', 'factormarket'],
+        'market_rank': 2,
+        'parameters': _parameters,
+        'context_parameters': _parameters - 22275,
+        'schedule': f'configs/schedule/archive/factorseq_v4_contextual_{_suffix}.yaml',
+        'experiment': 'configs/experience/model/factor_sequence/contextual_v4_market.md',
+    }
+CATALOG['factorseq_residual']['variants']['contextual_v4_events'].update(
+    event_rank=1, event_decay_days=20.0)
+CATALOG['factorseq_contextual_v4'].update(
+    version=4, mode='shared', streams=['factorseq', 'factorperf'],
+    windows=[60, 60], shared_streams=['factorperf'],
+    defaults={'hidden_dim':32,'rnn_layers':2,'dropout':.1,'context_dropout':.1,
+              'min_observations':20,'context_penalty':.01},
+    variants={variant: {'parameters': count, 'schedule': f'factorseq_v4_{variant}'}
+              for variant, count in [('shared', 23979), ('private', 28003), ('graph', 24975)]},
+    experiment='configs/experience/model/factor_sequence/contextual_v4_sequence.md')
 CATALOG['factorseq_gate'].update(gate_target='factor levels only',
     gate_inputs='stock values and metadata + causal performance/market context',
     context_to_head=False,gate_scale=.5)

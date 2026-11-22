@@ -1,0 +1,5 @@
+# v4 + continuous market + sparse event branch, on the same frozen campaign.
+factor_sequence_source: repaired_20261117
+factor_sequence_mode: contextual_v4_events
+model.module: factorseq_residual
+# Effective algorithm defaults are recorded by the factor-sequence resolver.

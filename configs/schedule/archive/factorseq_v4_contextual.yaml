@@ -1,0 +1,5 @@
+# Reuse the v3 frozen campaign, including labels and historical splits.
+factor_sequence_source: repaired_20261117
+factor_sequence_mode: contextual_v4
+model.module: factorseq_residual
+# The resolver records the v4 defaults in the effective/saved algo config.

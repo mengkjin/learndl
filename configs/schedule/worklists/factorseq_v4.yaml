@@ -1,0 +1,11 @@
+fit:
+  - factorseq_v4_shared
+  - factorseq_v4_private
+  - factorseq_v4_graph
+
+mode: sparse
+lifecycle:
+  step: 2
+resume: false
+force: false
+rerun_mark: 1

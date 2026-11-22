@@ -1,4 +1,4 @@
-"""Freeze one completed repaired dataset and label plan for three ordinary schedules."""
+"""Freeze a repaired dataset and label plan for comparable ordinary schedules."""
 
 from __future__ import annotations
 
@@ -128,14 +128,24 @@ def _label_state(dataset, dates):
 
 def resolve_repaired(source, model, name, mode):
     from src.proj import PATH, CALENDAR
+    from src.res.algo.nn.model.factor_sequence.contextual_v4 import V4_VARIANTS
     from src.res.model.experiment.factor_sequence.worklist import residual_config
 
-    if model != "factorseq_residual" or mode not in (
-        "snapshot",
-        "temporal",
-        "contextual",
-    ):
-        raise ValueError("Repaired schedules require an explicit residual mode")
+    valid_modes = {
+        "factorseq_residual": (
+            "snapshot",
+            "temporal",
+            "contextual",
+            "contextual_v4",
+            "contextual_v4_market",
+            "contextual_v4_events",
+        ),
+        "factorseq_contextual_v4": V4_VARIANTS,
+    }
+    if mode not in valid_modes.get(model, ()):
+        raise ValueError(
+            "Repaired schedules require a supported model and explicit mode"
+        )
     pin_path = PATH.lc_share / "factor_sequence" / f"{source}.json"
     pinned = json.loads(pin_path.read_text()) if pin_path.exists() else None
     if pinned:

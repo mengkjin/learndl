@@ -147,8 +147,12 @@ class ModuleData(Base.BoundLogger):
         )
         if factor_sequence_dataset:
             from src.data.preprocess.factor_sequence.schema import KEYS
-            if set(config.data_type_list) != set(KEYS) and not (factor_sequence_view == "compact" and set(config.data_type_list)=={"factorseq"}):
-                raise ValueError('Factor-sequence experiments require exactly the three versioned streams')
+            streams = set(config.data_type_list)
+            compact_subset = factor_sequence_view == "compact" and streams in (
+                {"factorseq"}, {"factorseq", "factorperf"},
+            )
+            if streams != set(KEYS) and not compact_subset:
+                raise ValueError('Invalid streams for this factor-sequence data view')
             config.data_type_list = tuple(k for k in KEYS if k in config.data_type_list)
         return cls(config = config, indent = indent, vb_level = vb_level)
 

@@ -1,0 +1,5 @@
+# v4 + current continuous-market branch, on the same frozen v3/v4 campaign.
+factor_sequence_source: repaired_20261117
+factor_sequence_mode: contextual_v4_market
+model.module: factorseq_residual
+# Effective algorithm defaults are recorded by the factor-sequence resolver.

@@ -151,7 +151,8 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
     from src.data.util import DataBlock
     from src.data import DATAVENDOR
     from src.res.model.model_module.application.trainer import ModelTrainer
-    from src.res.algo.nn.model.factor_sequence import CATALOG, MODELS
+    from src.res.algo.nn.model.factor_sequence import CATALOG
+    from .schedule_training import variants
     if training_email:
         raise ValueError('Per-fold email is retired; use the ordinary schedule suite for model-level mail')
     manifest=load(dataset)
@@ -200,12 +201,9 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
     np.savez_compressed(folder/'realized_returns.npz',values=future.values.cpu().numpy(),
                         dates=future.date,secids=future.secid)
     runs=[]
-    variants=[(key,{}) for key in MODELS if key != "factorseq_residual"]
-    if ablations:
-        variants += [('factorseq_m1',{'use_performance':False}),('factorseq_m1',{'use_market':False}),
-                     ('factorseq_m2',{'modulation':False})]
+    candidates = variants(ablations)
     pending=[{'model':model,'seed':seed,'variant':extra,'status':'not_run'}
-             for model,extra in variants for seed in ((17,29,43) if research else (17,))]
+             for model,extra in candidates for seed in ((17,29,43) if research else (17,))]
     write_json(folder/'model_cards.json',pending)
     from src.res.algo.nn.model import factor_sequence as model_code
     provenance: dict[str, Any] = {'model_sha256':file_digest(model_code.__file__),
@@ -214,7 +212,7 @@ def smoke(dataset, folder, research=False, ablations=False, test_start=None, tes
     from src.proj import PATH
     provenance['training_data_code']={str(path.relative_to(PATH.main)):file_digest(path)
         for path in (PATH.main/'src/res/model/util/data').glob('*.py')}
-    for model, extra in variants:
+    for model, extra in candidates:
         for seed in ((17,29,43) if research else (17,)):
             suffix='_'.join(extra) if extra else 'full'
             name=f'fs_{folder.parent.name}_{model}_{suffix}_{seed}'

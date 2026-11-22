@@ -163,3 +163,10 @@ Schedule Model 界面训练或 resume。原模型日期和训练/验证清除后
 旧版逐折实验不能自动改写成新目录结构。旧目录、结果、回执保留，禁止静默搬移或
 把旧折模型当成普通 schedule 的完整模型。停止旧任务后用新的 run ID 执行新版验证；
 不要继续使用旧 recovery 请求来启动旧的逐折循环。底层 smoke 的逐折邮件入口已关闭。
+
+## Contextual v4 时序实验
+
+普通 schedule 为 `factorseq_v4_shared`、`factorseq_v4_private` 和
+`factorseq_v4_graph`。结构、实验比较和运行方式见 [v4 时序模型卡](contextual_v4_sequence.md)。
+固定摘要与市场扩展草案的 schedule 移入 archive，旧结构说明见
+[摘要模型卡](contextual_v4.md)和[市场扩展模型卡](contextual_v4_market.md)。

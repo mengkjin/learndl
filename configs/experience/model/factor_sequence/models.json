@@ -179,5 +179,115 @@
     "gate_inputs": "stock values and metadata + causal performance/market context",
     "context_to_head": false,
     "gate_scale": 0.5
+  },
+  "factorseq_residual": {
+    "status": "implemented",
+    "version": 2,
+    "channels": [
+      "value",
+      "valid",
+      "gap",
+      "never"
+    ],
+    "variants": {
+      "contextual_v4": {
+        "version": 4,
+        "status": "legacy",
+        "streams": [
+          "factorseq",
+          "factorperf"
+        ],
+        "windows": [
+          60,
+          120
+        ],
+        "shared_streams": [
+          "factorperf"
+        ],
+        "parameters": 22404,
+        "context_parameters": 129,
+        "schedule": "configs/schedule/archive/factorseq_v4_contextual.yaml",
+        "experiment": "configs/experience/model/factor_sequence/contextual_v4.md"
+      },
+      "contextual_v4_market": {
+        "version": 4,
+        "status": "legacy",
+        "streams": [
+          "factorseq",
+          "factorperf",
+          "factormarket"
+        ],
+        "windows": [
+          60,
+          120,
+          1
+        ],
+        "shared_streams": [
+          "factorperf",
+          "factormarket"
+        ],
+        "parameters": 22506,
+        "context_parameters": 231,
+        "market_rank": 2,
+        "schedule": "configs/schedule/archive/factorseq_v4_contextual_market.yaml",
+        "experiment": "configs/experience/model/factor_sequence/contextual_v4_market.md"
+      },
+      "contextual_v4_events": {
+        "version": 4,
+        "status": "legacy",
+        "streams": [
+          "factorseq",
+          "factorperf",
+          "factormarket"
+        ],
+        "windows": [
+          60,
+          120,
+          1
+        ],
+        "shared_streams": [
+          "factorperf",
+          "factormarket"
+        ],
+        "parameters": 22551,
+        "context_parameters": 276,
+        "market_rank": 2,
+        "schedule": "configs/schedule/archive/factorseq_v4_contextual_events.yaml",
+        "experiment": "configs/experience/model/factor_sequence/contextual_v4_market.md",
+        "event_rank": 1,
+        "event_decay_days": 20.0
+      }
+    }
+  },
+  "factorseq_contextual_v4": {
+    "status": "implemented_not_trained",
+    "version": 4,
+    "streams": [
+      "factorseq",
+      "factorperf"
+    ],
+    "windows": [
+      60,
+      60
+    ],
+    "shared_streams": [
+      "factorperf"
+    ],
+    "config": "configs/algo/nn/factorseq_contextual_v4.yaml",
+    "experiment": "configs/experience/model/factor_sequence/contextual_v4_sequence.md",
+    "variants": {
+      "shared": {
+        "parameters": 23979,
+        "schedule": "configs/schedule/current/factorseq_v4_shared.yaml"
+      },
+      "private": {
+        "parameters": 28003,
+        "schedule": "configs/schedule/current/factorseq_v4_private.yaml"
+      },
+      "graph": {
+        "parameters": 24975,
+        "schedule": "configs/schedule/current/factorseq_v4_graph.yaml"
+      }
+    }
   }
 }

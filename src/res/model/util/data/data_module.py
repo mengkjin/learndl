@@ -105,15 +105,25 @@ class DataModule(Base.BoundLogger):
         """load prepared data at training begin , only load data once in a fitting"""
         if self.config.Param.get('input.factor_sequence.dataset'):
             keys = tuple(self.input_keys)
-            if keys not in (('factorseq',), ('factorseq','factorperf','factormarket')):
+            if keys not in (
+                ('factorseq',), ('factorseq', 'factorperf'), ('factorseq', 'factorperf', 'factormarket')
+            ):
                 raise ValueError('Invalid factor streams')
             if self.config.sample_method != 'sequential':
                 raise ValueError('Factor sequence requires ordered streams and single-date sequential batches')
             if any(self.config.seq_steps.get(k,1) != 1 for k in keys):
                 raise ValueError('Factor sequence v1 requires daily aligned windows')
             lens = self.config.seq_lens
-            if len(keys)>1 and (lens.get('factorperf') != lens.get('factormarket') or lens.get('factorperf',0) < lens.get('factorseq',0)):
-                raise ValueError('Context windows must match and cover the stock window')
+            if 'factorperf' in keys and lens.get('factorperf', 0) < lens.get('factorseq', 0):
+                raise ValueError('Factor performance must cover the stock window')
+            if 'factormarket' in keys and lens.get('factorperf') != lens.get('factormarket'):
+                modes = self.config.algo_config.Param.get('mode', [])
+                legacy_current_market = (
+                    self.config.model_module == 'factorseq_residual' and lens.get('factormarket') == 1
+                    and modes in (['contextual_v4_market'], ['contextual_v4_events'])
+                )
+                if not legacy_current_market:
+                    raise ValueError('Performance and market windows must match')
         if self.no_need_to_load_data(use_data):
             return self
         self._memory_mark('module_data_initialize_start')
