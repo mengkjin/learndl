@@ -117,13 +117,15 @@ class ValuationTest(unittest.TestCase):
         stopped_buy = valid.copy()
         stopped_sell = valid.copy()
         stopped_reason = reason.copy()
-        stopped = replace(panel, overnight_returns=stopped_overnight, intraday_returns=stopped_intraday,
-                          can_buy=stopped_buy, can_sell=stopped_sell, valuation_reason=stopped_reason)
         stopped_overnight[-1] = np.nan
         stopped_intraday[-1] = np.nan
         stopped_buy[-1] = False
         stopped_sell[-1] = False
         stopped_reason[-1] = 5
+        stopped = replace(panel, overnight_returns=stopped_overnight, intraday_returns=stopped_intraday,
+                          can_buy=stopped_buy, can_sell=stopped_sell, valuation_reason=stopped_reason)
+        _, frozen_overnight, frozen_intraday, *_ = stopped.execution_arrays()
+        self.assertTrue(np.isnan(frozen_overnight[-1, 0]) and np.isnan(frozen_intraday[-1, 0]))
         with self.assertRaisesRegex(ValueError, '600001.*not_listed'):
             replay_baseline(stopped, (0, 6), constraints, 'alpha_equal_weight')
         with tempfile.TemporaryDirectory() as directory:

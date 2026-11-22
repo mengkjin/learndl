@@ -13,7 +13,7 @@ Start date behaviour (daily update):
 - ETF/future/CB bars: enabled from 2023-06-01 on updatable machines; disabled elsewhere.
 
 Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
-back to 20090101, independent of ``src_start_date``. Stops before saving a day
+back to 20070101, independent of ``src_start_date``. Stops before saving a day
 with fewer than five stocks with valid prices on either SH or SZ. Daily update triggers a
 limited backfill (default ``max_days=5``) only after the latest sec 1-min bar
 was freshly downloaded in the same run.
@@ -183,7 +183,7 @@ def x_mins_to_update(date : int , data_type : MinDataType) -> list[int]:
     return x_mins
 
 def backfill_sec_dates() -> Dates:
-    """Trading days in [20090101, last td before daily src_start) missing from trade_ts/min."""
+    """Trading days in [20070101, last td before daily src_start) missing from trade_ts/min."""
     ceiling = src_start_date(MinDataType.SEC)
     if ceiling >= 20400101:
         return Dates()
@@ -459,7 +459,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         max_days : int | str | None = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
         **kwargs
     ) -> Base.UpdateFlag:
-        """Fill missing equity 1-min bars from the day before daily start back to 20090101.
+        """Fill missing equity 1-min bars from the day before daily start back to 20070101.
 
         Runs newest-missing first, at most ``max_days`` dates per call (default 5).
         None, empty text, "none", and "null" mean unlimited.

@@ -42,6 +42,7 @@ callbacks:
 
 algo:
   resnet_gru:
+    resnet_pool:    [flatten] # Original dd51 intraday projection.
     hidden_dim:     [64] #  2**5
     seqlens:        [{'15m_original': 30}] # although not a param for model, but can be different values(dict of SEQLEN) #
     dropout:        [0.1]

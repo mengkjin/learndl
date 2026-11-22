@@ -2,7 +2,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -63,12 +62,11 @@ class DownloadQualityTest(unittest.TestCase):
         self.enterContext(patch.object(bar_min, 'rcquant_instrument_list', return_value=instruments()))
         self.write = self.enterContext(patch.object(bar_min, 'write_min'))
         self.save = self.enterContext(patch.object(bar_min, '_save_bar'))
-        self.updater = SimpleNamespace(indent=0, vb_level=0, rcquant_min_to_normal_min=lambda df, kind: df)
+        self.updater = bar_min.RcquantMinBarDownloader(indent=0, vb_level=0)
+        self.enterContext(patch.object(self.updater, 'rcquant_min_to_normal_min', side_effect=lambda df, kind: df))
 
     def download(self, **kwargs):
-        return bar_min.RcquantMinBarDownloader.rcquant_bar_min(
-            self.updater, 20090105, bar_min.MinDataType.SEC, **kwargs,
-        )
+        return self.updater.rcquant_bar_min(20090105, bar_min.MinDataType.SEC, **kwargs)
 
     def test_bad_download_and_empty_payload_are_not_saved(self):
         for frame in [None, pd.DataFrame(), minute_data().iloc[:5].rename(columns={'code': 'order_book_id'})]:
@@ -121,13 +119,13 @@ class BackfillStopTest(unittest.TestCase):
             self.assertEqual(result, bar_min.Base.UpdateFlag.SUCCESS if good_days else bar_min.Base.UpdateFlag.SKIPPED)
             self.assertIn('SH=5, SZ=4', updater.logger.conclude.call_args.args[0])
 
-    def test_backfill_candidates_extend_to_2009(self):
+    def test_backfill_candidates_extend_to_2007(self):
         with patch.object(bar_min, 'src_start_date', return_value=20241101), \
              patch.object(bar_min.CALENDAR, 'td', return_value=20241031), \
              patch.object(bar_min, 'stored_dates', return_value=[]), \
              patch.object(bar_min, 'Dates') as dates:
             bar_min.backfill_sec_dates()
-        dates.assert_called_once_with(20090101, 20241031)
+        dates.assert_called_once_with(20070101, 20241031)
 
     def test_quota_still_stops_backfill(self):
         updater = MagicMock()

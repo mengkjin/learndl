@@ -57,13 +57,16 @@ class Device(BoundLogger):
     ):
         """Pick device via ``use_device`` (MPS checked before CUDA when available)."""
         super().__init__(indent=indent, vb_level=vb_level, **kwargs)
-        self.set_mps_memory_fraction()
         if policy not in _VALID_POLICIES:
             raise ValueError(f'Invalid device policy {policy}, expected one of {_VALID_POLICIES}')
         self.policy : DevicePolicy = policy
         self.try_cuda = False if policy == 'cpu_only' else try_cuda
         self._redirected = False
-        self._device = self.use_device(self.try_cuda)
+        if policy == 'cpu_only':
+            self._device = torch.device('cpu')
+        else:
+            self.set_mps_memory_fraction()
+            self._device = self.use_device(self.try_cuda)
 
     def __repr__(self): 
         return str(self.device)

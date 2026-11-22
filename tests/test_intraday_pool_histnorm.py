@@ -1,5 +1,10 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 import torch
+import yaml
+from src.proj import PATH
 from src.res.algo.nn.model.CNN import mod_resnet_1d, mod_resnet_2d, _IntradayPool
 from src.res.model.util.data.prenorm import SingleDataPrenorm, SpecialDataPrenorm
 from src.data.preprocess.hist_norm import PreProHistNorm
@@ -76,9 +81,18 @@ class IntradayTests(unittest.TestCase):
 
     def test_schedule_expansion(self):
         from src.res.model.util.config.config import AlgoConfig, ScheduleConfig
+        modes = ['flatten', 'mean', 'linear', 'attention', 'conv']
         pools = []
-        for name in ('resnet_gru_new_15m_pool', 'resnet_gru_new_15m_pool_conv2'):
-            schedule = ScheduleConfig(schedule_name=name, vb_level='never')
-            algo = AlgoConfig(None, start_with_none=True, module='resnet_gru_new', schedule_config=schedule, vb_level='never').expand()
-            pools.extend((p['resnet_pool'], p['resnet_pool_conv_layers']) for p in algo.params)
+        with TemporaryDirectory() as folder, patch.object(PATH, 'sched', Path(folder)):
+            for name, pool_modes, layers in [('unit_pool_sweep', modes, 1), ('unit_pool_conv2', ['conv'], 2)]:
+                params = {'resnet_pool': pool_modes, 'resnet_pool_conv_layers': [layers]}
+                (Path(folder) / f'{name}.yaml').write_text(
+                    yaml.safe_dump({'model': {'module': 'resnet_gru_new'}, 'algo': {'resnet_gru_new': params}}))
+                schedule = ScheduleConfig(schedule_name=name, vb_level='never')
+                algo = AlgoConfig(None, start_with_none=True, module='resnet_gru_new',
+                                  schedule_config=schedule, vb_level='never').expand()
+                pools.extend((p['resnet_pool'], p['resnet_pool_conv_layers']) for p in algo.params)
         self.assertEqual(pools, [('flatten', 1), ('mean', 1), ('linear', 1), ('attention', 1), ('conv', 1), ('conv', 2)])
+
+        live = ScheduleConfig(schedule_name='resnet_gru/resnet_gru_new_15m', vb_level='never')
+        self.assertEqual(live['algo.resnet_gru_new']['resnet_pool'], ['flatten'])

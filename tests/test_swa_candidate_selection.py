@@ -117,7 +117,9 @@ class SWASelectionTests(TestCase):
         cfg = ModelConfig(None, schedule_name=name, resume=0, vb_level='never',
                           override={'model.submodels': ['best', 'swalast', 'swa'], 'train.swa.lr_ratio': .1})
         self.assertEqual(cfg.swa_settings, (5, .1))
-        cfg.device = Device(try_cuda=False, policy='cpu_only')
+        with patch.object(torch.backends.mps, 'is_available', return_value=True):
+            cfg.device = Device(try_cuda=False, policy='cpu_only')
+        self.assertTrue(cfg.device.is_cpu)
         trainer: Any = object.__new__(BaseTrainer)
         trainer._config = cfg
         trainer._status = SimpleNamespace(stage='fit', epoch=0, phase=0, model_date=20230101,

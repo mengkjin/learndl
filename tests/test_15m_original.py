@@ -1,9 +1,10 @@
 """Frozen baseline parity and fail-closed original-data experiment."""
 import ast
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest import TestCase, main
 from unittest.mock import Mock, patch
@@ -98,6 +99,7 @@ class OriginalParity(TestCase):
         self.assertNotEqual(DataBlock.path_preprocess('15m_original', 'fit'), DataBlock.path_preprocess('15m', 'fit'))
         old = yaml.safe_load(subprocess.check_output(['git', 'show', f'{BASELINE_COMMIT}:configs/schedule/current/gru_15m_new_rtn.yaml'], cwd=ROOT, text=True))
         actual = yaml.safe_load((ROOT / 'configs/schedule/archive/gru_15m_original_rtn.yaml').read_text().replace('15m_original', '15m'))
+        self.assertEqual(actual['algo']['resnet_gru'].pop('resnet_pool'), ['flatten'])
         self.assertEqual(old, actual)
 
     def test_source_loader_uses_minute_data_not_fixed_15min(self):
@@ -115,11 +117,33 @@ class OriginalParity(TestCase):
         self.assertTrue(torch.isinf(actual.values[0, :, 0, 4]).all())
         self.assertEqual([call.args[1] for call in load.call_args_list], ['min', 'min'])
 
-    def test_network_files_are_identical_to_baseline(self):
-        for file in ('src/res/algo/nn/model/CNN.py', 'src/res/algo/nn/model/resnet_gru.py',
-                     'configs/algo/nn/resnet_gru.yaml'):
-            expected = subprocess.check_output(['git', 'show', f'{BASELINE_COMMIT}:{file}'], cwd=ROOT)
-            self.assertEqual((ROOT / file).read_bytes(), expected)
+    def test_original_network_loads_baseline_weights_and_reproduces_outputs(self):
+        from src.res.algo.nn.model.resnet_gru import resnet_gru
+
+        def baseline_module(name):
+            package = 'src.res.algo.nn.model'
+            path = f'src/res/algo/nn/model/{name}.py'
+            source = subprocess.check_output(['git', 'show', f'{BASELINE_COMMIT}:{path}'], cwd=ROOT)
+            module = ModuleType(f'{package}.{name}')
+            module.__package__ = package
+            exec(compile(source, path, 'exec'), module.__dict__)
+            return module
+
+        cnn = baseline_module('CNN')
+        with patch.dict(sys.modules, {cnn.__name__: cnn}):
+            reference_type = baseline_module('resnet_gru').resnet_gru
+        config = yaml.safe_load((ROOT / 'configs/schedule/archive/gru_15m_original_rtn.yaml').read_text())
+        params = {key: values[0] for key, values in config['algo']['resnet_gru'].items()}
+        with torch.random.fork_rng(devices=[]), torch.no_grad():
+            torch.manual_seed(17)
+            reference = reference_type(6, inday_dim=16, **params).eval()
+            current = resnet_gru(6, inday_dim=16, **params).eval()
+            current.load_state_dict(reference.state_dict(), strict=True)
+            inputs = torch.randn(3, 30, 16, 6)
+            expected, before = reference(inputs)
+            actual, after = current(inputs)
+            torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+            torch.testing.assert_close(after['hidden'], before['hidden'], rtol=0, atol=0)
 
     def test_real_input_selection_materializes_only_finite_batches(self):
         from src.res.model.util.data.operations import DataOperator

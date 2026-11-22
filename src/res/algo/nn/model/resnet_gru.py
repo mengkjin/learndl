@@ -65,6 +65,21 @@ class resnet_gru(nn.Module):
             self.fc_enc_att = None
 
         self.output = Layer.basic.OutputLayer(hidden_dim, hidden_as_factors, hidden_mean_pool)
+
+    def _load_from_state_dict(self, state_dict, prefix, local_metadata, strict,
+                              missing_keys, unexpected_keys, error_msgs):
+        # The original network stored its flatten projection and both output heads directly.
+        names = {'fc_hid_out.': 'output.fc_hid_out.', 'fc_map_out.': 'output.fc_map_out.'}
+        if self.fc_enc_in.resnet_pool == 'flatten':
+            names['fc_enc_in.fc_out.'] = 'fc_enc_in.fc_out.net.'
+        for old, new in names.items():
+            for key in list(state_dict):
+                if key.startswith(prefix + old) and not key.startswith(prefix + new):
+                    target = prefix + new + key.removeprefix(prefix + old)
+                    if target not in state_dict:
+                        state_dict[target] = state_dict.pop(key)
+        super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
+                                      missing_keys, unexpected_keys, error_msgs)
         
     def forward(self , x : Tensor) -> tuple[Tensor,dict]:
         """
