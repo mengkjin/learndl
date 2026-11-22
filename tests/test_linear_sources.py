@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 
 from src.proj import PATH
-from src.func.linear import weighted_components
+from src.shared.numeric.linear import weighted_components
 from src.res.factor.util.classes.alpha_model import Amodel
 from src.res.model.util.final_source import FinalSource, FinalInputLoader, prepare_final_values
 

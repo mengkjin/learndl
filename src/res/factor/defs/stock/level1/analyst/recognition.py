@@ -4,7 +4,7 @@ Analyst recognition factors for stock level1
 from __future__ import annotations
 import pandas as pd
 
-from src.func.transform import winsorize , standard_normal
+from src.shared.numeric.transform import winsorize , standard_normal
 
 from src.res.factor.calculator import CoverageFactor
 from src.res.factor.defs.stock.level0.analyst.coverage import (

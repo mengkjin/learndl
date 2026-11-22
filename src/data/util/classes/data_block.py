@@ -19,7 +19,7 @@ from typing import Any , Literal , TypeAlias , get_args
 from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
-from src.func.basic import (
+from src.shared.numeric.basic import (
     match_slice , forward_fillna , index_merge , intersect_copy , intersect_mesh_bytes ,
     intersect_pos_slice , INTERSECT_MESH_MAX_BYTES , IndexMergeMethod , IntersectCopyMethod ,
 )

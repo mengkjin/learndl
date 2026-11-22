@@ -14,7 +14,7 @@ import re
 import numpy as np
 import pandas as pd
 import torch
-from src.func.linear import linear_weights, weighted_components
+from src.shared.numeric.linear import linear_weights, weighted_components
 
 
 def final_weights(value, size: int) -> np.ndarray:

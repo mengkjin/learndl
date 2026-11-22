@@ -27,6 +27,19 @@ from src.res.model.util.trainer.optimizer import Optimizer
 
 
 class SWASelectionTests(TestCase):
+    def test_compiled_metrics_bind_to_eager_candidate(self):
+        from src.res.model.util.metric.trainer_metrics import _get_net, copy_metric_function
+
+        net = nn.Sequential(nn.Linear(2, 1))
+        compiled = torch.compile(net, backend='eager')
+        original = _get_net(SimpleNamespace(net=compiled))
+        self.assertIs(original, net)
+        candidate = deepcopy(net)
+        function = SimpleNamespace(net=original, weight=net[0].weight)
+        copied = copy_metric_function(function, candidate)
+        self.assertIs(copied.net, candidate)
+        self.assertIs(copied.weight, candidate[0].weight)
+
     def test_select_checkpoints_by_observed_phase_and_fixed_accuracy(self):
         checkpoints = Mock()
         metrics = Mock()

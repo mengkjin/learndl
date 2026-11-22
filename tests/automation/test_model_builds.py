@@ -37,7 +37,7 @@ class ModelBuildTest(unittest.TestCase):
         return self.pub.inbox / record['route'] / record['filename']
 
     def test_model_preview_moves_only_selected_build_and_routes_new_deliveries(self):
-        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.res.model.workflow.model_management import inventory, manage
         from src.proj import PATH
 
         self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
@@ -61,17 +61,17 @@ class ModelBuildTest(unittest.TestCase):
         self.enterContext(patch('src.api.learndl_monitor.experiments.Instances.discover', return_value=[]))
 
         def execute(action, build, value=None):
-            entry = next(row for row in inventory(library).values() if row['build'] == build['name'])
+            entry = next(row for row in inventory(library.management_context()).values() if row['build'] == build['name'])
             item = dict(id=entry['id'], value=value)
-            planned, = manage(library, action, [item])
+            planned, = manage(library.management_context(), action, [item])
             self.assertTrue(planned.get('ok'), planned)
-            applied, = manage(library, action, [item | {'target': planned['target']}], apply=True)
+            applied, = manage(library.management_context(), action, [item | {'target': planned['target']}], apply=True)
             self.assertTrue(applied.get('ok'), applied)
             return Path(applied['target'])
 
-        entry, = inventory(library).values()
+        entry, = inventory(library.management_context()).values()
         atomic_json(library.state / 'model_views.json', {entry['model_id']: {entry['build']: 'archived_trash'}})
-        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+        self.assertTrue(next(iter(inventory(library.management_context()).values()))['hidden'])
         execute('archive', original)
         archived = execute('rename', original, 'renamed')
         self.assertEqual(archived.relative_to(self.rec.results).parts,
@@ -82,7 +82,7 @@ class ModelBuildTest(unittest.TestCase):
         self.assertEqual((archived / 'results/report.txt').read_text(), 'update')
         receipt = load(self.rec.state / 'received' / (updated['manifest']['id'] + '.json'), {})
         self.assertEqual(receipt['target'], str(archived))
-        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+        self.assertTrue(next(iter(inventory(library.management_context()).values()))['hidden'])
 
         self.base.rename(self.root / 'original')
         report.parent.mkdir(parents=True)
@@ -92,7 +92,7 @@ class ModelBuildTest(unittest.TestCase):
         result, = receive(self.rec)
         self.assertEqual(Path(result['target']).parent.name, MODEL)
         self.assertNotEqual(Path(result['target']).parent, archived.parent)
-        self.assertEqual({(row['name'], row['hidden']) for row in inventory(library).values()},
+        self.assertEqual({(row['name'], row['hidden']) for row in inventory(library.management_context()).values()},
                          {('nn@gru@renamed', True), (MODEL, False)})
         execute('show', original)
         restored = execute('restore_archive', original)
@@ -116,7 +116,7 @@ class ModelBuildTest(unittest.TestCase):
         self.assertEqual((numbered / 'results/report.txt').read_text(), 'update')
 
     def test_manage_local_empty_directory_and_restore_with_number_conflict(self):
-        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.res.model.workflow.model_management import inventory, manage
         from src.proj import PATH
 
         base = self.root / 'models'
@@ -130,33 +130,73 @@ class ModelBuildTest(unittest.TestCase):
         library = Library('model_preview', self.rec, self.root / 'monitor')
 
         def plan(operation, entry, value=None):
-            result, = manage(library, operation, [dict(id=entry['id'], value=value)])
+            result, = manage(library.management_context(), operation, [dict(id=entry['id'], value=value)])
             self.assertTrue(result.get('ok'), result)
             return result
 
         def apply(operation, planned, value=None):
-            result, = manage(library, operation, [planned | {'value': value}], apply=True)
+            result, = manage(library.management_context(), operation, [planned | {'value': value}], apply=True)
             self.assertTrue(result.get('ok'), result)
             return Path(result['target'])
 
-        entry, = inventory(library).values()
+        entry, = inventory(library.management_context()).values()
         self.assertEqual(library.model_listing()['files'], [])
-        moved = apply('archive', plan('archive', entry))
+        import portalocker
+
+        marker = self.base / '.lifecycle.lock'
+        with portalocker.Lock(str(marker), timeout=0):
+            blocked, = manage(library.management_context(), 'archive', [{'id': entry['id']}])
+            self.assertIn('error', blocked)
+            self.assertTrue(self.base.is_dir())
+        marker.unlink()
+        planned = plan('archive', entry)
+        self.assertTrue(self.base.is_dir())
+        self.assertFalse((self.base / '.lifecycle.lock').exists())
+        self.assertFalse((library.state / 'model_history.json').exists())
+        self.assertFalse((library.state / 'model_move.json').exists())
+        moved = apply('archive', planned)
         self.assertEqual(moved.parent, archive)
+        from src.res.model.workflow.model_management import undo_latest
+        context = library.management_context()
+        self.assertTrue(undo_latest(context)['ok'])
+
+        def fail_history(path, value):
+            if path.name == 'model_history.json':
+                raise OSError('interrupted history update')
+            atomic_json(path, value)
+
+        with patch('src.res.model.workflow.model_management.operations.atomic_json', side_effect=fail_history):
+            with self.assertRaisesRegex(OSError, 'interrupted history'):
+                undo_latest(context, apply=True)
+        self.assertTrue(undo_latest(context)['ok'])
+        self.assertTrue(undo_latest(context, apply=True)['ok'])
+        self.assertFalse((library.state / 'undo_move.json').exists())
+        entry, = inventory(context).values()
+        moved = apply('archive', plan('archive', entry))
         self.base.mkdir()
-        archived = next(row for row in inventory(library).values() if row['archived'])
+        archived = next(row for row in inventory(library.management_context()).values() if row['archived'])
         restore = plan('restore_archive', archived)
         self.assertTrue(restore['name'].endswith('@2'))
         restored = apply('restore_archive', restore)
-        row = next(row for row in inventory(library).values() if row['path'] == str(restored))
-        conflict, = manage(library, 'renumber', [{'id': row['id'], 'value': '1'}])
+        row = next(row for row in inventory(library.management_context()).values() if row['path'] == str(restored))
+        conflict, = manage(library.management_context(), 'renumber', [{'id': row['id'], 'value': '1'}])
         self.assertIn('destination already exists', conflict['error'])
         renamed = apply('rename', plan('rename', row, 'another'), 'another')
         self.assertTrue(renamed.is_dir())
         self.assertTrue(self.base.is_dir())
 
+        from src.api.calls.files import _manage_model_paths
+        from src.res.model.workflow.model_management import operation_history
+        with patch('src.api.learndl_monitor.artifact_library.Library', return_value=library), \
+                patch('builtins.input', return_value='y'), patch('src.api.calls.files.Logger.stdout_pairs'):
+            _manage_model_paths([renamed], 'rename', 'via_cli')
+        self.assertFalse(renamed.exists())
+        last = operation_history(library.management_context())[-1]
+        self.assertEqual(last['entry'], 'cli')
+        self.assertTrue(Path(last['changes'][0]['target']).is_dir())
+
     def test_archived_legacy_build_adoption_keeps_location_and_hidden_state(self):
-        from src.api.learndl_monitor.model_management import inventory, manage
+        from src.res.model.workflow.model_management import inventory, manage
         from src.proj import PATH
 
         self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
@@ -168,14 +208,14 @@ class ModelBuildTest(unittest.TestCase):
         self.assertEqual(receive(self.rec)[0]['status'], 'received')
 
         library = Library('model_preview', self.rec, self.root / '.local_resources/learndl_monitor')
-        entry, = inventory(library).values()
+        entry, = inventory(library.management_context()).values()
         selection = {'id': entry['id']}
-        manage(library, 'hide', [selection | {'target': entry['path']}], apply=True)
-        planned, = manage(library, 'archive', [selection])
-        with patch('src.api.learndl_monitor.model_management.update_state', side_effect=OSError('interrupted')):
-            outcome, = manage(library, 'archive', [planned], apply=True)
+        manage(library.management_context(), 'hide', [selection | {'target': entry['path']}], apply=True)
+        planned, = manage(library.management_context(), 'archive', [selection])
+        with patch('src.res.model.workflow.model_management.operations.update_state', side_effect=OSError('interrupted')):
+            outcome, = manage(library.management_context(), 'archive', [planned], apply=True)
             self.assertEqual(outcome['error'], 'interrupted')
-        self.assertEqual(manage(library, 'recover', [], apply=True), [{'ok': True}])
+        self.assertEqual(manage(library.management_context(), 'recover', [], apply=True), [{'ok': True}])
         archived = Path(planned['target'])
         self.assertTrue(archived.is_dir())
 
@@ -186,10 +226,10 @@ class ModelBuildTest(unittest.TestCase):
         target = archived.with_name(formal['name'])
         self.assertEqual(outcome['target'], str(target))
         self.assertEqual((target / 'results/report.txt').read_text(), 'legacy')
-        self.assertTrue(next(iter(inventory(library).values()))['hidden'])
+        self.assertTrue(next(iter(inventory(library.management_context()).values()))['hidden'])
 
     def test_history_undo_retains_updates_and_restores_visibility(self):
-        from src.api.learndl_monitor.model_management import inventory, manage, operation_history, undo_latest
+        from src.res.model.workflow.model_management import inventory, manage, operation_history, undo_latest
         from src.proj import PATH
         self.enterContext(patch.object(PATH, 'lc_machine', self.root / 'machine'))
         self.enterContext(patch('src.res.model.util.core.model_path.source_models', return_value=[]))
@@ -200,27 +240,27 @@ class ModelBuildTest(unittest.TestCase):
         self.publish('before', ['results/report.txt'], build)
         receive(self.rec)
         library = Library('model_preview', self.rec, self.root / 'monitor')
-        original, = inventory(library).values()
+        original, = inventory(library.management_context()).values()
         for action, value in [('rename', 'new-name@2'), ('archive', None), ('hide', None)]:
-            row, = inventory(library).values()
+            row, = inventory(library.management_context()).values()
             item = dict(id=row['id'], value=value)
-            planned, = manage(library, action, [item])
+            planned, = manage(library.management_context(), action, [item])
             self.assertTrue(planned.get('ok'), planned)
-            result, = manage(library, action, [item | {'target': planned['target']}], apply=True,
+            result, = manage(library.management_context(), action, [item | {'target': planned['target']}], apply=True,
                              entry='cli' if action == 'archive' else 'web')
             self.assertTrue(result.get('ok'), result)
         report.write_text('updated')
         self.publish('updated', ['results/report.txt'], build)
         receive(self.rec)
-        self.assertEqual(len(operation_history(library)), 3)
+        self.assertEqual(len(operation_history(library.management_context())), 3)
         for _ in range(3):
-            self.assertTrue(undo_latest(library)['ok'])
-            self.assertTrue(undo_latest(library, apply=True)['ok'])
-        row, = inventory(library).values()
+            self.assertTrue(undo_latest(library.management_context())['ok'])
+            self.assertTrue(undo_latest(library.management_context(), apply=True)['ok'])
+        row, = inventory(library.management_context()).values()
         self.assertEqual(row['path'], original['path'])
         self.assertFalse(row['hidden'])
         self.assertEqual((Path(row['path']) / 'results/report.txt').read_text(), 'updated')
-        self.assertTrue(all(batch['undone'] for batch in operation_history(library)))
+        self.assertTrue(all(batch['undone'] for batch in operation_history(library.management_context())))
 
     def test_two_restarts_and_two_retests_keep_one_build_including_replayed_updates(self):
         from src.proj import PATH

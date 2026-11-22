@@ -12,7 +12,7 @@ from threading import Lock
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor , VolatilityFactor
 
-from src.func.transform import time_weight
+from src.shared.numeric.transform import time_weight
 
 __all__ = [
     'ff_mom_1m' , 'ff_mom_2m' , 'ff_mom_3m' , 'ff_mom_6m' , 'ff_mom_12m' , 

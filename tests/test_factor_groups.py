@@ -7,7 +7,7 @@ import numpy as np
 
 __all__ = []
 
-spec = importlib.util.spec_from_file_location('factor_groups', Path(__file__).resolve().parents[1] / 'src/func/factor_groups.py')
+spec = importlib.util.spec_from_file_location('factor_groups', Path(__file__).resolve().parents[1] / 'src/shared/numeric/factor_groups.py')
 assert spec is not None and spec.loader is not None
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)

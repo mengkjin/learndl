@@ -1,18 +1,25 @@
 """Persisted model properties and build identity shared with lightweight receivers."""
 from __future__ import annotations
 from contextlib import suppress
+from collections.abc import Mapping
+from hashlib import sha256
 import json
 import re
 
 from .file_ops import real_tree
 
-__all__ = ['KINDS', 'PROPERTY_FILE', 'LOG_PHASES', 'read_properties', 'validate_build']
+__all__ = ['KINDS', 'PROPERTY_FILE', 'LOG_PHASES', 'model_id', 'read_properties', 'validate_build']
 
 
 KINDS = ('build', 'initial_training', 'resume_training', 'last_test')
 PROPERTY_FILE = 'logs/property.jsonl'
 LOG_PHASES = ('train', 'test')
 BUILD_NAME = re.compile(r'build[0-9]{8}\.[0-9]{6}\.[0-9]+')
+
+
+def model_id(row: Mapping) -> str:
+    """Identify a model consistently in the receiver and its management clients."""
+    return sha256(json.dumps([row.get('host'), row.get('model')]).encode()).hexdigest()
 
 
 def read_properties(path):

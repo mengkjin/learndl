@@ -1,6 +1,6 @@
 # Project Infrastructure
 **Purpose:** Machine config, path management, trading calendar, database I/O, logging, singletons, and numerical utility functions.
-**Key source paths:** `src/proj/`, `src/func/`
+**Key source paths:** `src/proj/`, `src/shared/numeric/`
 **Depends on:** nothing (bottom of the dependency stack)
 
 ---
@@ -452,11 +452,11 @@ flat = FlattenDict({'a': {'b': 1, 'c': 2}})
 
 ---
 
-## 6. Numerical Utilities — `src/func/`
+## 6. Numerical Utilities — `src/shared/numeric/`
 
 Infrastructure-level vectorized operations for numpy/tensor/pandas. No business logic.
 
-### `src/func/basic.py` — index operations
+### `src/shared/numeric/basic.py` — index operations
 Common index-level operations on arrays and DataFrames:
 ```python
 align_index(df1, df2)          # align two DataFrames to common index/columns
@@ -464,13 +464,13 @@ reindex_like(arr, src_idx, tgt_idx)  # reindex array from src to tgt index
 isin_mask(arr, values)         # fast boolean mask: arr elements in values set
 ```
 
-### `src/func/tensor.py` — tensor operations (100+ functions)
+### `src/shared/numeric/tensor.py` — tensor operations (100+ functions)
 
 The main numerical workhorse. All functions operate on `torch.Tensor` unless noted.
 
 #### `TsRoller` — rolling window engine
 ```python
-from src.func.tensor import TsRoller
+from src.shared.numeric.tensor import TsRoller
 
 roller = TsRoller(window=20, min_periods=5)
 roller.mean(x)        # rolling mean along time axis
@@ -505,7 +505,7 @@ finite_mask(x)        # True where finite (not NaN/Inf)
 batch_apply(fn, x, batch_size)  # apply fn in batches to avoid OOM
 ```
 
-### `src/func/transform.py` — statistical transforms
+### `src/shared/numeric/transform.py` — statistical transforms
 ```python
 winsorize(x, pct=0.01)          # clip at [pct, 1-pct] quantiles
 winsorize_std(x, n_std=3.0)     # clip beyond n_std standard deviations
@@ -514,7 +514,7 @@ cov(x, min_periods=20)          # rolling covariance matrix
 neutralize(x, factors)          # OLS-residualize x against factors (cross-sectional)
 ```
 
-### `src/func/metric.py` — alpha evaluation metrics
+### `src/shared/numeric/metric.py` — alpha evaluation metrics
 ```python
 ic(pred, target)                # Pearson IC (cross-sectional)
 rank_ic(pred, target)           # Spearman rank IC
@@ -522,7 +522,7 @@ ic_series(pred_df, target_df)   # IC time series → pd.Series
 icir(ic_series)                 # IC Information Ratio
 ```
 
-### `src/func/linalg.py` — linear algebra
+### `src/shared/numeric/linalg.py` — linear algebra
 ```python
 symmetric_orth(A)               # symmetric orthogonalization of matrix A
                                 # used for risk-model factor orthogonalization

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import polars as pl
 
-spec = importlib.util.spec_from_file_location('audit_min_chars', Path(__file__).resolve().parents[1] / 'scripts/0_check/audit_min_chars.py')
+spec = importlib.util.spec_from_file_location('audit_min_chars', Path(__file__).resolve().parents[1] / 'scripts/0_check/.audit_min_chars.py')
 audit = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(audit)
 

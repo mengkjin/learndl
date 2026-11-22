@@ -378,7 +378,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
             return
         
         old_df = DB.load(f'factor_stats_{stats_type}' , self.db_key , vb_level = 'never')
-        from src.func.factor_groups import GROUPING_VERSION
+        from src.shared.numeric.factor_groups import GROUPING_VERSION
         new_df = getattr(self.Factor(dates) , f'{stats_type}_stats')()
         new_df['grouping_version'] = GROUPING_VERSION
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\

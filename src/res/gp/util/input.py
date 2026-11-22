@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.proj import CALENDAR , Const , Base , Load
-from src.func.tensor import zscore , neutralize_2d , ts_delay , ts_product
+from src.shared.numeric.tensor import zscore , neutralize_2d , ts_delay , ts_product
 from src.data import DATAVENDOR
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader

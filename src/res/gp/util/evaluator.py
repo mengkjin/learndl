@@ -11,7 +11,7 @@ from torch.multiprocessing import Pool
 from tqdm import tqdm
 
 from src.proj import Base
-from src.func.tensor import neutralize_1d , neutralize_2d , rankic_2d , nanmean , nanstd
+from src.shared.numeric.tensor import neutralize_1d , neutralize_2d , rankic_2d , nanmean , nanstd
 from src.res.gp.func import factor_func as FF
 from src.res.gp.param import gpParameters
 from .syntax import BaseIndividual , SyntaxRecord , Population , CompilerInputType

@@ -73,7 +73,7 @@ def build(root, raw, returns, dates, secids, market, events, eligible=None,
     components = {name: 'src/data/preprocess/factor_sequence/' + name
                   for name in ('schema.py', 'numeric.py', 'bundle.py')}
     components.update({'sources.py': 'src/res/model/experiment/factor_sequence/sources.py',
-                       'factor_groups.py': 'src/func/factor_groups.py'})
+                       'factor_groups.py': 'src/shared/numeric/factor_groups.py'})
     transform_hashes = {name: file_digest(repository / source_path) for name, source_path in components.items()}
     identity = {'config': asdict(cfg), 'inputs': sources, 'source': source or {},
                 'transform_hashes': transform_hashes}
@@ -229,7 +229,7 @@ def audit(path):
         if len(frame) < cfg.min_performance or frame.v.nunique() < 2:
             return None
         # np.floor preserves the pandas Series: use upper, not ndarray max.
-        from src.func.factor_groups import factor_groups
+        from src.shared.numeric.factor_groups import factor_groups
         group = factor_groups(frame.v)
         top, bottom = frame.r[group == group.max()], frame.r[group == group.min()]
         if group.max() == group.min():

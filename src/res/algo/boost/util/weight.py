@@ -12,7 +12,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Literal , TypeAlias
 
-from src.func.tensor import rank_pct
+from src.shared.numeric.tensor import rank_pct
 
 __all__ = ['BoostWeightMethod']
 

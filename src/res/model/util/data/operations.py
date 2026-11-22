@@ -19,7 +19,7 @@ from numpy.random import permutation
 from torch.utils.data import BatchSampler
 
 from src.proj import Base , CALENDAR
-from src.func.tensor import nanmedian , standardize , rank_pct
+from src.shared.numeric.tensor import nanmedian , standardize , rank_pct
 from src.data.preprocess import PrePros , PreProHistNorm
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.label_spec import LabelSpec

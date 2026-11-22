@@ -14,7 +14,7 @@ __all__ = [
 import numpy as np
 import pandas as pd
 from .schema import EVENTS, STOCK_CHANNELS
-from src.func.factor_groups import factor_groups
+from src.shared.numeric.factor_groups import factor_groups
 
 
 def clean(x):

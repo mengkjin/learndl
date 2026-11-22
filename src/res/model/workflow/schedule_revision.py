@@ -7,6 +7,8 @@ from pathlib import Path
 from src.proj import PATH
 from src.res.model.util.training_history import file_revision, git
 
+__all__ = ['schedule_revision']
+
 
 def schedule_revision(path: Path) -> dict:
     revision = file_revision(path)

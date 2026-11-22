@@ -200,7 +200,7 @@ FactorCalculator.from_config(cfg)
         ↓
 FactorCalculator.calculate(data)
   → DataAPI / DateDataAccess singletons (TRADE, BS, ...)
-  → src/func/ tensor utilities (TsRoller, cs_rank, ...)
+  → src/shared/numeric/ tensor utilities (TsRoller, cs_rank, ...)
         ↓
 Raw DataBlock (N_secid × N_date × 1 × 1)
         ↓

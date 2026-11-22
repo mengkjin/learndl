@@ -23,7 +23,7 @@
 └──────┬──┘  └──────┬──────┘  └─────────────┘  └─────────────────┘
        │            │
 ┌──────▼────────────▼────────────────────────────────────────────┐
-│           src/proj/ + src/func/  (infrastructure)               │
+│           src/proj/ + src/shared/numeric/  (infrastructure)               │
 │   env/  cal/  db/  log/  util/  core/                          │
 │   basic.py  tensor.py  transform.py  metric.py                 │
 └────────────────────────────────────────────────────────────────┘
@@ -34,7 +34,7 @@
 | Layer | Source Path | Purpose |
 |-------|-------------|---------|
 | Infrastructure | `src/proj/` | Machine config, paths, calendar, DB I/O, logging, singletons |
-| Numerical utils | `src/func/` | Vectorized tensor/numpy/pandas operations, rolling windows |
+| Numerical utils | `src/shared/numeric/` | Vectorized tensor/numpy/pandas operations, rolling windows |
 | Data pipeline | `src/data/` | Raw data download, loading, preprocessing, DataBlock construction |
 | Factor engine | `src/res/factor/` | Factor calculation, normalization, testing, risk model |
 | Algo modules | `src/res/algo/` | NN architectures (`nn/`) and boosting models (`boost/`) |

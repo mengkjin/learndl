@@ -9,6 +9,7 @@ import pandas as pd
 import torch
 
 from src.data import DataBlock
+from src.proj import PATH
 from src.data.preprocess import PrePros
 from src.data.preprocess.core import PreProcessor
 from src.data.preprocess.processors import PrePro_y, PrePro_y_lag0
@@ -183,6 +184,7 @@ class _Date:
 
 class LabelProcessorTest(TestCase):
     def test_schedule_and_dump_identity(self):
+        self.enterContext(patch.object(PATH, 'sched', PATH.sched_archive))
         for schedule in ['gru_day_lag0', 'gru_day_lag0_att']:
             config = ModelConfig(schedule_name=schedule, short_test=False, stage=1,
                                  resume=0, selection=0, vb_level='never')

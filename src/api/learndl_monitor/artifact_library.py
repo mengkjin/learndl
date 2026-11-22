@@ -12,10 +12,10 @@ from uuid import uuid4
 import portalocker
 
 from src.automation.artifact_exchange.core import (
-    Config, archived_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
+    Config, received_batches, atomic_json, experiment_members, fsync_dir, real_tree, received_member, safe_path,
 )
 from src.automation.artifact_exchange.model_builds import archived_builds
-from src.shared.model_provenance import LOG_PHASES, PROPERTY_FILE, read_properties
+from src.shared.model_provenance import LOG_PHASES, PROPERTY_FILE, model_id, read_properties
 from src.automation.artifact_exchange.model_metadata import BACKFILL_TASK, INVENTORY
 from .experiments import Instances
 from .services import ROOT, STATE
@@ -44,9 +44,16 @@ class Library:
         self.instances = Instances(state) if kind == 'model_preview' else None
 
     def _batches(self, category):
-        for folder, manifest in archived_batches(self.config, category):
-            if (self.config.state / 'received' / (manifest['id'] + '.json')).is_file():
-                yield folder, manifest
+        return received_batches(self.config, category)
+
+    def management_context(self):
+        from src.proj import PATH
+        from src.res.model.workflow.model_management import ModelManagementContext
+
+        instances = self.instances
+        return ModelManagementContext(self.config, self.state, PATH.model, PATH.model_archive,
+                                      instances.state / 'operations.lock' if instances else None,
+                                      instances.discover if instances else None)
 
     def rows(self):
         catalog = {}
@@ -210,10 +217,7 @@ class Library:
             rows.append(public)
         return sorted(rows, key=lambda r: (r.get('stamp', ''), r['label']), reverse=True)
 
-    @staticmethod
-    def model_id(row):
-        return sha256(json.dumps([row.get('host'), row.get('model')])
-                      .encode()).hexdigest()
+    model_id = staticmethod(model_id)
 
     def model_folder(self, key, build=None):
         for row in self.rows().values():
@@ -228,8 +232,8 @@ class Library:
         catalog = self.rows()
         files = self.listing(run, catalog=catalog)
         models = describe_models(catalog.values(), self.model_id)
-        from .model_management import inventory
-        for entry in inventory(self).values():
+        from src.res.model.workflow.model_management import inventory
+        for entry in inventory(self.management_context()).values():
             key = entry['model_id']
             if key not in models:
                 models[key] = dict(id=key, name=entry['name'], host=entry['host'], builds=[])
@@ -246,8 +250,9 @@ class Library:
         return {'files': files, 'models': models}
 
     def _model_views(self):
-        path = self.state / 'model_views.json'
-        return read_json(path) if path.exists() else {}
+        from src.res.model.workflow.model_management.inventory import model_views
+
+        return model_views(self.state)
 
     def available_row(self, key):
         return self.rows()[key]

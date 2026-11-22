@@ -7,7 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/2_data/7_repair_day_limit.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/2_data/.repair_day_limit.py'
 spec = importlib.util.spec_from_file_location('repair_day_limit_script', SCRIPT)
 repair = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(repair)

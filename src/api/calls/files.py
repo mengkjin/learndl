@@ -20,14 +20,29 @@ __all__ = [
     'ProjectAutoFix' ,
 ]  
 
+def _manage_model_paths(paths, action, value=None):
+    from src.api.learndl_monitor.artifact_library import Library
+    from src.res.model.workflow.model_management import inventory, manage
+
+    context = Library('model_preview').management_context()
+    rows = inventory(context)
+    selected = [dict(id=row['id'], value=value) for row in rows.values()
+                if not row['external'] and Path(row['path']) in paths]
+    if not selected:
+        return
+    plan = manage(context, action, selected, entry='cli')
+    values = {item['id']: item for item in selected}
+    valid = [item | {'value': values[item['id']]['value']} for item in plan if item.get('ok')]
+    Logger.stdout_pairs({item.get('source', item['id']): item.get('error') or item.get('target', '') for item in plan},
+                        title='Model operation preview')
+    if valid and input('Apply these model operations? [y/N] ').strip().lower() == 'y':
+        result = manage(context, action, valid, apply=True, entry='cli')
+        Logger.stdout_pairs({item['id']: item.get('error', 'Done') for item in result}, title='Model operations')
+
+
 class ModelArchiveOperations(DirectCall):
     """Manage model archive , including archive / resume / rename / packing."""
     category = 'Files'
-
-    @classmethod
-    def _manage_paths(cls, paths, action, value=None):
-        from src.api.learndl_monitor.model_management import cli_manage
-        cli_manage(paths, action, value)
 
     @classmethod
     def _iter_current_models(cls , parents : tuple[str,...]= ('nn' , 'boost' , 'factor') , print_paths : bool = True) -> list[Path]:
@@ -56,7 +71,7 @@ class ModelArchiveOperations(DirectCall):
             paths , confirm = False , multiple=True , title = title , print_options = False , use_checkbox = False,
             help_description='Select one or more model directories to move into PATH.model_archive.',
         ):
-            cls._manage_paths(flag.results, 'archive')
+            _manage_model_paths(flag.results, 'archive')
         return AskFor.flag()
 
     @classmethod
@@ -69,13 +84,13 @@ class ModelArchiveOperations(DirectCall):
                 help_description='Select archived model folder(s) to restore into active model directories.',
             )
             if flag.results:
-                cls._manage_paths(flag.results, 'restore_archive')
+                _manage_model_paths(flag.results, 'restore_archive')
         return AskFor.flag()
 
     @classmethod
     def reindex_all_current_models(cls):
         paths = cls._iter_current_models(parents = ('nn' , 'boost') , print_paths = False)
-        cls._manage_paths(paths, 'renumber', '1')
+        _manage_model_paths(paths, 'renumber', '1')
         return AskFor.flag()
 
     @classmethod
@@ -94,7 +109,7 @@ class ModelArchiveOperations(DirectCall):
                 help_description='New folder name under the same parent directory. Must be unique among current models.',
             )
             if name_flag and name_flag.result:
-                cls._manage_paths([flag.result], 'rename', name_flag.result)
+                _manage_model_paths([flag.result], 'rename', name_flag.result)
         return AskFor.flag()
 
     @classmethod

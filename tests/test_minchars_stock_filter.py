@@ -16,7 +16,7 @@ from src.data.preprocess.minchars_input import load_selected
 from src.data.update.custom.min_chars import daily, rolling, tagged
 from src.data.update.custom.min_chars import _common
 
-spec = importlib.util.spec_from_file_location('clean_min_chars', Path(__file__).resolve().parents[1] / 'scripts/0_check/clean_min_chars.py')
+spec = importlib.util.spec_from_file_location('clean_min_chars', Path(__file__).resolve().parents[1] / 'scripts/0_check/.clean_min_chars.py')
 clean = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(clean)
 

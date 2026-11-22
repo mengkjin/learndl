@@ -17,9 +17,9 @@ from functools import cached_property
 from typing import Any
 
 from src.proj import Logger , Base
-from src.func.basic import index_merge , match_slice , intersect_copy
-from src.func.metric import rankic_2d , ic_2d
-from src.func.tensor import rank_pct , standardize , standardize_mad
+from src.shared.numeric.basic import index_merge , match_slice , intersect_copy
+from src.shared.numeric.metric import rankic_2d , ic_2d
+from src.shared.numeric.tensor import rank_pct , standardize , standardize_mad
 
 from .weight import BoostWeightMethod
 

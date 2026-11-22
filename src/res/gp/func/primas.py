@@ -6,8 +6,8 @@ import torch
 from functools import wraps
 from collections.abc import Callable
 
-from src.func.basic import allna , exact
-import src.func.tensor as T
+from src.shared.numeric.basic import allna , exact
+import src.shared.numeric.tensor as T
 
 __all__ = [
     'PrimTool' , 'all_prim_names'

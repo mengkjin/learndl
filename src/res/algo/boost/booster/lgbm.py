@@ -16,7 +16,7 @@ from typing import Any
 
 from src.proj import Base , Proj
 from src.proj.util.functional.mpl_config import configure_matplotlib
-from src.func.basic import match_values
+from src.shared.numeric.basic import match_values
 from ..util import BasicBoostModel , BoostInput
 
 configure_matplotlib()

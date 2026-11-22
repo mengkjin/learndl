@@ -35,7 +35,7 @@ import torch
 
 from src.data.util.mem_trace import fmt_bytes , rss_bytes
 from src.data.util import DataBlock
-from src.func.basic import INTERSECT_MESH_MAX_BYTES , IntersectCopyMethod , index_merge , intersect_mesh_bytes
+from src.shared.numeric.basic import INTERSECT_MESH_MAX_BYTES , IntersectCopyMethod , index_merge , intersect_mesh_bytes
 
 # Production merge kwargs from ``PreProcessor.load_with_extension`` year chunks.
 _YEAR_MERGE : dict[str , Any] = {

@@ -17,6 +17,7 @@ class PackageBoundaryTest(unittest.TestCase):
             ('src/data/util/prices', ('src.data.loader', 'src.data.preprocess', 'src.data.update')),
             ('src/automation/artifact_exchange', ('src.res.rl_experimental',)),
             ('src/shared', ('src.proj', 'src.data', 'src.res', 'src.automation', 'src.api')),
+            ('src/res/model/workflow/model_management', ('src.api',)),
         ]
         for directory, forbidden in rules:
             for path in (ROOT / directory).rglob('*.py'):
@@ -34,12 +35,21 @@ import src.shared.duration
 import src.shared.dynamic_import
 import src.shared.file_ops
 import src.shared.filtered
+import src.shared.model_provenance
+import src.shared.numeric
 import src.shared.resource.memory
 import src.shared.singleton
 for namespace in ('numpy', 'torch', 'pandas', 'scipy', 'statsmodels', 'psutil',
                   'src.proj', 'src.data', 'src.res', 'src.api', 'src.automation'):
     assert namespace not in sys.modules, namespace
 """], cwd=ROOT, check=True, timeout=30)
+
+    def test_model_operations_do_not_import_api(self):
+        subprocess.run([sys.executable, '-c', """
+import sys
+import src.res.model.workflow.model_management
+assert 'src.api' not in sys.modules
+"""], cwd=ROOT, check=True, timeout=60)
 
     def test_software_tests_are_outside_runtime_packages(self):
         for path in (ROOT / 'src').rglob('*.py'):

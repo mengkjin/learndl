@@ -1,6 +1,5 @@
 """Daily hidden normalization and legacy GRU compatibility on synthetic CPU data."""
-import copy
-from pathlib import Path
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -9,6 +8,7 @@ from torch import nn
 import yaml
 
 from src.res.algo.nn import layer as Layer
+from src.proj import PATH
 from src.res.algo.nn.model import RNN
 from src.res.model.util.config.config import AlgoConfig, ScheduleConfig
 
@@ -129,15 +129,16 @@ class RNNHiddenStandardizeTest(unittest.TestCase):
             RNN.gru(input_dim=3, hidden_dim=4, hidden_norm='typo')
 
     def test_schedule_loading_and_baseline_equivalence(self):
-        root = Path(__file__).resolve().parents[1] / 'configs/schedule/current'
-        baseline = yaml.safe_load((root / 'gru_day_new.yaml').read_text())
-        new = yaml.safe_load((root / 'gru_day_new_std.yaml').read_text())
-        expected = copy.deepcopy(baseline)
+        # Compare against the GRU schedule used when this archived experiment was defined.
+        expected = yaml.safe_load(subprocess.check_output(
+            ['git', 'show', '7cbcc1b4:configs/schedule/current/gru_day_new.yaml'], cwd=PATH.main))
+        new = yaml.safe_load((PATH.sched_archive / 'gru_day_new_std.yaml').read_text())
         expected['train'].update({'dataloader.sample_method': 'sequential',
                                   'dataloader.shuffle_option': 'epoch'})
         expected['algo']['gru'].update(hidden_norm=['std'], output_as_factors=[True])
         self.assertEqual(new, expected)
-        schedule = ScheduleConfig(schedule_name='gru_day_new_std', vb_level='never')
+        with patch.object(PATH, 'sched', PATH.sched_archive):
+            schedule = ScheduleConfig(schedule_name='gru_day_new_std', vb_level='never')
         self.assertEqual(schedule['model.name'], 'gru_day_new_std')
         algo = AlgoConfig(None, start_with_none=True, module='gru',
                           schedule_config=schedule, vb_level='never').expand()

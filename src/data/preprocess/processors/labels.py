@@ -9,7 +9,7 @@ __all__ = [
 ]
 import torch
 from src.proj import Const
-from src.func.tensor import neutralize_2d, process_factor
+from src.shared.numeric.tensor import neutralize_2d, process_factor
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader
 from ..core import TradePreProcessor

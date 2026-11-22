@@ -15,7 +15,7 @@
 - doc: context/modules/project_infra.md
   sources:
     - src/proj/
-    - src/func/
+    - src/shared/numeric/
 
 - doc: context/modules/shell_opener.md
   sources:

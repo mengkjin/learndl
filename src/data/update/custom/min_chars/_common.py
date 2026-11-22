@@ -37,7 +37,7 @@ import pandas as pd
 import polars as pl
 
 from src.proj import DB , Dates , CALENDAR , Base
-from src.func.basic import DIV_TOL
+from src.shared.numeric.basic import DIV_TOL
 from src.data.util.minchars_stock import stock_rows
 
 N_SESS = 8

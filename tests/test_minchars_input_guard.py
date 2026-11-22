@@ -5,7 +5,7 @@ import unittest
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, create_autospec, patch
 
 import numpy as np
 import polars as pl
@@ -76,7 +76,8 @@ class MemoryGuardTest(unittest.TestCase):
 
         for cap in (1, None):
             with self.subTest(cap=cap):
-                processor = SimpleNamespace(
+                processor = create_autospec(PreProcessor, instance=True)
+                processor.configure_mock(
                     key='budget_test', load_start=20201231, load_end=20210104,
                     DateChunkYears=1, CalculationWindow=1, ChunkFillNan=None,
                     MaxAllocationBytes=cap, MemTrace=False,

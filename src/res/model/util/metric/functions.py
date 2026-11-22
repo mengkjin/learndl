@@ -5,6 +5,7 @@ from __future__ import annotations
 import torch
 
 from torch import nn , Tensor
+from math import isfinite, isnan
 from typing import Any
 
 from src.proj import Logger , Base
@@ -12,7 +13,7 @@ from src.res.algo.nn.loss import Accuracy , Loss , MultiHeadLosses
 from src.res.model.util.core import BatchData
 from .components import MetricComponent , LossComponent , AccuracyComponent
 
-__all__ = ['MetricFunction' , 'LossFunction' , 'AccuracyFunction']
+__all__ = ['MetricFunction', 'LossFunction', 'AccuracyFunction', 'NonFiniteAccuracyError', 'RankICFunction']
 
 class _Grads:
     def __init__(self , require_grad : bool = True):
@@ -115,6 +116,16 @@ class NonFiniteAccuracyError(ValueError):
 class AccuracyFunction(MetricFunction):
     SearchList : list[str] = ['accuracy' , 'Accuracy' , 'AccuracyFunction' , 'accuracy_function' , 'accuracies' , 'Accuracies']
     ExcludeNan : bool = True
+
+    @staticmethod
+    def scalar_accuracies(values) -> dict[str, float]:
+        result = {key: float(value) for key, value in values.items()}
+        invalid = {key: value for key, value in result.items() if not isfinite(value)}
+        if invalid:
+            kind = 'nan' if all(isnan(value) for value in invalid.values()) else 'nonfinite'
+            raise NonFiniteAccuracyError(f'Encountered {kind} accuracies! {invalid}')
+        return result
+
     def __init__(
         self , 
         criterions : dict[str,dict[str,Any]] , 
@@ -148,11 +159,7 @@ class AccuracyFunction(MetricFunction):
         if dataset not in ['train','valid']:
             return {}
         accuracies = self(data, which_output = which_output , which_label = which_label , require_grad = False)
-        if any(torch.isnan(value) for value in accuracies.values()):
-            bad = {k: float(v) for k, v in accuracies.items() if torch.isnan(v)}
-            raise NonFiniteAccuracyError(f'Encountered nan accuracies! {bad}')
-        accuracies = {key:value.item() if isinstance(value , Tensor) else value for key,value in accuracies.items()}
-        return accuracies
+        return self.scalar_accuracies(accuracies)
 
 class RankICFunction:
     ExcludeNan : bool = True

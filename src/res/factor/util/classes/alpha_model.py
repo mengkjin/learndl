@@ -13,8 +13,8 @@ from collections.abc import Callable, Sequence, Mapping
 
 from src.proj import Const , DB , Base , Dates 
 from src.data import DATAVENDOR
-from src.func.transform import fill_na_as_const , winsorize_by_dist , standard_normal
-from src.func.linear import weighted_components
+from src.shared.numeric.transform import fill_na_as_const , winsorize_by_dist , standard_normal
+from src.shared.numeric.linear import weighted_components
 
 from .general_model import GeneralModel
 

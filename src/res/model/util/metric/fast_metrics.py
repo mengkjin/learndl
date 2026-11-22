@@ -8,10 +8,9 @@ __all__ = [
 ]
 
 import pandas as pd
-import torch
 
 from src.res.algo.nn.loss import Accuracy
-from .functions import AccuracyFunction, NonFiniteAccuracyError
+from .functions import AccuracyFunction
 from .stage_metrics import BatchMetrics, EpochMetrics, AggregatedMetrics
 
 
@@ -49,11 +48,7 @@ class ReusingAccuracyFunction(AccuracyFunction):
             return super().accuracies(data, which_output, which_label, dataset)
         values = self(data, which_output=which_output, which_label=which_label, require_grad=False)
         # Keep the original immediate failure and scalar-read timing.
-        bad = {key: float(value) for key, value in values.items() if not torch.isfinite(value)}
-        if bad:
-            raise NonFiniteAccuracyError(f'Encountered nonfinite accuracies: {bad}')
-        result = {key: value.item() if isinstance(value, torch.Tensor) else value
-                  for key, value in values.items()}
+        result = self.scalar_accuracies(values)
         self.last_rankic = values['spearman'].mean()
         return result
 

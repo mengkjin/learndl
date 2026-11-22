@@ -2,12 +2,12 @@
 name: learndl-base-modules
 description: >-
   Routes agents to learndl base packages under `src/proj` (paths, DB, calendar, logging, Proj facade)
-  and `src/func` (tensor/factor ops, numpy/pandas helpers). Use when editing or importing `proj` or
-  `func`, configuring environments, logging, trade calendars, or shared numerics—not `src/res`
+  and `src/shared/numeric` (tensor/factor ops, numpy/pandas helpers). Use when editing or importing `proj` or
+  `src.shared.numeric`, configuring environments, logging, trade calendars, or shared numerics—not `src/res`
   strategy/factor pipelines or `src/data` loaders.
 ---
 
-# learndl base libraries (`proj` / `func`)
+# learndl base libraries (`src.proj` / `src.shared.numeric`)
 
 Use this file as a route map only; behavior and APIs live in source and module docstrings.
 
@@ -43,12 +43,12 @@ Use this file as a route map only; behavior and APIs live in source and module d
 | Process pools, proxy/cache callers | `src/proj/util/proxy/` |
 | Script locks, script lifecycle, CLI helpers | `src/proj/util/script/` |
 | Watchdog, scheduling, autofix, installation | `src/automation/`; use `learndl-automation` skill |
-| Factor tensors, rolling, neutralize, rank | `src/func/tensor.py` |
-| Index align, fillna, `index_merge` | `src/func/basic.py` |
-| NumPy/pandas transforms, OLS, cov | `src/func/transform.py` |
-| Torch metrics, IC, weighted corr | `src/func/metric.py` |
-| Symmetric orthogonalization | `src/func/linalg.py` |
-| Package exports | `src/proj/__init__.py`, `src/func/__init__.py` |
+| Factor tensors, rolling, neutralize, rank | `src/shared/numeric/tensor.py` |
+| Index align, fillna, `index_merge` | `src/shared/numeric/basic.py` |
+| NumPy/pandas transforms, OLS, cov | `src/shared/numeric/transform.py` |
+| Torch metrics, IC, weighted corr | `src/shared/numeric/metric.py` |
+| Symmetric orthogonalization | `src/shared/numeric/linalg.py` |
+| Package exports | `src/proj/__init__.py`, `src/shared/numeric/__init__.py` |
 
 ## `src/proj` layout
 
@@ -57,8 +57,8 @@ Use this file as a route map only; behavior and APIs live in source and module d
 - **`cal/`**: `CALENDAR`, `TradeDate`, etc.—start here for session/backtest dates.
 - **`db/`**: low-level access and mappers; not the same as `src/data` vendor loaders.
 - **`core/`**: project logging controls, output helpers and trading types.
-- **`util/`**: general utilities—**not** `src/func`.
-- **`util/func/`**: engineering helpers (parallel, disk, shell)—**not** the math package `src/func`.
+- **`util/`**: general utilities—**not** `src/shared/numeric`.
+- **`util/functional/`**: project helpers for parallel execution, devices and plotting.
 
 ## Lightweight shared utilities
 
@@ -66,7 +66,9 @@ Use this file as a route map only; behavior and APIs live in source and module d
 - `src/shared/resource/memory.py`: process memory measurements, cgroup headroom and budget calculation. Data block allocation policy lives in `src/data/util/memory_guard.py`.
 - `src/shared/duration.py`, `dynamic_import.py`, `cached_properties.py`, `singleton.py`, `filtered.py`: standalone timing, module loading and Python primitives.
 
-## `src/func` layout
+## `src/shared/numeric` layout
+
+`shared` is project-independent. Its package initializers stay lightweight; import individual numerical modules to opt into their dependencies.
 
 - **`tensor.py`**: largest module; `TsRoller`, `process_factor`, `neutralize_*`, `rank`, `corrwith`, `ts_*`.
 - **`basic.py`**: `DIV_TOL`, `allna`, index/`intersect_*` helpers.
@@ -76,8 +78,8 @@ Use this file as a route map only; behavior and APIs live in source and module d
 
 ## Easy to confuse
 
-- **`src/func`**: shared quant math (`from func import ...` / `import func.tensor`).
-- **`src/proj/util/func`**: project utilities; unrelated despite the name.
+- **`src/shared/numeric`**: shared quant math (`from src.shared.numeric.tensor import ...`).
+- **`src/proj/util/functional`**: project-specific execution and plotting helpers.
 
 ## Outside this skill
 

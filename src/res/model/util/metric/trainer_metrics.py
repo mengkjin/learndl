@@ -13,6 +13,7 @@ from torch import nn
 from typing import Any
 
 from src.proj import Base
+from src.res.model.util.advance.torch_compile import TorchCompiler
 from src.res.model.util.core import BatchData, BatchOutput
 from src.res.model.util.config import ModelConfig
 from src.res.model.util.trainer import BaseTrainer , TrainerPipeline
@@ -23,15 +24,13 @@ from .metric_result import EpochMetricResult
 from .fast_metrics import FastBatchMetrics, FastEpochMetrics, ReusingAccuracyFunction
 from .stage_metrics import BatchMetrics , EpochMetrics , AttemptMetrics , ModelMetrics
 
-__all__ = ['TrainerMetrics']
+__all__ = ['TrainerMetrics', 'copy_metric_function']
 
 def _get_net(model : nn.Module | Any) -> nn.Module | None:
-    if isinstance(model , nn.Module):
-        return model
-    elif hasattr(model , 'net') and isinstance(getattr(model , 'net') , nn.Module):
-        return getattr(model , 'net')
-    else:
-        return None
+    net = model if isinstance(model, nn.Module) else getattr(model, 'net', None)
+    return TorchCompiler.unwrap_module(net) if isinstance(net, nn.Module) else None
+
+
 def copy_metric_function(function, net):
     """Copy mutable metric state and bind any network references to the candidate."""
     original = function.net

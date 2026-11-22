@@ -9,7 +9,7 @@ from typing import Any
 from tqdm import tqdm
 
 from src.proj import Base
-from src.func.tensor import corrwith , concat_factors_2d
+from src.shared.numeric.tensor import corrwith , concat_factors_2d
 from src.res.gp.func import factor_func as FF
 from .memory import MemoryManager
 

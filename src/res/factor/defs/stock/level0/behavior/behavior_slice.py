@@ -8,7 +8,7 @@ from typing import Literal , TypeAlias
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor , CorrelationFactor
 
-from src.func.transform import lm_resid
+from src.shared.numeric.transform import lm_resid
 
 __all__ = [
     'mom_ltampl_v1' , 'mom_ltampl_v2' , 

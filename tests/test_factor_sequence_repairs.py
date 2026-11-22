@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import pandas as pd
 
-from src.func.factor_groups import factor_groups
+from src.shared.numeric.factor_groups import factor_groups
 from src.data.preprocess.factor_sequence.dividend import dividend_values
 from src.data.maintenance.factor_sequence.repair import Checkpoint, dependency_order
 from src.data.preprocess.factor_sequence.numeric import (

@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from src.proj import PATH , DB , Load , Base
-from src.func.metric import ic_2d , rankic_2d
+from src.shared.numeric.metric import ic_2d , rankic_2d
 
 from .dataset import BoostInput , BoostOutput
 from .weight import BoostWeightMethod

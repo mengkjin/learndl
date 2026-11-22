@@ -11,6 +11,9 @@ import portalocker
 from src.proj import PATH
 from src.proj.env.schedules import find_schedule_path, schedule_matches, schedule_source
 
+__all__ = ['saved_reference', 'linear_model_available', 'validate_model_source',
+           'guard_model_source', 'save_model_source']
+
 
 def _marker(model):
     return model.conf() / 'schedule_source.json'

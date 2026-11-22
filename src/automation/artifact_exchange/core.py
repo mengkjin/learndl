@@ -48,6 +48,7 @@ __all__ = [
     'category_root',
     'archive_target',
     'archived_batches',
+    'received_batches',
     'experiment_members',
     'received_member',
     'receive',
@@ -553,6 +554,13 @@ def archived_batches(config, category=None):
                 yield source.parent, manifest
         except (OSError, ValueError, TypeError, KeyError):
             continue
+
+
+def received_batches(config, category=None):
+    """Yield published archive folders with a durable local receipt."""
+    for folder, manifest in archived_batches(config, category):
+        if (config.state / 'received' / (manifest['id'] + '.json')).is_file():
+            yield folder, manifest
 
 
 def experiment_members(manifest):

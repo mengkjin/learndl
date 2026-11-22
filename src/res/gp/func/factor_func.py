@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 
 from src.proj import Logger , Base
-from src.func.tensor import rankic_2d , corrwith , zscore_inplace , allna , ts_mean , ts_stddev , zscore
+from src.shared.numeric.tensor import rankic_2d , corrwith , zscore_inplace , allna , ts_mean , ts_stddev , zscore
 
 __all__ = [
     'FactorValue' , 'MultiFactorValue' , 'MultiFactor' , 

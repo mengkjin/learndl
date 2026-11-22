@@ -24,7 +24,7 @@ from functools import cached_property
 from typing import Any , cast , get_args
 
 from src.proj import CALENDAR , Const , Base , Dates
-from src.func.basic import INTERSECT_MESH_MAX_BYTES
+from src.shared.numeric.basic import INTERSECT_MESH_MAX_BYTES
 from src.data.util import DataBlock
 from src.data.loader import BlockLoader , FactorCategory1Loader
 from .date_chunk import calendar_year_spans

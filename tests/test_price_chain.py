@@ -11,6 +11,14 @@ from src.proj import Dates
 
 
 class PriceChainTest(unittest.TestCase):
+    def test_force_replaces_corrupted_output_from_valid_inputs(self):
+        self.raw(20041230)
+        prices.ensure_adjprice(20041230)
+        path = self.path('trade_ts', 'adjprice', 20041230)
+        path.write_bytes(b'truncated')
+        self.assertTrue(prices.ensure_adjprice(20041230, force=True))
+        self.assertEqual(pd.read_feather(path).close.item(), 10.)
+
     def test_equal_recalculation_preserves_price_stamp_and_summarizes(self):
         self.raw(20041230)
         prices.ensure_adjprice(20041230)

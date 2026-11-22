@@ -17,7 +17,8 @@ import json
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-import fcntl
+import portalocker
+from pyarrow import ArrowInvalid
 from uuid import uuid4
 
 from src.proj import CALENDAR, DB, Save, Logger
@@ -174,7 +175,7 @@ def price_lock():
     path = DB.path('trade_ts', 'adjprice', first_date()).parent.parent / '.prices.lock'
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open('a') as stream:
-        fcntl.flock(stream, fcntl.LOCK_EX)
+        portalocker.lock(stream, portalocker.LOCK_EX)
         yield
 
 
@@ -269,7 +270,11 @@ def _ensure_adjprice(date: int, force: bool = False, reason: str = 'query',
         path = DB.path('trade_ts', 'adjprice', current)
         inputs = dependencies(current)
         candidate = calc_adjprice(current)
-        old = DB.load('trade_ts', 'adjprice', current, vb_level='never')
+        try:
+            old = DB.load('trade_ts', 'adjprice', current, vb_level='never')
+        except ArrowInvalid:
+            # The derived file is replaceable once its inputs have been validated.
+            old = pd.DataFrame()
         same = (path.exists() and set(old.columns) == set(candidate.columns)
                 and old.sort_values('secid').reset_index(drop=True).equals(
                     candidate.reindex(columns=old.columns).sort_values('secid').reset_index(drop=True)))

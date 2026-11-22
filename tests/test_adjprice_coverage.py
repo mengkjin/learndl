@@ -17,6 +17,19 @@ from src.data.maintenance.repair_microcap import check_prices
 __all__ = ['AdjpriceCoverageTest']
 
 class AdjpriceCoverageTest(unittest.TestCase):
+    def test_replaced_price_file_refreshes_missing_held_security(self):
+        trade = object.__new__(TradeDataAccess)
+        updated = pd.DataFrame({'secid': [1, 2], 'close': [10., 15.]})
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'adjprice.feather'
+            updated.to_feather(path)
+            with (patch.object(trade, 'get_adjprice', return_value=updated.iloc[:1]),
+                  patch.object(trade, 'get', return_value=updated) as refresh,
+                  patch.object(adjprice.DB, 'path', return_value=path)):
+                result = trade.get_adjprice_checked(20050104, [2], ['secid', 'close'])
+                self.assertEqual(result.close.tolist(), [10., 15.])
+                refresh.assert_called_once_with(20050104, 'adj', overwrite=True)
+
     def test_rebalance_filters_on_execution_day_and_keeps_unknown(self):
         desc = pd.DataFrame({
             'secid': [1, 2, 3, 3, 4, 5],

@@ -7,7 +7,7 @@ import pandas as pd
 from src.data import DATAVENDOR
 from src.res.factor.calculator import CorrelationFactor
 
-from src.func.transform import time_weight , apply_ols
+from src.shared.numeric.transform import time_weight , apply_ols
 
 __all__ = [
     'beta_1m' , 'beta_2m' , 'beta_3m' , 'beta_6m' , 'beta_12m'

@@ -158,7 +158,7 @@ saved predictions on resume), the data stage raises an error. Storage missing
 from the computer is still an error, rather than being treated as an empty day.
 Empty individual months are allowed. Resume with no new dates is a no-op.
 
-Final inputs and `Amodel.combine_linear` share `src.func.linear` weight parsing
+Final inputs and `Amodel.combine_linear` share `src.shared.numeric.linear` weight parsing
 and per-component multiplication. Their defaults remain intentionally explicit:
 linear uses the finite intersection and literal vector coefficients;
 AlphaComposite keeps its component preprocessing, date fallback, union/zero

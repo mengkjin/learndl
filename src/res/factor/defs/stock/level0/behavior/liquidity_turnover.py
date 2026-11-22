@@ -7,7 +7,7 @@ import pandas as pd
 from src.data import DATAVENDOR
 from src.res.factor.calculator import LiquidityFactor
 
-from src.func.transform import apply_ols
+from src.shared.numeric.transform import apply_ols
 
 __all__ = [
     'turn_1m' , 'turn_2m' , 'turn_3m' , 'turn_6m' , 'turn_12m' , 'turn_unexpected'

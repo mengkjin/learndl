@@ -137,7 +137,7 @@ def build_repaired_data(root: str | Path, start: int, end: int, batch_size: int 
                         columns=secids,
                     )
                     ret = prices.pct_change(fill_method=None).iloc[-1].to_numpy()
-                    from src.func.factor_groups import factor_groups
+                    from src.shared.numeric.factor_groups import factor_groups
 
                     for j, factor in enumerate(factors):
                         metric = group_metrics(previous[:, j], ret, cfg.min_performance)
@@ -227,7 +227,7 @@ def build_repaired_data(root: str | Path, start: int, end: int, batch_size: int 
     }
     write_json(stage / "feature_dictionary.json", feature_dictionary)
     files = {p.name: file_digest(p) for p in stage.iterdir() if p.is_file()}
-    from src.func.factor_groups import GROUPING_VERSION
+    from src.shared.numeric.factor_groups import GROUPING_VERSION
 
     from src.data.preprocess.factor_sequence.provenance import component_paths
     code = {name: file_digest(p) for name, p in component_paths().items()}

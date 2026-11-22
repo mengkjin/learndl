@@ -137,25 +137,30 @@ class TradeDataAccess(DateDataAccess):
         ids = Base.ensure_secid(secid)
         frame = self.get_adjprice(date)
         fields = ([field] if isinstance(field, str) else field)
-        present = frame
-        if fields is not None and 'secid' in frame:
-            prices = [name for name in fields if name != 'secid']
-            if prices:
-                values = frame.reindex(columns=prices).to_numpy(dtype=float)
-                valid = np.asarray(np.all(np.isfinite(values) & (values > 0), axis=1))
-                present = frame.loc[valid]
-        if ids is not None:
-            missing = pd.Index(ids).difference(present.secid.tolist() if 'secid' in present else [])
-            if len(missing):
-                path = Path(snapshot_read_path(DB.path('trade_ts', 'adjprice', int(date))))
-                try:
-                    stat = path.stat()
-                    version = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
-                except FileNotFoundError:
-                    version = None
-                for sid in missing:
-                    _warn_missing_price(int(date), int(sid), str(path), version,
-                                        ','.join(fields or []) or 'row')
+        holdings = pd.Index([] if ids is None else ids)
+
+        def missing_holdings(panel):
+            present = panel
+            prices = [name for name in fields or () if name != 'secid']
+            if prices and 'secid' in panel:
+                values = panel.reindex(columns=prices).to_numpy(dtype=float)
+                present = panel.loc[np.all(np.isfinite(values) & (values > 0), axis=1)]
+            return holdings.difference(present.secid.tolist() if 'secid' in present else [])
+
+        if len(holdings) and len(missing := missing_holdings(frame)):
+            path = Path(snapshot_read_path(DB.path('trade_ts', 'adjprice', int(date))))
+            try:
+                stat = path.stat()
+                version = (stat.st_ino, stat.st_size, stat.st_mtime_ns)
+            except FileNotFoundError:
+                version = None
+            if version is not None and not snapshot_active():
+                # Another writer may have replaced the file since this date was cached.
+                frame = self.get(int(date), 'adj', overwrite=True)
+                missing = missing_holdings(frame)
+            for sid in missing:
+                _warn_missing_price(int(date), int(sid), str(path), version,
+                                    ','.join(fields or []) or 'row')
         return frame if fields is None else frame.reindex(columns=fields)
 
     def get_adjprice_with_ensure(self, date, secid, field=None) -> pd.DataFrame:

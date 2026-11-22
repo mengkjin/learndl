@@ -252,7 +252,7 @@ class CheckCodeIssues(DirectCall):
     def _check___all___existence(cls ,path : Path) -> bool:
         """Check __all__ existence."""
         exempt_paths = [
-            PATH.main.joinpath('src' , 'func') ,
+            PATH.main.joinpath('src' , 'shared' , 'numeric') ,
             PATH.main.joinpath('src' , 'proj' , 'core' , 'literals.py') ,
             PATH.main.joinpath('src' , 'proj' , 'core' , 'alias.py') ,
         ]

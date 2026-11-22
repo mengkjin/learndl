@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 from typing import Literal , Any , TypeAlias
 
-from src.func.metric import mse , pearson , ccc , spearman
+from src.shared.numeric.metric import mse , pearson , ccc , spearman
 
 from .basic import first_output , mask_topx
 

@@ -13,7 +13,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Any, Literal , TypeAlias
 
-from src.func.metric import mse , pearson , ccc
+from src.shared.numeric.metric import mse , pearson , ccc
 
 __all__ = ['Loss']
 

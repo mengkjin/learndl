@@ -16,7 +16,7 @@ import torch
 from torch.nn.functional import pad
 
 from src.proj import CALENDAR , DB , Base , Dates
-from src.func.tensor import rank_pct
+from src.shared.numeric.tensor import rank_pct
 from src.data.loader import DATAVENDOR
 from src.data.update.custom.basic import BasicCustomUpdater
 

@@ -11,7 +11,7 @@ from src.res.model.callback.test.basic import basic_group_stats, BasicTestResult
 from src.res.model.util.metric.stage_metrics import AttemptMetrics
 from src.res.model.util.metric.functions import RankICFunction
 from src.res.model.util.core import BatchInput, BatchOutput, BatchData
-from src.func.metric import spearman
+from src.shared.numeric.metric import spearman
 
 
 def latest_reference(attempt, dataset, metric):
@@ -114,45 +114,23 @@ class CallbackStatisticsTest(TestCase):
     def test_summary_output_and_empty_hidden(self):
         from src.res.model.callback.monitor.summary import SummaryWriter
 
-        attempt = object.__new__(AttemptMetrics)
-        for count in (0, 3):
-            attempt.tables = {
-                f"{ds}_epoch_totals": [
-                    pd.DataFrame(
-                        {
-                            "total_loss": [i],
-                            "total_accuracy": [i / 2],
-                            "rankic": [i / 10],
-                        }
-                    )
-                    for i in range(count)
-                ]
-                for ds in ("train", "valid")
-            }
-            cb = NS(
-                TSBOARD_PREFIXIS=SummaryWriter.TSBOARD_PREFIXIS,
-                metrics=NS(attempt_metrics=attempt),
-                writer=Mock(),
-                step_epoch=7,
-            )
-            SummaryWriter.add_total_metric(cast(SummaryWriter, cb))
-            for call, metric in zip(
-                cb.writer.add_scalars.call_args_list, ("accuracy", "loss", "rankic")
-            ):
-                self.assertEqual(
-                    call.args,
-                    (
-                        f"00.Metrics/Total{metric.title()}",
-                        {
-                            ds: latest_reference(attempt, ds, metric)
-                            for ds in ("train", "valid")
-                        },
-                        7,
-                    ),
-                )
-            cb.HIDDEN_FEATURE_MODE = True
-            cb.batch_data = NS(output=NS(other={}))
-            SummaryWriter.append_batch_hidden_summary(cast(SummaryWriter, cb))
+        cb = NS(
+            TSBOARD_PREFIXIS=SummaryWriter.TSBOARD_PREFIXIS,
+            metrics=NS(epoch_train_metrics=NS(total_accuracy=0.8, total_loss=0.4, rankic=0.2),
+                       epoch_valid_metrics=NS(total_accuracy=0.7, total_loss=0.5, rankic=0.1)),
+            writer=Mock(),
+            step_epoch=7,
+        )
+        SummaryWriter.add_total_metric(cast(SummaryWriter, cb))
+        self.assertEqual(
+            [call.args for call in cb.writer.add_scalars.call_args_list],
+            [('00.Metrics/TotalAccuracy', {'train': 0.8, 'valid': 0.7}, 7),
+             ('00.Metrics/TotalLoss', {'train': 0.4, 'valid': 0.5}, 7),
+             ('00.Metrics/TotalRankic', {'train': 0.2, 'valid': 0.1}, 7)],
+        )
+        cb.HIDDEN_FEATURE_MODE = True
+        cb.batch_data = NS(output=NS(other={}))
+        SummaryWriter.append_batch_hidden_summary(cast(SummaryWriter, cb))
 
     def test_basic_actual_callback_resume_and_nan_rows(self):
         import src.res.model.callback.test.basic as module

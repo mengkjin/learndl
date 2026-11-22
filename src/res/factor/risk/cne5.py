@@ -11,7 +11,7 @@ from typing import Any , Literal , TypeAlias
 from src.proj import CALENDAR , DB , Const , Base , Dates
 from src.proj.util.catcher import WarningCatcher
 from src.data import DATAVENDOR
-from src.func.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
+from src.shared.numeric.transform import (time_weight , descriptor , apply_ols , lm_resid , ewma_cov , ewma_sd)
 
 __all__ = ['TuShareCNE5_Calculator']
 

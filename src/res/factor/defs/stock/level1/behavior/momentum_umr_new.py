@@ -10,8 +10,8 @@ from src.proj import CALENDAR , DB , Const
 from src.data import DATAVENDOR
 from src.res.factor.calculator import MomentumFactor
 
-from src.func.transform import time_weight , lm_resid
-from src.func.linalg import symmetric_orth_np
+from src.shared.numeric.transform import time_weight , lm_resid
+from src.shared.numeric.linalg import symmetric_orth_np
 
 __all__ = ['umr_new_1m' , 'umr_new_3m' , 'umr_new_6m' , 'umr_new_12m']
 

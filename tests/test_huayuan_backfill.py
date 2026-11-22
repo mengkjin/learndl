@@ -9,7 +9,7 @@ import pandas as pd
 
 
 spec = importlib.util.spec_from_file_location(
-    'huayuan_backfill', Path(__file__).resolve().parents[1] / 'scripts/2_data/6_backfill_huayuan.py'
+    'huayuan_backfill', Path(__file__).resolve().parents[1] / 'scripts/2_data/.6_backfill_huayuan.py'
 )
 assert spec and spec.loader
 backfill_module = importlib.util.module_from_spec(spec)

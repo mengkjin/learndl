@@ -362,7 +362,7 @@ def _run_repair(
         status["affected_end"] = affected_end
         code = hashlib.sha256()
         for directory in [
-            PATH.srcs / "func",
+            PATH.srcs / "shared" / "numeric",
             PATH.srcs / "res" / "factor",
             PATH.srcs / "data" / "preprocess" / "factor_sequence",
             PATH.srcs / "data" / "maintenance" / "factor_sequence",
@@ -601,7 +601,7 @@ def _run_repair(
                         new = getattr(factor, f"{period}_stats")()
                         if new.empty:
                             raise ValueError(f"Empty stats: {name}/{period}/{year}")
-                        from src.func.factor_groups import GROUPING_VERSION
+                        from src.shared.numeric.factor_groups import GROUPING_VERSION
 
                         new["grouping_version"] = GROUPING_VERSION
                         old = DB.load(f"factor_stats_{period}", cls.db_key)

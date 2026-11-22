@@ -81,9 +81,9 @@ def main(kind, *, state=STATE):
                 if url.path == '/api/models' and kind == 'model_preview':
                     return self.reply(catalog.model_listing(param('run')))
                 if url.path == '/api/model-management' and kind == 'model_preview':
-                    from .model_management import MOVE_JOURNAL, inventory
+                    from src.res.model.workflow.model_management import MOVE_JOURNAL, inventory
 
-                    return self.reply({'records': list(inventory(catalog).values()),
+                    return self.reply({'records': list(inventory(catalog.management_context()).values()),
                                        'pending': (catalog.state / MOVE_JOURNAL).is_file()})
                 if url.path == '/api/chapters':
                     row = catalog.available_row(param('id'))
@@ -116,14 +116,14 @@ def main(kind, *, state=STATE):
                 data = json.loads(self.rfile.read(size))
                 action = data['action']
                 if action in ('history_models', 'undo_models') and kind == 'model_preview':
-                    from .model_management import operation_history, undo_latest
+                    from src.res.model.workflow.model_management import operation_history, undo_latest
 
-                    return self.reply(operation_history(catalog) if action == 'history_models'
-                                      else undo_latest(catalog, apply=data.get('apply') is True, expected=data.get('operation_id')))
+                    return self.reply(operation_history(catalog.management_context()) if action == 'history_models'
+                                      else undo_latest(catalog.management_context(), apply=data.get('apply') is True, expected=data.get('operation_id')))
                 if action in ('plan_models', 'apply_models') and kind == 'model_preview':
-                    from .model_management import manage
+                    from src.res.model.workflow.model_management import manage
 
-                    return self.reply(manage(catalog, data['operation'], data['items'],
+                    return self.reply(manage(catalog.management_context(), data['operation'], data['items'],
                                              apply=action == 'apply_models'))
                 if action in ('archive', 'unarchive', 'delete', 'restore', 'purge') and kind == 'mail_archive':
                     ids = data['ids']

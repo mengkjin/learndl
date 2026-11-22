@@ -32,7 +32,7 @@ learndl/
 ```
 src/
 ├── proj/         # infrastructure: env/, cal/, db/, log/, util/, core/
-├── func/         # numerical utils: basic.py, tensor.py, transform.py, metric.py
+├── shared/numeric/  # numerical utils: basic.py, tensor.py, transform.py, metric.py
 ├── data/         # data pipeline: crawler/, download/, loader/, preprocess/, update/, util/
 ├── res/
 │   ├── factor/   # factor engine: calculator/, defs/, analytic/, fmp/, loader/, risk/, util/
@@ -94,7 +94,7 @@ Always use `src.proj.log.Logger` — never `print()` or stdlib `logging` directl
 - Add `from __future__ import annotations` immediately after the module docstring, before ordinary imports and other statements.
 - Define an explicit module-level `__all__` listing the intended public functions, classes, constants, type aliases, and intentional re-exports. Keep it synchronized with API changes; use `__all__ = []` for modules with no public API.
 - Preserve symbols required by existing star-import consumers. Compatibility modules that replace themselves in `sys.modules` must preserve the target module's identity and exports.
-- Follow the existing `CheckCodeIssues` exemptions: `__init__.py` and `__version__.py` are exempt from all three presence checks; `src/func/**`, `src/proj/core/literals.py`, and `src/proj/core/alias.py` are additionally exempt from the `__all__` presence check.
+- Follow the existing `CheckCodeIssues` exemptions: `__init__.py` and `__version__.py` are exempt from all three presence checks; `src/shared/numeric/**`, `src/proj/core/literals.py`, and `src/proj/core/alias.py` are additionally exempt from the `__all__` presence check.
 - Verify these declarations using the three presence checks in `src/api/calls/source_code.py` (`CheckCodeIssues`), in addition to Ruff and Pyright. Fix reported omissions in changed modules before completing the work.
 
 ## Path conventions

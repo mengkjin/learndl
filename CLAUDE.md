@@ -7,7 +7,7 @@ Covers data ingestion, factor engineering, NN/boost/GP models, and portfolio tra
 
 | Layer | Source Path | Entry API |
 |-------|-------------|-----------|
-| Infrastructure | `src/proj/`, `src/func/` | `MACHINE`, `PATH`, `CALENDAR`, `DataAPI` |
+| Infrastructure | `src/proj/`, `src/shared/numeric/` | `MACHINE`, `PATH`, `CALENDAR`, `DataAPI` |
 | Data Pipeline | `src/data/` | `DATAVENDOR` (facade), `DateDataAccess` singletons, `ModuleData` (model inputs) |
 | Factor Engine | `src/factor/` | `FactorAPI`, `FactorCalculator` |
 | NN Models | `src/res/algo/nn/` | `ModelAPI` |
