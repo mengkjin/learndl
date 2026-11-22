@@ -43,7 +43,7 @@ class BoostParameterTest(unittest.TestCase):
 
     def test_xgboost_schedule_parameters_survive_filtering(self):
         root = Path(__file__).resolve().parents[1]
-        schedule = yaml.safe_load((root / 'configs/schedule/current/gru_day_xgboost.yaml').read_text())
+        schedule = yaml.safe_load((root / 'configs/schedule/current/gru/gru_day_xgboost.yaml').read_text())
         params = {key: value[0] for key, value in schedule['algo']['xgboost'].items()}
         params.update(num_boost_round=3, early_stopping=0)
         model = GeneralBoostModel('xgboost', params=params,

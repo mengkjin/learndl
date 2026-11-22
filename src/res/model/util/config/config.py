@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any , Literal , cast , TypeAlias , get_args
 
 from src.proj import PATH, MACHINE, Const, Proj , Base
+from src.proj.env.schedules import find_schedule_path, schedule_matches, schedule_stem
 from src.proj.util.functional.device import Device
 from src.res.algo import AlgoModule
 from src.res.factor.calculator import StockFactorHierarchy, FactorCalculator
@@ -58,8 +59,13 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
         self.base_path = base_path
         self.schedule_name = schedule_name
         if model_name:
-            assert model_name == schedule_name or not ScheduleConfig.check_name_exist(model_name), \
+            assert model_name == (schedule_stem(schedule_name) if schedule_name else None) or not ScheduleConfig.check_name_exist(model_name), \
                 f"model_name [{model_name}] is not the same as schedule_name [{schedule_name}]"
+        if base_path and schedule_name:
+            from ..schedule_output import validate_model_source
+            source = find_schedule_path(schedule_name)
+            if source is not None:
+                validate_model_source(base_path, source)
         self.Param = self.get_config_dict(self.base_path, self.schedule_name)
 
     def __getitem__(self, key: str) -> Any:
@@ -77,29 +83,32 @@ class ScheduleConfig(Base.BoundLogger , Base.CacheProps):
         if config.get('factor_sequence_source'):
             from src.res.model.experiment.factor_sequence.worklist import resolve_schedule
             config = get_config_dict(resolve_schedule(
-                config['factor_sequence_source'], config['model.module'], schedule_name,
+                config['factor_sequence_source'], config['model.module'],
+                schedule_stem(schedule_name) if schedule_name else None,
                 mode=config.get('factor_sequence_mode')))
         if not base_path and config:
             self.logger.alert1(f'Using schedule name "{schedule_name}" to load config' , vb = 1)
         if schedule_name and config:
-            if 'model.name' in config and config['model.name'] != schedule_name:
+            model_name = schedule_stem(schedule_name)
+            if 'model.name' in config and config['model.name'] != model_name:
                 self.logger.alert2(f'model.name {config['model.name']} is not the same as schedule_name {schedule_name}' , vb = 1)
-            config.update({'model.name': schedule_name} , relevant_only = False)
+            config.update({'model.name': model_name} , relevant_only = False)
         return config
 
     @classmethod
     def find_path(cls , base_path: ModelPath | None = None, name: str | None = None) -> Path | None:
         if base_path:
             if base_path.module_type == 'linear':
-                path = PATH.sched_linear / f'{base_path.model_clean_name}.yaml'
-                if not path.is_file():
-                    raise FileNotFoundError(f'Linear schedule is required: {path}')
+                from ..schedule_output import saved_reference
+                reference = name or saved_reference(base_path) or base_path.model_clean_name
+                path = find_schedule_path(reference)
+                if path is None or not path.is_relative_to(PATH.sched_linear):
+                    raise FileNotFoundError(f'Linear schedule is required: {reference}')
                 return path
             config_path = base_path.conf_file("schedule")
             return config_path if config_path.exists() else None
         else:
-            from src.proj.env.schedules import find_schedule_path
-            return find_schedule_path(name, roots=(PATH.sched, PATH.sched_shared, PATH.sched_linear))
+            return find_schedule_path(name)
 
     @classmethod
     def check_name_exist(cls , model_name: str | None = None) -> bool:
@@ -179,7 +188,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
             # case 1: with schedule name, load schedule config first, then resume or load default config
             assert ScheduleConfig.check_name_exist(self.schedule_name), f"schedule_name [{self.schedule_name}] does not exist"
             self.Param = self.optional_load_params("default")
-            self['model.name'] = self.schedule_name
+            self['model.name'] = schedule_stem(self.schedule_name)
         else:
             # case 2: without schedule name, resume or load current config first, then adjust according to force_module, then check schedule name conflict
             self.Param = self.optional_load_params("current")
@@ -187,7 +196,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
                 self.logger.alert1(f"force_module [{self.force_module}] is provided, will use it to load config" , vb = 1)
                 self['model.module'] = self.force_module
                 self['model.name'] = ''
-            assert self.base_path or not ScheduleConfig.check_name_exist(self['model.name']), \
+            assert self.base_path or not (self['model.name'] and schedule_matches(self['model.name'])), \
                 f"base_path is not provided, but model.name [{self['model.name']}] is owned by a schedule model, and must not be used as a model name"
         self.schedule_config = ScheduleConfig(self.base_path, self.schedule_name, indent=self.indent, vb_level=self.vb_level)
         return self
@@ -291,10 +300,9 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         if self.module_type == 'linear':
             if self.model_module != 'linear' or (self.start_with_none and not self.schedule_name):
                 raise ValueError('Use a linear schedule, not an ad-hoc module configuration')
-            name = self.schedule_name or self.base_path.model_clean_name
-            self['model.name'] = name
-            source = ScheduleConfig.find_path(None, name)
-            if source != PATH.sched_linear / f'{name}.yaml':
+            self['model.name'] = schedule_stem(self.schedule_name) if self.schedule_name else self.base_path.model_clean_name
+            source = ScheduleConfig.find_path(self.base_path, self.schedule_name)
+            if source is None or not source.is_relative_to(PATH.sched_linear):
                 raise ValueError('Linear models require a defining configs/schedule/linear schedule')
             if self.input_type != 'final':
                 raise ValueError('Linear models require input.type=final')
@@ -371,7 +379,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
 
     def generate_model_full_name(self):
         if self.module_type == 'linear':
-            name = self.schedule_name or self["model.name"]
+            name = self["model.name"]
             if not name:
                 raise ValueError('Linear models require a schedule name')
             full_name = f'linear@{name}'
@@ -392,7 +400,7 @@ class BaseModelConfig(Base.BoundLogger , Base.CacheProps):
         else:
             data_str = self.input_type
         model_name = "_".join([s for s in [mod_str, head_str, data_str] if s])
-        if ScheduleConfig.check_name_exist(model_name):
+        if schedule_matches(model_name):
             model_name = f'{model_name}.{random.randint(1, 99):02d}'
         return model_name
 
@@ -1069,6 +1077,15 @@ class ModelConfig(BaseModelConfig):
     def start_model(self):
         self.start_time = datetime.now()
         self.process_parser()
+        from src.res.model.util.schedule_output import guard_model_source, saved_reference
+
+        reference = self.model_config.schedule_name
+        if reference is None and self.module_type == 'linear':
+            reference = saved_reference(self.base_path) or self.base_path.model_clean_name
+        with guard_model_source(self.base_path, reference) as source:
+            return self._prepare_model(source)
+
+    def _prepare_model(self, source: Path | None):
         from src.res.model.util.resume_validation import validate_resume
         from src.res.model.util.lifecycle import ModelLifecycle
         ModelLifecycle.validate_entry(self)
@@ -1088,6 +1105,9 @@ class ModelConfig(BaseModelConfig):
             prepare_linear_run(self)
         ModelLifecycle.prepare(self)
         self.base_path.mkdir(model_nums=self.model_num_list, exist_ok=True)
+        if source is not None:
+            from src.res.model.util.schedule_output import save_model_source
+            save_model_source(self.base_path, source)
         from src.res.model.util.model_identity import build_identity
 
         build_identity(self.base_path.base, fresh=not existed, reset=reset)

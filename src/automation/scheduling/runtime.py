@@ -424,6 +424,8 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                    f'Phase: {run["phase"]}\n{event["detail"]}\n'
                    f'Log: {run.get("log_path", "")}\nVersion: {run.get("version", "")}\n'
                    f'Progress timeout: {run.get("progress_timeout_seconds", "")} seconds')
+        if reference := run.get('schedule_reference'):
+            message += f'\nSchedule reference: {reference}'
         if run.get('owner') == 'idle_worklist':
             from .recovery import evidence, recovery_plan
             from .idle_worklist import settings

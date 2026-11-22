@@ -11,7 +11,7 @@ import numpy as np
 from functools import wraps
 from typing import Any , Literal , TypeAlias , cast , Sized , Callable, TYPE_CHECKING
 
-from src.proj import Const , Base, PATH
+from src.proj import Const , Base
 from src.proj.util.script.fit_lock import FitLock, FitLockNN
 
 from src.proj.bases import FittingEventType
@@ -109,8 +109,8 @@ class BaseTrainer(BasePipeline):
         config_kwargs = dict(self._config_kwargs)
         model_kwargs = dict(self._kwargs)
         schedule_resume = config_kwargs.get('schedule_name') and self._kwargs.get('resume') == 1
-        linear_schedule = bool(config_kwargs.get('schedule_name') and
-                               (PATH.sched_linear / f"{config_kwargs['schedule_name']}.yaml").is_file())
+        from src.proj.env.schedules import is_linear_schedule
+        linear_schedule = is_linear_schedule(config_kwargs.get('schedule_name'))
         automatic_resume = (schedule_resume and not linear_schedule
                             and not config_kwargs.get('base_path')
                             and model_kwargs.get('resume_selection') == 'latest')

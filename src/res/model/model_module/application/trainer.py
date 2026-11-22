@@ -2,6 +2,7 @@
 Trainer for model , which can train the model
 """
 from __future__ import annotations
+from src.res.model.util.schedule_output import linear_model_available
 from contextlib import nullcontext
 from typing import Literal , TypeAlias
 
@@ -215,4 +216,4 @@ class ModelTrainer(BaseTrainer):
             root_paths.append(PATH.model_factor)
         bases = [f'{root.name}@{model.name}' for root in root_paths for model in sorted(root.glob("*")) if model.is_dir() and not model.name.startswith('.')]
         return [name for name in bases if ModelPath(name).module_type != 'linear'
-                or (PATH.sched_linear / f'{ModelPath(name).model_clean_name}.yaml').is_file()]
+                or linear_model_available(ModelPath(name))]

@@ -1,7 +1,9 @@
 """Discover models, modules, schedules, ports, and factors; cache lists for Streamlit and CLI."""
 from __future__ import annotations
 from datetime import datetime
+import json
 from src.proj.env import PATH
+from .schedules import is_linear_schedule
 
 __all__ = ['OptionsDefinition' , 'OptionsCache' , 'Options']
 
@@ -16,8 +18,11 @@ class OptionsDefinition:
                 if model.is_dir() and not model.name.startswith('.'):
                     linear_name = (model.name if root == PATH.model_linear else
                                    model.name.removeprefix('linear@') if root == PATH.model_st and model.name.startswith('linear@') else None)
-                    if linear_name is not None and not (PATH.sched_linear / f'{linear_name}.yaml').is_file():
-                        continue
+                    if linear_name is not None:
+                        marker = model / 'configs' / 'schedule_source.json'
+                        reference = json.loads(marker.read_text())['reference'] if marker.is_file() else linear_name
+                        if not is_linear_schedule(reference):
+                            continue
                     models.append(f'{root.name}/{model.name}')
         return models
 
@@ -40,8 +45,8 @@ class OptionsDefinition:
     @classmethod
     def available_linear_schedules(cls) -> list[str]:
         """Linear schedules can be tested before a model output directory exists."""
-        return [name for name in cls.available_schedules()
-                if (PATH.sched_linear / f'{name}.yaml').is_file()]
+        from .schedules import available_schedules
+        return available_schedules(roots=(PATH.sched_linear,))
 
     @classmethod
     def available_trackingports(cls) -> list[str]:

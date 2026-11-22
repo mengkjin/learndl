@@ -114,7 +114,11 @@ def worklist_schedules(store: RunStore) -> tuple[dict, dict, list[str]]:
         except FileNotFoundError:
             missing.append(name)
             continue
-        revisions['worklist'] = revision_for(worklist, name)
+        except ValueError as exc:
+            key = version({'name': name, 'error': str(exc)})
+            store.event({'id': f'worklist-config-{key}', 'owner': OWNER}, 'configuration_error', str(exc))
+            missing.append(name)
+            continue
         schedules[name] = revisions
     if missing:
         key = version({'missing': sorted(missing), 'sources': {n: revision_for(worklist, n) for n in missing}})
@@ -141,6 +145,7 @@ def candidate(store: RunStore, *, only: str | None = None, options: dict | None 
 def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | None = None,
                options: dict | None = None) -> dict | None:
     from src.res.model.workflow.worklist_state import WorklistState
+    from src.res.model.workflow.worklists import reference_for
     from .recovery import recovery_plan, record
     options = settings() if options is None else options
     attempts = store.owned(OWNER)
@@ -177,6 +182,7 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
             resume_request = {field: recovery[field] for field in
                               ('parent_run_id', 'retry_index', 'retry_not_before') if field in recovery}
             return {'task': name, 'version': key, 'revisions': revisions, **resume_request,
+                    'schedule_reference': reference_for(worklist, name),
                     'rerun_mark': WorklistState.rerun_mark(worklist.get('_sources', {}).get(name, {}).get('doc', worklist))}
     return None
 
@@ -412,6 +418,8 @@ def reset_worklist(store: RunStore | None = None) -> str:
 
 def reset(schedule: str, store: RunStore | None = None) -> None:
     store = store or RunStore()
+    from src.proj.env.schedules import schedule_stem
+    schedule = schedule_stem(schedule)
     with queue_lock():
         runs = [run for run in store.owned(OWNER) if run['task'] == schedule]
         if any(run['phase'] in ACTIVE for run in runs):
@@ -437,7 +445,8 @@ def main() -> int:
             for name in doc['entries']:
                 saved = WorklistState(name).read()
                 try:
-                    revisions = WorklistState.revisions(name, worklist=worklist)
+                    from src.proj.env.schedules import schedule_stem
+                    revisions = WorklistState.revisions(schedule_stem(name), worklist=worklist)
                     reason, _ = WorklistState.decision(saved, revisions, force=False, resume=False)
                     states[name] = {'status': 'completed' if reason == 'completed' else 'pending',
                                     'reason': reason, 'record': saved}

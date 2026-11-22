@@ -357,7 +357,7 @@ class CallbackTests(unittest.TestCase):
         self.assertIn('ActivationCheckpointing', read('configs/model/train.yaml')['callbacks'])
         self.assertIn('ActivationCheckpointing', read('configs/model/default/required.yaml')['train.callbacks'])
         self.assertTrue(read('configs/schedule/archive/transformer_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
-        self.assertTrue(read('configs/schedule/current/gru_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
+        self.assertTrue(read('configs/schedule/current/gru/gru_gru_15m.yaml')['callbacks']['ActivationCheckpointing']['enabled'])
         self.assertIs(ConsolidateCallBack.get_callback_class('ActivationCheckpointing'), ActivationCheckpointing)
 
     def test_explicit_opt_in_with_legacy_callback_list(self):

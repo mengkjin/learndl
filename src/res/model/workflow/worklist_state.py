@@ -10,7 +10,8 @@ from collections.abc import Mapping
 import portalocker
 
 from src.proj import PATH
-from src.res.model.util.training_history import file_revision, now, write_json
+from src.proj.env.schedules import schedule_stem
+from src.res.model.util.training_history import now, write_json
 
 __all__ = ['WorklistState', 'AutomaticDeferred']
 
@@ -23,6 +24,8 @@ class AutomaticDeferred(Exception):
 class WorklistState:
     def __init__(self, schedule_name: str):
         self.root = PATH.lc_machine / 'schedule_worklist'
+        self.reference = schedule_name
+        schedule_name = schedule_stem(schedule_name)
         key = hashlib.sha256(schedule_name.encode()).hexdigest()
         self.path = self.root / f'{key}.json'
         self.schedule_name = schedule_name
@@ -62,7 +65,7 @@ class WorklistState:
         conflicting duplicate schedules are rejected rather than run ambiguously.
         """
         if isinstance(worklist, Mapping) and '_sources' in worklist:
-            return {name: source['entries'][name] for name, source in worklist['_sources'].items()}
+            return {name: source['options'] for name, source in worklist['_sources'].items()}
         if not isinstance(worklist, Mapping) or not isinstance(worklist.get('fit'), list):
             raise ValueError('worklist.fit must be a list of schedule names or mappings')
         defaults: dict[str, Any] = {'resume': False, 'force': False} | cls._options(worklist)
@@ -94,6 +97,8 @@ class WorklistState:
     @classmethod
     def options(cls, worklist: Mapping, name: str) -> dict[str, Any]:
         """Standalone requests inherit global options without requiring a list entry."""
+        if name and '_sources' in worklist:
+            name = schedule_stem(name)
         return cls.entries(worklist).get(name, {'resume': False, 'force': False} | cls._options(worklist))
 
     def lock(self):
@@ -118,14 +123,35 @@ class WorklistState:
             raise ValueError('A nonempty training request ID is required')
         from src.res.model.workflow.worklists import load
         worklist, _, _ = load()
+        if self.schedule_name in worklist['_blocked']:
+            raise ValueError(f'Worklist entry is blocked: {self.schedule_name}')
         if not allow_unlisted and self.schedule_name not in self.entries(worklist):
             raise ValueError(f'Schedule [{self.schedule_name}] is not in the training worklist')
-        self.revisions(self.schedule_name)  # Verify the schedule config before writing.
+        from src.res.model.util.config.config import ScheduleConfig
+        from .worklists import reference_for
+        configured = reference_for(worklist, self.schedule_name)
+        target = self.reference if '/' in self.reference else configured
+        path = ScheduleConfig.find_path(name=target)
+        if path is None:
+            raise FileNotFoundError(f'Schedule config missing: {target}')
+        if self.schedule_name in self.entries(worklist) and ScheduleConfig.find_path(name=configured) != path:
+            raise ValueError(f'Schedule request {target} conflicts with worklist {configured}')
         request = {'id': request_id}
         if allow_unlisted:
-            request['schedule_name'] = self.schedule_name
+            from src.proj.env.schedules import schedule_roots, schedule_source
+            request['schedule_name'] = (
+                schedule_source(path).split('/', 1)[1]
+                if any(path.is_relative_to(root) for root in schedule_roots()) else target
+            )
         with self.lock():
-            if not self.request_path.exists() or json.loads(self.request_path.read_text()) != request:
+            previous = json.loads(self.request_path.read_text()) if self.request_path.is_file() else {}
+            if previous.get('id') == request_id:
+                previous_reference = previous.get('schedule_name', configured)
+                if ScheduleConfig.find_path(name=previous_reference) != path:
+                    raise ValueError(f'Training request {request_id} is already bound to {previous_reference}')
+                if not allow_unlisted or 'schedule_name' in previous:
+                    return previous
+            if previous != request:
                 write_json(self.request_path, request)
         return request
 
@@ -147,19 +173,25 @@ class WorklistState:
                 completed_request = previous.get('revisions', {}).get('training_request', {})
                 if previous.get('status') == 'success' and completed_request.get('id') == request['id']:
                     continue
-                names.append(name)
+                names.append(cls(name).schedule_name)
         return names
 
     @staticmethod
     def revisions(schedule_name: str, *, worklist=None):
         from src.res.model.util.config.config import ScheduleConfig
-        path = ScheduleConfig.find_path(name=schedule_name)
-        if path is None:
-            raise FileNotFoundError(f'Schedule config missing: {schedule_name}')
-        from src.res.model.workflow.worklists import load, revision_for
+        from .schedule_revision import schedule_revision
+        from .worklists import load, reference_for, revision_for
+
         if worklist is None:
             worklist, _, _ = load()
-        revisions = {'worklist': revision_for(worklist, schedule_name), 'schedule': file_revision(path)}
+        name = schedule_stem(schedule_name)
+        if name in worklist['_blocked']:
+            raise ValueError(f'Worklist entry is blocked: {name}')
+        reference = reference_for(worklist, schedule_name)
+        path = ScheduleConfig.find_path(name=reference)
+        if path is None:
+            raise FileNotFoundError(f'Schedule config missing: {reference}')
+        revisions = {'worklist': revision_for(worklist, name), 'schedule': schedule_revision(path)}
         reset_path = PATH.lc_machine / 'schedule_worklist' / 'reset.json'
         if reset_path.exists():
             revisions['reset_generation'] = {'generation': json.loads(reset_path.read_text())['generation']}

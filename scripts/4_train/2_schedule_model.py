@@ -41,7 +41,7 @@
 #       desc: NN quick training window cap (default 1200)
 # file_editor:
 #   name : "Schedule Config File Editor"
-#   path: "{PATH.sched}/{schedule_name}.yaml | {PATH.sched_shared}/{schedule_name}.yaml"
+#   path: "schedule:{schedule_name}"
 #   height : 300 # optional
 
 from pathlib import Path

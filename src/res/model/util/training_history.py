@@ -127,7 +127,7 @@ class TrainingRun:
                 source = ScheduleConfig.find_path(name=schedule_name)
                 if source:
                     self.data['schedule_source'] = file_revision(source)
-            except (OSError, AssertionError) as exc:
+            except (OSError, AssertionError, ValueError) as exc:
                 self.data['schedule_source_error'] = str(exc)
         self.save()
 

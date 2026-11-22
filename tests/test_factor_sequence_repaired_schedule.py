@@ -306,7 +306,7 @@ class RepairedScheduleTests(unittest.TestCase):
         sources = []
         for name in expected:
             config = yaml.safe_load(
-                (root / f"configs/schedule/current/{name}.yaml").read_text()
+                (root / f"configs/schedule/current/factorseq/{name}.yaml").read_text()
             )
             sources.append(config["factor_sequence_source"])
         self.assertEqual(len(set(sources)), 1)

@@ -18,6 +18,8 @@ def find_schedule_runs(schedule_name: str, *, short_test: bool | None = None) ->
     """Match the schedule across modules and indices, including incomplete folders."""
     if short_test is None:
         short_test = not MACHINE.cuda_server
+    from src.proj.env.schedules import schedule_stem
+    schedule_name = schedule_stem(schedule_name)
     roots = [PATH.model_st] if short_test else [PATH.model_nn, PATH.model_boost]
     suffix = re.compile(r'@' + re.escape(schedule_name) + r'(?:@(?P<index>\d+))?$')
     candidates = []

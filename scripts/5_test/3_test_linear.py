@@ -23,10 +23,10 @@
 #       desc: end date
 # file_editor:
 #   name: "Linear Schedule Config File Editor"
-#   path: "{PATH.sched_linear}/{schedule_name}.yaml"
+#   path: "schedule:{schedule_name}"
 #   height: 300
 
-from src.proj import Options
+from src.proj.env.schedules import is_linear_schedule
 from src.proj.util.script import ScriptTool
 
 
@@ -34,7 +34,7 @@ from src.proj.util.script import ScriptTool
 def main(schedule_name: str | None = None, resume: bool = False,
          start: int | None = None, end: int | None = None, **kwargs):
     from src.res.model.model_module.application import ModelTrainer
-    if schedule_name not in Options.available_linear_schedules(refresh=True):
+    if not is_linear_schedule(schedule_name):
         raise ValueError(f'A schedule in configs/schedule/linear is required: {schedule_name!r}')
     return ModelTrainer.schedule(schedule_name, short_test=False, resume=int(bool(resume)), start=start, end=end)
 

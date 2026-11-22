@@ -297,6 +297,17 @@ def conditional_path(format_str : str , params : dict[str, Any] , root: Path = P
         The resolved path string.
     """
     params = params | {'PATH' : PATH , 'MACHINE' : MACHINE}
+    if format_str.startswith('schedule:'):
+        from src.proj.env.schedules import find_schedule_path
+
+        reference = format_str.removeprefix('schedule:').format(**params)
+        try:
+            schedule = find_schedule_path(reference) if reference not in ('', 'None') else None
+        except ValueError as exc:
+            st.error(str(exc))
+            return ''
+        return str(schedule) if schedule else ''
+
     if '|' in format_str:
         format_strs = [s.strip() for s in format_str.split('|')]
         for s in format_strs:

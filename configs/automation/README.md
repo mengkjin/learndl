@@ -692,3 +692,14 @@ leases and repository checks permit it. No timer reinstall is needed for this fi
 Only `configs/schedule/worklists/*.yaml` is loaded (no legacy file fallback). Files run by last Git committer timestamp ascending, then filename; entries retain their list order. Files without Git history wait in automatic scheduling. Each file owns its defaults and revision; changes do not invalidate other files. Duplicate schedules across files are blocked and reported; malformed files are isolated.
 
 Use `python -m src.automation.scheduling.idle_worklist worklist-status` to inspect loaded files, Git times, records and validation errors. `reset-worklist` resets all lists. Keep the existing safe Git update boundary: finish running training before pulling this source/configuration change. No training-history migration or reset is necessary.
+
+Schedule YAML under `configs/schedule/current/` and `configs/schedule/linear/` can
+live at the root or in nested folders. Use a reference such as
+`factorseq/factorseq_v3_temporal` in a worklist or CLI. A bare filename stem still
+works when it matches a single schedule. Ambiguous names list the conflicting
+paths. The archive is excluded from discovery.
+
+Folder names do not change the names of existing model outputs. The layout move
+preserves worklist execution identity when Git confirms the unchanged rename.
+A subsequent edit to a schedule still creates a new version. Keep the move and
+its migration manifest together in the same commit.

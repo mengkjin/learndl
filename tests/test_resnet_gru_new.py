@@ -41,7 +41,7 @@ class ResnetGRUNewTests(unittest.TestCase):
 
     def test_schedule_constructs_registered_model(self):
         root = Path(__file__).resolve().parents[1]
-        config = yaml.safe_load((root / 'configs/schedule/current/resnet_gru_new_15m.yaml').read_text())
+        config = yaml.safe_load((root / 'configs/schedule/current/resnet_gru/resnet_gru_new_15m.yaml').read_text())
         module = config['model']['module']
         params = {key: value[0] for key, value in config['algo'][module].items()}
         model = get_nn_module(module)(6, inday_dim=16, **params)

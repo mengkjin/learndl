@@ -1,6 +1,6 @@
 # 恒等旁路 ResNet-GRU 基础实验
 
-配置：`configs/schedule/current/resnet_gru_simp_15m.yaml`。
+配置：`configs/schedule/current/resnet_gru/resnet_gru_simp_15m.yaml`。
 模型：`resnet_gru_simp`，独立名称 `resnet_gru_simp_15m`，种子 0。
 初版新增模型时未启动训练；后续单因素实验的 worklist 安排见文末。
 

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 from src.proj import MACHINE, PATH, Logger
 from src.proj.util.cli.script_session import as_script_main
-from .worklists import load as load_worklists, revision_for
+from .worklists import load as load_worklists, reference_for
 
 __all__ = ['ScheduleWorklist']
 
@@ -16,17 +16,29 @@ class ScheduleWorklist:
     SCHEDULE_SCRIPT = PATH.scpt.joinpath('4_train' , '2_schedule_model.py')
     @classmethod
     def get_schedules(cls) -> list[str]:
-        from src.res.model.util.config.config import ScheduleConfig
-
         from src.res.model.workflow.worklist_state import WorklistState
         worklist, _, _ = load_worklists()
         ret = list(dict.fromkeys([*WorklistState.entries(worklist),
                                  *(n for n in WorklistState.requested_schedules() if n not in worklist['_blocked'])]))
-        missing = [name for name in ret if not ScheduleConfig.check_name_exist(name)]
+        missing = cls._unavailable(worklist, ret)
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
             ret = [name for name in ret if name not in set(missing)]
         return ret if MACHINE.platform_server else ret[:cls.max_test_schedules]
+    @staticmethod
+    def _unavailable(worklist, names):
+        from src.res.model.util.config.config import ScheduleConfig
+
+        missing = []
+        for name in names:
+            try:
+                if ScheduleConfig.check_name_exist(reference_for(worklist, name)):
+                    continue
+            except ValueError as exc:
+                Logger.warning(str(exc))
+            missing.append(name)
+        return missing
+
     @classmethod
     def schedule_names(cls) -> str:
         schedules = cls.get_schedules()
@@ -88,14 +100,18 @@ class ScheduleWorklist:
         for error in errors:
             Logger.warning(error)
         entries = WorklistState.entries(worklist)
-        from src.res.model.util.config.config import ScheduleConfig
         schedules = list(dict.fromkeys([*entries, *(n for n in WorklistState.requested_schedules() if n not in worklist['_blocked'])]))
-        missing = [name for name in schedules if not ScheduleConfig.check_name_exist(name)]
+        missing = self._unavailable(worklist, schedules)
         if missing:
             Logger.warning(f'Schedule configs missing from worklist (skipped): {", ".join(missing)}')
             schedules = [name for name in schedules if name not in set(missing)]
         if only_schedule := self.kwargs.get('only_schedule'):
+            from src.proj.env.schedules import schedule_stem
+            reference_for(worklist, only_schedule)
+            only_schedule = schedule_stem(only_schedule)
             if only_schedule not in schedules:
+                if self.kwargs.get('automatic'):
+                    raise AutomaticDeferred(f'Schedule [{only_schedule}] is no longer eligible')
                 raise ValueError(f'Schedule [{only_schedule}] is no longer in worklist')
             schedules = [only_schedule]
         if not MACHINE.platform_server:
@@ -119,7 +135,6 @@ class ScheduleWorklist:
                 try:
                     previous = state.read()
                     revisions = state.revisions(schedule_name, worklist=worklist)
-                    revisions['worklist'] = revision_for(worklist, schedule_name)
                     automatic = bool(self.kwargs.get('automatic', False))
                     if automatic and self.kwargs.get('expected_version'):
                         from src.automation.scheduling.idle_worklist import version
@@ -142,6 +157,7 @@ class ScheduleWorklist:
                         effective_resume, reason = True, 'abnormal exit recovery'
                     Logger.note(f'Run [{schedule_name}]: {reason}; requested_resume={effective_resume}')
                     details: dict[str, Any] = {'revisions': revisions, 'reason': reason, 'resume': effective_resume,
+                               'schedule_reference': reference_for(worklist, schedule_name),
                                'force': force, 'model_path': model_path, 'training_run_ids': [], 'options': entry}
                     state.save(status='running', **details)
                     def record_progress(run):
@@ -159,7 +175,7 @@ class ScheduleWorklist:
                     with collect_training_runs(on_update=record_progress) as runs:
                         try:
                             task = self._train_one_schedule(
-                                main, schedule_name=schedule_name, short_test=entry.get('short_test'),
+                                main, schedule_name=reference_for(worklist, schedule_name), short_test=entry.get('short_test'),
                                 resume=effective_resume, start=entry.get('start'), end=entry.get('end'), email=True,
                                 **({'lifecycle_options': entry['lifecycle']} if entry.get('lifecycle') else {}),
                                 resume_selection='latest' if automatic else 'interactive',

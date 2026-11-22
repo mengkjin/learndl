@@ -151,7 +151,7 @@ class LinearScheduleTest(unittest.TestCase):
         self.root = Path(temporary.name).resolve()
         for key, relative in [('model', 'models'), ('model_nn', 'models/nn'), ('model_boost', 'models/boost'),
                               ('model_st', 'models/st'), ('model_linear', 'models/linear'),
-                              ('sched_linear', 'schedules/linear')]:
+                              ('sched_linear', 'schedules/linear'), ('lc_machine', 'machine')]:
             folder = self.root / relative
             folder.mkdir(parents=True)
             self.enterContext(patch.object(PATH, key, folder))
@@ -418,8 +418,18 @@ class LinearScheduleTest(unittest.TestCase):
             Save.async_wait_all()
             self.assertEqual(trainer.data.test_full_dates.tolist(), [20240103, 20240105, 20240108])
 
+    def test_nested_schedule_keeps_model_name_and_recovers_by_output_path(self):
+        path = PATH.sched_linear / 'nested' / self.schedule.name
+        path.parent.mkdir()
+        self.schedule.rename(path)
+        cfg = ModelConfig(schedule_name='nested/linear_unit', short_test=False,
+                          resume=0, vb_level='never').start_model()
+        self.assertEqual(cfg.base_path.full_name, 'linear@linear_unit')
+        resumed = ModelConfig(base_path=cfg.base_path, short_test=False, resume=1, vb_level='never')
+        self.assertEqual(resumed.model_name, 'linear_unit')
+
     def test_sample_schedules_parse(self):
-        real_schedules = Path(__file__).resolve().parents[1] / 'configs/schedule/linear'
+        real_schedules = Path(__file__).resolve().parents[1] / 'configs/schedule/linear/gru'
         for name, weights, precursor in [('gru_only', 'equal', 'normal'),
                                          ('gru_df_equal', 'equal', 'normal'),
                                          ('gru_df_weighted', [0.7, 0.3], 'normal'),

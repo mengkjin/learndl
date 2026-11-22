@@ -1,0 +1,229 @@
+{
+  "base": "758f2c176b2b0fe7756a5081cdc6a30f7f4ac6b2",
+  "moves": {
+    "configs/schedule/current/astgnn/astgnn_15m.yaml": {
+      "old": "configs/schedule/current/astgnn_15m.yaml",
+      "sha256": "d21545222b0e01ac4c8809c321fe883fd9cd8612393a5d036a81208c98f37bbf"
+    },
+    "configs/schedule/current/astgnn/astgnn_day.yaml": {
+      "old": "configs/schedule/current/astgnn_day.yaml",
+      "sha256": "d7adf59e2ac991f327de4ee66677f4f1f2fbfe86217a510cff0b899537d65e49"
+    },
+    "configs/schedule/current/astgnn/astgnn_legacy_15m.yaml": {
+      "old": "configs/schedule/current/astgnn_legacy_15m.yaml",
+      "sha256": "b0f1b66840d09764817cb32797aadd128709a292750a19ec7614acbb21cb4dc8"
+    },
+    "configs/schedule/current/astgnn/astgnn_legacy_day.yaml": {
+      "old": "configs/schedule/current/astgnn_legacy_day.yaml",
+      "sha256": "3a617d5e014270a81948c6d45495d7e4cbbc86b0d2f444b0e6aa7ea59cb65264"
+    },
+    "configs/schedule/current/astgnn/astgnn_legacy_mincr.yaml": {
+      "old": "configs/schedule/current/astgnn_legacy_mincr.yaml",
+      "sha256": "717ea39f84128cdf688aa33ef1a54e3c9f43227936467f489e19e3733f4119c4"
+    },
+    "configs/schedule/current/astgnn/astgnn_mincr.yaml": {
+      "old": "configs/schedule/current/astgnn_mincr.yaml",
+      "sha256": "3da8f6807ef30067a50311de6ba7a24981c6a6c729be6d8663a27644641d425f"
+    },
+    "configs/schedule/current/factorseq/factorseq_gate_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_gate_verify.yaml",
+      "sha256": "5fc2d72ad735a9bfd31581b21a79fb50cf492f28db7eaa6a4258fc82808325b4"
+    },
+    "configs/schedule/current/factorseq/factorseq_gru_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_gru_verify.yaml",
+      "sha256": "dbc6445783011f46ab64bf4534fcbf58d963059499b1d476d1a32350ead9c913"
+    },
+    "configs/schedule/current/factorseq/factorseq_m1_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_m1_verify.yaml",
+      "sha256": "46dbf775144156cb5d0ef2f07fb6c3b85fe3745977ae2a84c7fe8f79e9b3281e"
+    },
+    "configs/schedule/current/factorseq/factorseq_m2_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_m2_verify.yaml",
+      "sha256": "ca8e6d24bb78240381ab46b1b10268c3a06168f25ef1a99aab61b04f75f3373a"
+    },
+    "configs/schedule/current/factorseq/factorseq_mask_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_mask_verify.yaml",
+      "sha256": "743d91a4af21cbe19b632442d72a4d1f5db6c0dad6115e88eb0f4f5c626565a2"
+    },
+    "configs/schedule/current/factorseq/factorseq_mlp_verify.yaml": {
+      "old": "configs/schedule/current/factorseq_mlp_verify.yaml",
+      "sha256": "c8645d958eea7d94796aaa56a07457d34dc6f6ae4b1967282c7cd9423048c8a3"
+    },
+    "configs/schedule/current/factorseq/factorseq_v2_contextual.yaml": {
+      "old": "configs/schedule/current/factorseq_v2_contextual.yaml",
+      "sha256": "7bc1638b495f602126d4924ea02deccff6450138e766993f9b1a3cb54bc1347c"
+    },
+    "configs/schedule/current/factorseq/factorseq_v2_snapshot.yaml": {
+      "old": "configs/schedule/current/factorseq_v2_snapshot.yaml",
+      "sha256": "0698785500a91870f6c8cd74453aa1c84f4ee0b11c68e7ae39569569a0fe2865"
+    },
+    "configs/schedule/current/factorseq/factorseq_v2_temporal.yaml": {
+      "old": "configs/schedule/current/factorseq_v2_temporal.yaml",
+      "sha256": "583774faeb2964b469cd8beb48dfb7a5ee15074db39788f61627811d80a8182d"
+    },
+    "configs/schedule/current/factorseq/factorseq_v3_contextual.yaml": {
+      "old": "configs/schedule/current/factorseq_v3_contextual.yaml",
+      "sha256": "ba542f10798dcc98434f5bf9efce96cff99d547bdc5396e4542d0310a34da15e"
+    },
+    "configs/schedule/current/factorseq/factorseq_v3_snapshot.yaml": {
+      "old": "configs/schedule/current/factorseq_v3_snapshot.yaml",
+      "sha256": "c25eeacf362ddfb46f6c4cdfac9ad2287ff9fa336f00defa75fb5df7bdcb1c5a"
+    },
+    "configs/schedule/current/factorseq/factorseq_v3_temporal.yaml": {
+      "old": "configs/schedule/current/factorseq_v3_temporal.yaml",
+      "sha256": "cc6b7fbd23b661e99fe639a51a0d7bcef506a1b79ebf00fc4921bec76ad96931"
+    },
+    "configs/schedule/current/factorseq/factorseq_v4_graph.yaml": {
+      "old": "configs/schedule/current/factorseq_v4_graph.yaml",
+      "sha256": "7cc4927295a2fb128dc0d6bfe87bd36194c7c38cb2ac3c3ed4f3b04538d9a12b"
+    },
+    "configs/schedule/current/factorseq/factorseq_v4_private.yaml": {
+      "old": "configs/schedule/current/factorseq_v4_private.yaml",
+      "sha256": "bc36a908410aaa1b0aa6aa3179b43875a529322a3f488483986178ac9b348386"
+    },
+    "configs/schedule/current/factorseq/factorseq_v4_shared.yaml": {
+      "old": "configs/schedule/current/factorseq_v4_shared.yaml",
+      "sha256": "3afa25a769500092571150dd7bfdce0b72c865e74782086ee29ed43fec730f12"
+    },
+    "configs/schedule/current/gru/gru_30m_new.yaml": {
+      "old": "configs/schedule/current/gru_30m_new.yaml",
+      "sha256": "ac4d63181b9a7ec2b668ca280fc4a852f839ab9067d83344aa93ddb8d3db60d3"
+    },
+    "configs/schedule/current/gru/gru_30mcont.yaml": {
+      "old": "configs/schedule/current/gru_30mcont.yaml",
+      "sha256": "827835a595157466f4a3585a22af325c7905beef6c2066934fab152d4c76d597"
+    },
+    "configs/schedule/current/gru/gru_day_lgbm.yaml": {
+      "old": "configs/schedule/current/gru_day_lgbm.yaml",
+      "sha256": "0b5c163046db35e77ec09df3d90c77cb54daac6bb00bebf030c8fb24e06b81dd"
+    },
+    "configs/schedule/current/gru/gru_day_moe_new.yaml": {
+      "old": "configs/schedule/current/gru_day_moe_new.yaml",
+      "sha256": "3da92c9fa70cf49bfb2df2d274c295ba02311a1abf1cf91e6b719ef43472da1c"
+    },
+    "configs/schedule/current/gru/gru_day_new.yaml": {
+      "old": "configs/schedule/current/gru_day_new.yaml",
+      "sha256": "c3704274489758e833dcbfd1060c578952971b1bcb79fff5c4ac74629f6aa785"
+    },
+    "configs/schedule/current/gru/gru_day_raw.yaml": {
+      "old": "configs/schedule/current/gru_day_raw.yaml",
+      "sha256": "9d5fca90577476b69a4442443ec600700aae3f15e5b811eb85932fe970b3212b"
+    },
+    "configs/schedule/current/gru/gru_day_xgboost.yaml": {
+      "old": "configs/schedule/current/gru_day_xgboost.yaml",
+      "sha256": "3c77def9b0f1b0311b3e50eea351bb9b9d919a4845315a9572769a54a90c75bb"
+    },
+    "configs/schedule/current/gru/gru_gru_15m.yaml": {
+      "old": "configs/schedule/current/gru_gru_15m.yaml",
+      "sha256": "325c00da4b83b134fd831759eae6254898be0b3dcbadae9324351ba2cefd54ff"
+    },
+    "configs/schedule/current/gru/gru_gru_new_15m.yaml": {
+      "old": "configs/schedule/current/gru_gru_new_15m.yaml",
+      "sha256": "8deb37b254e990807cd59989933b3979576a1ffa3e8648baf9d71b0b6a16da73"
+    },
+    "configs/schedule/current/gru/gru_minc.yaml": {
+      "old": "configs/schedule/current/gru_minc.yaml",
+      "sha256": "2f89e9e256aacf3eb4e1b94da40bb72d82dc228f162250bb660869763feb42da"
+    },
+    "configs/schedule/current/gru/gru_mincr.yaml": {
+      "old": "configs/schedule/current/gru_mincr.yaml",
+      "sha256": "d112c262f42e223b95e09520e67e00e9c46d025bef80771bdf22ca188f946982"
+    },
+    "configs/schedule/current/gru/gru_week_new.yaml": {
+      "old": "configs/schedule/current/gru_week_new.yaml",
+      "sha256": "cc02625fe9e493315318e984b8bcdb4acf379b22ded850bd08898ff2d77175c5"
+    },
+    "configs/schedule/current/boost/lgbm_of_hidden.yaml": {
+      "old": "configs/schedule/current/lgbm_of_hidden.yaml",
+      "sha256": "ac488cfb95b4bf4cf7b84a52e56a32f9fcc5359c9b5f51e48a77b2aff6250baf"
+    },
+    "configs/schedule/current/boost/lgbm_of_hidden_fast.yaml": {
+      "old": "configs/schedule/current/lgbm_of_hidden_fast.yaml",
+      "sha256": "18701df416813d55872d69b917de6ef52a81623c088f4d028c7b3c51f5be5b8f"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_new_15m.yaml": {
+      "old": "configs/schedule/current/resnet_gru_new_15m.yaml",
+      "sha256": "28cdc70c949c210073f21d89e21767caecf4cab1b541d6b16978f87466baa3f9"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_new_15m_att.yaml": {
+      "old": "configs/schedule/current/resnet_gru_new_15m_att.yaml",
+      "sha256": "1ff683259b92c9ef3d600e108fda3a90864b1b17072ce23145d7721166cd1889"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_new_15m_conv2.yaml": {
+      "old": "configs/schedule/current/resnet_gru_new_15m_conv2.yaml",
+      "sha256": "b8bcab59380ce4fd24483b2cacd3fe6920c588f53aa67d4ad59cadcd372b2f4a"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_new_15m_transition_capped_soft_topk.yaml": {
+      "old": "configs/schedule/current/resnet_gru_new_15m_transition_capped_soft_topk.yaml",
+      "sha256": "de4ddb15da4ab260046b4a9a1c90d07d3d0db5372ed03ab079ea641be0c69053"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_new_15m_transition_soft_topk.yaml": {
+      "old": "configs/schedule/current/resnet_gru_new_15m_transition_soft_topk.yaml",
+      "sha256": "61d9deba99138e62bd0227611db9d22c4e52c0da88e87af4c6ecec95cf7cf524"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m.yaml",
+      "sha256": "47732efca614762bf5c9715fd82c10073d95eb317c6ec61d36be979c98b7b637"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_ccc.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_ccc.yaml",
+      "sha256": "f5086cefa5ed1011c8885b035ca35b782563c02df60e4a89ec3399cef338bbfa"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_dim.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_dim.yaml",
+      "sha256": "6aaf87066bdc3ffcea39d5c13326ac92b3097fe623ad2b21960aa413fa0a3a9b"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_learned.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_learned.yaml",
+      "sha256": "ef02a550a341ab8c6b20707ba9bac4e632d71b5d88f5e53e28fab443603d5fde"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_learned_swa.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_learned_swa.yaml",
+      "sha256": "18d60c9ea99750f5a3266f6ad514eb9b9720c7c283c0695ce9af97a624d76b61"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_nohistnorm.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_nohistnorm.yaml",
+      "sha256": "dfba47f61686b4baf3a448d328a77901ed0044c09043c534e3a4a652cee50ee0"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_pearson.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_pearson.yaml",
+      "sha256": "6b27c3d70bd704850939af7630c0f6ba9a0d7319fce54830dae0b63b5ee7f1ab"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_pearson_AdamW.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_pearson_AdamW.yaml",
+      "sha256": "915c16957ca51757cf3b38ac25cc0d7e6b052bcbabe3806d0d4b9d5e609f0282"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_pearson_swa.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_pearson_swa.yaml",
+      "sha256": "e1c771f965ac418f8b5ce113c924833ab447620c2f88ce3f9793dd62e5d514bd"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_polar.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_polar.yaml",
+      "sha256": "49093268c4cc2edca4487196c1ff80c1a7f607179281467fe676bb1fbf44409a"
+    },
+    "configs/schedule/current/resnet_gru/resnet_gru_simp_15m_rnn2.yaml": {
+      "old": "configs/schedule/current/resnet_gru_simp_15m_rnn2.yaml",
+      "sha256": "37bebcffb7fcd864c007e2ce70abb61faf7d71219cdb4c7559746a4ece361e00"
+    },
+    "configs/schedule/linear/gru/gru_df_equal.yaml": {
+      "old": "configs/schedule/linear/gru_df_equal.yaml",
+      "sha256": "99133e9d6c6b0e11166b0dd603193426bd7b7bb341f4cd12a35838a5dd01171c"
+    },
+    "configs/schedule/linear/gru/gru_df_raw_sum.yaml": {
+      "old": "configs/schedule/linear/gru_df_raw_sum.yaml",
+      "sha256": "031b6d7b92cbebd01e5d0edca0da6a841cb940f33e1c0260a27be27c3a96cc77"
+    },
+    "configs/schedule/linear/gru/gru_df_weighted.yaml": {
+      "old": "configs/schedule/linear/gru_df_weighted.yaml",
+      "sha256": "cf8dca31b1260eb2d9e005442d659e72a71305d02c5088f012223434be1a444a"
+    },
+    "configs/schedule/linear/gru/gru_only.yaml": {
+      "old": "configs/schedule/linear/gru_only.yaml",
+      "sha256": "f7b8e3da5c54b5678a37e698d427d24440b714baa6040e8d5dba13e2232ff602"
+    },
+    "configs/schedule/linear/hidden/linear_of_hidden.yaml": {
+      "old": "configs/schedule/linear/linear_of_hidden.yaml",
+      "sha256": "5bc93f5366e6fb6c3e37130b89ae8ff75e59093d61fa6b3acd5712a6d5c972eb"
+    }
+  }
+}
