@@ -55,11 +55,11 @@ _LOG_CSS = """
 .output { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; }
 .output-line { margin: 0 0 2px; }
 .meta { color: #9ca3af; }
-.muted { color: #6b7280; font-style: italic; }
+.muted { color: #a8bdcc; font-style: italic; }
 .stderr { border-left: 2px solid #f87171; background: rgba(248, 113, 113, 0.08); padding-left: 6px; }
 .stderr .meta { color: #fca5a5; }
 """
-_LOG_COLORS = "background: #111827; color: #e5e7eb; font: 12px/1.45 Monaco, Menlo, 'Ubuntu Mono', monospace;"
+_LOG_COLORS = "background: #17212c; color: #e2e8f0; font: 12px/1.45 Monaco, Menlo, 'Ubuntu Mono', monospace;"
 
 _live_output = component(
     'learndl_live_output',
@@ -326,7 +326,7 @@ def _resource_row(label: str, value: str) -> None:
 
 
 def _render_header(style_key: str = 'running-style') -> str:
-    st.markdown('<style>.block-container{padding-top:3.5rem;padding-bottom:.25rem}h1{padding-top:0!important;font-size:1.6rem!important}h3{font-size:1.1rem!important;padding:.2rem 0!important}.st-key-running-list [data-testid=stMarkdownContainer] p{font-size:12px;margin:0}.task-start{display:block;font-size:11px;line-height:1.5;color:#718096}</style>', unsafe_allow_html=True)
+    st.markdown('<style>.block-container{padding-top:3.5rem;padding-bottom:.25rem}h1{padding-top:0!important;font-size:1.6rem!important}h3{font-size:1.1rem!important;padding:.2rem 0!important}.st-key-running-list [data-testid=stMarkdownContainer] p{font-size:12px;margin:0}.task-start{display:block;font-size:11px;line-height:1.5;color:#a8bdcc}</style>', unsafe_allow_html=True)
     title, settings, system = st.columns((6, 1, 1), vertical_alignment='center')
     title.title('Task Center')
     with settings.popover('', icon=':material/settings:', help='Settings', width='content'):

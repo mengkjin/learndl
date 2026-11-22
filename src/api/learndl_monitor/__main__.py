@@ -8,6 +8,7 @@ from pathlib import Path
 import secrets
 import subprocess
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 from urllib.parse import urlsplit
@@ -16,6 +17,7 @@ import webbrowser
 import portalocker
 import psutil
 
+from .preferences import Preferences
 from .services import ROOT, STATE, Manager, SERVICES
 
 __all__ = ['main']
@@ -67,8 +69,12 @@ def main():
             webbrowser.open_new_tab(url)
         return
     token = secrets.token_urlsafe(32)
+    instance = secrets.token_hex(8)
     manager = Manager()
+    preferences = Preferences(STATE, SERVICES)
     origin = f'http://127.0.0.1:{args.port}'
+    operations = threading.Lock()
+    restarting = False
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -95,7 +101,7 @@ def main():
                     return
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
-                self.send_header('Referrer-Policy', 'no-referrer')
+                self.send_header('Referrer-Policy', 'same-origin')
                 self.send_header('Cache-Control', 'no-store')
                 self.send_header('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'")
                 self.end_headers()
@@ -106,7 +112,8 @@ def main():
                 self.reply({'error': 'Session expired. Refresh the page to reconnect.'}, 403)
                 return
             if self.path == '/api/services':
-                self.reply({'application': 'learndl-monitor', 'services': [manager.snapshot(key) for key in SERVICES]})
+                self.reply({'application': 'learndl-monitor', 'services': [manager.snapshot(key) for key in SERVICES],
+                            'preferences': preferences.read(), 'instance': instance})
             elif self.path.startswith('/api/log/') and self.path.split('/')[-1] in SERVICES:
                 path = STATE / (self.path.split('/')[-1] + '.log')
                 if path.exists():
@@ -120,8 +127,11 @@ def main():
                 self.send_error(404)
 
         def do_POST(self):
-            if not self.authorized() or self.path != '/api/action':
-                self.send_error(403)
+            if not self.authorized() or self.headers.get('Origin') != origin:
+                self.reply({'error': 'Console request was not authorized.'}, 403)
+                return
+            if self.path not in ('/api/action', '/api/preferences', '/api/restart'):
+                self.reply({'error': 'Unknown console operation.'}, 404)
                 return
             try:
                 size = int(self.headers.get('Content-Length', '0'))
@@ -130,16 +140,46 @@ def main():
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data, dict):
                     raise ValueError('Expected an object')
-                manager.submit(data['service'], data['action'], data.get('pid'), data.get('created'))
-                self.reply({'accepted': True}, 202)
+                with operations:
+                    self.handle_operation(data)
             except (ValueError, KeyError) as exc:
                 self.reply({'error': str(exc)}, 400)
+
+        def handle_operation(self, data):
+            nonlocal restarting
+            if restarting:
+                self.reply({'error': 'The console is restarting. Try again shortly.'}, 503)
+            elif self.path == '/api/preferences':
+                try:
+                    saved = preferences.update(data)
+                except (OSError, portalocker.LockException):
+                    self.reply({'error': 'Could not save console preferences. Please try again.'}, 503)
+                else:
+                    self.reply({'preferences': saved})
+            elif self.path == '/api/restart':
+                from src.automation.patch_services import interface_operation
+
+                if any(lock.locked() for lock in manager.locks.values()):
+                    self.reply({'error': 'A service operation is in progress. Try again shortly.'}, 409)
+                    return
+                with interface_operation(STATE, key='console'):
+                    restarting = True
+                    try:
+                        self.reply({'instance': instance}, 202)
+                    finally:
+                        # shutdown() must run outside the serve_forever thread.
+                        threading.Thread(target=server.shutdown).start()
+            else:
+                manager.submit(data['service'], data['action'], data.get('pid'), data.get('created'))
+                self.reply({'accepted': True}, 202)
 
     with portalocker.Lock(str(STATE / 'server.lock'), timeout=0):
         with ThreadingHTTPServer(('127.0.0.1', args.port), Handler) as server:
             record.write_text(json.dumps({'url': origin, 'token': token, 'pid': os.getpid(), 'created': psutil.Process().create_time()}))
             record.chmod(0o600)
             server.serve_forever()
+    if restarting:
+        os.execv(sys.executable, [sys.executable, '-m', 'src.api.learndl_monitor', '--serve', '--port', str(args.port)])
 
 
 if __name__ == '__main__':

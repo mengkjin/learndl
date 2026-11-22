@@ -1,5 +1,12 @@
 [theme]
-base = "light"
+base = "dark"
+backgroundColor = "#10161e"
+secondaryBackgroundColor = "#17212c"
+textColor = "#e2e8f0"
+primaryColor = "#55ccb9"
+borderColor = "#344355"
+dataframeHeaderBackgroundColor = "#202c3a"
+chartCategoricalColors = ["#55ccb9", "#81acff", "#f1bf70", "#eca9cf", "#b7dc86", "#c4adff", "#ffad98", "#7ed5ee"]
 
 [client]
 showSidebarNavigation = false

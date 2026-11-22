@@ -8,26 +8,52 @@
 :root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
 *{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:60px auto;padding:0 28px}
 header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;gap:20px}h1{font-size:30px;font-weight:550;letter-spacing:-1px;margin:0}
+.header-controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.filter{position:relative}
+.filter-panel{position:absolute;right:0;top:calc(100% + 8px);min-width:200px;max-width:calc(100vw - 40px);max-height:65vh;overflow:auto;z-index:20;padding:12px;background:#17212c;border:1px solid #344355;border-radius:9px;box-shadow:0 8px 24px #0008}
+.filter-panel label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer}
+.filter-panel input{accent-color:#55ccb9}
+.filter-panel button{margin-top:8px}
 select,button{background:#202c3a;color:#dce8ee;border:1px solid #344355;border-radius:7px;padding:10px 12px;cursor:pointer}
 button:hover,button:focus-visible{border-color:#55ccb9}button:disabled{opacity:.3;cursor:default}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
 .card{position:relative;background:#17212c;border:1px solid #293748;border-radius:12px;padding:24px}
+.card h2{padding-right:25px}
+.hide-card{position:absolute;right:12px;top:12px;width:28px;height:28px;padding:0;font-size:18px;line-height:1;color:#a8bdcc;background:transparent;border-color:transparent}
+#empty{text-align:center;padding:24px;color:#a8bdcc}
+#preferences-error{color:#ffb6a6;margin-bottom:15px;font-size:13px}
+#preferences-error:empty{display:none}
 h2{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:550;margin:0 0 24px;outline-offset:5px}
 .dot{width:7px;height:7px;flex:none;border-radius:50%;background:#67778b}.running .dot{background:#55ccb9}.starting .dot,.scanning .dot,.restarting .dot{background:#e9bd6d}.failed .dot{background:#ef9f91}
 .actions{display:flex;flex-wrap:wrap;gap:7px}.primary{background:#27564f;color:#96edda;border-color:#33776b}
 .tooltip{display:none;position:absolute;z-index:10;left:16px;right:16px;top:65px;padding:16px;background:#243342;border:1px solid #466079;border-radius:8px;box-shadow:0 12px 30px #0008;font:13px/1.8 monospace;white-space:pre-line;overflow-wrap:anywhere;color:#c3d1df;pointer-events:none}
 h2:hover+.tooltip,h2:focus+.tooltip{display:block}#notice{color:#ffb6a6;margin-bottom:15px;font-size:13px}#notice:empty{display:none}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.grid{grid-template-columns:1fr}main{margin-top:30px}h1{font-size:25px}}
+@media(max-width:600px){header{flex-wrap:wrap;gap:12px}.header-controls{flex-wrap:wrap;max-width:100%}}
+@media(max-width:380px){.filter-panel{right:auto;left:0}}
 </style>
 <main>
-<header><h1>Learndl Monitor</h1><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select></header>
-<div id="notice" role="alert"></div><section class="grid" id="cards"></section>
+<header><h1>Learndl Monitor</h1><div class="header-controls">
+ <button id="restart-console" type="button">重启控制台</button>
+ <div class="filter" id="filter">
+  <button id="filter-toggle" type="button" aria-controls="filter-panel" aria-expanded="false" disabled>子服务</button>
+  <div class="filter-panel" id="filter-panel" hidden>
+   <div id="filter-options"></div><button id="show-all" type="button"></button>
+  </div>
+ </div>
+ <select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>
+</div></header>
+<div id="notice" role="alert"></div><div id="preferences-error" role="alert"></div>
+<section class="grid" id="cards"></section>
+<div id="empty" hidden><p id="empty-message"></p><button id="empty-show-all" type="button"></button></div>
 </main>
 <script>
 let token=document.querySelector('meta[name=console-token]').content;
 if(token)sessionStorage.setItem('learndl-token',token);
 history.replaceState(null,'',location.pathname);
 let lang=localStorage.getItem('learndl-language')||'zh',services=[];
+let hiddenServices=new Set(),preferencesReady=false,savingPreferences=false,preferencesGeneration=0;
+let restartingConsole=false;
 if(!['zh','en'].includes(lang))lang='zh';
 const labels={
  zh:{start:'启动',open:'打开',restart:'重启',stop:'关闭',stopped:'已关闭',running:'运行中',starting:'启动中',stopping:'关闭中',restarting:'重启中',scanning:'扫描中',unavailable:'未就绪',managed:'控制台启动',external:'外部发现',confirm:'确认执行此操作？',descriptions:{mail_archive:'同步邮件、执行信息及附件',model_preview:'训练、测试日志与实验结果',compare:'已有模型结果的交互对比',experiments:'TensorBoard 与 Optuna 多实例管理',tasks:'任务状态、运行输出与进程管理',storage:'磁盘占用、目录分布与快照报告',research:'数据、模型与研究工作流'}},
@@ -41,25 +67,109 @@ async function request(path,options={}){
  finally{clearTimeout(timeout);}
 }
 async function api(path,body,retry=true){
- const r=await request(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+ const sentToken=token;
+ const r=await request(path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+sentToken,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
  if(r.status===403&&retry){
   // A running console may have restarted since this tab was opened.
   const page=await request('/');
   if(page.ok){
    const current=new DOMParser().parseFromString(await page.text(),'text/html').querySelector('meta[name=console-token]');
-   if(current&&current.content!==token){token=current.content;return api(path,body,false);}
+   if(current?.content&&current.content!==sentToken){token=current.content;return api(path,body,false);}
   }
  }
  if(!r.ok){
   const fallback=lang==='zh'?'请求失败，请稍后重试。':'Request failed. Please try again.';
-  if(r.status===403)throw Error(lang==='zh'?'会话已过期，正在重连。':'Session expired. Reconnecting.');
-  const error=await r.json().catch(()=>({}));throw Error(error.error||fallback);
+  const error=await r.json().catch(()=>({}));
+  if(r.status===403&&!error.error&&['/api/preferences','/api/restart'].includes(path)){
+   throw Error(lang==='zh'?'当前控制台后端尚未更新，请从 CLI 重启 Learndl Monitor。':'This console is running an older backend. Restart Learndl Monitor from the CLI.');
+  }
+  throw Error(error.error||fallback);
  }
  return r.json();
 }
 function element(tag,text,cls){const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;}
+function setFilterOpen(open){
+ document.getElementById('filter-panel').hidden=!open;
+ document.getElementById('filter-toggle').setAttribute('aria-expanded',String(open));
+}
+function renderFilter(){
+ const restart=document.getElementById('restart-console');
+ restart.textContent=lang==='zh'?'重启控制台':'Restart console';
+ restart.disabled=restartingConsole;
+ const toggle=document.getElementById('filter-toggle');
+ toggle.textContent=lang==='zh'?'子服务':'Services';
+ toggle.disabled=!preferencesReady;
+ const options=document.getElementById('filter-options');
+ for(const service of services){
+  let row=document.getElementById('filter-'+service.id);
+  if(!row){
+   row=element('label');row.id='filter-'+service.id;
+   const input=element('input');input.type='checkbox';
+   input.onchange=()=>{
+    const visible=input.checked;
+    input.checked=!hiddenServices.has(service.id);
+    savePreferences({service:service.id,visible});
+   };
+   row.append(input,element('span'));options.append(row);
+  }
+  const input=row.querySelector('input');
+  input.checked=!hiddenServices.has(service.id);
+  input.setAttribute('aria-disabled',String(savingPreferences));
+  row.querySelector('span').textContent=service[lang];
+ }
+ for(const id of ['show-all','empty-show-all']){
+  const button=document.getElementById(id);
+  button.textContent=lang==='zh'?'全部显示':'Show all';
+  button.disabled=savingPreferences||!hiddenServices.size;
+ }
+ document.getElementById('empty-message').textContent=lang==='zh'?'所有子服务已隐藏。':'All services are hidden.';
+ document.getElementById('empty').hidden=!preferencesReady||!services.length||services.some(s=>!hiddenServices.has(s.id));
+}
+async function restartConsole(){
+ if(restartingConsole||!confirm(lang==='zh'?'重启 Learndl Monitor？子服务会继续运行。':'Restart Learndl Monitor? Child services will keep running.'))return;
+ restartingConsole=true;
+ renderFilter();
+ const notice=document.getElementById('preferences-error');
+ notice.textContent=lang==='zh'?'控制台正在重启…':'Restarting console…';
+ try{
+  const {instance}=await api('/api/restart',{});
+  const deadline=Date.now()+20000;
+  while(Date.now()<deadline){
+   await new Promise(resolve=>setTimeout(resolve,500));
+   const status=await api('/api/services').catch(()=>null);
+   if(status?.instance&&status.instance!==instance){location.reload();return;}
+  }
+  throw Error(lang==='zh'?'控制台尚未重新连接，请稍后刷新。':'Console has not reconnected. Try refreshing shortly.');
+ }catch(error){
+  notice.textContent=error.message;
+  restartingConsole=false;
+  renderFilter();
+ }
+}
+async function savePreferences(change,returnFocus=false){
+ if(savingPreferences)return;
+ savingPreferences=true;
+ preferencesGeneration++;
+ const notice=document.getElementById('preferences-error');
+ notice.textContent='';
+ render();
+ try{
+  const result=await api('/api/preferences',change);
+  hiddenServices=new Set(result.preferences.hidden);
+  if(returnFocus)document.getElementById('filter-toggle').focus();
+  notifyChange();
+ }catch(error){notice.textContent=error.message;}
+ finally{
+  preferencesGeneration++;
+  savingPreferences=false;
+  render();
+  refresh();
+ }
+}
 function render(){
  document.documentElement.lang=lang;
+ renderFilter();
+ if(!preferencesReady)return;
  const root=document.getElementById('cards');
  // Keep card nodes in place during polling so hovering and keyboard focus remain stable.
  services.forEach(s=>{
@@ -68,8 +178,16 @@ function render(){
    card=element('article',null,'card');card.id='service-'+s.id;
    const title=element('h2');title.tabIndex=0;title.append(element('span',null,'dot'),element('span'));
    const tip=element('div',null,'tooltip');tip.id='details-'+s.id;tip.role='tooltip';title.setAttribute('aria-describedby',tip.id);
-   card.append(title,tip,element('div',null,'actions'));root.append(card);
+   const hide=element('button','−','hide-card');hide.type='button';
+   hide.onclick=()=>savePreferences({service:s.id,visible:false},true);
+   card.append(title,tip,hide,element('div',null,'actions'));root.append(card);
   }
+  if(hiddenServices.has(s.id)&&card.contains(document.activeElement))document.getElementById('filter-toggle').focus();
+  card.hidden=hiddenServices.has(s.id);
+  const hide=card.querySelector('.hide-card');
+  hide.title=lang==='zh'?`隐藏 ${s[lang]}`:`Hide ${s[lang]}`;
+  hide.setAttribute('aria-label',hide.title);
+  hide.disabled=savingPreferences;
   card.className='card '+s.state+(s.error?' failed':'');
   card.querySelector('h2 span:last-child').textContent=s[lang];
   card.querySelector('.tooltip').textContent=[labels[lang].descriptions[s.id],t(s.state),s.pid?`PID ${s.pid} · ${t(s.source)} · ${s.uptime}s · ${s.count} ${lang==='zh'?'个实例':'instance(s)'}`:'',s.url||`127.0.0.1:${s.port}`,s.snapshot,s.error].filter(Boolean).join('\n');
@@ -113,7 +231,13 @@ function refresh(){
  if(refreshing){refreshAgain=true;return refreshing;}
  refreshing=(async()=>{
   try{
-   services=(await api('/api/services')).services;
+   const generation=preferencesGeneration;
+   const response=await api('/api/services');
+   services=response.services;
+   if(!savingPreferences&&generation===preferencesGeneration){
+    hiddenServices=new Set(response.preferences?.hidden||[]);
+    preferencesReady=true;
+   }
    render();document.getElementById('notice').textContent='';
    const state=JSON.stringify(services.map(s=>[s.id,s.state,s.pid,s.created,s.url,s.error,s.snapshot]));
    if(state!==lastState){lastState=state;notifyChange();}
@@ -130,6 +254,17 @@ window.addEventListener('online',()=>refresh());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 document.getElementById('language').value=lang;
 document.getElementById('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);render();};
+const filter=document.getElementById('filter'),filterToggle=document.getElementById('filter-toggle');
+filterToggle.onclick=()=>setFilterOpen(document.getElementById('filter-panel').hidden);
+document.getElementById('show-all').onclick=()=>savePreferences({show_all:true});
+document.getElementById('restart-console').onclick=restartConsole;
+document.getElementById('empty-show-all').onclick=()=>savePreferences({show_all:true},true);
+document.addEventListener('click',event=>{if(!filter.contains(event.target))setFilterOpen(false);});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape'&&!document.getElementById('filter-panel').hidden){
+  setFilterOpen(false);filterToggle.focus();
+ }
+});
 refresh();setInterval(refresh,2000);
 </script>
 </html>
