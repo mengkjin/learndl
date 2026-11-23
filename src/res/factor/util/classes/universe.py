@@ -76,12 +76,11 @@ class Universe:
         if path.exists() and not rebuild:
             df = Load.df(path)
         else:
-            desc = DATAVENDOR.INFO.get_desc()
-            secid = desc.index
-
             if self.name == 'all':
+                secid = DATAVENDOR.INFO.get_desc(date).index.unique()
                 df = pd.DataFrame({'date' : date , 'secid' : secid})
             elif self.name.startswith('top'):
+                secid = DATAVENDOR.INFO.get_desc(date).index
                 top_num = int(self.name.split('.')[0].removeprefix('top'))
                 df = DATAVENDOR.TRADE.get_val(DATAVENDOR.TRADE.closest_date('val' , date)).sort_values('circ_mv' , ascending=False)
                 df = df.query('secid in @secid').iloc[:top_num].loc[:,['secid']].\

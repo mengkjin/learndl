@@ -171,7 +171,7 @@ migration remains applied and the interface recovery report lists the problem.
 Use `python -m src.automation.version_patch restore-services` to retry
 interface recovery after fixing the reported condition.
 
-### Migration checks for upgrades through 0.7.7
+### Migration checks for upgrades through 0.7.9
 
 - **0.7.2/001** verifies TensorBoard moves against file hashes, then moves or
   copies experiments. Optuna uses SQLite backup and retains the original
@@ -198,6 +198,10 @@ interface recovery after fixing the reported condition.
 - **0.7.7/002** consolidates legacy model batches into build indexes, remaps
   references, and keeps original batches in the attempt's backup directory.
   Inspect content verification and publication errors before resuming.
+
+- **0.7.9/001** removes securities outside every known listing interval from
+  daily all/top universe snapshots. Only changed files are backed up and replaced.
+  The patch keeps surviving rows in order and does not refill rankings.
 
 Hosts upgraded from the previous name keep using their existing
 `PATH.runtime/version_autofix/` directory. The new CLI reads the same history
