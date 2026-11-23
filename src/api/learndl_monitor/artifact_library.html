@@ -14,6 +14,22 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .panel{border:1px solid #293748;border-radius:10px;background:#17212c;padding:14px;min-width:0}
 #items{max-height:68vh;overflow:auto}#items label{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #273544}
 .item{border:0;background:transparent;text-align:left;width:100%;overflow-wrap:anywhere}.item[aria-current=true]{color:#8de2d3;background:#203b3c}
+.mail-heading{justify-content:space-between;margin-bottom:12px}
+.mail-heading h2{flex:1;min-width:0;margin:0}
+.mail-section{border:1px solid #293748;border-radius:8px;padding:0 10px}
+.mail-section summary{font-weight:600}
+.mail-section .actions{padding:0 0 10px}
+.mail-section pre,#mail-preview pre{max-height:53vh;overflow:auto}
+.mail-body pre{font-size:12px;line-height:1.45}
+.mail-item-title{display:flex;align-items:baseline;gap:7px}
+.mail-status{flex:none;font-size:12px;color:#9aabba}
+.mail-status[data-state=success]{color:#70d8bc}
+.mail-status[data-state=failed]{color:#ff9e91}
+.mail-status[data-state=running]{color:#ebc27c}
+#mail-preview:empty{display:none}
+#mail-preview{margin-top:14px}
+#mail-preview img{display:block;max-width:100%;max-height:57vh}
+#mail-pages{justify-content:space-between;margin-top:10px}
 .model-library{max-width:1540px}
 .model-layout{--sidebar:clamp(168px,var(--sidebar-width,232px),38%);align-items:start;gap:12px 0;
  grid-template-columns:var(--sidebar) 14px minmax(0,1fr);grid-template-rows:max-content minmax(0,1fr);
@@ -21,6 +37,8 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .model-layout[data-layout=right]{grid-template-columns:var(--sidebar) 14px minmax(0,1fr) minmax(0,1.16fr);
  grid-template-rows:auto;grid-template-areas:"list split detail preview";column-gap:6px}
 .model-layout.collapsed{--sidebar:44px}
+.mail-layout{grid-template-rows:auto;grid-template-areas:"list split detail"}
+.mail-layout.collapsed :is(#actions,#mail-pages){display:none}
 .model-list{grid-area:list;padding:8px}.model-list-header{justify-content:space-between;min-height:32px;margin-bottom:6px}
 .model-layout.collapsed .model-list-header{margin:0}
 #sidebar-toggle{padding:1px 6px;min-height:28px;min-width:26px}
@@ -56,6 +74,7 @@ small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywher
  .model-layout,.model-layout[data-layout=right]{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"list" "detail" "preview";gap:10px}
  #model-splitter{display:none}
  .model-layout #items{max-height:34vh}
+ .mail-layout{grid-template-areas:"list" "detail"}
 }
 .management-table{overflow:auto;margin:12px 0}.management-table table{width:100%;border-collapse:collapse}
 .management-table :is(th,td){padding:8px;text-align:left;border-bottom:1px solid #334155;overflow-wrap:anywhere}
@@ -70,7 +89,7 @@ dialog{background:#17212c;color:inherit;border:1px solid #52667e;border-radius:1
 </style>
 <main>
 <header class="row"><h1>__TITLE__</h1><div class="row header-actions"><select id="language" aria-label="Language">
-<option value="zh">中文</option><option value="en">English</option></select></div></header>
+<option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header>
 <div id="preview-page">
 <div class="toolbar">
 <input id="search" type="search">
@@ -80,7 +99,7 @@ dialog{background:#17212c;color:inherit;border:1px solid #52667e;border-radius:1
 <div id="model-filters" class="toolbar" hidden></div>
 <p id="notice" role="status"></p>
 <div class="layout">
-<section class="panel" id="list-panel"><div id="list-header"><div id="actions" class="actions"></div><small id="count" role="status"></small></div><div id="items"></div></section>
+<section class="panel" id="list-panel"><div id="list-header"><div id="actions" class="actions"></div><small id="count" role="status"></small></div><div id="items"></div><nav id="mail-pages" class="row" hidden></nav></section>
 <section class="panel" id="detail" aria-live="polite"></section>
 </div>
 </div>
@@ -92,6 +111,8 @@ const modelPage=kind==='model_preview', $=id=>document.getElementById(id);
 const filters=new URLSearchParams(location.search), selected=new Set(), bindings=new WeakMap();
 let lang=localStorage.getItem('learndl-language')==='en'?'en':'zh';
 let rows=[], models={}, shown=[], active='', activeModel='', activeBuild=null, version='', blobURL='', loaded=false;
+const MAIL_PAGE_SIZE=50;
+let mailPage=0,mailTotal=0;
 const tr=(zh,en)=>lang==='en'?en:zh;
 const terms={
  cancel:['取消','Cancel'], goTo:['转到','Go to'], invert:['反选','Invert selection'], batchRename:['批量改名','Reset selected numbers to 1'],
@@ -108,6 +129,7 @@ const terms={
  title:modelPage?['模型预览','Model Preview']:['邮件档案','Mail Archive'],
  search:modelPage?['搜索模型或文件','Search models or files']:['搜索主题或脚本','Search subjects or scripts'],
  host:['来源','Source'], allHosts:['全部来源','All sources'], status:['执行状态','Execution status'],
+ allMailTypes:['全部邮件类型','All mail types'],
  allStatus:['全部状态','All statuses'], view:['视图','View'], active:['当前','Active'],
  archived:['已归档','Archived'], trash:['回收站','Trash'], refresh:['刷新','Refresh'],
  loading:['正在加载记录…','Loading records…'], loadFailed:['记录加载失败','Could not load records'],
@@ -157,6 +179,15 @@ const terms={
  previous:['上一页','Previous'], next:['下一页','Next'], mustRestore:['从回收站恢复后即可查看。','Restore the item from Trash to view it.'],
  modelRun:['模型运行','Model run'], smtp:['SMTP 状态','SMTP status'], missing:['缺失附件','Missing attachments'],
  body:['正文','Body'], original:['原始邮件','Original email'], start:['启动或打开','Start or open'],
+ mailInfo:['邮件信息','Mail information'], mailBody:['邮件正文','Message body'], mailAttachments:['邮件附件','Attachments'],
+ attachmentMode:['附件点击方式','Attachment click action'], previewAttachment:['预览附件','Preview attachment'],
+ openAttachment:['打开附件','Open attachment'], noAttachments:['无附件。','No attachments.'], noBody:['无正文。','No message body.'],
+ htmlPopupBlocked:['请允许此页面打开新标签页。','Allow this site to open a new tab.'],
+ mailType:['邮件类型','Mail type'], mailTime:['归档时间','Archive time'], mailTask:['任务','Task'], mailScript:['脚本','Script'],
+ From:['发件人','From'], To:['收件人','To'], Cc:['抄送','Cc'], Date:['邮件时间','Message date'],
+ research:['研究','Research'], daily:['日更','Daily update'], weekly:['周更','Weekly update'],
+ data_update:['数据更新','Data update'], watchdog:['Watchdog 告警','Watchdog alert'],
+ maintenance:['系统维护','Maintenance'], storage:['存储报告','Storage report'], other:['其他','Other'],
  stop:['停止','Stop'], ready:['实例尚未就绪','The instance is not ready'],
  stopped:['实例已停止。','Instance stopped.'], openInstance:['打开实验实例','Open experiment instance'],
  nn:['神经网络','Neural network'], boost:['提升树','Boosting'], factor:['因子','Factor'], linear:['线性模型','Linear model'],
@@ -214,7 +245,7 @@ function field(id,key,tag='select'){
 const modelFields={type:'module_type',module:'module',stage:'stage',short:'short_test'};
 const filterLabels={type:'allTypes',module:'allModules',stage:'allStages',short:'short'};
 function setupModelLayout(){
- const layout=document.querySelector('.layout'), list=$('list-panel'), header=$('list-header');
+ const layout=document.querySelector('.layout');
  const preference='learndl-model-preview-';
  const mode=field('preview-layout','layout');
  mode.append(option('below'),option('right'));
@@ -226,11 +257,16 @@ function setupModelLayout(){
  const modeLabel=element('label');modeLabel.append(label('span','layout'),' ',mode);
  $('refresh').after(modeLabel);
  document.querySelector('main').classList.add('model-library');
- layout.classList.add('model-layout');
- list.classList.add('model-list');header.className='row model-list-header';
  $('actions').hidden=true;
  const preview=element('section');preview.id='model-file-detail';preview.className='panel';preview.hidden=true;
  layout.append(preview);
+ setupSidebar(preference,232);
+}
+function setupSidebar(preference,initialWidth){
+ const layout=document.querySelector('.layout'), list=$('list-panel'), header=$('list-header');
+ layout.classList.add('model-layout');
+ list.classList.add('model-list');
+ header.className='row model-list-header';
  const splitter=field('model-splitter','resizeSidebar','div');
  splitter.tabIndex=0;
  splitter.setAttribute('role','separator');
@@ -238,7 +274,7 @@ function setupModelLayout(){
  splitter.setAttribute('aria-controls','list-panel');
  list.after(splitter);
 
- let width=Number(localStorage.getItem(preference+'width'))||232;
+ let width=Number(localStorage.getItem(preference+'width'))||initialWidth;
  const min=168, max=()=>Math.max(min,Math.floor(layout.clientWidth*.38));
  const setWidth=(next,save=false)=>{
   width=Math.max(min,Math.min(max(),next));
@@ -265,7 +301,7 @@ function setupModelLayout(){
  setWidth(width);
  setCollapsed(localStorage.getItem(preference+'collapsed')==='1');
  window.addEventListener('resize',()=>{
-  const saved=Number(localStorage.getItem(preference+'width'))||232;
+  const saved=Number(localStorage.getItem(preference+'width'))||initialWidth;
   if(!layout.classList.contains('resizing'))setWidth(saved);
  });
  splitter.onpointerdown=e=>{
@@ -488,9 +524,20 @@ function setup(){
    for(const id of ['search','host',...Object.keys(modelFields),'experiment','from','to'])$(id).value='';
    $('dateField').value='initial_training';$('dateUnknown').checked=false;render();
   }));
+ }else{
+  document.querySelector('.layout').classList.add('mail-layout');
+  setupSidebar('learndl-mail-archive-',350);
+  const type=field('mail-type','mailType');
+  type.append(option('','allMailTypes'));
+  $('status').before(type);
+  const mode=field('attachment-mode','attachmentMode');
+  mode.append(option('preview','previewAttachment'),option('open','openAttachment'));
+  mode.value=localStorage.getItem('learndl-mail-attachment-mode')==='open'?'open':'preview';
+  mode.onchange=()=>localStorage.setItem('learndl-mail-attachment-mode',mode.value);
+  $('language').before(mode);
  }
- const ids=['search','host','status','view',...Object.keys(modelFields),'experiment','dateField','from','to','dateUnknown'];
- for(const id of ids)if($(id))$(id).oninput=render;
+ const ids=['search','host','status','view','mail-type',...Object.keys(modelFields),'experiment','dateField','from','to','dateUnknown'];
+ for(const id of ids)if($(id))$(id).oninput=()=>{mailPage=0;render();};
  $('refresh').onclick=refresh;
  $('language').value=lang;
  $('language').onchange=()=>{
@@ -512,7 +559,7 @@ async function refresh(){
   if(modelPage){
    const builds=Object.values(models).flatMap(model=>model.builds);
    for(const [id,key] of Object.entries(modelFields))options(id,builds.map(build=>modelValue(build,key)),filterLabels[id]);
-  }
+  }else options('mail-type',rows.map(r=>r.mail_type||'other'),'allMailTypes');
   loaded=true;setNotice(filters.has('run')?()=>t('runFilter'):'');render();
  }catch(error){
   if(!loaded){bindings.delete($('count'));localized($('count'),()=>t('loadFailed'));}
@@ -549,10 +596,20 @@ function render(){
  if(!loaded)return;
  const query=$('search').value.trim().toLowerCase();
  if(modelPage){renderModels(rows.filter(r=>!r.trashed),query);return;}
- shown=rows.filter(visibleState);
- shown=shown.filter(r=>(!$('host').value||r.host===$('host').value)&&
+ const matches=rows.filter(visibleState).filter(r=>(!$('host').value||r.host===$('host').value)&&
   (!$('status').value||r.metadata?.status===$('status').value)&&
+  (!$('mail-type').value||(r.mail_type||'other')===$('mail-type').value)&&
   matchesText([r.label,r.host,r.metadata?.task,r.metadata?.script,r.stamp],query));
+ const pages=Math.max(1,Math.ceil(matches.length/MAIL_PAGE_SIZE));
+ mailTotal=matches.length;
+ mailPage=Math.min(mailPage,pages-1);
+ shown=matches.slice(mailPage*MAIL_PAGE_SIZE,(mailPage+1)*MAIL_PAGE_SIZE);
+ const pager=$('mail-pages');
+ pager.hidden=pages===1;
+ const move=step=>()=>{mailPage+=step;render();$('items').scrollTop=0;};
+ const previous=action('previous',move(-1)),next=action('next',move(1));
+ previous.disabled=mailPage===0;next.disabled=mailPage+1===pages;
+ pager.replaceChildren(previous,element('small',`${mailPage+1} / ${pages}`),next);
  $('items').replaceChildren(...shown.map(fileRow));
  if(!shown.length)$('items').append(label('p','noMail'));
  trimSelection();renderActions();
@@ -562,16 +619,26 @@ function trimSelection(){
  for(const id of selected)if(!visible.has(id))selected.delete(id);
 }
 function fileRow(r){
- const line=element('label'), b=button(r.label,()=>details(r));
+ const subject=r.label.replace(/^Learndl\s*\[[^\]]+\]\s*[:：]\s*/i,'');
+ const shortTitle=subject.replace(/^(?:success|succeeded|completed?|fail(?:ed|ure)?|error|killed|timeout|aborted|cancelled|skipped|running|pending)\s+[-–—]\s+/i,'')||subject||r.label;
+ const line=element('label'), b=button('',()=>details(r));
  if(!r.readonly){
   const check=element('input');check.type='checkbox';check.checked=selected.has(r.id);
   localized(check,()=>t('select')+' '+r.label,'aria-label');
   check.onchange=()=>{check.checked?selected.add(r.id):selected.delete(r.id);renderActions();};
   line.append(check);
  }
- b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));
- b.append(localized(element('small'),()=>
-  [r.host,r.metadata?.task,t(r.metadata?.status||''),r.stamp].filter(Boolean).join(' · ')));
+ b.className='item';b.dataset.file=r.id;b.setAttribute('aria-current',String(active===r.id));b.title=shortTitle;
+ const title=element('span');title.className='mail-item-title';
+ const status=r.metadata?.status||'unknown', normalized=status.toLowerCase();
+ const state=['success','succeeded','complete','completed'].includes(normalized)?'success':
+  /fail|error|killed|timeout|abort/i.test(normalized)?'failed':/running|pending|start/i.test(normalized)?'running':'unknown';
+ const mark=element('span',{success:'●',failed:'◆',running:'◐',unknown:'○'}[state]);
+ mark.className='mail-status';mark.dataset.state=state;mark.setAttribute('role','img');
+ localized(mark,()=>t(status),'aria-label');
+ title.append(mark,element('span',shortTitle));
+ b.append(title,localized(element('small'),()=>
+  [r.host,r.stamp&&formatDate(r.stamp)].filter(Boolean).join(' · ')));
  line.append(b);return line;
 }
 function folder(actionName,id,build){
@@ -785,7 +852,7 @@ function renderActions(){
  const view=$('view').value, countLabel=$('count');
  const ops=view==='trash'?['restore','purge']:[view==='archived'?'unarchive':'archive','delete'];
  bindings.delete(countLabel);
- localized(countLabel,()=>items(shown.length)+' · '+tr('已选 ','Selected ')+items(selected.size));
+ localized(countLabel,()=>items(mailTotal)+' · '+tr('已选 ','Selected ')+items(selected.size));
  const pick=action(selected.size?'clear':'selectAll',()=>{
   if(selected.size)selected.clear();else shown.filter(r=>!r.readonly).slice(0,500).forEach(r=>selected.add(r.id));
   render();
@@ -801,14 +868,20 @@ function renderActions(){
   });b.disabled=selected.size===0;return b;
  }));
 }
-async function file(r,index,name,download=false){
- if(!download&&name.toLowerCase().endsWith('.xlsx'))return spreadsheet(r,index);
- const target=$('preview');bindings.delete(target);
+async function downloadOriginal(r,index){
+ const response=await api(url('/api/file',{id:r.id,index}));
+ const anchor=element('a'), downloadURL=URL.createObjectURL(await response.blob());
+ anchor.href=downloadURL;anchor.download='message.eml';anchor.click();
+ setTimeout(()=>URL.revokeObjectURL(downloadURL),30000);
+}
+async function file(r,index,name){
+ if(name.toLowerCase().endsWith('.xlsx'))return spreadsheet(r,index);
+ const target=$('preview');
+ bindings.delete(target);
  const response=await api(url('/api/file',{id:r.id,index}));
  if(!target?.isConnected)return;
- if(blobURL)URL.revokeObjectURL(blobURL);
  const mime=response.headers.get('Content-Type');
- if(!download&&(mime.startsWith('text/')&&mime!=='text/html'||mime==='application/json')){
+ if(mime.startsWith('text/')&&mime!=='text/html'||mime==='application/json'){
   let content=await response.text();
   if(mime==='application/json')try{content=JSON.stringify(JSON.parse(content),null,2);}catch{}
   if(target.isConnected)target.replaceChildren(element('pre',content));
@@ -819,13 +892,17 @@ async function file(r,index,name,download=false){
  if(modelPage&&!['text/html','application/pdf'].includes(blob.type)){
   localized(target,()=>t('noPreview'));return;
  }
+ if(blobURL)URL.revokeObjectURL(blobURL);
  blobURL=URL.createObjectURL(blob);
- if(!download&&['text/html','application/pdf'].includes(blob.type)){
+ if(['text/html','application/pdf'].includes(blob.type)){
   const frame=element('iframe');if(blob.type==='text/html')frame.setAttribute('sandbox','');frame.title=name;
   frame.src=blobURL;target.replaceChildren(frame);
+ }else if(!modelPage&&blob.type.startsWith('image/')){
+  const image=element('img');image.src=blobURL;image.alt=name;target.replaceChildren(image);
  }else{
   const anchor=localized(element('a'),()=>t('download')+' '+name);
-  anchor.href=blobURL;anchor.download=name;target.replaceChildren(anchor);anchor.click();
+  anchor.href=blobURL;anchor.download=name;target.replaceChildren(anchor);
+  if(modelPage)anchor.click();
  }
 }
 async function spreadsheet(r,index,sheet=''){
@@ -849,6 +926,32 @@ function link(run,key,prefix=''){
  const a=localized(element('a'),()=>t(key)+prefix);
  a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
 }
+async function mailHtmlFrame(r,index,name,doc=document){
+ const response=await api(url('/api/mail-html',{id:r.id,index}));
+ const {html}=await response.json();
+ const frame=doc.createElement('iframe');
+ frame.setAttribute('sandbox','');
+ frame.referrerPolicy='no-referrer';
+ frame.title=name;
+ frame.srcdoc=html;
+ return frame;
+}
+async function openMailHtml(r,index,name){
+ const tab=window.open('','_blank');
+ if(!tab)throw Error(t('htmlPopupBlocked'));
+ try{
+  tab.opener=null;
+  tab.document.title=name;
+  const frame=await mailHtmlFrame(r,index,name,tab.document);
+  if(tab.closed)return;
+  tab.document.body.style.margin='0';
+  frame.style.cssText='position:fixed;inset:0;display:block;width:100%;height:100%;border:0';
+  tab.document.body.replaceChildren(frame);
+ }catch(error){
+  tab.close();
+  throw error;
+ }
+}
 async function chapters(r,page){
  const target=$('preview');
  const data=await (await api(url('/api/chapters',{id:r.id,page,run:filters.get('run')||''}))).json();
@@ -868,21 +971,76 @@ async function chapters(r,page){
 async function details(r){
  active=r.id;
  for(const b of document.querySelectorAll('[data-file]'))b.setAttribute('aria-current',String(b.dataset.file===active));
- const pane=$('detail'), actions=element('div'), preview=element('div');
- bindings.delete(pane);actions.className='actions';preview.id='preview';
- pane.replaceChildren(element('h2',r.label),actions,preview);
- if(r.trashed){localized(preview,()=>t('mustRestore'));return;}
- actions.append(action('folder',folder('folder',r.id)));
+ const pane=$('detail'), header=element('div');
+ bindings.delete(pane);header.className='row mail-heading';
+ if(blobURL){URL.revokeObjectURL(blobURL);blobURL='';}
+ header.append(element('h2',r.label));pane.replaceChildren(header);
+ if(r.trashed){pane.append(label('p','mustRestore'));return;}
+ header.append(action('folder',folder('folder',r.id)));
+
+ const section=(key,expanded)=>{
+  const node=element('details');node.className='mail-section';node.open=expanded;
+  node.append(label('summary',key));return node;
+ };
+ const info=section('mailInfo',false), body=section('mailBody',true);
+ body.classList.add('mail-body');
+ const attachments=section('mailAttachments',true), preview=element('div');
+ preview.id='mail-preview';
+ const values=element('dl');values.className='properties';
+ const field=(key,value)=>{if(value)values.append(label('dt',key),localized(element('dd'),typeof value==='function'?value:()=>value));};
  const m=r.metadata;
- pane.insertBefore(localized(element('pre'),()=>[m.task,t(m.status||''),m.script,m.source,m.revision,m.started_at,m.finished_at,m.task_run_id,
-  t('smtp')+' · '+t(m.smtp_status||'unknown'),m.missing_attachments?.length?
-  t('missing')+' · '+m.missing_attachments.join(', '):''].filter(Boolean).join('\n')),actions);
- for(const id of m.model_runs||[])actions.append(link(id,'modelRun',' '+id.slice(0,8)));
- r.files.forEach((name,i)=>{
-  actions.append(button(()=>r.mail_parts?.[i]?t(r.mail_parts[i]):name,()=>file(r,i,name)));
-  if(i>0)actions.append(button(()=>t('download')+' '+(r.mail_parts?.[i]?t(r.mail_parts[i]):name),()=>file(r,i,name,true)));
+ field('mailType',()=>t(r.mail_type||'other'));
+ field('mailTime',()=>r.stamp?formatDate(r.stamp):t('unknown'));
+ field('host',[r.host,m.source].filter(Boolean).join(' · '));
+ field('mailTask',m.task);field('mailScript',m.script);
+ field('status',()=>t(m.status||'unknown'));field('smtp',()=>t(m.smtp_status||'unknown'));
+ field('started',m.started_at?()=>formatDate(m.started_at):null);
+ field('finished',m.finished_at?()=>formatDate(m.finished_at):null);
+ field('Git HEAD',m.revision);field('runId',m.task_run_id);
+ field('missing',m.missing_attachments?.join(', '));
+ const links=element('div');links.className='actions';
+ for(const id of m.model_runs||[])links.append(link(id,'modelRun',' '+id.slice(0,8)));
+ const originalIndex=r.mail_parts?.indexOf('original')??-1;
+ info.append(values,links);
+ if(originalIndex>=0){
+  links.append(action('original',()=>downloadOriginal(r,originalIndex)));
+  info.addEventListener('toggle',async()=>{
+   if(!info.open||info.dataset.headers)return;
+   info.dataset.headers='loading';
+   try{
+    const headers=await (await api(url('/api/mail-headers',{id:r.id}))).json();
+    for(const [key,value] of Object.entries(headers))field(key,value);
+    info.dataset.headers='loaded';
+   }catch(error){delete info.dataset.headers;setNotice(()=>t('actionError')+' · '+error.message);}
+  });
+ }
+ const buttons=element('div');buttons.className='actions';
+ r.files.forEach((name,index)=>{
+  if(r.mail_parts?.[index])return;
+  buttons.append(button(name,async()=>{
+   if($('attachment-mode').value==='open'){
+    if(/\.html?$/i.test(name)){await openMailHtml(r,index,name);return;}
+    await api('/api/action',{action:'open_attachment',id:r.id,index});
+    return;
+   }
+   if(blobURL){URL.revokeObjectURL(blobURL);blobURL='';}
+   const target=element('div');target.id='preview';
+   preview.replaceChildren(element('h2',name),target);
+   if(/\.html?$/i.test(name)){
+    const frame=await mailHtmlFrame(r,index,name);
+    if(target.isConnected)target.replaceChildren(frame);
+    return;
+   }
+   await file(r,index,name);
+  }));
  });
- if(r.files.length)await file(r,0,r.files[0]);
+ attachments.append(buttons.childElementCount?buttons:label('p','noAttachments'));
+ const content=element('pre'), bodyIndex=r.mail_parts?.indexOf('body')??-1;
+ body.append(content);pane.append(info,body,attachments,preview);
+ if(bodyIndex<0){localized(content,()=>t('noBody'));return;}
+ const response=await api(url('/api/file',{id:r.id,index:bodyIndex}));
+ const message=await response.text();
+ if(message.trim())content.textContent=message;else localized(content,()=>t('noBody'));
 }
 setup();
 if(modelPage){
@@ -892,6 +1050,11 @@ if(modelPage){
   $('preview-page').hidden=true;$('management').hidden=false;
   renderManagement().then(()=>scrollTo(0,history.state?.scroll||0));
  }else refresh().then(async()=>{if(active){const row=rows.find(row=>row.id===active);if(row)await modelFileDetails(row);}scrollTo(0,history.state?.scroll||0);});
-}else refresh();
+}else{
+ refresh();
+ setInterval(()=>{
+  if(!$('refresh').disabled)refresh();
+ },60000);
+}
 </script>
 </html>

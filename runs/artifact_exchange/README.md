@@ -290,7 +290,8 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 端口可分别由 `LEARNDL_MAIL_ARCHIVE_PORT` 和 `LEARNDL_MODEL_PREVIEW_PORT` 覆盖。
 两个服务监听本机地址，远程访问使用现有的 SSH 端口转发方式。
 
-- 日常更新、模型训练和测试等任务的现有邮件会额外投递完整档案。可在脚本
+- 启用 artifact 发布的服务器默认归档项目邮件，包括日常更新、模型训练和测试、Watchdog 通知
+  及直接通过项目 SMTP 接口发送的邮件。可在脚本
   YAML 头部设置 `mail_sync: true` 或 `false`，也可在 `ScriptTool`、`AutoRunTask`
   或邮件入口显式传入。SMTP 仍使用原有配置。邮件档案中的“SMTP 未知”表示接收时
   没有 SMTP 回执，发送与重试进度仍由发件端的原有队列记录。

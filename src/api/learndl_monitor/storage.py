@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import psutil
 
 from .services import STATE, SERVICES
+from .restart_control import restart_link
 
 __all__ = ['main']
 
@@ -153,6 +154,7 @@ def main():
                 self.send_error(404)
                 return
             page = Path(__file__).with_name('storage.html').read_text().replace('__SERVICE_BASE__', '/' + token)
+            page = page.replace('__RESTART_LINK__', restart_link('storage', port))
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()

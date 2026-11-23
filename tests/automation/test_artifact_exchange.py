@@ -226,6 +226,8 @@ class ExchangeTest(unittest.TestCase):
 
         message = EmailMessage()
         message['Subject'] = 'Daily run'
+        message['From'] = 'automation@example.test'
+        message['To'] = 'research@example.test'
         message.set_content('This is the body')
         message.add_attachment(b'actual', maintype='application', subtype='octet-stream', filename='report.txt')
         original = self.source / 'original'
@@ -246,6 +248,15 @@ class ExchangeTest(unittest.TestCase):
         self.assertEqual(row['metadata']['subject'], 'Daily run')
         self.assertEqual([item['smtp'] for item in row['metadata']['attachments']], [True, False])
         self.assertEqual([path.read_bytes() for _, path in row['files'][2:]], [b'actual', b'before handoff'])
+        self.assertEqual(library.listing()[0]['mail_type'], 'daily')
+        self.assertEqual(library.mail_headers(row)['From'], 'automation@example.test')
+        self.assertEqual(library.mail_headers(row)['To'], 'research@example.test')
+        with patch('src.api.learndl_monitor.artifact_library.open_local') as opener:
+            library.open_mail_attachment(row, 2)
+            opener.assert_called_once_with(row['files'][2][1])
+            with self.assertRaisesRegex(ValueError, 'Select a mail attachment'):
+                library.open_mail_attachment(row, 1)
+            opener.assert_called_once()
         self.assertTrue(library.manage('archive', [row['id']])[0]['ok'])
         self.assertTrue(library.listing()[0]['archived'])
         self.assertTrue(library.manage('delete', [row['id']])[0]['ok'])
@@ -260,8 +271,35 @@ class ExchangeTest(unittest.TestCase):
 
         owner = SimpleNamespace(task_name='daily_update', kwargs={'mail_sync': 'false'})
         with patch('src.automation.artifact_exchange.mail_archive.Config.load', return_value=self.pub):
+            self.assertIs(publisher(None), self.pub)
             self.assertIsNone(publisher(owner))
             self.assertIs(publisher(owner, override=True), self.pub)
+
+    def test_static_mail_html_retains_format_and_drops_active_content(self):
+        from src.api.learndl_monitor.mail_html import static_mail_html
+
+        document = static_mail_html(
+            '<head><style>.content-cell { white-space: pre-wrap; }</style>'
+            '<script>evil()</script><meta http-equiv="refresh" content="0;url=https://example.test"></head>'
+            '<body class="report"><h1 style="color:green">Report</h1>'
+            '<table cellpadding="0" cellspacing="0"><colgroup span="2" width="96"></colgroup>'
+            '<tr><td class="content-cell" width="96" nowrap>Output</td></tr></table>'
+            '<a href="https://example.test">Link label</a>'
+            '<img src="https://example.test/pixel" onerror="evil()">'
+            '<img src="data:image/png;base64,aGVsbG8=">'
+            '<form action="https://example.test"><input name="secret"></form>'
+        )
+        self.assertIn('<style>.content-cell { white-space: pre-wrap; }</style>', document)
+        self.assertIn('<table cellpadding="0" cellspacing="0">', document)
+        self.assertIn('<colgroup span="2" width="96">', document)
+        self.assertIn('<td class="content-cell" width="96" nowrap="">Output</td>', document)
+        self.assertNotIn('overflow-wrap:anywhere', document)
+        self.assertIn('<body class="report">', document)
+        self.assertIn('<h1 style="color:green">Report</h1>', document)
+        self.assertIn('Link label', document)
+        self.assertIn('data:image/png;base64,aGVsbG8=', document)
+        for forbidden in ('example.test', 'evil()', '<script', 'onerror', '<form', '<input', 'http-equiv="refresh"'):
+            self.assertNotIn(forbidden, document)
 
     def test_receive_removes_empty_routes_and_old_leftovers(self):
         archive = self.publish()

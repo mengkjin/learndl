@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
+from datetime import datetime, timezone
+from email import policy
+from email.parser import BytesHeaderParser
 from hashlib import sha256
 import json
 import mimetypes
 from pathlib import Path
+import re
 import shutil
 from uuid import uuid4
 
@@ -33,6 +37,34 @@ def existing(root, relative):
     if path.is_file():
         return path
     return None
+
+
+def _mail_type(metadata):
+    explicit = metadata.get('mail_type')
+    if explicit in ('research', 'daily', 'weekly', 'data_update', 'watchdog', 'maintenance', 'storage', 'other'):
+        return explicit
+    keywords = re.sub(r'[_/-]+', ' ', ' '.join(str(metadata.get(key) or '') for key in
+                                                     ('task', 'script', 'subject')))
+    for category, pattern in (
+        ('watchdog', r'\bwatchdog\b|看门狗'),
+        ('daily', r'\bdaily (?:data )?update\b|日更'),
+        ('weekly', r'\bweekly (?:data )?update\b|周更'),
+        ('data_update', r'\b(?:tracking update|rcquant sec backfill)\b|数据更新'),
+        ('storage', r'\b(?:storage (?:insights|report)|disk usage)\b|存储报告'),
+        ('maintenance', r'\b(?:autofix|git update|version patch|maintenance|host startup)\b|系统维护'),
+        ('research', r'\b(?:research|train(?:ing)?|resume test(?:ing)?|test (?:model|linear)|update models|tensorboard|optuna|experiment)\b|研究|模型训练'),
+    ):
+        if re.search(pattern, keywords, re.IGNORECASE):
+            return category
+    return 'research' if metadata.get('model_runs') else 'other'
+
+
+def _mail_timestamp(value):
+    try:
+        date = datetime.fromisoformat(value)
+        return (date if date.tzinfo else date.replace(tzinfo=timezone.utc)).timestamp()
+    except (ValueError, TypeError, OverflowError, OSError):
+        return float('-inf')
 
 
 class Library:
@@ -206,6 +238,7 @@ class Library:
             files = row.get('files', [])
             public['files'] = [name for name, _ in files]
             if row['type'] == 'mail':
+                public['mail_type'] = _mail_type(row['metadata'])
                 public['mail_parts'] = [{'body.txt': 'body', 'message.eml': 'original'}.get(
                     path.name, '') if path.parent == row['path'] / 'mail' else '' for _, path in files]
             if row.get('type') == 'mail' and not row.get('trashed'):
@@ -215,6 +248,8 @@ class Library:
             else:
                 public['bytes'] = 0
             rows.append(public)
+        if self.kind == 'mail_archive':
+            return sorted(rows, key=lambda row: (_mail_timestamp(row.get('stamp')), row['id']), reverse=True)
         return sorted(rows, key=lambda r: (r.get('stamp', ''), r['label']), reverse=True)
 
     model_id = staticmethod(model_id)
@@ -257,6 +292,28 @@ class Library:
     def available_row(self, key):
         return self.rows()[key]
 
+    def mail_headers(self, row):
+        original = row['path'] / 'mail/message.eml'
+        for index, (_, path) in enumerate(row.get('files', ())):
+            if path == original:
+                path, _, _ = self.file(row, index)
+                with path.open('rb') as stream:
+                    message = BytesHeaderParser(policy=policy.default).parsebytes(stream.read(64 * 1024))
+                return {key: str(message.get(key, '')) for key in ('From', 'To', 'Cc', 'Date')}
+        return {}
+
+    def open_mail_attachment(self, row, index):
+        path, name, _ = self.file(row, index)
+        if path.parent != row['path'] / 'mail/attachments':
+            raise ValueError('Select a mail attachment')
+        # Restrict OS handlers to data files; archived senders can supply any filename.
+        if Path(name).suffix.lower() not in {
+            '.txt', '.md', '.log', '.csv', '.json', '.jsonl', '.yaml', '.yml', '.toml',
+            '.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.zip', '.sqlite3', '.parquet', '.feather',
+        } or path.suffix.lower() != Path(name).suffix.lower():
+            raise ValueError('This attachment type cannot be opened on the host. Use Preview instead.')
+        return open_local(path)
+
     def chapters(self, row, page, run=''):
         if row['type'] != 'process_log' or row.get('trashed'):
             raise ValueError('Select a model process log')
@@ -297,6 +354,8 @@ class Library:
         mime = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
         if path.suffix.lower() in ('.yaml', '.yml', '.log', '.jsonl', '.toml', '.eml'):
             mime = 'text/plain'
+        if row['type'] == 'mail' and mime in ('image/png', 'image/jpeg', 'image/gif', 'image/webp'):
+            return path, name, mime
         if mime not in ('text/html', 'text/plain', 'text/markdown', 'application/json', 'application/pdf'):
             mime = 'application/octet-stream'
         return path, name, mime

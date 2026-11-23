@@ -18,6 +18,7 @@ import portalocker
 import psutil
 
 from src.api.learndl_monitor.services import ROOT, STATE, SERVICES
+from src.api.learndl_monitor.restart_control import restart_link
 
 __all__ = ['Instances', 'main', 'argument', 'KINDS']
 KINDS = {'tensorboard': ('tensorboard.main', 6006), 'optuna': ('optuna_dashboard', 8080)}
@@ -421,7 +422,8 @@ def main():
             if not self.local():
                 self.reply({'error': 'Forbidden'}, 403)
             elif self.path == '/':
-                self.reply(Path(__file__).with_name('experiments.html').read_text().replace('__TOKEN__', token), html=True)
+                page = Path(__file__).with_name('experiments.html').read_text().replace('__TOKEN__', token)
+                self.reply(page.replace('__RESTART_LINK__', restart_link('experiments', port)), html=True)
             elif self.path == '/health':
                 self.reply({'ok': True})
             elif self.headers.get('Authorization') != 'Bearer ' + token:

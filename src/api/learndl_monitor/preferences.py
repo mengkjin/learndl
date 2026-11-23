@@ -1,4 +1,4 @@
-"""Persist shared console card visibility independently of service state."""
+"""Persist shared console card visibility and order."""
 from __future__ import annotations
 
 import json
@@ -13,11 +13,11 @@ __all__ = ['Preferences']
 
 
 class Preferences:
-    """Store a versioned set of hidden service IDs on the console server."""
+    """Store card preferences on the console server."""
 
     def __init__(self, state: Path, services):
         self.path = state / 'preferences.json'
-        self.services = frozenset(services)
+        self.services = tuple(services)
 
     def read(self) -> dict:
         try:
@@ -26,29 +26,47 @@ class Preferences:
                     or data['version'] != 1 or not isinstance(data.get('hidden'), list)
                     or not all(isinstance(key, str) for key in data['hidden'])):
                 raise ValueError('Invalid preferences format')
-            return {'version': 1, 'hidden': sorted(self.services.intersection(data['hidden']))}
+            order = data.get('order', [])
+            if not isinstance(order, list):
+                order = []
+            order = list(dict.fromkeys(key for key in order if isinstance(key, str) and key in self.services))
+            order.extend(key for key in self.services if key not in order)
+            return {'version': 1, 'hidden': sorted(set(self.services).intersection(data['hidden'])), 'order': order}
         except FileNotFoundError:
             pass
         except (ValueError, OSError) as exc:
             logging.getLogger(__name__).warning('Could not read console preferences: %s', exc)
-        return {'version': 1, 'hidden': []}
+        return {'version': 1, 'hidden': [], 'order': list(self.services)}
 
     def update(self, data: dict) -> dict:
         show_all = data == {'show_all': True} and data['show_all'] is True
         service = data.get('service')
         visible = data.get('visible')
-        if not show_all and (data.keys() != {'service', 'visible'} or not isinstance(service, str)
-                             or service not in self.services or type(visible) is not bool):
-            raise ValueError('Expected a known service ID and boolean visibility, or show_all: true')
+        move = data.get('move')
+        valid_service = isinstance(service, str) and service in self.services
+        visibility_change = data.keys() == {'service', 'visible'} and type(visible) is bool
+        reorder = data.keys() == {'service', 'move'} and move in ('earlier', 'later')
+        if not show_all and not (valid_service and (visibility_change or reorder)):
+            raise ValueError('Expected a service visibility or move operation, or show_all: true')
         with portalocker.Lock(self.path.with_suffix('.lock'), timeout=3):
-            hidden = set(self.read()['hidden'])
+            current = self.read()
+            hidden, order = set(current['hidden']), current['order']
             if show_all:
                 hidden.clear()
+            elif reorder:
+                visible_positions = [i for i, key in enumerate(order) if key not in hidden]
+                position = order.index(service)
+                if position not in visible_positions:
+                    raise ValueError('The service is hidden')
+                neighbor = visible_positions.index(position) + (-1 if move == 'earlier' else 1)
+                if 0 <= neighbor < len(visible_positions):
+                    other = visible_positions[neighbor]
+                    order[position], order[other] = order[other], order[position]
             elif visible:
                 hidden.discard(service)
             else:
                 hidden.add(service)
-            result = {'version': 1, 'hidden': sorted(hidden)}
+            result = {'version': 1, 'hidden': sorted(hidden), 'order': order}
             with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=self.path.parent,
                                              prefix='.preferences-', delete=False) as stream:
                 temporary = Path(stream.name)

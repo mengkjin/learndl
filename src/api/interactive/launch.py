@@ -32,7 +32,10 @@ def main() -> None:
     """
     Proj.print_info(once_type = 'os')
     pg = page_setup()
+    from src.api.learndl_monitor.restart_control import restart_link
+
+    st.html(restart_link('research', int(st.get_option('server.port')), fixed=True))
     pg.run()
     
 if __name__ == '__main__':
-    main() 
+    main()

@@ -1,7 +1,7 @@
 <!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiment Dashboards</title>
 <style>
 :root{color-scheme:dark;font:14px/1.6 system-ui;background:#10161e;color:#dce8ee}body{max-width:1200px;margin:40px auto;padding:0 24px}header,.controls,.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}header{justify-content:space-between}section{background:#17212c;border:1px solid #344355;border-radius:12px;padding:24px;margin:24px 0}input,select,button{background:#202c3a;color:inherit;border:1px solid #425468;border-radius:6px;padding:9px}select.path{flex:1;min-width:220px}button{cursor:pointer}button:disabled{opacity:.4}.instance{border-top:1px solid #344355;padding:16px 0;margin-top:14px}.row strong{flex:1;overflow-wrap:anywhere;min-width:180px}small,summary{color:#9eb3c8}pre{white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#ffb6a6}h1{font-size:28px}input.limit{width:65px}</style>
-<header><h1 id="title"></h1><select id="lang"><option value="zh">中文</option><option value="en">English</option></select></header><p id="error" role="alert"></p><main id="main"></main>
+<header><h1 id="title"></h1><div style="display:flex;align-items:center;gap:8px"><select id="lang" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header><p id="error" role="alert"></p><main id="main"></main>
 <script>
 const token='__TOKEN__',kinds=['tensorboard','optuna'];let lang=localStorage.getItem('learndl-language')||'zh',busy=false,refreshing=false,instances=[];
 const t=(zh,en)=>lang==='zh'?zh:en;

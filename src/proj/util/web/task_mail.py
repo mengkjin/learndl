@@ -111,7 +111,7 @@ def _retry_delivery(directory, *, transport=None):
             # The external receipt records any sub-parts without a second queue owner.
             from src.proj.util.web.mail_package import fingerprint
             return Email.send_with_smtplib(message, recipient,
-                delivery_id=f'task-result:{directory}:{fingerprint(message)}')
+                delivery_id=f'task-result:{directory}:{fingerprint(message)}', archive=False)
 
         transport = default_transport
     for item in state['messages']:

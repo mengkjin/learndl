@@ -488,6 +488,8 @@ def _render_running() -> None:
 
 
 def _render_dashboard() -> None:
+    from src.api.learndl_monitor.restart_control import restart_link
+
     # Preserve filters even when their page's widgets are not rendered this run.
     for key in ('finished-statuses', 'finished-window', 'finished-style', 'running-style'):
         if key in st.session_state:
@@ -498,6 +500,7 @@ def _render_dashboard() -> None:
     ], position='top')
     if page.title != 'Running':
         _clear_kill()
+    st.html(restart_link('tasks', int(st.get_option('server.port')), fixed=True))
     page.run()
 
 

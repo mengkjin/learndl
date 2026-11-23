@@ -9,6 +9,7 @@ import sys
 import threading
 import time
 from urllib.request import urlopen
+from urllib.parse import urlsplit
 
 import psutil
 
@@ -146,9 +147,15 @@ class Manager:
                         with urlopen(Request(record['control'], data=b'{}', method='POST'), timeout=5):
                             pass
                     else:
+                        restart_port = None
                         if action in ('stop', 'restart'):
                             process = matches[0]
                             process_created = process.create_time()
+                            if action == 'restart':
+                                current = self.snapshot(key)
+                                if current['pid'] != identity or current['created'] != created:
+                                    raise ValueError('Service identity changed; refresh and try again')
+                                restart_port = urlsplit(current.get('url', '')).port
                             targets = [process] if key in HEALTH_SERVICES else process.children(recursive=True) + [process]
                             if psutil.Process(process.pid).create_time() != process_created:
                                 raise ValueError('Process identity changed')
@@ -166,7 +173,7 @@ class Manager:
                         if action in ('start', 'restart'):
                             if self.discover(key):
                                 raise ValueError('A service instance already exists')
-                            self.start(key)
+                            self.start(key, port=restart_port)
             except Exception as exc:
                 self.errors[key] = str(exc)
             finally:

@@ -30,6 +30,8 @@ Wants=network-online.target
 # 要执行的脚本路径
 ExecStart=/usr/bin/python3 /usr/local/bin/startup_notifier.py
 
+# 如需归档，请改用 Learndl 项目的 .venv/bin/python，并将项目根目录加入 PYTHONPATH。
+
 # 从仅 root 可读的文件加载 SMTP 配置
 EnvironmentFile=/etc/learndl/startup-email.env
 
@@ -76,12 +78,16 @@ cat /var/log/startup_notifier.log
 
 """
 
+from __future__ import annotations
+
 import subprocess
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import logging
 import os
+
+__all__ = []
 
 def load_smtp_config():
     """Load SMTP settings without storing credentials in source code."""
@@ -193,6 +199,12 @@ def send_email(subject, body, config):
     msg['Subject'] = subject
     
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    try:
+        from src.automation.artifact_exchange.mail_archive import archive_message
+
+        archive_message(msg)
+    except Exception as error:
+        logging.warning("Learndl startup-mail archive unavailable: %s", error)
     
     try:
         logging.info(f"connecting to SMTP server {config['server']}:{config['port']}...")

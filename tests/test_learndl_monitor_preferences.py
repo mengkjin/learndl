@@ -12,6 +12,22 @@ __all__ = []
 
 
 class PreferencesTest(unittest.TestCase):
+    def test_reorder_visible_cards_preserves_hidden_slots_and_survives_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            first = Preferences(state, ('tasks', 'storage', 'compare'))
+            first.path.write_text('{"version":1,"hidden":["storage"]}')
+            self.assertEqual(first.read()['order'], ['tasks', 'storage', 'compare'])
+            self.assertEqual(first.update({'service': 'compare', 'move': 'earlier'})['order'],
+                             ['compare', 'storage', 'tasks'])
+            restarted = Preferences(state, ('tasks', 'storage', 'compare', 'research'))
+            self.assertEqual(restarted.read()['order'], ['compare', 'storage', 'tasks', 'research'])
+            self.assertEqual(restarted.read()['hidden'], ['storage'])
+            self.assertEqual(restarted.update({'service': 'compare', 'move': 'later'})['order'],
+                             ['tasks', 'storage', 'compare', 'research'])
+            with self.assertRaisesRegex(ValueError, 'hidden'):
+                restarted.update({'service': 'storage', 'move': 'earlier'})
+
     def test_concurrent_changes_survive_restart_and_allow_new_services(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

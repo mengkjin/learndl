@@ -10,20 +10,13 @@ from uuid import uuid4
 
 from .core import ArtifactSpec, Config, atomic_json, component, publish_artifacts, sandboxed
 
-__all__ = ['DEFAULT_TASKS', 'freeze_task_attachments', 'archive_message', 'publish_archive']
-
-
-DEFAULT_TASKS = {
-    'daily_update', 'weekly_update', 'tracking_update', 'rcquant_sec_backfill',
-    'train_model', 'train_schedule_model', 'resume_train', 'resume_training',
-    'update_models', 'resume_testing', 'test_model', 'test_linear',
-}
+__all__ = ['freeze_task_attachments', 'archive_message', 'publish_archive']
 
 
 def enabled(owner, override=None):
     explicit = override if override is not None else getattr(owner, 'kwargs', {}).get('mail_sync')
     if explicit is None:
-        return owner is not None and owner.task_name in DEFAULT_TASKS
+        return True
     if isinstance(explicit, str):
         return explicit.strip().lower() in ('true', 'yes', 'on', '1')
     return bool(explicit)

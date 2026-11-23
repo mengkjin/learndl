@@ -8,7 +8,7 @@ from datetime import datetime , timezone
 from email import encoders, policy
 from email.message import Message
 from email.parser import BytesParser
-from .mail_package import MAX_BYTES, needs_preparation, wire
+from .mail_package import MAX_BYTES, fingerprint, needs_preparation, wire
 from .mail_queue import MailQueue
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
@@ -194,7 +194,8 @@ class Email(BoundLogger, metaclass=NoInstance):
 
     @classmethod
     def send_with_smtplib(cls, message, recipient=None, confirmation_message=None,
-                          timeout: int = 20, *, delivery_id: str | None = None) -> bool:
+                          timeout: int = 20, *, delivery_id: str | None = None,
+                          archive: bool = True) -> bool:
         """Caller-owned retry with per-part receipts; never enqueue an automatic copy.
 
         Supply a stable delivery_id for an external event. Large legacy calls without
@@ -205,6 +206,15 @@ class Email(BoundLogger, metaclass=NoInstance):
         if delivery_id is None and not needs_preparation(message, cls.max_message_bytes):
             delivery_id = uuid.uuid4().hex
         try:
+            if archive:
+                from src.automation.artifact_exchange.mail_archive import archive_message
+
+                if recipient:
+                    if message.get('To'):
+                        message.replace_header('To', recipient)
+                    else:
+                        message['To'] = recipient
+                archive_message(message, notification_id=delivery_id or fingerprint(message))
             with cls._outbox_lock() as locked:
                 if not locked:
                     return False
@@ -381,7 +391,8 @@ class Email(BoundLogger, metaclass=NoInstance):
         from src.automation.artifact_exchange.mail_archive import archive_message
         archive_message(message, override=mail_sync, main_task=archive_task, notification_id=delivery_id)
         if not queue_on_failure:
-            return cls.send_with_smtplib(message, recipient, confirmation_message, delivery_id=delivery_id)
+            return cls.send_with_smtplib(message, recipient, confirmation_message, delivery_id=delivery_id,
+                                         archive=False)
         # Publish before network work. A competing worker can safely deliver this entry.
         folder = cls._enqueue(message, confirmation_message, '')
         del message

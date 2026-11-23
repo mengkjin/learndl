@@ -12,7 +12,7 @@ function page(fetch,bus=[]){
   constructor(){bus.push(this);}
   postMessage(data){for(const other of bus)if(other!==this)queueMicrotask(()=>other.onmessage?.({data}));}
  }
- const context=vm.createContext({fetch,AbortController,queueMicrotask,setTimeout,clearTimeout,setInterval:()=>{},BroadcastChannel:Channel,
+ const context=vm.createContext({fetch,URL,URLSearchParams,AbortController,queueMicrotask,setTimeout,clearTimeout,setInterval:()=>{},BroadcastChannel:Channel,
   DOMParser:class{parseFromString(){return {querySelector:()=>({content:'new-token'})};}},
   sessionStorage:{setItem(){}},localStorage:{getItem:()=>null,setItem(){}},history:{replaceState(){}},location:{pathname:'/'},
   document:{hidden:false,querySelector:()=>({content:'old-token'}),getElementById:id=>elements[id]??=( {} ),addEventListener:(name,callback)=>events[name]=callback},

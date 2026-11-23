@@ -25,10 +25,15 @@ def main():
     from src.proj import PATH
     from src.res.model.analytic.compare import CompareConfig
     st.set_page_config(page_title='Model Compare', layout='wide')
-    zh = st.selectbox('Language', ['中文', 'English']) == '中文'
+    from src.api.learndl_monitor.restart_control import restart_link
+
+    heading, language, restart = st.columns((7, 2, 1), vertical_alignment='center')
+    zh = language.selectbox('Language', ['中文', 'English'], label_visibility='collapsed') == '中文'
+    with restart:
+        st.html('<div style="text-align:right">' + restart_link('compare', int(st.get_option('server.port'))) + '</div>')
     def t(chinese, english):
         return chinese if zh else english
-    st.title(t('模型对比', 'Model Compare'))
+    heading.title(t('模型对比', 'Model Compare'))
     candidates = sorted(PATH.model.rglob('detailed_alpha_data.xlsx'))
     with st.form('comparison'):
         selected = st.multiselect(t('选择至少两个模型', 'Select at least two models'), candidates,
