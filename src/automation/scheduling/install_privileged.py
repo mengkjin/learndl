@@ -27,7 +27,7 @@ from pathlib import Path
 
 BASE = Path('/run/learndl-install')
 UNITS = Path('/etc/systemd/system')
-NAME = re.compile(r'learndl-(?:(?:schedule|lane)-[a-z][a-z0-9_]*|git-update|watchdog|idle-worklist|autofix|deferred|aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(?:service|timer)')
+NAME = re.compile(r'learndl-(?:(?:schedule|lane)-[a-z][a-z0-9_]*|git-update|watchdog|idle-worklist|autofix|deferred|aux-(?:email-outbox|cli-recovery|task-monitor-cache|remote-monitor))\.(?:service|timer)')
 
 
 def execute(request: dict, approval: dict) -> str:

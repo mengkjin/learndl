@@ -32,7 +32,7 @@ ENTRYPOINTS = {
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')
-JOB_NAMES = {'email_outbox', 'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'rl_experiment', 'git_auto_update', 'cli_recovery', 'autofix'}
+JOB_NAMES = {'remote_monitor', 'email_outbox', 'task_lifecycle', 'task_timeouts', 'systemd_unit_probe', 'task_monitor_cache', 'idle_worklist', 'rl_experiment', 'git_auto_update', 'cli_recovery', 'autofix'}
 IDENTIFIER = re.compile(r'^[a-z][a-z0-9_]*$')
 
 
@@ -221,7 +221,9 @@ def load_config(directory: Path, host: str) -> dict:
                 raise ValueError('progress_timeout_seconds must be positive')
             if job.get('enabled') and not watchdog['jobs'].get('task_timeouts', {}).get('enabled'):
                 raise ValueError('idle_worklist requires task_timeouts supervision')
-        if type(job['enabled']) is not bool or type(job['interval_seconds']) is not int or job['interval_seconds'] < tick or job['interval_seconds'] % 60:
+        minimum = 15 if key == 'remote_monitor' else tick
+        divisor = 15 if key == 'remote_monitor' else 60
+        if type(job['enabled']) is not bool or type(job['interval_seconds']) is not int or job['interval_seconds'] < minimum or job['interval_seconds'] % divisor:
             raise ValueError(f'Invalid maintenance interval/enabled: {key}')
         for option in ('max_sources', 'max_seconds'):
             if option in job and (type(job[option]) is not int or job[option] <= 0):

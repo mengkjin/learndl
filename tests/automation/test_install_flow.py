@@ -249,7 +249,7 @@ class InstallationTest(unittest.TestCase):
         saved = json.loads((staging / identifier / 'approval.json').read_text())
         self.assertEqual(saved['allowed_units'], approval['allowed_units'])
         for suffix in ('service', 'timer'):
-            for name in ('email-outbox', 'cli-recovery', 'task-monitor-cache'):
+            for name in ('email-outbox', 'cli-recovery', 'task-monitor-cache', 'remote-monitor'):
                 self.assertIn(f'learndl-aux-{name}.{suffix}', saved['allowed_units'])
 
     def test_privileged_registration_rejects_unknown_helpers_before_mutation(self):

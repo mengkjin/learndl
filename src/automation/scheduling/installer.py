@@ -291,8 +291,9 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         name = 'learndl-aux-' + job.replace('_', '-')
         limit = max(60, config['watchdog']['jobs'].get(job, {}).get('max_seconds', 20) + 30) if job == 'task_monitor_cache' else 120
         units[name + '.service'] = protected_service(root, python, job).replace('TimeoutStartSec=infinity', f'TimeoutStartSec={limit}s')
+        interval = config['watchdog']['jobs'][job]['interval_seconds'] if job == 'remote_monitor' else 60
         units[name + '.timer'] = ('[Unit]\nDescription=Learndl auxiliary worker\n[Timer]\n'
-            'OnBootSec=90s\nOnUnitInactiveSec=60s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
+            f'OnBootSec=90s\nOnUnitInactiveSec={interval}s\nAccuracySec=1s\n[Install]\nWantedBy=timers.target\n')
     # Git is internally bounded, and each version patch has its own deadline.
     units['learndl-git-update.service'] = service(root, python, 'src.automation.scheduling.git_update', [])
     units['learndl-git-update.timer'] = ('[Unit]\nDescription=Learndl Git check and maintenance\n[Timer]\n'
@@ -405,7 +406,7 @@ def validate_unit(name: str, contents: str) -> None:
             kind, arguments = 'calendar', [name.removeprefix(PREFIX).removesuffix('.service')]
         if name.startswith('learndl-aux-'):
             kind = name.removeprefix('learndl-aux-').removesuffix('.service').replace('-', '_')
-            if kind not in {'email_outbox', 'cli_recovery', 'task_monitor_cache'}:
+            if kind not in {'email_outbox', 'cli_recovery', 'task_monitor_cache', 'remote_monitor'}:
                 raise ValueError('Unexpected auxiliary worker')
             expected = None
         if name.startswith('learndl-lane-'):
@@ -466,7 +467,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if actual_desktop is not None and actual_desktop not in (previous.get('desktop_autostart'), desired_desktop, interrupted_desktop):
         raise RuntimeError(f'Desktop autostart was externally changed: {desktop}')
     for name in previous['units']:
-        if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
+        if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache|remote-monitor))\.(timer|service)', name):
             raise ValueError('Invalid manifest unit name')
     # Do not convert a still-running legacy script whose whole-shell lifetime
     # is not covered by the new runner lock (daily has post-main schedulers).
@@ -489,7 +490,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
     if recovering:
         # Include partially installed files when deriving the recovery diff.
         for name in transaction['plan']['units']:
-            if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name):
+            if not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache|remote-monitor))\.(timer|service)', name):
                 raise ValueError('Invalid transaction unit name')
             path = UNIT_DIR / name
             if path.exists():
@@ -566,7 +567,7 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         return
     # Explicit allow-list: never manipulate an unrelated unit through a manifest.
     names = set(previous['units']) | set(plan['units'])
-    if any(not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache))\.(timer|service)', name) for name in names):
+    if any(not re.fullmatch(r'(learndl-(?:schedule|lane)-[a-z][a-z0-9_]*|learndl-git-update|learndl-watchdog|learndl-idle-worklist|learndl-autofix|learndl-deferred|learndl-aux-(?:email-outbox|cli-recovery|task-monitor-cache|remote-monitor))\.(timer|service)', name) for name in names):
         raise ValueError('Invalid managed unit name')
     with tempfile.TemporaryDirectory(prefix='learndl-install-') as temp:
         stage = Path(temp)

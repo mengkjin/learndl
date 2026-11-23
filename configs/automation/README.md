@@ -711,3 +711,36 @@ Folder names do not change the names of existing model outputs. The layout move
 preserves worklist execution identity when Git confirms the unchanged rename.
 A subsequent edit to a schedule still creates a new version. Keep the move and
 its migration manifest together in the same commit.
+
+
+### Remote Running via Syncthing
+
+服务器使用现有 artifact exchange publisher 配置及固定 `source_host`。
+启用 `remote_monitor` 并通过调度安装 plan/apply/status 发布配置后，
+`learndl-aux-remote-monitor.timer` 在每轮结束后等待 15 秒再次采样。
+采样使用有界 oneshot，释放代码许可后再等待下一轮。
+
+共享目录为 `runtime/<SHA256(source_host)>/`，主机 `heartbeat.json` 每轮更新，
+`index.json` 只在任务列表或状态变化时更新。各任务的 `manifest.json` 单独描述日志代次和字节范围。
+新版协议为 v2，本机读端同时支持 v1；切换发布器时直接承接 v1 卷和偏移，保留原字节。
+升级应先更新本机读端，再更新服务器发布器及安装配置。
+
+日志文件附 UTC 时间标签和字节范围，发布后只创建、删除。
+每轮没有新增字节就不创建日志文件。保留最近三个原始小片，较老的连续原始片达到
+64 片或 256 KiB 时合并。64 片形成的中间片可与相邻片再次累计到 256 KiB 合并，
+容量合并后的历史卷封存。临时文件完整写入后再原子发布，私有 journal 保证发布、
+清单切换、旧片清理在中断后能重试。本机缺卷时显示正在同步，按范围缓存避免合并后重读历史。
+合并会产生额外正文传输，实际网络开销还需两机测量。
+
+采样器恢复后从已提交偏移补到本次启动采样的文件末尾，无需回溯 15 秒时间片。
+一次积压直接生成多个历史卷和尾片。每批最多读 4 MiB，积压期间连续处理，
+批间检查代码维护请求，每次服务运行最多补传约 20 秒，再交由下一次定时触发继续。
+日志轮换、截断无法恢复的区间会显示缺失提示并使用新代次。
+脚本退出前把运行日志原子移至私有 `remote_monitor/pending/`，与运行日志应位于同一文件系统。
+移交失败保留原文件。结束后进入最近结束列表，最终输出发布完成后保留 24 小时再清理。
+
+本机每 5 秒只检查索引和当前任务清单的文件标识，正文按需读取并缓存原字节及解析文本。
+每个页面会话默认使用 64 MiB 缓存，超过上限淘汰较旧内容。
+`Reload logs` 清除当前任务缓存，服务重启后按需重建。
+采样超过 60 秒标记过期，错误记录在 `scheduling/auxiliary/remote_monitor.json`。
+两端离线超过完成后保留窗口可能错过远程日志。

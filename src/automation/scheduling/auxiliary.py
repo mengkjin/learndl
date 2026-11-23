@@ -22,7 +22,7 @@ import portalocker
 
 from .config import require_installed_config, runtime_dir
 
-NAMES = ('email_outbox', 'cli_recovery', 'task_monitor_cache')
+NAMES = ('email_outbox', 'cli_recovery', 'task_monitor_cache', 'remote_monitor')
 
 
 def queue():
@@ -133,6 +133,9 @@ def deliver(context, sender):
 
 
 def worker(name):
+    if name == 'remote_monitor':
+        from src.api.task_monitor.remote import publish_once
+        return publish_once()
     from .priority import enabled
     if not enabled():
         return 0

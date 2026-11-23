@@ -103,6 +103,16 @@ class CrashProtectorCatcher(OutputCatcher):
         return True
         
     def close(self):
+        if self.markdown_file.closed:
+            return
         self.markdown_file.close()
         if not self.retain_file:
+            try:
+                from src.api.task_monitor.remote import retain_log
+                if retain_log(self.filename, str(self.task_id)):
+                    return
+            except (OSError, ValueError, TypeError) as exc:
+                self.retain_file = True
+                self.logger.error(f"Remote log handoff failed, preserving {self.filename}: {exc}")
+                return
             self.filename.unlink(missing_ok=True)

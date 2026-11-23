@@ -87,6 +87,7 @@ def main():
         'training': ('src.automation.scheduling.idle_worklist', ['worker']),
         'email_outbox': ('src.automation.scheduling.auxiliary', ['email_outbox']),
         'cli_recovery': ('src.automation.scheduling.auxiliary', ['cli_recovery']),
+        'remote_monitor': ('src.automation.scheduling.auxiliary', ['remote_monitor']),
         'task_monitor_cache': ('src.automation.scheduling.auxiliary', ['task_monitor_cache']),
     }
     module, arguments = targets[kind]
@@ -114,7 +115,7 @@ def main():
                 db.execute('INSERT OR IGNORE INTO metadata VALUES (?,?)',
                            ('schedule-config:' + args[0] + ':' + os.environ['LEARNDL_SCHEDULE_SLOT'],
                             json.dumps({'task': args[0], 'config': config})))
-    auxiliary = kind in {'email_outbox', 'cli_recovery', 'task_monitor_cache'}
+    auxiliary = kind in {'email_outbox', 'cli_recovery', 'task_monitor_cache', 'remote_monitor'}
     if auxiliary and not modern:
         return 0
     # Check before taking SH as well: otherwise synchronized helper timers can

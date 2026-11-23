@@ -17,18 +17,20 @@ PHASES = {'queued':'starting', 'starting':'starting', 'running':'running',
           'unknown':'error', 'killed':'killed', 'cancelled':'killed'}
 
 
-def rows(path, query):
+def rows(path, query, parameters=(), *, strict=False):
     if not path.is_file():
         return []
     try:
         with sqlite3.connect(path.resolve().as_uri()+'?mode=ro', uri=True, timeout=2) as db:
             db.execute('PRAGMA query_only=ON')
-            return db.execute(query).fetchall()
+            return db.execute(query, parameters).fetchall()
     except (sqlite3.Error, OSError):
+        if strict:
+            raise
         return []
 
 
-def snapshots(repository, *, detail=False, task_id=None):
+def snapshots(repository, *, detail=False, task_id=None, since=None):
     from .core import TaskSnapshot
     scheduler = repository.runtime_dir/'scheduling/runs.sqlite'
     links = {}
@@ -36,13 +38,19 @@ def snapshots(repository, *, detail=False, task_id=None):
         links.setdefault(run_id, set()).add(linked_task_id)
     # Metadata only. Never instantiate either lifecycle store (constructors may write).
     scripts = {r[0]: r[1:] for r in rows(repository.db_path,
-        'SELECT task_id,pid,status,start_time FROM task_records')}
+        "SELECT task_id,pid,status,start_time FROM task_records" +
+        (" WHERE status IN ('starting','running') OR end_time>=?" if since is not None else ''),
+        (since,) if since is not None else (), strict=since is not None)}
     sources = [('scheduler', scheduler, 'SELECT data FROM runs')]
     if repository.autofix_path is not None:
         sources.append(('autofix', repository.autofix_path, 'SELECT data FROM fixes'))
     result = []
     for kind, path, query in sources:
-        for (raw,) in rows(path, query):
+        parameters = ()
+        if since is not None:
+            query += " WHERE json_extract(data, '$.phase') IN ('queued','starting','running','terminating','finalizing') OR COALESCE(json_extract(data, '$.finished_at'),0)>=?"
+            parameters = (since,)
+        for (raw,) in rows(path, query, parameters, strict=since is not None):
             try:
                 doc = json.loads(raw)
                 if not isinstance(doc, dict):
@@ -73,7 +81,7 @@ def snapshots(repository, *, detail=False, task_id=None):
                     try:
                         proc = psutil.Process(pid)
                         alive = abs(proc.create_time()-created) < .01 and proc.is_running() and proc.status()!=psutil.STATUS_ZOMBIE
-                        if detail and alive:
+                        if detail and alive and since is None:
                             children = tuple(p.pid for p in proc.children(recursive=True))
                     except psutil.NoSuchProcess:
                         alive = False

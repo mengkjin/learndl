@@ -172,9 +172,9 @@ class TaskMonitorRepository:
             pid_alive=_pid_alive(pid) if status in ACTIVE_STATUSES else None,
         )
 
-    def _managed_tasks(self, *, detail=False, task_id=None):
+    def _managed_tasks(self, *, detail=False, task_id=None, since=None):
         from .managed import snapshots
-        return snapshots(self, detail=detail, task_id=task_id)
+        return snapshots(self, detail=detail, task_id=task_id, since=since)
 
     def list_tasks(self, *, statuses=None, window: TimeWindow = 'last_day', cursor=None, limit=50, now=None):
         """Merge script rows and managed groups with one stable pagination cursor."""

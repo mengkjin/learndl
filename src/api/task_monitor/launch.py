@@ -494,8 +494,10 @@ def _render_dashboard() -> None:
     for key in ('finished-statuses', 'finished-window', 'finished-style', 'running-style'):
         if key in st.session_state:
             st.session_state[key] = st.session_state[key]
+    from src.api.task_monitor.remote_view import render as render_remote
     page = st.navigation([
         st.Page(_render_running, title='Running', icon=':material/play_circle:', default=True),
+        st.Page(render_remote, title='Remote Running', icon=':material/dns:', url_path='remote'),
         st.Page(_render_finished, title='Finished', icon=':material/task_alt:', url_path='finished'),
     ], position='top')
     if page.title != 'Running':
