@@ -327,7 +327,9 @@ def register_report(source, run_id):
 
 
 def model_result_specs(base, name):
-    from .model_metadata import DIRECTORIES, metadata_files
+    from .model_metadata import DIRECTORIES, metadata_files, migrate_model_html
+
+    migrate_model_html(base)
 
     specs = []
     results = base / 'results'
@@ -349,11 +351,6 @@ def model_result_specs(base, name):
         members = tuple(name.split('/', 1)[1] for name in files if name.startswith(directory + '/'))
         if members:
             specs.append(ArtifactSpec(base / directory, category='model_training', members=members, destination=directory))
-    html = base / 'run_logs/html'
-    captures = tuple(path.name for path in sorted(html.glob('*.html'))
-                     if path.is_file() and not path.is_symlink())
-    if captures:
-        specs.append(ArtifactSpec(html, category='model_training', members=captures, destination='html'))
     return specs
 
 
@@ -366,6 +363,7 @@ def model_run(trainer):
     run_id = run.run_id if run is not None else uuid.uuid4().hex
     owner = CURRENT_TASK.get()
     html = None
+    parent_html = False
     catcher = nullcontext()
     if run is not None:
         if owner is not None:
@@ -373,7 +371,13 @@ def model_run(trainer):
         if title := getattr(trainer, 'model_html_title', None):
             from src.proj.util.catcher import HtmlCatcher
 
-            html = trainer.base_path('run_logs', 'html', f'{run_id}.html')
+            from .model_metadata import migrate_model_html
+
+            migrate_model_html(trainer.base_path())
+            primary = getattr(HtmlCatcher, 'PrimaryInstance', None)
+            parent_html = (owner is not None and primary is not None
+                           and bool(primary.export_file_list))
+            html = trainer.base_path('logs', 'html', f'{run_id}.html')
             catcher = HtmlCatcher(title=title)
             catcher.set_export_files(html)
     token = MODEL_ARTIFACTS.set(specs)
@@ -389,7 +393,7 @@ def model_run(trainer):
         raise
     finally:
         MODEL_ARTIFACTS.reset(token)
-        if html is not None and html.is_file() and owner is not None:
+        if html is not None and html.is_file() and owner is not None and not parent_html:
             from src.proj import Proj
 
             Proj.exit_files.append(html)

@@ -149,7 +149,72 @@ class ExchangeTest(unittest.TestCase):
         files = list(target.rglob('*.html'))
         self.assertEqual([path.name for path in files], [first + '.html'])
         self.assertEqual(files[0].read_text(), 'current HTML')
+        self.assertEqual(files[0].relative_to(target).as_posix(), f'logs/html/{first}.html')
         self.assertEqual((target / 'logs/test.md').read_text(), log.read_text())
+
+    def test_legacy_model_html_migration_preserves_conflicts_and_artifacts(self):
+        from src.automation.artifact_exchange.research import model_result_specs
+
+        old = self.source / 'run_logs/html'
+        new = self.source / 'logs/html'
+        old.mkdir(parents=True)
+        new.mkdir(parents=True)
+        (old / 'run.html').write_text('old')
+        (new / 'run.html').write_text('new')
+        (old / 'same.html').write_text('same')
+        (new / 'same.html').write_text('same')
+        specs = model_result_specs(self.source, 'nn@test')
+        self.assertFalse(old.parent.exists())
+        self.assertEqual(sorted(p.read_text() for p in new.glob('*.html')), ['new', 'old', 'same'])
+        self.assertEqual(specs, model_result_specs(self.source, 'nn@test'))
+        logs = next(spec for spec in specs if spec.destination == 'logs')
+        self.publish(logs)
+        received = receive(self.rec)
+        target = Path(received[0]['target'])
+        self.assertEqual(sorted(p.read_text() for p in target.rglob('*.html')), ['new', 'old', 'same'])
+
+    def test_model_html_mail_requires_no_parent_report(self):
+        from types import SimpleNamespace
+        from src.automation.artifact_exchange.research import CURRENT_TASK, model_run
+        from src.proj import Proj
+
+        class Catcher:
+            PrimaryInstance: SimpleNamespace | None = None
+
+            def __init__(self, title):
+                self.output = None
+
+            def set_export_files(self, path):
+                self.output = path
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                assert self.output is not None
+                self.output.parent.mkdir(parents=True, exist_ok=True)
+                self.output.write_text('model HTML')
+
+        trainer = SimpleNamespace(
+            base_path=lambda *parts: self.source.joinpath(*parts),
+            training_run=SimpleNamespace(run_id='model-run'), model_html_title='Test')
+        owner = SimpleNamespace(_model_run_ids=[], _artifact_results=[])
+        token = CURRENT_TASK.set(owner)
+        try:
+            for parent, expected in ((None, 1), (SimpleNamespace(export_file_list=[]), 1),
+                                     (SimpleNamespace(export_file_list=['task.html']), 0)):
+                Catcher.PrimaryInstance = parent
+                with patch('src.proj.util.catcher.HtmlCatcher', Catcher), \
+                        patch('src.proj.Save.async_wait_all'), \
+                        patch('src.automation.artifact_exchange.research.sandboxed', return_value=True), \
+                        patch.object(Proj.exit_files, 'append') as append:
+                    with model_run(trainer):
+                        pass
+                    self.assertEqual(append.call_count, expected)
+                self.assertTrue((self.source / 'logs/html/model-run.html').is_file())
+                self.assertFalse((self.source / 'run_logs').exists())
+        finally:
+            CURRENT_TASK.reset(token)
 
     def test_self_contained_mail_archive_and_trash(self):
         from datetime import datetime

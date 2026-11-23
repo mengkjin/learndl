@@ -299,7 +299,9 @@ apply 检查 lsof 打开的写句柄、最近五分钟写入、前后清单和�
 - 0.7.7 起，模型本地的 `logs/train.md` 和 `logs/test.md` 按实际运行阶段追加。
   接收机将变更文件合入同一 build，累计日志保存在 `results/external/models/<来源电脑>/<模型>/<build>/logs/`。
   从头训练会分配新的 build，恢复训练和测试沿用原 build。
-- 显式训练、手动恢复训练和独立测试保存本次模型 HTML。自动模型更新和
+- 显式训练、手动恢复训练和独立测试将本次模型 HTML 保存到 `logs/html/<run_id>.html`。
+  下次模型运行或产物收集时，历史 `run_logs/html` 自动合入该目录；同名异内容保留带摘要后缀的历史副本。
+  已有父任务完整 HTML 时不再重复附加模型 HTML 到邮件，但仍通过 artifact 归档。自动模型更新和
   `resume_testing` 仍可由父脚本保存一份任务 HTML，模型调用只写 Markdown。
   分析 callback 的报告作为独立结果打开。模型预览和实验面板共享已启动的实例和额度。
 - 模型预览和 CLI 的模型归档操作共用 `src/res/model/workflow/model_management`。

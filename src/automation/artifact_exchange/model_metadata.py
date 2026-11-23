@@ -13,6 +13,7 @@ __all__ = [
     'INVENTORY',
     'BACKFILL_TASK',
     'metadata_files',
+    'migrate_model_html',
     'read_inventory',
     'metadata_baseline',
     'metadata_specs',
@@ -24,6 +25,31 @@ DIRECTORIES = {
 }
 INVENTORY = '.model-metadata/inventory.json'
 BACKFILL_TASK = 'model_metadata_backfill'
+
+
+def migrate_model_html(base):
+    """Move legacy source captures under logs; callers hold the model lifecycle lock."""
+    old = real_tree(base / 'run_logs/html')
+    if not old.is_dir():
+        return
+    target = real_tree(base / 'logs/html')
+    for source in sorted(old.glob('*.html')):
+        source = real_tree(source)
+        if not source.is_file():
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        destination = real_tree(target / source.name)
+        if destination.exists() and digest(destination) != digest(source):
+            destination = real_tree(target / f'{source.stem}.legacy-{digest(source)}.html')
+        if destination.exists():
+            if digest(destination) != digest(source):
+                raise ValueError(f'Conflicting legacy HTML: {destination}')
+            source.unlink()
+        else:
+            source.rename(destination)
+    for folder in (old, old.parent):
+        if folder.is_dir() and not any(folder.iterdir()):
+            folder.rmdir()
 
 
 def metadata_files(base):
