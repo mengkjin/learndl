@@ -2,7 +2,7 @@
 # author: jinmeng
 # date: 2026-08-31
 # description: Backfill RcQuant sec minute bars
-# content: 向前补全 RCQuant 股票分钟线，最早到20070101；SH/SZ任一市场有数据的股票不足5只即停止。日更成功后自动限幅补全（默认最多5天），本脚本用于补跑。
+# content: 手动向前补全 RCQuant 股票分钟线，最早到20070101；SH/SZ任一市场有数据的股票不足5只即停止。历史回补已完成，不再由日更或定时任务自动触发。
 # blacklist:
 #   machine: ['Mathews-Mac']
 # email: True

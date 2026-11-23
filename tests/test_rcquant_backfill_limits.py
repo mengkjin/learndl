@@ -1,10 +1,26 @@
 """Backfill limits must support CLI null values without disabling stop guards."""
 import unittest
+from types import MethodType
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 
 from src.data.download.other_source.rcquant import bar_min
+
+
+class DailyUpdateTest(unittest.TestCase):
+    def test_latest_day_download_never_triggers_historical_backfill(self):
+        updater = MagicMock()
+        updater.download = MethodType(bar_min.RcquantMinBarDownloader.download, updater)
+        updater.rcquant_bar_min.return_value = True
+        with patch.object(bar_min, 'target_dates', return_value=pd.Index([20261123])), \
+             patch.object(bar_min, 'x_mins_target_dates', return_value=pd.Index([])):
+            result = bar_min.RcquantMinBarDownloader.download_since_last_data(
+                updater, start=20261123, end=20261123,
+            )
+        self.assertEqual(result, bar_min.Base.UpdateFlag.SUCCESS)
+        self.assertEqual(updater.rcquant_bar_min.call_count, len(bar_min.MinDataType))
+        updater._backfill_sec_min.assert_not_called()
 
 
 class BackfillLimitTest(unittest.TestCase):

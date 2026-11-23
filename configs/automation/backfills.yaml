@@ -1,5 +1,2 @@
-schedules:
-  rcquant_sec_backfill:
-    task: rcquant_sec_backfill
-    days: daily
-    times: ['21:01']
+# Historical minute-bar backfill is complete; retain the task for manual use.
+schedules: {}

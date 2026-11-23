@@ -16,6 +16,13 @@ This directory is the single editable source for non-training automation setting
 and `autofix.yaml` declares one-shot repairs. See [autofix operations](AUTOFIX.md).
 Model/worklist/RL configurations and `.secret` machine settings stay in place.
 
+Historical RCQuant minute-bar backfill is complete. `backfills.yaml` now has no
+calendar schedules, and daily update no longer invokes backfill. The registered
+`rcquant_sec_backfill` task, script and downloader remain available for manual use.
+After deploying this change, run `plan --diff`, `apply` and `status` on the server
+to remove the installed backfill calendar/lane timers. Any independently added
+legacy backfill cron lines must also be removed; the installer preserves external cron.
+
 The old built-in `--config-dir runs/scheduling` resolves to this directory;
 custom config directories retain their original meaning. Old Python entrypoints
 and shell install commands remain supported, including services installed before
@@ -526,8 +533,9 @@ LEARNDL_SYSTEMD_ACCEPTANCE=1 .venv/bin/python -m unittest tests.automation.test_
 数据 worker 在可用内存低于 10% 时暂缓启动并记录原因；一个任务的暂缓不阻塞其他 lane。
 
 任务配置支持 `channel: data | independent`（默认 data）以及 `window: rcquant_evening`。
-RCQuant 配置为 independent，保持北京时间 21:01；当天日更成功前等待，每分钟重试，23:59 到达已有下载截止点后不再启动，跨日请求过期。
-不同时间的同日 RCQuant 触发归一到同一个请求。日更内嵌补全与独立补全使用同一份每类型、每交易日的跨进程下载锁。
+RCQuant 手动任务保留 independent 通道和 rcquant_evening 窗口，但历史回补完成后已移除每日 21:01 计划，日更也不再调用回补。
+窗口兼容逻辑继续保留：当天日更成功前等待，23:59 到达下载截止点后不再启动，跨日请求过期；同日触发归一到同一个请求。
+分钟线下载与手动回补使用同一份每类型、每交易日的跨进程下载锁。
 取得锁后重新检查原始缓存；转换失败只重做转换。样本下载 `first_n > 0` 使用隔离缓存，不写全量数据库。
 原始数据及 RCQuant 派生数据均通过临时文件原子发布；远端响应后、本地保存前崩溃仍可能导致重试请求。
 

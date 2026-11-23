@@ -50,10 +50,17 @@ class ScheduleConfigTest(unittest.TestCase):
         self.assertEqual([job.name for job in default_jobs(old)], ['email_outbox', 'task_lifecycle', 'cli_recovery'])
         self.assertEqual(default_jobs({'jobs': {'cli_recovery': {'enabled': False}, 'email_outbox': {'enabled': False}}}), ())
 
-    def test_evening_backfill_is_unlimited(self):
+    def test_backfill_is_manual_only(self):
         self.assertEqual(self.config['tasks']['rcquant_sec_backfill']['args'], ['--max_days', 'none'])
-        schedule = self.config['schedules']['rcquant_sec_backfill']
-        self.assertEqual(schedule['times'], ['21:01'])
+        self.assertTrue(self.config['tasks']['rcquant_sec_backfill']['enabled'])
+        self.assertFalse(any(s['task'] == 'rcquant_sec_backfill' for s in self.config['schedules'].values()))
+        for backend in ('systemd', 'cron'):
+            config = copy.deepcopy(self.config)
+            config['tasks']['rcquant_sec_backfill']['backend'] = backend
+            plan = build_plan(config, '', ROOT, Path('/venv/bin/python'), 'Asia/Shanghai')
+            self.assertEqual(plan['report']['rcquant_sec_backfill']['managed_slots'], 0)
+            self.assertFalse(any('rcquant_sec_backfill' in unit for unit in plan['units']))
+            self.assertNotIn('rcquant_sec_backfill', plan['cron'])
 
     def test_partial_cron_comment_and_restore(self):
         line = f'30 18 * * * /bin/bash {ROOT}/runs/daily_update.sh\n'
@@ -303,6 +310,23 @@ class InstallerTransactionTest(unittest.TestCase):
         self.assertEqual((bootstrap.read_bytes(), bootstrap.stat().st_mtime_ns), original)
         self.assertEqual(json.loads((self.state/'installed.json').read_text())['schedules']['daily_update']['times'], ['22:17'])
         self.assertTrue((self.state/'installed.json').is_symlink())
+
+    def test_removing_backfill_schedule_retires_timers_and_preserves_manual_task(self):
+        self.config['schedules']['rcquant_sec_backfill'] = {
+            'task': 'rcquant_sec_backfill', 'days': 'daily', 'times': ['21:01'],
+        }
+        apply_plan(self.plan(), self.cron, self.state)
+        timers = ['learndl-schedule-rcquant_sec_backfill.timer', 'learndl-lane-rcquant_sec_backfill.timer']
+        for name in timers:
+            self.assertTrue((self.units / name).exists())
+        del self.config['schedules']['rcquant_sec_backfill']
+        apply_plan(self.plan(), self.cron, self.state)
+        for name in timers:
+            self.assertFalse((self.units / name).exists())
+            self.assertTrue((self.units / (name + '.learndl-disabled')).exists())
+        installed = json.loads((self.state / 'installed.json').read_text())
+        self.assertTrue(installed['tasks']['rcquant_sec_backfill']['enabled'])
+        self.assertNotIn('rcquant_sec_backfill', installed['schedules'])
 
     def test_legacy_module_upgrade_and_rollback_preserve_ledger_and_locks(self):
         from src.automation.scheduling.autofix_store import Store

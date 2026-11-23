@@ -14,9 +14,8 @@ Start date behaviour (daily update):
 
 Historical sec backfill (``backfill_sec_min``) walks from the day before 20241101
 back to 20070101, independent of ``src_start_date``. Stops before saving a day
-with fewer than five stocks with valid prices on either SH or SZ. Daily update triggers a
-limited backfill (default ``max_days=5``) only after the latest sec 1-min bar
-was freshly downloaded in the same run.
+with fewer than five stocks with valid prices on either SH or SZ. Historical
+backfill is manual only; daily update does not trigger it.
 """
 from __future__ import annotations
 import rqdatac
@@ -300,27 +299,21 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         first_n : int = -1 ,
         data_types : Sequence[MinDataType | str] | None = None ,
         overwrite : bool = False ,
-        auto_backfill : bool = True ,
-        max_backfill_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
         **kwargs
     ) -> Base.UpdateFlag:
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
         return updater.download_since_last_data(
             start = start , end = end , first_n = first_n ,
             data_types = data_types , overwrite = overwrite ,
-            auto_backfill = auto_backfill , max_backfill_days = max_backfill_days ,
         )
 
     def download_since_last_data(
         self , start : int , end : int , first_n : int = -1 ,
         data_types : Sequence[MinDataType | str] | None = None ,
         overwrite : bool = False ,
-        auto_backfill : bool = True ,
-        max_backfill_days : int = SEC_BACKFILL_MAX_DAYS_DEFAULT ,
     ) -> Base.UpdateFlag:
         flags = Base.UpdateFlagList()
         selected = list(MinDataType) if data_types is None else [MinDataType(dt) for dt in data_types]
-        self._sec_latest_day_downloaded = False
         for data_type in selected:
             try:
                 flags += self.download(start , end , data_type , first_n , overwrite = overwrite)
@@ -329,20 +322,6 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 flags += Base.UpdateFlag.FAILED
                 continue
 
-        # Limited historical backfill only after all instrument types finished, and only
-        # when this run freshly downloaded the latest sec 1-min bar (skip/fail/quota: no).
-        if auto_backfill and self._sec_latest_day_downloaded:
-            try:
-                flags += self._backfill_sec_min(
-                    force = True , first_n = first_n , max_days = max_backfill_days ,
-                )
-            except Exception as e:
-                self.logger.error(f'RcQuant sec backfill failed: {e}')
-                flags += Base.UpdateFlag.FAILED
-        elif auto_backfill:
-            self.logger.skipping(
-                'RcQuant sec backfill skipped: latest sec 1-min was not freshly downloaded this run'
-            )
         return flags.summarize()
 
     def download(
@@ -352,7 +331,6 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         assert data_type is not None , 'data_type is required'
         flags = Base.UpdateFlagList()
         dates = target_dates(data_type , start , end , overwrite = overwrite)
-        latest_day = int(CALENDAR.td(end))
         if dates.empty: 
             self.logger.skipping(f'RcQuant {data_type} bar min is up to date')
             flags += Base.UpdateFlag.SKIPPED
@@ -362,8 +340,6 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 mark = self.rcquant_bar_min(dt , data_type , first_n)
                 if not mark: 
                     self.logger.alert1(f'Download RcQuant {data_type} bar min {dt} failed')
-                elif first_n <= 0 and data_type == MinDataType.SEC and dt == latest_day:
-                    self._sec_latest_day_downloaded = True
                 marks.append(mark)
             if all(marks):
                 self.logger.success(f'Download RcQuant {data_type} bar min at {dates}')
@@ -466,7 +442,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         Full downloads stop before saving if either SH or SZ has fewer than five
         stocks with valid minute prices. Sample runs (``first_n > 0``) are exempt.
         Stops immediately on quota exhaustion. ``force`` skips the hour window and
-        daily_update gate (used by the daily-update hook).
+        daily_update gate for manual runs.
         """
         updater = cls(indent = cls.logger.indent + 1 , vb_level = cls.logger.vb_level + 1)
         return updater._backfill_sec_min(force = force , first_n = first_n , max_days = max_days)
@@ -500,8 +476,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             conclude_filled(msg)
             return Base.UpdateFlag.SKIPPED
 
-        # Standalone/cron path still waits for evening window + successful daily_update.
-        # Daily-update hook passes force=True and skips these gates.
+        # Manual runs wait for evening window + successful daily_update unless forced.
         if not force and started_at.hour < 21:
             msg = f'RcQuant sec backfill skipped: BJ hour is {started_at.hour}, window is 21:00-23:59'
             self.logger.skipping(msg)
