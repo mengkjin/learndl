@@ -768,6 +768,26 @@ sys.stdin.buffer.read()
         self.assertEqual(sender.call_count, 2)
         self.assertIn('retry 0.7.2/001', sender.call_args.args[1])
 
+    def test_interface_pause_failure_has_an_attached_traceback(self):
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_apply', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        services = Mock()
+        services.pause.side_effect = RuntimeError('Processes did not stop after SIGTERM: [40]')
+        with (patch.object(git_update, 'runtime_dir', return_value=self.scheduling),
+              patch.object(version, 'ROOT', self.root),
+              patch('src.automation.patch_services.PatchServices', return_value=services)):
+            self.notify.side_effect = git_update.queue_version_failure
+            result = self.apply()
+            self.assertEqual(result['status'], 'blocked')
+            log = Path(result['log'])
+            self.assertIn('Could not pause project interfaces', log.read_text())
+            self.assertIn('Traceback', log.read_text())
+            self.assertEqual(result['failure']['step'], 'suspend interfaces')
+            sender = Mock(return_value=True)
+            self.assertTrue(git_update.deliver_update_emails(sender))
+            self.assertEqual(sender.call_args.kwargs['attachments'], [str(log)])
+
     def test_retry_can_adopt_corrected_commit_after_timer_sees_head_change(self):
         store = self.control()
         self.git_worker(store)

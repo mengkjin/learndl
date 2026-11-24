@@ -169,7 +169,12 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
                                   (' AND id=?' if notice_id else ''), (notice_id,) if notice_id else ()).fetchall()
     for key, raw in rows:
         data = json.loads(raw)
+        mail_options = {}
+        delivery_id = f'git-update:{key}'
         if data.get('kind') == 'version_patch_failure':
+            mail_options['attachments'] = [data['log_path']]
+            # Older receipts contain the body alone and reject changed message content.
+            delivery_id += ':with-log-v1'
             subject = f'Learndl version patch failed - {data["host"]} - {data["patch"]}'
             from src.automation.patch_diagnostics import failure_summary
 
@@ -209,7 +214,7 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
         try:
             sent = sender(subject, body,
                           confirmation_message='Learndl automatic Git update', queue_on_failure=False,
-                          delivery_id=f'git-update:{key}')
+                          delivery_id=delivery_id, **mail_options)
         except Exception:
             sent = False
         if sent:

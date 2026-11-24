@@ -53,7 +53,15 @@ class PatchDiagnosticsTest(unittest.TestCase):
         for call in sender.call_args_list:
             self.assertIn('Different files', call.args[1])
             self.assertIn('source: old', call.args[1])
-            self.assertEqual(call.kwargs['delivery_id'], 'git-update:version-attempt')
+            self.assertEqual(call.kwargs['delivery_id'], 'git-update:version-attempt:with-log-v1')
+            self.assertEqual(call.kwargs['attachments'], [str(self.log)])
+            from src.proj.util.web.emailer import Email
+
+            message = Email.message(*call.args, attachments=call.kwargs['attachments'],
+                                    recipient='test@example.invalid')
+            attachments = [part for part in message.walk() if part.get_filename()]
+            self.assertEqual([part.get_filename() for part in attachments], ['patch.log'])
+            self.assertEqual(attachments[0].get_payload(decode=True), self.log.read_bytes())
 
     def test_log_fallback_before_first_report(self):
         self.log.write_text('Version patch step: verify\nAssertionError: missing migrated output\n')

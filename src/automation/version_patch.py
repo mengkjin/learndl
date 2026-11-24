@@ -18,6 +18,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import traceback
 import types
 from typing import Literal, TypedDict, cast
 import uuid
@@ -702,6 +703,12 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
                 check_committed(root, commit, patch)
             except Exception as exc:
                 reason = str(exc)
+                if not log.exists():
+                    # Interface suspension can fail before the patch subprocess opens its log.
+                    try:
+                        log.write_text(traceback.format_exc())
+                    except OSError as log_error:
+                        logger.error('Could not save version patch log: %s', log_error)
                 with db:
                     db.execute("UPDATE attempts SET status='failed', finished=?, error=? WHERE id=?",
                                (time.time(), reason, key))

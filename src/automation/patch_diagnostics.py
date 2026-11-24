@@ -111,7 +111,8 @@ def failure_summary(attempt, *, persist=False):
     except OSError:
         pass
 
-    if error.startswith('Could not pause project interfaces:'):
+    if (error.startswith('Could not pause project interfaces:')
+            or (attempt.get('error') or '').startswith('Could not pause project interfaces:')):
         step = 'suspend interfaces'
     # 0.7.3/001 has a published digest and used a generic lsof error.
     prefix = 'RuntimeError: Open files or uncertain lsof result: '
