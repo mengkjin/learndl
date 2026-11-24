@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from html import escape
 from urllib.parse import urlencode, urlsplit
 
@@ -10,7 +11,7 @@ from .services import STATE
 __all__ = ['restart_link']
 
 
-def restart_link(service: str, port: int, *, state=STATE, fixed=False) -> str:
+def restart_link(service: str, port: int, *, state=STATE, fixed=False, browser_url=None) -> str:
     console_port = 8500
     try:
         record = json.loads((state / 'console.json').read_text())
@@ -20,7 +21,12 @@ def restart_link(service: str, port: int, *, state=STATE, fixed=False) -> str:
     except (OSError, ValueError, KeyError, TypeError):
         pass
     fragment = urlencode({'restart-service': service, 'port': port})
-    address = escape(f'http://127.0.0.1:{console_port}/#{fragment}', quote=True)
+    origin = f'http://127.0.0.1:{console_port}'
+    if browser_url:
+        browser = urlsplit(browser_url)
+        if browser.scheme == 'https' and re.fullmatch(r'[a-z0-9-]+\.[a-z0-9.-]+\.ts\.net', browser.hostname or ''):
+            origin = f'https://{browser.hostname}:{console_port}'
+    address = escape(f'{origin}/#{fragment}', quote=True)
     position = 'position:fixed;right:.8rem;top:3.5rem;z-index:999;' if fixed else ''
     return (f'<a class="service-restart" href="{address}" target="_self" '
             'title="重启服务 / Restart service" aria-label="重启服务 / Restart service" '

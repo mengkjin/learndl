@@ -34,7 +34,7 @@ def main() -> None:
     pg = page_setup()
     from src.api.learndl_monitor.restart_control import restart_link
 
-    st.html(restart_link('research', int(st.get_option('server.port')), fixed=True))
+    st.html(restart_link('research', int(st.get_option('server.port')), fixed=True, browser_url=st.context.url))
     pg.run()
     
 if __name__ == '__main__':

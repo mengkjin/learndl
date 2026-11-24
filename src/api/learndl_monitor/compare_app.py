@@ -30,7 +30,7 @@ def main():
     heading, language, restart = st.columns((7, 2, 1), vertical_alignment='center')
     zh = language.selectbox('Language', ['中文', 'English'], label_visibility='collapsed') == '中文'
     with restart:
-        st.html('<div style="text-align:right">' + restart_link('compare', int(st.get_option('server.port'))) + '</div>')
+        st.html('<div style="text-align:right">' + restart_link('compare', int(st.get_option('server.port')), browser_url=st.context.url) + '</div>')
     def t(chinese, english):
         return chinese if zh else english
     heading.title(t('模型对比', 'Model Compare'))
