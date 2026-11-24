@@ -375,15 +375,29 @@ def needs_migration(root: Path, runtime: Path) -> bool:
     return not state['ready']
 
 
-def admission_reason(root: Path, runtime: Path) -> str | None:
+def admission_reason(root: Path, runtime: Path, *, announce_pending: bool = False) -> str | None:
     """Return the reason a new business process must wait, if any."""
     try:
         state = status(root, runtime)
         if state['baseline'] is None:
             return 'Version patch ledger is awaiting automatic initialization'
-        if not state['ready']:
-            return f'Version migration pending ({state["applied"]} -> {state["target"]}); see version_patch status'
-    except _STATUS_ERRORS as exc:
+        if state['ready']:
+            return None
+        command = 'python -m src.automation.version_patch'
+        if attempt := state['failed']:
+            action = (f'{command} status' if attempt['status'] == 'running'
+                      else f'{command} retry {attempt["patch"]}')
+            return f'Version patch {attempt["patch"]} ({attempt["status"]}). See {attempt["log_path"]}. Run {action}'
+        # A worker can exit between patches in the same version, after changing
+        # data but before recording the new applied version or the next attempt.
+        applied = version_key(state['applied'])
+        if any(version_key(row['patch'].split('/')[0]) > applied for row in state['records']):
+            return f'Version migration partially applied. Run {command} apply'
+        committed_catalog(root, 'HEAD', state['target'])
+        if announce_pending:
+            logger.info('Version migration pending (%s -> %s). Continuing with current data. Details: %s status',
+                        state['applied'], state['target'], command, extra={'console_stderr': True})
+    except (*_STATUS_ERRORS, subprocess.SubprocessError) as exc:
         return f'Version migration check failed: {exc}'
     return None
 
@@ -478,7 +492,13 @@ def committed_catalog(root: Path, commit: str, target: str) -> None:
                 continue
         if not info.startswith((b'100644 blob ', b'100755 blob ')) or (root / name).is_symlink():
             raise MigrationError(f'Expected a regular committed file: {name}')
-        if (root / name).read_bytes() != git(root, 'show', f'{commit}:{name}'):
+        # Admission also checks pending catalogs. Compare the Git blob ID from
+        # ls-tree directly to avoid starting a Git process per patch per worker.
+        oid = info.split()[2]
+        content = (root / name).read_bytes()
+        digest = hashlib.new('sha256' if len(oid) == 64 else 'sha1', f'blob {len(content)}\0'.encode())
+        digest.update(content)
+        if digest.hexdigest().encode() != oid:
             raise MigrationError(f'Patch input differs from committed source: {name}')
         tracked.add(name)
     for patch in discover(root, target).values():

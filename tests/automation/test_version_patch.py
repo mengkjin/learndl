@@ -18,7 +18,7 @@ from unittest.mock import Mock, patch
 from src.automation import version_patch as version
 from src.automation.scheduling import autofix, calendar_lanes, channels, git_update, priority, runner
 from src.automation.scheduling.autofix_store import Store, initialize
-from src.automation.scheduling import worker_bootstrap
+from src.automation.scheduling import maintenance_gate, worker_bootstrap
 from src.automation.scheduling import idle_worklist as idle
 from src.automation.scheduling.runtime import RunStore
 
@@ -122,7 +122,8 @@ def verify(ctx):
     return (ctx.root / 'data/new/item').read_text() == 'payload'
 """)
         self.commit()
-        self.assertIsNotNone(version.admission_reason(self.root, self.runtime))
+        self.assertIsNone(version.admission_reason(self.root, self.runtime))
+        self.assertTrue(version.needs_migration(self.root, self.runtime))
         with redirect_stdout(StringIO()) as stdout, redirect_stderr(StringIO()) as progress:
             result = self.apply()
         self.assertFalse(stdout.getvalue())
@@ -199,6 +200,42 @@ def verify(ctx):
         self.assertNotEqual(records[0]['digest'], records[1]['digest'])
         path.unlink()
         self.assertIn('Successful patch changed or disappeared', version.admission_reason(self.root, self.runtime) or '')
+
+    def test_interruption_between_patches_of_same_version_requires_completion(self):
+        self.release('0.7.2')
+        for name in ('001_first', '002_second'):
+            self.patch_file('0.7.2', name, 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        with (patch.object(version.logger, 'info', side_effect=[None, KeyboardInterrupt]),
+              self.assertRaises(KeyboardInterrupt)):
+            self.apply()
+        self.assertIsNone(version.status(self.root, self.runtime)['failed'])
+        self.assertIn('partially applied', version.admission_reason(self.root, self.runtime) or '')
+        self.assertEqual(self.apply()['patches'], ['0.7.2/002'])
+        self.assertIsNone(version.admission_reason(self.root, self.runtime))
+
+    def test_manual_permit_reports_pending_and_explains_a_blocked_wait_once(self):
+        control = self.control().directory
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
+        self.commit()
+        self.enterContext(patch.object(maintenance_gate, 'ROOT', self.root))
+        self.enterContext(patch.object(priority, 'enabled', return_value=True))
+        self.enterContext(patch.object(channels, 'enabled', return_value=True))
+        self.enterContext(patch('src.automation.scheduling.config.installed_config', return_value={'version_patch': True}))
+        self.enterContext(patch('src.automation.scheduling.config.runtime_dir', return_value=self.scheduling))
+        self.enterContext(patch('src.automation.scheduling.install_request.directory', return_value=control.parent / 'installation'))
+        with redirect_stderr(StringIO()) as pending, maintenance_gate.permit(directory=control):
+            self.assertIn('pending (0.7.1 -> 0.7.2)', pending.getvalue())
+            self.assertTrue(version.needs_migration(self.root, self.runtime))
+        self.assertEqual(self.apply()['status'], 'blocked')
+        with (redirect_stderr(StringIO()) as waiting,
+              patch.object(maintenance_gate.time, 'sleep', side_effect=[None, KeyboardInterrupt]),
+              self.assertRaises(KeyboardInterrupt), maintenance_gate.permit(directory=control)):
+            self.fail('Failed migration admitted a manual script')
+        self.assertEqual(waiting.getvalue().count('Waiting for maintenance access'), 1)
+        self.assertIn('retry 0.7.2/001', waiting.getvalue())
+        self.assertFalse(list(control.glob('waiting-*.json')))
 
     def test_timeout_and_interrupted_worker_preserve_evidence(self):
         self.release('0.7.2')
@@ -408,7 +445,10 @@ def verify(ctx):
             self.assertEqual(store.owned(idle.OWNER), [request])
             launch.assert_not_called()
 
-        assert_waiting('migration pending')
+        self.assertEqual(idle.worker(), 0)
+        launch.assert_called_once()
+        launch.reset_mock()
+        store.put(dict(request, phase='queued'))
         with ThreadPoolExecutor(max_workers=1) as pool:
             attempt = pool.submit(self.apply)
             try:
@@ -421,7 +461,7 @@ def verify(ctx):
             finally:
                 (self.root.parent / 'finish').touch()
             self.assertEqual(attempt.result(timeout=10)['status'], 'blocked')
-        assert_waiting('migration pending')
+        assert_waiting('retry 0.7.2/001')
         (self.root.parent / 'valid').touch()
         self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
         self.assertEqual(idle.worker(), 0)
@@ -438,7 +478,7 @@ def verify(ctx):
             store.assert_not_called()
         self.assertFalse(version.ledger_path(self.runtime).exists())
 
-    def test_calendar_and_autofix_wait_for_verified_data(self):
+    def test_daily_runs_while_pending_and_workers_wait_during_patch_and_after_failure(self):
         controls = self.control()
         runs = RunStore(self.scheduling / 'runs.sqlite')
         tasks = {'daily_update': 'data', 'weekly_update': 'data', 'rcquant_sec_backfill': 'independent'}
@@ -487,7 +527,15 @@ def verify(ctx):
             repair.assert_not_called()
             legacy_script.assert_not_called()
 
-        assert_waiting()
+        self.assertEqual(calendar_lanes.worker('daily_update'), 0)
+        self.assertEqual(launch.call_args.args[0], 'daily_update')
+        self.assertEqual(runner.legacy('daily_update', []), 0)
+        launch.reset_mock()
+        legacy_script.reset_mock()
+        with patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '124'}):
+            runner.run('daily_update')
+        queued = controls.scheduled()
+        self.assertEqual(len(queued), 3)
         with version.code_lease(self.scheduling):
             assert_waiting()
         self.assertEqual(self.apply()['status'], 'blocked')
@@ -567,6 +615,25 @@ sys.stdin.buffer.read()
         self.assertIsNone(version.admission_reason(self.root, self.runtime))
         self.assertEqual(priority.read(store)['phase'], 'idle')
 
+    def test_verified_checkout_releases_daily_lane_when_patch_is_deferred(self):
+        store = self.control()
+        self.git_worker(store)
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        head = self.git('rev-parse', 'HEAD').decode().strip()
+        channels.reserve(store, 'git', channels.GROUPS)
+        channels.running(store, 'git')
+        priority.write(store, {'phase': 'checkout', 'last_completed': 0, 'target': head})
+        with patch.object(git_update, 'training_blocker', return_value='training active'):
+            self.assertEqual(git_update._channel_update(self.root, {})['status'], 'deferred')
+        self.assertEqual(priority.read(store)['verified_head'], head)
+        self.assertIsNone(channels.blocker(store, 'data'))
+        self.assertTrue(version.needs_migration(self.root, self.runtime))
+        with version.business_lease(self.scheduling, root=self.root):
+            self.assertEqual(git_update._channel_update(self.root, {})['status'], 'deferred')
+        self.assertEqual(git_update._channel_update(self.root, {})['patches'], ['0.7.2/001'])
+
     def test_blocked_worker_fetches_and_retries_once_per_new_commit(self):
         store = self.control()
         self.git_worker(store)
@@ -641,17 +708,23 @@ sys.stdin.buffer.read()
         self.assertEqual([row['status'] for row in snapshot['records']], ['failed', 'success'])
         self.assertTrue(snapshot['ready'])
 
-    def test_bootstrap_holds_new_business_before_import_after_manual_pull(self):
+    def test_bootstrap_admits_pending_but_holds_failed_patch_before_import(self):
         control = self.control().directory
         (control / 'worker-settings.json').write_text(json.dumps({'root': str(self.root), 'runtime': str(self.scheduling)}))
         (self.scheduling / 'installed.json').write_text('{"scheduler_version": 3, "version_patch": true}')
         self.release('0.7.2')
+        self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
         self.commit()
         self.addCleanup(os.chdir, Path.cwd())
         with (patch.object(worker_bootstrap, '__file__', str(control / 'worker_bootstrap.py')),
               patch.object(sys, 'argv', ['bootstrap', 'lane', 'daily_update']),
               patch.object(sys, 'path', sys.path.copy()),
               patch.object(worker_bootstrap.runpy, 'run_module') as load):
+            worker_bootstrap.main()
+            load.assert_called_once_with('src.automation.scheduling.runner', run_name='__main__')
+            load.reset_mock()
+            self.assertEqual(self.apply()['status'], 'blocked')
+            sys.argv = ['bootstrap', 'lane', 'daily_update']
             worker_bootstrap.main()
             load.assert_not_called()
             with patch.object(sys, 'argv', ['bootstrap', 'watchdog']):
@@ -661,10 +734,6 @@ sys.stdin.buffer.read()
                 worker_bootstrap.main()
                 load.assert_called_once_with('src.automation.watchdog', run_name='__main__')
                 load.reset_mock()
-            # The bootstrap releases the lock when it declines the start.
-            self.apply()
-            worker_bootstrap.main()
-            load.assert_called_once()
 
     def test_verified_git_checkout_stays_blocked_on_failure_but_allows_mail(self):
         store = self.control()

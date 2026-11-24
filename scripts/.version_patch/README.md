@@ -12,9 +12,14 @@ its next tick. It checks for version patches even if Git fetching is disabled.
 Automatic research, Autofix, and daily, weekly and RCQuant updates share the
 same code lock. Each worker takes a read lock and checks the patch ledger before
 starting a script, including when invoked by an older launcher. A patch needs
-exclusive access. Missing, pending or failed migrations keep workers waiting
-between attempts. Calendar timers can still register their slots. After
-verification the next tick uses the existing queue, overlap and expiry rules.
+exclusive access. With a registered baseline and an intact checkout, a pending
+version upgrade allows daily updates and other scripts to start using the current
+data. Maintenance retries when those scripts release their leases. A manual
+script reports the pending version range on stderr. If it must wait for
+maintenance, it reports the reason immediately and again when the reason changes.
+An active patch, an incomplete patch version, a failed attempt or an unreadable
+ledger still holds new work. Calendar timers can register their slots during
+maintenance. Workers resume with the existing queue, overlap and expiry rules.
 Watchdog can finalize earlier runs between patch attempts.
 Use an idle window for manual Git operations and stop external processes that
 write the same files before updating.

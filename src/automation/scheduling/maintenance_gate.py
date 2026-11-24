@@ -22,6 +22,7 @@ from pathlib import Path
 import portalocker
 import psutil
 
+from src.automation.console import logger
 from .autofix_store import ROOT, Store, state_dir
 
 _depth = contextvars.ContextVar('maintenance_depth', default=0)
@@ -114,6 +115,7 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
     waiter = directory / f'waiting-{os.getpid()}.json'
     previous = os.environ.get('LEARNDL_MAINTENANCE_FD')
     previous_owner = os.environ.get('LEARNDL_MAINTENANCE_OWNER')
+    last_wait_reason = None
     try:
         while True:
             try:
@@ -139,14 +141,15 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         reason = blocker(Store(directory), task_class) if modern else None
                         if reason:
                             raise MaintenanceBusy(reason)
+                        if modern_channels:
+                            descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class, exclusive_groups))
                         if modern and task_class not in {'git', 'installation'}:
                             from .config import installed_config, runtime_dir
                             from src.automation.version_patch import activation, admission_reason
                             if activation(installed_config()):
-                                if reason := admission_reason(ROOT, runtime_dir().parent):
+                                if reason := admission_reason(ROOT, runtime_dir().parent, announce_pending=blocking):
                                     raise MaintenanceBusy(reason)
                         if modern_channels:
-                            descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class, exclusive_groups))
                             lane_token = _lane_fds.set(descriptors)
                     except BaseException:
                         lane_leases.close()
@@ -156,6 +159,10 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
             except (portalocker.LockException, MaintenanceBusy) as exc:
                 if not blocking:
                     raise MaintenanceBusy(str(exc) or 'Maintenance execution lock unavailable') from None
+                reason = str(exc) if isinstance(exc, MaintenanceBusy) else 'Maintenance admission or execution lock occupied'
+                if reason != last_wait_reason:
+                    logger.info('Waiting for maintenance access: %s', reason, extra={'console_stderr': True})
+                    last_wait_reason = reason
                 # Distinguish a parked legacy wrapper from unguarded live work.
                 waiter.write_text(json.dumps({'pid': os.getpid(), 'created': psutil.Process().create_time()}))
                 time.sleep(.5)

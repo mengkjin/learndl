@@ -79,8 +79,10 @@ Use ledger state and explicit baselines for migration decisions. File times do
 not establish the data version.
 
 Version patches are part of server code upgrades, including manual pulls. Use
-the shared maintenance and code leases. Keep new business work blocked until
-verification succeeds. Keep the failure record and backups, notify by email,
+the shared maintenance and code leases. Allow business work, including daily
+updates, while a clean migration is pending. Report the reason when a manual
+script waits. Hold new work during execution and after an incomplete or failed
+patch version until verification succeeds. Keep the failure record and backups, notify by email,
 and require operator retry after a failure or interruption. Use the existing
 Autofix request workflow for one-off operational repairs. Follow the
 [version patch guide](../../../scripts/.version_patch/README.md) for the

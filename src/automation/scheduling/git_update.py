@@ -377,17 +377,22 @@ def _admitted_update(root, options, *, target_snapshot=None, migrate=None):
         except (OSError, GitUpdateError) as exc:
             priority.write(store, dict(state, phase='blocked', reason=str(exc), version_verified=False))
             return {'status': 'blocked', 'reason': str(exc)}
+        result = {'status': 'verified', 'after': head}
         if migrate is not None:
             # The mail worker can now load the verified checkout even if a
             # migration fails. Business workers still see checkout/blocked.
             state = dict(state, version_verified=True, version_verified_head=head)
             priority.write(store, state)
-            result = migrate()
-            if result['status'] != 'ready':
-                priority.write(store, dict(state, phase='blocked', reason=result['reason']))
-                return result
+            migration = migrate()
+            if migration['status'] == 'deferred':
+                # Release the verified checkout. The next tick rediscovers the
+                # outstanding patch from the ledger when training is idle.
+                result = migration
+            elif migration['status'] != 'ready':
+                priority.write(store, dict(state, phase='blocked', reason=migration['reason']))
+                return migration
         priority.write(store, {'phase': 'idle', 'last_completed': time.time(), 'verified_head': head})
-        return {'status': 'verified', 'after': head}
+        return result
     if options.get('enabled') is False:
         priority.write(store, {'phase': 'idle', 'last_completed': time.time()})
         return {'status': 'disabled'}
