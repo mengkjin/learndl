@@ -22,10 +22,11 @@ __all__ = [
     'backfill_valid_values',
     'asof_map',
     'stamp_asof',
+    'load_asof_cross_sections',
 ]
 
 import threading
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -223,3 +224,56 @@ def stamp_asof(loaded : pd.DataFrame , mapping : Mapping[int , int]) -> pd.DataF
     base = loaded.rename(columns = {'date' : 'src'})
     out = base.merge(pairs , on = 'src' , how = 'inner').drop(columns = 'src')
     return out.sort_values(['secid' , 'date']).reset_index(drop = True)
+
+
+def load_asof_cross_sections(
+    requested: np.ndarray,
+    valid_dates: Sequence[np.ndarray],
+    load: Callable[[int, np.ndarray], pd.DataFrame],
+    column: str,
+    *,
+    max_age_months: int | None = None,
+) -> pd.DataFrame:
+    """Load the latest usable source per date, breaking ties by source order."""
+    remaining = np.unique(np.asarray(requested, dtype=np.int64))
+    earliest: dict[int, int] = {}
+    if max_age_months is not None:
+        requested_days = pd.to_datetime(remaining.astype(str), format='%Y%m%d')
+        cutoff = requested_days - pd.DateOffset(months=max_age_months)
+        earliest = dict(zip(remaining, cutoff.strftime('%Y%m%d').astype(int)))
+
+    valid_dates = list(valid_dates)
+    frames: list[pd.DataFrame] = []
+    while remaining.size:
+        best: dict[int, tuple[int, int]] = {}
+        for source, valid in enumerate(valid_dates):
+            for date, observed in asof_map(remaining, valid).items():
+                if observed >= earliest.get(date, 0) and (date not in best or observed > best[date][0]):
+                    best[date] = (observed, source)
+        if not best:
+            break
+
+        by_source: dict[int, dict[int, int]] = {}
+        for date, (observed, source) in best.items():
+            by_source.setdefault(source, {})[date] = observed
+
+        resolved: list[int] = []
+        for source, mapping in by_source.items():
+            source_dates = np.unique(np.fromiter(mapping.values(), dtype=np.int64))
+            loaded = load(source, source_dates)
+            finite = np.isfinite(pd.to_numeric(loaded[column], errors='coerce'))
+            usable = loaded.loc[finite, 'date'].unique()
+            unavailable = np.setdiff1d(source_dates, usable)
+            if unavailable.size:
+                # An indexed file can be missing or its requested column can be unusable.
+                valid_dates[source] = np.setdiff1d(valid_dates[source], unavailable)
+                loaded = loaded.loc[loaded['date'].isin(usable)]
+            stamped = stamp_asof(loaded, mapping)
+            if not stamped.empty:
+                frames.append(stamped)
+                resolved.extend(stamped['date'].unique())
+        remaining = np.setdiff1d(remaining, resolved)
+    if not frames:
+        return pd.DataFrame(columns=['secid', 'date', column])
+    return (pd.concat(frames).drop_duplicates(subset=['secid', 'date'], keep='last')
+            .sort_values(['secid', 'date']).reset_index(drop=True))

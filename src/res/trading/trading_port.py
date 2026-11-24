@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any , ClassVar , Literal , TypeAlias
 
+from src.automation.artifact_exchange.production import batched , saved as publish_saved
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
 from src.data import DATAVENDOR
 from src.res.factor.util import Benchmark , Portfolio , AlphaComposite , Universe , Port , PortfolioAccount
@@ -255,7 +256,9 @@ class TradingPort(Base.BoundLogger):
         """
         path = self.export_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
-        Save.df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = f'Portfolio' , indent = self.indent + 1 , vb_level = self.vb_level + 2)
+        saved = Save.df(pf.loc[:,['secid' , 'weight' , 'value']] , path , prefix = 'Portfolio' ,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 2)
+        publish_saved(path , saved)
     
     def load_portfolio(self , start : int | None = None , end : int | None = None):
         """
@@ -286,6 +289,7 @@ class TradingPort(Base.BoundLogger):
                                   save_after = True , indent = self.indent + 1 , vb_level = self.vb_level + 2)
         return self.portfolio.account
 
+    @batched
     def analyze(
         self , start : int | None = None , end : int | None = None , 
         write_down = True , display_all = False , key_fig = 'perf_curve', 
@@ -318,14 +322,16 @@ class TradingPort(Base.BoundLogger):
             figs  = {f'{k}@{fig_name}':fig for k,v in self.tasks.items() for fig_name , fig in v.figs.items()}
 
             if write_down:
-                Save.dfs(
+                data_saved = Save.dfs(
                     rslts , self.result_path_data , async_save = True ,
                     prefix=f'Portfolio Analysis of {self.name} Datas' , 
                     indent = self.indent + 1 , vb_level = self.vb_level + 2)
-                Save.figs(
+                plot_saved = Save.figs(
                     figs   , self.result_path_plot , async_save = True ,
                     prefix=f'Portfolio Analysis of {self.name} Plots' , 
                     indent = self.indent + 1 , vb_level = self.vb_level + 2)
+                publish_saved(self.result_path_data , data_saved)
+                publish_saved(self.result_path_plot , plot_saved)
 
             for name , fig in figs.items():
                 if (key_fig and key_fig.lower() in name.lower()) or display_all:
@@ -378,6 +384,8 @@ class TrackingPort(TradingPort):
         Build the tracking portfolio for the given date.
         """
         alpha = self.Alpha.get(date)
+        if alpha.empty:
+            return pd.DataFrame()
         universe = self.Universe.get(date , self.exclusion)
         if last_port is None:
             last_port = self.get_last_port(date , reset)
@@ -450,6 +458,7 @@ class BacktestPort(TradingPort):
         self.new_ports[date] = df
         return self
     
+    @batched
     def build_backward(self , date : int , reset = False , export = True) -> pd.DataFrame:
         """
         Build the backtest portfolio up to the given date from the start date.
@@ -473,8 +482,10 @@ class BacktestPort(TradingPort):
             return pd.DataFrame()
         self.logger.stdout(f'Loading alpha for {self.name} at {Dates(date_list)}')
         alpha = self.Alpha.get(date_list)
-        if alpha.empty:
+        date_list = [day for day in date_list if not alpha.get(day , closest = False).empty]
+        if not date_list:
             return pd.DataFrame()
+        alpha = alpha.subset(date_list)
         self.logger.stdout(f'Loading universe for {self.name} at {Dates(date_list)}')
         univ_port = self.Universe.get(date_list , self.exclusion)
         last_port = self.get_last_port(date_list[0])

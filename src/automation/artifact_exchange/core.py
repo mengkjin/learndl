@@ -92,16 +92,22 @@ class Config:
     max_bytes: int = MAX_BYTES
     max_files: int = MAX_FILES
     source_host: str = field(default_factory=socket.gethostname)
+    production_root: Path | None = None
 
     def __post_init__(self):
-        for name in ('shared_root', 'state', 'results'):
+        paths = ('shared_root', 'state', 'results')
+        if self.production_root is not None:
+            paths += ('production_root',)
+        for name in paths:
             p = Path(os.path.expandvars(os.path.expanduser(str(getattr(self, name)))))
             if not p.is_absolute():
                 raise ValueError(f'{name} must be absolute')
             setattr(self, name, real_tree(p))
         if self.role not in ('publisher', 'receiver') or self.max_bytes <= 0 or self.max_files <= 0:
             raise ValueError('Invalid role or limits')
-        for p in (self.state, self.results):
+        for p in (self.state, self.results, self.production_root):
+            if p is None:
+                continue
             if p.is_relative_to(self.shared_root) or self.shared_root.is_relative_to(p):
                 raise ValueError('Shared and private paths must not overlap')
 
@@ -118,6 +124,10 @@ class Config:
     @property
     def inbox(self):
         return self.shared_root / 'artifact_exchange'
+
+    @property
+    def production(self):
+        return self.production_root or self.results.parent
 
 
 def sandboxed():
@@ -288,7 +298,8 @@ def _write_zip_member(archive, source, name):
         shutil.copyfileobj(stream, output, 1024 * 1024)
 
 
-def publish_artifacts(task, run_id, artifacts, status='success', *, config=None, prepare_only=False, build=None, adopt_legacy=False) -> list[dict[str, Any]]:
+def publish_artifacts(task, run_id, artifacts, status='success', *, config=None, prepare_only=False,
+                      build=None, adopt_legacy=False, production_versions=None) -> list[dict[str, Any]]:
     if sandboxed():
         return [{'status': 'skipped', 'reason': 'autofix'}]
     config = config or Config.load()
@@ -302,7 +313,8 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None,
         atomic_json(config.state / 'source_host.json', {'source_host': config.source_host})
         for (category, experiment, group_run), specs in groups.items():
             try:
-                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category, experiment, prepare_only, build, adopt_legacy))
+                outcomes.append(_prepare(task, group_run, list(dict.fromkeys(specs)), status, config, category,
+                                         experiment, prepare_only, build, adopt_legacy, production_versions))
             except Exception as exc:
                 failure = {'status': 'failed', 'sources': [str(s.source) for s in specs], 'error': str(exc)}
                 atomic_json(config.state / 'failures' / (uuid.uuid4().hex + '.json'), failure)
@@ -310,11 +322,16 @@ def publish_artifacts(task, run_id, artifacts, status='success', *, config=None,
     return outcomes
 
 
-def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False, build=None, adopt_legacy=False) -> dict[str, Any]:
+def _prepare(task, run_id, specs, status, config, category, experiment, prepare_only=False, build=None,
+             adopt_legacy=False, production_versions=None) -> dict[str, Any]:
     # Mail callers use private temporary directories. The notification ID
     # identifies the logical message even when it is retried from a new directory.
     declaration = [] if category == 'mail_archive' else [asdict(s) | {'source': str(s.source)} for s in specs]
     identity = [2, config.source_host, task, run_id, category, experiment, declaration]
+    if category == 'production' or production_versions is not None:
+        if category != 'production' or not production_versions or build is not None:
+            raise ValueError('Production requires explicit file versions')
+        identity.append(production_versions)
     if build is not None:
         from src.shared.model_provenance import validate_build
 
@@ -385,6 +402,21 @@ def _prepare(task, run_id, specs, status, config, category, experiment, prepare_
                     'experiment': experiment, 'experiment_dir': component(experiment),
                     'status': status, 'host': config.source_host, 'host_dir': component(config.source_host),
                     'artifacts': artifacts, 'files': files}
+        if production_versions is not None:
+            from .production import PAYLOAD, finished_report, members
+
+            if {item['path'] for item in files} != {f'{PAYLOAD}/{name}' for name in production_versions}:
+                raise ValueError('Production file inventory changed')
+            for item in files:
+                path = item['path']
+                stamp, size = production_versions[path.removeprefix(PAYLOAD + '/')]
+                source = Path(source_files[path]['source']).stat()
+                if (source.st_mtime_ns, source.st_size, item['size']) != (stamp, size, size):
+                    raise ValueError(f'Production source changed during snapshot: {path}')
+                if not finished_report(payload / path):
+                    raise ValueError(f'Production report is still incomplete: {path}')
+                item['mtime_ns'] = stamp
+            members(manifest)
         if build is not None:
             from .model_builds import validate_model_members
 
@@ -470,18 +502,24 @@ def _send(record, ledger, config) -> dict[str, Any]:
     return record
 
 
-def retry(config):
+def retry(config, *, category=None):
     if sandboxed() or not config.enabled or config.role != 'publisher':
         return []
     output = []
     with locked(config, 'publish'):
+        pending = []
         for p in sorted((config.state / 'outbox').glob('*/delivery.json')):
             record = json.loads(p.read_text())
-            if record['status'] != 'published':
-                try:
-                    output.append(_send(record, p, config))
-                except Exception as exc:
-                    output.append({'id': record['id'], 'status': 'failed', 'error': str(exc)})
+            if (record['status'] != 'published'
+                    and (category is None or record.get('manifest', {}).get('category') == category)):
+                pending.append((p, record))
+        if category == 'production':
+            pending.sort(key=lambda item: min(f['mtime_ns'] for f in item[1]['manifest']['files']))
+        for p, record in pending:
+            try:
+                output.append(_send(record, p, config))
+            except Exception as exc:
+                output.append({'id': record['id'], 'status': 'failed', 'error': str(exc)})
     return output
 
 
@@ -625,6 +663,11 @@ def _receive(archive, config):
         if manifest['schema_version'] not in (1, 2):
             raise ValueError('Unsupported schema')
         target = archive_target(manifest, config)
+        production = manifest['category'] == 'production'
+        if production:
+            from .production import install, members
+
+            members(manifest)
         build_update = 'model_build' in manifest
         if build_update:
             from .model_builds import validate_model_members
@@ -663,6 +706,8 @@ def _receive(archive, config):
         previous = json.loads(receipt.read_text()) if receipt.exists() else None
         if previous and previous['sha256'] != archive_hash:
             raise ValueError('Package ID reused with different content')
+        if previous and production:
+            return _finish_receive(archive, archive_hash, manifest, previous['target'])
         if previous and (build_update or legacy_update):
             from .model_builds import locate_build
 
@@ -677,8 +722,9 @@ def _receive(archive, config):
                 target = real_tree(legacy)
         if previous and manifest['schema_version'] == 2 and manifest.get('category') in ('model_training', 'mail_archive'):
             return _finish_receive(archive, archive_hash, manifest, target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=target.parent, prefix='.receive-') as tmp:
+        staging_parent = config.state if production else target.parent
+        staging_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=staging_parent, prefix='.receive-') as tmp:
             staging = Path(tmp) / 'result'
             staging.mkdir()
             for name, item in listed.items():
@@ -698,6 +744,10 @@ def _receive(archive, config):
                         checked_entries(inner, config)
                         if inner.testzip() is not None:
                             raise ValueError('Damaged experiment archive')
+            if production:
+                result = install(config, manifest, staging, mapped)
+                atomic_json(receipt, {'id': manifest['id'], 'sha256': archive_hash, **result})
+                return _finish_receive(archive, archive_hash, manifest, result['target']) | result
             if build_update or legacy_update:
                 from .model_builds import adopt_history, apply_update, legacy_target, locate_build
 

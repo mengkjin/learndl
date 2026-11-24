@@ -74,7 +74,7 @@ class BasicCreatorConfig:
     def get_sorting_alpha(self , model_date : int , alpha_model : AlphaModel | Amodel) -> Amodel:
         alpha_composite = self.alpha_sorter.get(model_date , alpha_model if 'self' in self.sorter else None)
         sorting_alpha = alpha_composite.get_model(model_date)
-        if not sorting_alpha:
+        if sorting_alpha.empty:
             sorting_alpha = alpha_model.get_model(model_date)
         return sorting_alpha
 

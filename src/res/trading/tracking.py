@@ -8,8 +8,10 @@ import pandas as pd
 
 from pathlib import Path
 
+from src.automation.artifact_exchange.production import saved as publish_saved
 from src.proj import PATH , Proj , CALENDAR , Const , Base , Dates
 from src.res.trading.util.trade_suggestion import TradeSuggestion
+from src.shared.file_ops import atomic_bytes
 
 from .trading_port import TrackingPort
 
@@ -62,7 +64,8 @@ class TrackingPortfolioManager(Base.BoundLogger):
                         cls.logger.conclude(suggestion.format())
                     
             path = cls.attachment_path(date)
-            pd.concat([df for df in new_ports.values()]).to_csv(path)
+            atomic_bytes(path , pd.concat(new_ports.values()).to_csv().encode())
+            publish_saved(path)
             Proj.email_attachments.append(path)
 
         cls.logger.stdout(f'Analyze Tracking Portfolios at {Dates(date)} start ...' , idt = 1 , vb = 1)

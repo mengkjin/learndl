@@ -7,7 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import pandas as pd
 
-from src.proj import Dates
+from src.proj import DB, PATH, Dates
 from src.data.download.sellside.from_sql import SellsideSQLDownloader
 from src.data.quality.valid_dates import (
     asof_map,
@@ -167,6 +167,71 @@ class SellsideValidDatesTest(unittest.TestCase):
 
 
 class SellsideFactorAsofTest(unittest.TestCase):
+    def test_primary_and_backup_use_latest_date_then_source_order(self):
+        from src.res.factor.defs.affiliate.level0.external.sellside import df_scores_v3
+
+        primary, backup = 'dongfang.scores_v3', 'huayuan.scores_v3'
+        valid = {
+            primary: [20251231, 20260107],
+            backup: [20260105, 20260107, 20260109],
+        }
+        calls = []
+
+        def fake_loads(cls, src, key, dates, col=None, closest=False):
+            calls.append((key, list(dates)))
+            return pd.DataFrame({
+                'secid': 1, 'date': dates,
+                cls.factor_name: [day if key == primary else -day for day in dates],
+            })
+
+        requested = [20251230, 20251231, 20260105, 20260107, 20260108, 20260109]
+        expected = {
+            20251231: 20251231, 20260105: -20260105, 20260107: 20260107,
+            20260108: 20260107, 20260109: -20260109,
+        }
+        with patch('src.data.quality.valid_dates.load_valid_dates',
+                   side_effect=lambda key, *args, **kwargs: np.array(valid[key])), \
+                patch.object(df_scores_v3, 'loads_from_db', classmethod(fake_loads)):
+            frame = df_scores_v3.Loads(requested)
+            self.assertEqual(frame.set_index('date')['df_scores_v3'].to_dict(), expected)
+            self.assertCountEqual(calls, [
+                (primary, [20251231, 20260107]), (backup, [20260105, 20260109]),
+            ])
+            factor = df_scores_v3()
+            self.assertTrue(factor.load_factor(20251230).empty)
+            for date, value in expected.items():
+                with self.subTest(date=date):
+                    single = factor.load_factor(date)
+                    self.assertEqual(single.columns.tolist(), ['secid', 'df_scores_v3'])
+                    self.assertEqual(single['df_scores_v3'].tolist(), [value])
+
+    def test_stale_index_falls_back_to_another_source_or_an_older_date(self):
+        from src.res.factor.defs.affiliate.level0.external.sellside import df_scores_v3
+
+        primary, backup = 'dongfang.scores_v3', 'huayuan.scores_v3'
+        valid = {
+            primary: [20260105, 20260107, 20260109],
+            backup: [20260107, 20260112, 20260113],
+        }
+        stored = {
+            primary: {20260105: 1.0, 20260107: np.nan},
+            backup: {20260107: 2.0, 20260112: 3.0, 20260113: np.inf},
+        }
+
+        def fake_loads(cls, src, key, dates, col=None, closest=False):
+            return pd.DataFrame(
+                [(1, day, stored[key][day]) for day in dates if day in stored[key]],
+                columns=['secid', 'date', cls.factor_name],
+            )
+
+        with patch('src.data.quality.valid_dates.load_valid_dates',
+                   side_effect=lambda key, *args, **kwargs: np.array(valid[key])), \
+                patch.object(df_scores_v3, 'loads_from_db', classmethod(fake_loads)):
+            frame = df_scores_v3.Loads([20260106, 20260107, 20260109, 20260113])
+        self.assertEqual(frame.set_index('date')['df_scores_v3'].to_dict(), {
+            20260106: 1.0, 20260107: 2.0, 20260109: 2.0, 20260113: 3.0,
+        })
+
     def test_loads_reads_each_source_once_and_stamps_request_dates(self):
         from src.res.factor.defs.affiliate.level0.external.sellside import hy_scores_v5
 
@@ -256,6 +321,88 @@ class SellsideFactorAsofTest(unittest.TestCase):
         self.assertIsNotNone(again)
         assert again is not None
         self.assertEqual(again.tolist(), [20260105])
+
+
+class SellsidePortfolioFreshnessTest(unittest.TestCase):
+    def setUp(self):
+        from src.res.factor.util.classes.alpha_model import AlphaComponent
+
+        directory = self.enterContext(tempfile.TemporaryDirectory())
+        self.enterContext(patch.object(PATH, 'db', Path(directory)))
+        self.enterContext(patch.object(AlphaComponent, '_cache_normalized', {}))
+        self.enterContext(patch.object(AlphaComponent, '_cache_unnormalized', {}))
+
+    def test_factor_alias_masks_expired_dates_even_after_a_fresh_read(self):
+        from src.res.factor.calculator import StockFactorHierarchy
+        from src.res.factor.defs.affiliate.level0.external.sellside import df_scores_v3
+        from src.res.factor.util.classes.alpha_model import AlphaComposite
+        from src.res.trading.trading_port import BacktestPort, TrackingPort
+
+        primary, backup = 'dongfang.scores_v3', 'huayuan.scores_v3'
+        DB.save(pd.DataFrame({'secid': [1, 2], 'pred': [1., 2.]}),
+                'sellside', primary, 20240229, vb_level='never')
+        DB.save(pd.DataFrame({'secid': [1, 2], 'scores_v3': [4., 3.]}),
+                'sellside', backup, 20240402, vb_level='never')
+        backfill_valid_values(primary)
+        backfill_valid_values(backup)
+
+        portfolio_alpha = AlphaComposite(['factor@df_scores_v3'])
+        with patch.object(StockFactorHierarchy, 'get_factor', return_value=df_scores_v3):
+            boundary = portfolio_alpha.get(20240329).item()
+            batch = portfolio_alpha.get([20240329, 20240401, 20240402])
+            repeat = portfolio_alpha.get(20240401).item()
+            tracking = TrackingPort('freshness_probe', 'factor@df_scores_v3')
+            with patch.object(tracking.Universe, 'get') as universe:
+                self.assertTrue(tracking.build_portfolio(20240401, export=False).empty)
+                universe.assert_not_called()
+            backtest = BacktestPort('freshness_probe', 'factor@df_scores_v3',
+                                    backtest=True, test_start=20240329)
+            with patch.object(backtest, 'end_date', return_value=-1), \
+                    patch.object(backtest, 'get_last_port'), \
+                    patch.object(backtest.Universe, 'get'), \
+                    patch('src.res.trading.trading_port.PortfolioBuilder') as builder:
+                backtest.build_backward(20240402, export=False)
+                builds = builder.return_value.setup.return_value.build.call_args_list
+                self.assertEqual([call.args[0] for call in builds], [20240329, 20240402])
+
+            self.assertEqual(df_scores_v3().load_factor(20240401)['df_scores_v3'].tolist(), [1., 2.])
+            DB.save(pd.DataFrame({'secid': [1, 2], 'scores_v3': [6., 5.]}),
+                    'sellside', backup, 20240401, vb_level='never')
+            backfill_valid_values(backup)
+            late = portfolio_alpha.get(20240401).item()
+
+        self.assertTrue(np.isfinite(boundary.alpha_of([1, 2])).all())
+        self.assertTrue(np.isnan(batch.get(20240401).alpha_of([1, 2])).all())
+        self.assertTrue(np.isnan(repeat.alpha_of([1, 2])).all())
+        self.assertGreater(batch.get(20240402).alpha_of([1, 2])[0],
+                           batch.get(20240402).alpha_of([1, 2])[1])
+        self.assertTrue(np.isfinite(late.alpha_of([1, 2])).all())
+
+    def test_direct_alias_ignores_stale_or_all_null_columns_in_composites_and_screeners(self):
+        from src.res.factor.fmp.generator.basic import BasicCreatorConfig
+        from src.res.factor.util.classes.alpha_model import AlphaComponent, AlphaComposite, AlphaScreener, Amodel
+
+        key = 'huatai.master_combined'
+        direct = f'sellside@{key}@master_combined'
+        other_column = f'sellside@{key}@secondary'
+        DB.save(pd.DataFrame({'secid': [1, 2], 'master_combined': [1., 2.], 'secondary': [1., 2.]}),
+                'sellside', key, 20240229, vb_level='never')
+        DB.save(pd.DataFrame({'secid': [1, 2], 'master_combined': [np.nan, np.nan], 'secondary': [3., np.nan]}),
+                'sellside', key, 20240329, vb_level='never')
+
+        data = AlphaComponent(direct, normalize=False).get_alpha_model([20240329, 20240401])
+        alternative = AlphaComponent(other_column, normalize=False).get_alpha_model(20240401)
+        np.testing.assert_array_equal(data.get(20240329).alpha_of([1, 2]), [1., 2.])
+        self.assertTrue(np.isnan(data.get(20240401).alpha_of([1, 2])).all())
+        np.testing.assert_allclose(alternative.item().alpha_of([1, 2]), [3., np.nan], equal_nan=True)
+
+        current = Amodel(20240401, np.array([1., 2.]), np.array([1, 4]), 'current')
+        combined = AlphaComposite([direct, current]).get(20240401).item()
+        np.testing.assert_array_equal(combined.secid, current.secid)
+        np.testing.assert_allclose(combined.alpha, current.zscore().alpha)
+        self.assertEqual(AlphaScreener([direct]).screened_pool(20240401, [1, 2]).size, 0)
+        config = BasicCreatorConfig(sorter=direct, screener='self')
+        self.assertIs(config.get_sorting_alpha(20240401, current), current)
 
 
 if __name__ == '__main__':

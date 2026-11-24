@@ -27,8 +27,8 @@ def main(forfeit_if_done : bool = True , **kwargs):
     from src.api.pkgs.data import DataAPI
     from src.automation.artifact_exchange.storage_insights import publish_daily_safe
     if MACHINE.updatable and DataAPI.is_updated():
-        from src.automation.artifact_exchange.trading_audit import publish_daily_safe as publish_trading_audit
-        publish_trading_audit()
+        from src.automation.artifact_exchange.production import sync_current_safe
+        sync_current_safe()
         publish_daily_safe(PATH.production, time.time())
 
 if __name__ == '__main__':

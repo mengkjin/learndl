@@ -1,6 +1,6 @@
 # Syncthing 研究结果投递与本机归档
 
-服务器脚本按需发布完成的分析结果，Mac 每 300 秒接收。Syncthing 负责跨网络传输；本模块负责快照、校验、归档和清理。服务器原件保留，不自动传输模型权重、检查点或原始训练数据。autofix 上下文跳过，不扩大沙盒权限。
+服务器脚本发布完成的分析结果和生产文件，Mac 每 300 秒接收。Syncthing 负责跨网络传输，本模块负责快照、校验、落盘和清理。服务器保留原件，autofix 上下文跳过发布和接收。
 
 已经完成一次 100 MiB 中国服务器 → 美国 Mac 传输及 SHA-256 校验。换网、休眠恢复和跨时段稳定性尚待验证。300 秒是本机归档轮询周期，不是跨境到达时限。
 
@@ -10,6 +10,7 @@
 
 ```text
 ~/workspace/Syncthing/artifact_exchange/
+  production/<来源电脑>/<UTC时间>__<UUID>.transfer.zip
   models/<完整模型名称>/<UTC时间>__<UUID>.transfer.zip
   model_compare/<实验名称>/<UTC时间>__<UUID>.transfer.zip
   factor_sequence/<实验名称>/<UTC时间>__<UUID>.transfer.zip
@@ -391,11 +392,22 @@ PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.4/support/results.py
 打开子服务或切换来源不会自动扫描本机；本机扫描由页面按钮触发。发布端在页面点击重新扫描后，会把刚生成的报告通过同一发布流程强制覆盖到 `latest.html`，跳过当天已发布检查。
 该功能沿用 Daily Update 调度，更新代码并重启本机存储洞察服务即可，无需新增 watchdog 安装。
 
-### 跟踪组合与预测快照
+### 生产权重、预测和组合
 
-`daily_update` 在核心行情更新完成后，把最近十个交易日的 `use_daily`、`master_daily`、
-`gru_daily` 持仓及 `gru_day_V1` 预测发布到
-`$HOME/workspace/Syncthing/persistent/trading_audit/<source_host>/latest.zip`。
-`manifest.json` 列出实际文件日期，预测包含窗口首日需要的前序文件（如有）。
-在已启用投递的服务器执行 `.venv/bin/python -m src.automation.artifact_exchange.trading_audit`
-可用当前已落盘数据立即生成快照。每次发布原子替换压缩包，保留生产数据。
+生产投递使用 `artifact_exchange/production/<source_host>/`。模型在生产审批提交后
+发布正式推理权重和加载所需的模型配置。预测、跟踪和回测持仓、模型因子组合、账户和
+组合分析文件在保存完成后发布。日更会补发生产目录中尚未成功发布的版本。
+
+Mac 接收器校验整包后按项目相对路径原子落盘，保留源文件生成时间。接收项目默认是
+`results` 配置路径的父目录，也可通过 `production_root` 指定。同路径有多个版本时，
+迟到的旧包不会覆盖更新的本机文件。接收回执位于私有状态目录，服务器保留原件。
+
+- 模型权重落到 `models/{nn,boost}/<模型>/archive/<编号>/<日期>/<子模型>/`，
+  加载配置落到对应模型的 `configs/`。
+- 预测、跟踪持仓、模型组合和账户分别落到 `data/Export/` 下的
+  `model_prediction/`、`trading_portfolio/`、`factor_model_port/`、`factor_model_account/`。
+- 回测持仓、跟踪与回测报告及日更持仓 CSV 落到 `results/trade/` 的对应目录。
+
+先更新接收端，再部署发布端。生产权重只在受信任的 Syncthing 设备间共享。
+需要立即补发当前生产目录时，在生产服务器运行
+`.venv/bin/python -m src.automation.artifact_exchange sync-production`。

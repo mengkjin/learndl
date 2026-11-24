@@ -10,6 +10,7 @@ import polars as pl
 from functools import cached_property
 from typing import Any , ClassVar , Self , overload , TypeAlias , cast
 
+from src.automation.artifact_exchange.production import batched
 from src.proj import MACHINE , Proj , CALENDAR , Base , Save , Load , Dates
 from src.data.util import DataBlock
 from src.res.model.util import PredictorPath , ModelConfig , DataModule , PredictorModel
@@ -485,6 +486,7 @@ class ArchivedPredictorModel(Base.BoundLogger):
             self.cached_df = pd.concat(df_list , axis = 0).groupby(['date','secid'])[self.model_name].mean().reset_index()
         return self
 
+    @batched
     def save_preds(
         self , df : pd.DataFrame | None = None , 
         overwrite = False , secid_col = SECID_COLS , date_col = DATE_COLS

@@ -24,6 +24,7 @@ CombineWorstMethod : TypeAlias = Literal['worst' , 'worst2']
 AmodelsType : TypeAlias = 'Amodel | list[Amodel] | Mapping[int, Amodel] | AlphaModel | None'
 ComponentInputType : TypeAlias = 'str | AlphaModel | Amodel'
 CompositeInputType : TypeAlias = 'str | ComponentInputType | Sequence[ComponentInputType]'
+SELLSIDE_MAX_AGE_MONTHS = 1
 
 @dataclass
 class Amodel:
@@ -150,12 +151,12 @@ class Amodel:
         assert len(value_col) == 1 , f'When submit alpha as pd.DataFrame, there must be only one possible column :{data.columns} but got {value_col}'
         if filter_date:
             data = data.query('date == @date')
-        data = data.reset_index().set_index('secid')[value_col].dropna()
+        data = data.reset_index().set_index('secid')[value_col[0]].dropna()
         secid = Base.ensure_secid(secid)
         if secid is not None: 
             data = data.reindex(secid).fillna(0)
 
-        return cls(date , data.to_numpy().squeeze() , data.index.values , name or value_col[0])
+        return cls(date , data.to_numpy() , data.index.values , name or value_col[0])
 
     @classmethod
     def create(
@@ -393,33 +394,42 @@ class AlphaComponent:
             return self.input.to_alpha_model()
 
         dates = Dates(dates)
-        cached_alpha_model = self.get_cache(self.name , normalize = self.normalize)
-        cached_dates = cached_alpha_model.available_dates() if cached_alpha_model else []
+        cached_alpha_model = self.get_cache(self.name , normalize = self.normalize , key = self.input)
+        cached_dates = [date for date , model in cached_alpha_model.models.items() if not model.empty]
         new_dates = dates.diff(cached_dates , inplace = False)
         if new_dates.empty:
             return cached_alpha_model.subset(dates , closest = True)
             
         alpha_model = self.loads(new_dates)
         new_alpha_model = cached_alpha_model.append(alpha_model)
-        self.set_cache(new_alpha_model , self.name , normalize = self.normalize)
+        self.set_cache(new_alpha_model , self.name , normalize = self.normalize , key = self.input)
         return new_alpha_model.subset(dates , closest = True)
 
     @classmethod
-    def get_cache(cls , name : str , normalize : bool = True) -> AlphaModel:
+    def get_cache(cls , name : str , normalize : bool = True , *, key : str | None = None) -> AlphaModel:
         if normalize:
-            alpha_model = cls._cache_normalized.get(name)
+            alpha_model = cls._cache_normalized.get(key or name)
         else:
-            alpha_model = cls._cache_unnormalized.get(name)
+            alpha_model = cls._cache_unnormalized.get(key or name)
         if alpha_model is None:
             alpha_model = AlphaModel(name = name)
         return alpha_model
 
     @classmethod
-    def set_cache(cls , alpha_model : AlphaModel , name : str , normalize : bool = True) -> None:
+    def set_cache(cls , alpha_model : AlphaModel , name : str , normalize : bool = True , *,
+                  key : str | None = None) -> None:
         if normalize:
-            cls._cache_normalized[name] = alpha_model
+            cls._cache_normalized[key or name] = alpha_model
         else:
-            cls._cache_unnormalized[name] = alpha_model
+            cls._cache_unnormalized[key or name] = alpha_model
+
+    @staticmethod
+    def _mark_missing_sellside_dates(model : AlphaModel , dates : Base.intDates) -> AlphaModel:
+        # An explicit empty day aligns to NaN and prevents closest-date lookup from filling it.
+        for date in Dates(dates):
+            if date not in model.models:
+                model.append(Amodel.empty_model(date , name = model.name))
+        return model
     
     @classmethod
     def db_loads(
@@ -427,13 +437,29 @@ class AlphaComponent:
         normalize : bool = True , closest = True , direction : int = 1
     ) -> Callable[[Base.intDates], AlphaModel]:
         from src.res.factor.util import StockFactor
+        src , key , col = alpha
+        col = col or key
+
+        def load_frame(dates : Base.intDates , use_closest : bool) -> pd.DataFrame:
+            df = DB.loads(src , key , dates , override_existing_key = True , closest = use_closest , vb_level = 'never')
+            assert df.empty or col in df.columns , f'{col} not in {df.columns} at date {dates}'
+            columns = ['secid' , 'date' , col]
+            return pd.DataFrame(columns = columns) if df.empty else df.loc[:, columns]
+
         def wrapper(dates : Base.intDates) -> AlphaModel:
-            src , key , col = alpha
-            col = col if col else key
-            df = DB.loads(src , key , dates , override_existing_key = True , closest = closest , vb_level = 'never')
-            assert df.empty or (col in df.columns.to_list()) , f'{col} not in {df.columns} at date {dates}'
-            df = pd.DataFrame(columns=['secid' , 'date' , col]) if df.empty else df.loc[:,['secid' , 'date' , col]]
-            return StockFactor(df).alpha_model(normalize , name , direction)
+            if src != 'sellside':
+                return StockFactor(load_frame(dates , closest)).alpha_model(normalize , name , direction)
+
+            from src.data.quality.valid_dates import load_asof_cross_sections
+
+            dates = Dates(dates)
+            stored = DB.dates(src , key , end = dates.max)
+            frame = load_asof_cross_sections(
+                dates.dates , [stored.dates] , lambda _, source_dates: load_frame(source_dates , False) ,
+                col , max_age_months = SELLSIDE_MAX_AGE_MONTHS,
+            )
+            model = StockFactor(frame).alpha_model(normalize , name , direction)
+            return cls._mark_missing_sellside_dates(model , dates)
         return wrapper
 
     @classmethod
@@ -441,11 +467,15 @@ class AlphaComponent:
         cls , factor_name : str , name : str = 'alpha0' , 
         normalize : bool = True , closest = True , direction : int = 1
     ) -> Callable[[Base.intDates], AlphaModel]:
-        from src.res.factor.calculator import StockFactorHierarchy
+        from src.res.factor.calculator import SellsideFactor , StockFactorHierarchy
         from src.res.factor.util import StockFactor
         def wrapper(dates : Base.intDates) -> AlphaModel:
-            df = StockFactorHierarchy.get_factor(factor_name).Loads(dates , closest = closest)
-            return StockFactor(df).alpha_model(normalize , name , direction)
+            factor = StockFactorHierarchy.get_factor(factor_name)
+            if issubclass(factor , SellsideFactor):
+                frame = factor.Loads(dates , closest = closest , max_age_months = SELLSIDE_MAX_AGE_MONTHS)
+                model = StockFactor(frame).alpha_model(normalize , name , direction)
+                return cls._mark_missing_sellside_dates(model , dates)
+            return StockFactor(factor.Loads(dates , closest = closest)).alpha_model(normalize , name , direction)
         return wrapper
 
 class AlphaCombination:
@@ -509,14 +539,18 @@ class AlphaComposite(AlphaCombination):
         assert alpha_models , f'no alpha models created, if AlphaComposite is empty, please submit a final alpha or components'
 
         models : list[Amodel] = []
+        missing : list[int] = []
         for d in dates:
             alphas = [alpha.get(d , closest=True) for alpha in alpha_models]
             if not any(not alpha.empty for alpha in alphas):
-                from src.proj.log import Logger
-                Logger.error(f'all alphas of {[alpha.name for alpha in alphas]} are empty at date {d}')
-                return AlphaModel('AllNan' , [])
-            amodel = Amodel.combine_linear(alphas , self.weights[:len(alpha_models)] , date = d)
-            models.append(amodel)
+                missing.append(d)
+                models.append(Amodel.empty_model(d , name = self.name))
+            else:
+                amodel = Amodel.combine_linear(alphas , self.weights[:len(alpha_models)] , date = d)
+                models.append(amodel.assign(date = d))
+        if missing:
+            from src.proj.log import Logger
+            Logger.warning(f'{self.name}: no usable alpha at {Dates(missing)}')
         return AlphaModel(self.name , models)
 
 class AlphaScreener(AlphaCombination):
@@ -541,8 +575,11 @@ class AlphaScreener(AlphaCombination):
 
         models : list[Amodel] = []
         for d in dates:
-            amodel = Amodel.combine_worst([alpha.get(d , closest=True) for alpha in alpha_models] , self.method , date = d)
-            models.append(amodel)
+            alphas = [alpha.get(d , closest=True) for alpha in alpha_models]
+            if any(not alpha.empty for alpha in alphas):
+                models.append(Amodel.combine_worst(alphas , self.method , date = d))
+            else:
+                models.append(Amodel.empty_model(d , name = self.name))
         return AlphaModel(self.name , models)
 
     def screened_pool(
