@@ -73,7 +73,7 @@ def gpu_memory_percent() -> float:
     return float(selected[0][2]) / float(selected[0][3]) * 100
 
 
-def idle_reason(options: dict) -> str | None:
+def idle_reason(options: dict, *, continuation: bool = False) -> str | None:
     from .maintenance_gate import configured, pending
     from .autofix_store import state_dir
     from .channels import enabled as channels_enabled
@@ -81,10 +81,12 @@ def idle_reason(options: dict) -> str | None:
         return 'autofix maintenance pending'
     from src.proj import MACHINE
     from src.proj.util.script import FitLock
-    if not MACHINE.cuda_server or sys.platform != 'linux':
+    if sys.platform != 'linux' or (not continuation and not MACHINE.cuda_server):
         return 'requires a CUDA server on Linux'
     if FitLock.is_held():
         return 'fit lock occupied'
+    if not MACHINE.cuda_server:
+        return None
     try:
         used = gpu_memory_percent()
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
@@ -174,6 +176,8 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
         try:
             with state.lock():
                 previous = state.read()
+                if previous and previous.get('status') == 'paused' and previous.get('revisions') == revisions:
+                    continue
                 already_completed = previous and previous.get('status') == 'success' and previous.get('revisions') == revisions
                 reason, _ = state.decision(previous, revisions, force=force and not already_completed, resume=resume)
         except portalocker.LockException:
@@ -206,6 +210,7 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
 
 def _dispatch(options: dict, store: RunStore) -> dict:
     from . import rl_experiment as rl
+    from . import training_maintenance as maintenance
     with queue_lock():
         _defer_retired_requests(store)
         rl_request = rl.observe(store, throttle=True)
@@ -222,7 +227,13 @@ def _dispatch(options: dict, store: RunStore) -> dict:
         if any(run['phase'] in ACTIVE for run in store.owned(OWNER)):
             rl.waiting(store, 'another idle training is queued or active')
             return {'idle_worklist': 'queued or active', **diagnostics}
-        if reason := idle_reason(options):
+        maintenance_enabled = maintenance.available()
+        if maintenance_enabled and (request := maintenance.maintenance_request('research')):
+            reason = f'waiting for {request["kind"]}'
+            rl.waiting(store, reason)
+            return {'idle_worklist': reason, **diagnostics}
+        resume = maintenance.candidate(store) if maintenance_enabled else None
+        if reason := idle_reason(options, continuation=bool(resume)):
             rl.waiting(store, reason)
             return {'idle_worklist': reason, **diagnostics}
         model_request = _candidate(store, worklist, schedules, options=options) if schedules else None
@@ -231,12 +242,18 @@ def _dispatch(options: dict, store: RunStore) -> dict:
                    else model_request)
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
+        request = resume or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
-        request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
-                       progress_timeout_seconds=options.get('progress_timeout_seconds', 43200), timeout_seconds=None)
-        store.put(request)
+        _queue(request, store, options)
         return {'queued': request['task'], 'version': request['version'], **diagnostics}
+
+
+def _queue(request, store, options):
+    request.setdefault('id', uuid.uuid4().hex)
+    request.update(owner=OWNER, phase='queued', queued_at=time.time(),
+                   progress_timeout_seconds=options.get('progress_timeout_seconds', 43200), timeout_seconds=None)
+    store.put(request)
 
 
 def _launch(request: dict, store: RunStore, code_fd: int) -> int:
@@ -287,29 +304,40 @@ def _launch(request: dict, store: RunStore, code_fd: int) -> int:
         current['returncode'] = code
         connection.execute('UPDATE runs SET data=? WHERE id=?', (json.dumps(current), request['id']))
     # Watchdog finalizes and sends durable notifications, including if we die here.
-    return code if code >= 0 else 128 - code
+    return 0 if code == DEFERRED else code if code >= 0 else 128 - code
 
 
 def worker() -> int:
     """Minutely independent trigger; a queue item is required to do any work."""
     from src.proj.util.script.script_lock import ScriptLock
     from .maintenance_gate import MaintenanceBusy, permit
+    from . import training_maintenance as maintenance
     try:
         with (version_patch.business_lease(runtime_dir()) as code_fd,
               ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases):
             store = RunStore()
             with queue_lock():
                 _defer_retired_requests(store)
+                options = settings()
+                if maintenance.available() and maintenance.maintenance_request('research'):
+                    return 0
                 queued = [run for run in store.owned(OWNER) if run['phase'] == 'queued']
+                if (maintenance.available() and not any(run.get('task_kind') == maintenance.TASK for run in queued)
+                        and (resume := maintenance.candidate(store))):
+                    for ordinary in queued:
+                        store.put(dict(ordinary, phase='deferred', blocked_by='maintenance continuation has priority'))
+                    _queue(resume, store, options)
+                    queued = [resume]
                 if not queued:
                     return 0
                 request = queued[0]
-                options = settings()
                 others = [run for run in store.owned(OWNER) if run['phase'] in ACTIVE and run['id'] != request['id']]
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                if request.get('task_kind') == 'factor_sequence':
+                if request.get('task_kind') == maintenance.TASK:
+                    next_candidate = maintenance.candidate(store)
+                elif request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
@@ -317,7 +345,9 @@ def worker() -> int:
                     next_candidate = observe(store)
                 else:
                     next_candidate = candidate(store, options=options) if options.get('enabled') else None
-                if (others or idle_reason(options) or not next_candidate or next_candidate['task'] != request['task'] or next_candidate['version'] != request['version']
+                if (others or idle_reason(options, continuation=request.get('task_kind') == maintenance.TASK)
+                        or not next_candidate or next_candidate['task'] != request['task'] or next_candidate['version'] != request['version']
+                        or (request.get('task_kind') == maintenance.TASK and next_candidate['id'] != request['id'])
                         or next_candidate.get('parent_run_id') != request.get('parent_run_id')
                         or next_candidate.get('retry_index') != request.get('retry_index')):
                     return 0
@@ -348,6 +378,25 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
+    from . import training_maintenance as maintenance
+    from .recovery import record
+
+    if request.get('task_kind') == maintenance.TASK:
+        from src.res.model.workflow.worklist_state import AutomaticDeferred
+        try:
+            paused = maintenance.execute(request)
+        except AutomaticDeferred as exc:
+            record(store, run_id, script_outcome='superseded', reason=str(exc))
+            return DEFERRED
+        except BaseException as exc:
+            record(store, run_id, script_outcome='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'error',
+                   error=f'{type(exc).__name__}: {exc}')
+            raise
+        if isinstance(paused, maintenance.TrainingPaused):
+            maintenance.record_pause(store, run_id)
+            return DEFERRED
+        record(store, run_id, script_outcome='success')
+        return 0
     if request.get('task_kind') in ('model_lifecycle', 'nn_metrics_ab'):
         return DEFERRED
     if request.get('task_kind') == 'factor_sequence':
@@ -368,17 +417,19 @@ def child(run_id: str) -> int:
             raise
     from src.res.model.workflow.execution import ScheduleWorklist
     from src.res.model.workflow.worklist_state import AutomaticDeferred
-    from .recovery import record
     sys.argv = [str(ScheduleWorklist.SCHEDULE_SCRIPT)]
     try:
-        ScheduleWorklist(only_schedule=request['task'], automatic=True,
-                                 expected_version=request['version'],
-                                 recovery_run_id=run_id if request.get('parent_run_id') else None).run()
+        paused = ScheduleWorklist(only_schedule=request['task'], automatic=True,
+                                  expected_version=request['version'],
+                                  recovery_run_id=run_id if request.get('parent_run_id') else None).run()
     except AutomaticDeferred:
         return DEFERRED
     except BaseException as exc:
         record(store, run_id, script_outcome='interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'error')
         raise
+    if isinstance(paused, maintenance.TrainingPaused):
+        maintenance.record_pause(store, run_id)
+        return DEFERRED
     record(store, run_id, script_outcome='success')
     return 0
 
@@ -425,7 +476,8 @@ def reset(schedule: str, store: RunStore | None = None) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=['worker', '_child', 'status', 'worklist-status', 'rl-status', 'reset', 'reset-worklist'])
+    parser.add_argument('command', choices=['worker', '_child', 'status', 'worklist-status', 'rl-status', 'reset',
+                                           'reset-worklist', 'cancel-resume'])
     parser.add_argument('schedule_or_run', nargs='?')
     args = parser.parse_args()
     if args.command == 'worklist-status':
@@ -442,7 +494,8 @@ def main() -> int:
                     from src.proj.env.schedules import schedule_stem
                     revisions = WorklistState.revisions(schedule_stem(name), worklist=worklist)
                     reason, _ = WorklistState.decision(saved, revisions, force=False, resume=False)
-                    states[name] = {'status': 'completed' if reason == 'completed' else 'pending',
+                    paused = saved and saved.get('status') == 'paused' and saved.get('revisions') == revisions
+                    states[name] = {'status': 'paused' if paused else 'completed' if reason == 'completed' else 'pending',
                                     'reason': reason, 'record': saved}
                 except (ValueError, FileNotFoundError) as exc:
                     states[name] = {'status': 'blocked', 'reason': str(exc), 'record': saved}
@@ -472,6 +525,10 @@ def main() -> int:
         parser.error('schedule/run ID required')
     if args.command == 'reset':
         reset(args.schedule_or_run)
+        return 0
+    if args.command == 'cancel-resume':
+        from .training_maintenance import cancel
+        cancel(RunStore(), args.schedule_or_run)
         return 0
     return child(args.schedule_or_run)
 

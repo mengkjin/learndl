@@ -47,7 +47,9 @@
 from pathlib import Path
 
 from src.proj.util.script import ScriptTool
+from src.automation.scheduling.training_maintenance import checkpointed_script
 
+@checkpointed_script('schedule')
 @ScriptTool('train_schedule_model' , '@schedule_name' , lock_num = 2 , markdown_catcher = True)
 def main(schedule_name : str | None = None , short_test : bool | None = None , 
          resume : bool | None = None , start : int | None = None , end : int | None = None ,

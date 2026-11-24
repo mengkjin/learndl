@@ -168,8 +168,13 @@ class BackendTaskRecorder:
         if not self._task_id or self.task_db is None:
             return
         self.update_msg['end_time'] = datetime.now().timestamp()
+        from src.automation.scheduling.training_maintenance import TrainingPaused
+
         if exc_type is None:
             self.update_msg['status'] = 'error' if self.exit_msg.code else 'complete'
+        elif isinstance(exc_value, TrainingPaused):
+            self.update_msg['status'] = 'paused'
+            self.update_msg['exit_message'] = str(exc_value)
         else:
             self.update_msg['status'] = 'error'
             self.update_msg['exit_code'] = 1

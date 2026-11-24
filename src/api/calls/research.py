@@ -72,4 +72,6 @@ class ScheduleModel(DirectCall):
                 Logger.note(f'Training schedule [{schedule_name}] with {kwargs}')
                 if main is None:
                     main = CarryOutScheduleWorkList._load_schedule_main()
-                CarryOutScheduleWorkList._train_one_schedule(main , **kwargs)
+                from src.automation.scheduling.training_maintenance import TrainingPaused
+                if isinstance(CarryOutScheduleWorkList._train_one_schedule(main, **kwargs), TrainingPaused):
+                    return

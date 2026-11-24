@@ -74,20 +74,27 @@ class ModelTrainer(BaseTrainer):
         return trainer
 
     @classmethod
-    def update_models(cls , force_update : bool = False):
+    def update_models(cls , force_update : bool = False, *, daily_priority: bool = False):
         if not MACHINE.cuda_server:
             cls.logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             from src.res.model.util.lifecycle import ModelLifecycle
+            from src.proj.util.script.fit_lock import FitLock
+            requests = ModelLifecycle.inspect_registered(force_check=force_update)
+            if not requests:
+                return
+            if daily_priority:
+                cls.logger.note(f'Daily update requesting fit priority for {len(requests)} production model(s)')
             failures = []
-            for request in ModelLifecycle.inspect_registered(force_check=force_update):
-                try:
-                    ModelLifecycle(Path(request['base'])).repair(request, cls.GO)
-                except Exception as exc:
-                    exc.add_note(f"Production model {request['name']}")
-                    cls.logger.error(f"Update failed for {request['name']}: {exc}")
-                    failures.append(exc)
+            with FitLock.production_guard() if daily_priority else nullcontext():
+                for request in requests:
+                    try:
+                        ModelLifecycle(Path(request['base'])).repair(request, cls.GO)
+                    except Exception as exc:
+                        exc.add_note(f"Production model {request['name']}")
+                        cls.logger.error(f"Update failed for {request['name']}: {exc}")
+                        failures.append(exc)
             if failures:
                 raise ExceptionGroup('Production model updates failed', failures)
 

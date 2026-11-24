@@ -70,7 +70,11 @@ def version_key(version: str) -> tuple[int, ...]:
 
 
 def code_version(root: Path) -> str:
-    body = ast.parse((root / VERSION_FILE).read_bytes()).body
+    return parse_code_version((root / VERSION_FILE).read_bytes())
+
+
+def parse_code_version(source: str | bytes) -> str:
+    body = ast.parse(source).body
     if (len(body) != 1 or not isinstance(body[0], ast.Assign) or len(body[0].targets) != 1
             or not isinstance(body[0].targets[0], ast.Name)
             or body[0].targets[0].id != '__version__' or not isinstance(body[0].value, ast.Constant)):

@@ -503,11 +503,26 @@ def _automatic_patch_retry(root, runtime, deadline, head=None):
     return None
 
 
+def _upgrades_version(root, before, target, deadline):
+    from src.automation.version_patch import VERSION_FILE, MigrationError, parse_code_version, version_key
+
+    if not _git(root, ['diff', '--name-only', before, target, '--', VERSION_FILE], deadline):
+        return False
+    try:
+        old, new = (parse_code_version(_git(root, ['show', f'{ref}:{VERSION_FILE}'], deadline))
+                    for ref in (before, target))
+    except (GitUpdateError, MigrationError, SyntaxError) as exc:
+        logger.warning('Cannot classify Git update as a version upgrade: %s', exc)
+        return False
+    return version_key(new) > version_key(old)
+
+
 def _channel_update(root, options):
     """Reconcile data, then fetch only when a fast-forward can be admitted."""
     from . import channels, priority
     from .autofix_store import Store, state_dir
     from .maintenance_gate import permit, MaintenanceBusy, pass_fds
+    from .training_maintenance import publish_request
     from .config import installed_config
     from src.automation import version_patch as version
     from src.automation.patch_services import PatchServices
@@ -516,8 +531,11 @@ def _channel_update(root, options):
     store = Store(state_dir())
     directory = runtime_dir()
     runtime = directory.parent
+    interval = options.get('interval_seconds', 60)
     result = {}
     keep_reservation = False
+    confirmed_patch = False
+    confirmed_git = False
     with portalocker.Lock(str(directory / 'git-worker.lock'), timeout=0):
         try:
             state = priority.read(store)
@@ -543,6 +561,16 @@ def _channel_update(root, options):
                     return {'status': 'blocked', 'reason': f'{type(exc).__name__}: {exc}'}
 
             if needs_reconciliation:
+                if activated and not checkout_pending:
+                    try:
+                        migration = version.status(root, runtime)
+                        if migration['baseline'] and migration['pending'] and not migration['failed']:
+                            version.committed_catalog(root, 'HEAD', migration['target'])
+                            publish_request('patch', migration['target'], directory=directory, interval=interval)
+                            confirmed_patch = True
+                    except (version.MigrationError, OSError, sqlite3.Error, SyntaxError, ValueError, subprocess.SubprocessError):
+                        # The regular migration path reports invalid or unreadable state.
+                        pass
                 with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory) as fd:
                     if checkout_pending:
                         if retry_enabled and state.get('version_verified_head') == state.get('target'):
@@ -577,6 +605,11 @@ def _channel_update(root, options):
             if _git(root, ['merge-base', before, target], deadline, allow_failure=True) != before:
                 result = {'status': 'deferred', 'reason': 'local commits or divergent master'}
                 return result
+            confirmed_git = _upgrades_version(root, before, target, deadline)
+            if confirmed_git:
+                publish_request('git', target, directory=directory, interval=interval)
+            else:
+                publish_request('git', directory=directory)
             keep_reservation = True
             if not channels.reserve(store, 'git', channels.GROUPS):
                 result = {'status': 'deferred', 'reason': 'maintenance occupied or cooling down'}
@@ -598,6 +631,11 @@ def _channel_update(root, options):
             result = dict(result, status='error', reason=str(exc))
             return result
         finally:
+            if not (confirmed_patch and result.get('status') == 'deferred'):
+                publish_request('patch', directory=directory)
+            if not (result.get('checkout_attempted') or
+                    (confirmed_git and result.get('status') == 'deferred')):
+                publish_request('git', directory=directory)
             if (not keep_reservation and not result.get('checkout_attempted')
                     and priority.read(store)['phase'] not in {'checkout', 'blocked'}):
                 channels.release(store, 'git')

@@ -701,6 +701,40 @@ Only `configs/schedule/worklists/*.yaml` is loaded (no legacy file fallback). Fi
 
 Use `python -m src.automation.scheduling.idle_worklist worklist-status` to inspect loaded files, Git times, records and validation errors. `reset-worklist` resets all lists. Keep the existing safe Git update boundary: finish running training before pulling this source/configuration change. No training-history migration or reset is necessary.
 
+## Training during maintenance
+
+On installed scheduler v3 Linux hosts, Train Model, Train Schedule Model and
+manual or automatic worklists can pause after a complete fit node. The trainer
+finishes saving the node's weights and records before releasing its locks.
+The pause is recorded in training history and worklist status. Result email
+is sent when the script eventually finishes or reports an error.
+
+A confirmed Git fast-forward that raises the project version, an applicable
+version patch or an authorized background installation can request the pause.
+Ordinary Git changes wait for the existing code locks to become free.
+
+`daily_update` owns production model training. It requests priority only after
+its data preparation succeeds and it finds due production models. The daily
+process takes the fit lock for that production batch. Worklist and CLI fits
+already running yield at their next saved node, and queued research waits until
+the production batch exits. The lock is released when the daily process exits.
+
+The independent training worker continues paused research from the same model
+directory after the production batch or maintenance releases admission.
+It verifies the saved checkpoint before fitting any more nodes. Removed worklist
+entries are skipped, and changed versions are evaluated by the normal worklist
+rules. A paused manual batch retains the items it still needs to visit.
+
+The pause log includes a resume ID. Cancel a continuation that is still waiting
+with `python -m src.automation.scheduling.idle_worklist cancel-resume RESUME_ID`.
+Use the regular task stop once a continuation has started. A cancelled
+worklist version can be made eligible again with a worklist change or
+`reset-worklist`.
+
+Training processes that loaded earlier code release their locks at natural exit.
+Use the scheduling install preview after pulling the release to see whether the
+installed worker and timer need to be updated.
+
 Schedule YAML under `configs/schedule/current/` and `configs/schedule/linear/` can
 live at the root or in nested folders. Use a reference such as
 `factorseq/factorseq_v3_temporal` in a worklist or CLI. A bare filename stem still

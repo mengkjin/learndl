@@ -205,6 +205,15 @@ class AutoRunTask(BoundLogger):
             CURRENT_TASK.reset(self._artifact_token)
 
     def _finish_task(self, exc_type, exc_value, exc_traceback):
+        from src.automation.scheduling.training_maintenance import TrainingPaused
+
+        if isinstance(exc_value, TrainingPaused):
+            self.status = 'Paused'
+            self.end_time = datetime.now()
+            self.catchers.exit(None, None, None)
+            Proj.exit_files.pop_all()
+            Proj.email_attachments.pop_all()
+            return
         artifact_saves_complete = True
         try:
             Save.async_wait_all(caller_name = self.__class__.__name__)

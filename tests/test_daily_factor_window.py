@@ -30,29 +30,34 @@ class DailyFactorWindowTest(unittest.TestCase):
         import src.api.pkgs.model as api
         from src.res.model.model_module.application import trainer
         from src.res.model.util.lifecycle import ModelLifecycle
+        from src.proj.util.script.fit_lock import FitLock
+        from contextlib import nullcontext
 
         events = []
         with (
             patch.object(api, 'MACHINE', SimpleNamespace(cuda_server=True)),
             patch.object(trainer, 'MACHINE', SimpleNamespace(cuda_server=True)),
             patch.object(trainer, 'Proj'),
-            patch.object(api, 'wrap_update', side_effect=lambda fn, title: fn()),
+            patch.object(api, 'wrap_update', side_effect=lambda fn, title, **kwargs: fn(**kwargs)),
             patch.object(api.ModelAPI, 'prepare_predict_data', side_effect=lambda: events.append('data')),
             patch.object(api.ArchivedPredictorModel, 'update', side_effect=lambda: events.append('predict')),
             patch.object(api.ModelPortfolioBuilder, 'update', side_effect=lambda: events.append('portfolio')),
             patch.object(ModelLifecycle, 'inspect_registered',
                          side_effect=lambda **kwargs: events.append('check') or [{'base': '/tmp/day'}]) as inspect,
             patch.object(ModelLifecycle, 'repair', autospec=True, side_effect=lambda *args: events.append('fit')) as resume,
+            patch.object(FitLock, 'production_guard', return_value=nullcontext()) as priority_fit,
         ):
             api.ModelAPI.update(update_due_models=True)
             self.assertEqual(events, ['data', 'check', 'fit', 'predict', 'portfolio'])
             manager, request, run = resume.call_args.args
             self.assertEqual(str(manager.base), request['base'])
             self.assertEqual(run, trainer.ModelTrainer.GO)
+            priority_fit.assert_called_once()
             events.clear()
             inspect.side_effect = lambda **kwargs: events.append('check') or []
             api.ModelAPI.update(update_due_models=True)
             self.assertEqual(events, ['data', 'check', 'predict', 'portfolio'])
+            priority_fit.assert_called_once()
 
     def test_factor_apis_forward_window(self):
         with patch.object(factor, 'wrap_update') as wrap:

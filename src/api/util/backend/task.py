@@ -41,7 +41,7 @@ __all__ = [
     'TaskDatabase' , 'TaskQueue' , 'TaskItem' , 'runs_page_url'
 ]
 
-RunStatus : TypeAlias = Literal['starting', 'running', 'complete', 'error' , 'killed']
+RunStatus : TypeAlias = Literal['starting', 'running', 'complete', 'error', 'killed', 'paused']
 RunSource : TypeAlias = Literal['script' , 'shell' , 'os'] | str
 TimeType : TypeAlias = Literal['create', 'start', 'end']
 InfoType : TypeAlias = Literal['all' , 'enter' , 'exit']
@@ -1292,6 +1292,8 @@ class TaskItem:
             icon , color = ':material/close:' , 'red'
         elif status == 'killed':
             icon , color = ':material/cancel:' , 'violet'
+        elif status == 'paused':
+            icon , color = ':material/pause:' , 'orange'
         else: 
             raise ValueError(f"Invalid status: {status}")
         return f":{color}-badge[{icon}]" if tag else icon
@@ -1300,7 +1302,7 @@ class TaskItem:
     def status_state(self):
         if self.is_running: 
             return 'running'
-        elif self.is_complete:  
+        elif self.is_complete or self.status == 'paused':
             return 'complete'
         elif self.is_error or self.is_killed: 
             return 'error'
@@ -1318,6 +1320,8 @@ class TaskItem:
             return 'Error'
         elif self.is_killed:
             return 'Killed'
+        elif self.status == 'paused':
+            return 'Paused'
         else:
             raise ValueError(f"Invalid status: {self.status}")
 
@@ -1332,6 +1336,8 @@ class TaskItem:
             return 'red'
         elif self.is_killed:
             return 'violet'
+        elif self.status == 'paused':
+            return 'orange'
         else:
             raise ValueError(f"Invalid status: {self.status}")
 

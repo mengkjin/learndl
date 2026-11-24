@@ -122,3 +122,35 @@ class WorklistExecutionTest(TestCase):
     def test_dictionary_membership_allows_explicit_request(self):
         WorklistState('two').request_training('request-1')
         self.assertTrue(WorklistState('two').request_path.is_file())
+
+    def test_manual_batch_continues_active_item_then_remaining_items(self):
+        from src.automation.scheduling import training_maintenance as maintenance
+
+        def pause_first(**kwargs):
+            paused = maintenance._worklist.get()
+            raise maintenance.TrainingPaused({
+                'id': 'test-run', 'maintenance': {'kind': 'git'}, 'worklist': paused,
+            })
+
+        self.main.side_effect = pause_first
+        with patch.object(maintenance, 'enqueue') as enqueue:
+            paused = CarryOutScheduleWorkList().run()
+        enqueue.assert_called_once_with(paused)
+        self.assertEqual(self.main.call_count, 1)
+        self.assertEqual(WorklistState('one').read()['status'], 'paused')
+        self.assertEqual(paused.ticket['worklist']['remaining'], ['two'])
+
+        self.main.side_effect = self.train
+        CarryOutScheduleWorkList(automatic=True, maintenance_ticket=paused.ticket).run()
+        self.assertEqual([call.kwargs['schedule_name'] for call in self.main.call_args_list], ['one', 'one', 'two'])
+        self.assertTrue(self.main.call_args_list[1].kwargs['resume'])
+        self.assertEqual(WorklistState('one').read()['status'], 'success')
+        self.assertEqual(WorklistState('two').read()['status'], 'success')
+
+    def test_superseded_paused_request_does_not_open_old_model(self):
+        ticket = {'id': 'test-run', 'worklist': {'name': 'one', 'remaining': [], 'revisions': WorklistState.revisions('one')}}
+        self.config['fit'] = [{'name': 'one', 'resume': False}]
+        self.write()
+        with self.assertRaisesRegex(AutomaticDeferred, 'superseded'):
+            CarryOutScheduleWorkList(automatic=True, maintenance_ticket=ticket).run()
+        self.main.assert_not_called()

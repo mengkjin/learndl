@@ -33,7 +33,7 @@ class ModelAPI:
         """
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
         if update_due_models and MACHINE.cuda_server:
-            wrap_update(cls.update_models, 'continue due production models')
+            wrap_update(ModelTrainer.update_models, 'continue due production models', daily_priority=True)
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     

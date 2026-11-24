@@ -95,6 +95,8 @@ def exit_reason(store: RunStore, run: dict) -> str:
             data.get('service_exit_status') in ('TERM', 'INT', 'SIGTERM', 'SIGINT', '15', '2')) or (
             data.get('service_exit_code') == 'exited' and data.get('service_exit_status') in ('130', '143')):
         return 'interrupted'
+    if code in (None, 75) and data.get('script_outcome') == 'maintenance_paused':
+        return 'maintenance_pause'
     if code is not None and code > 0:
         return 'script_error'
     if run.get('boot_id') and run['boot_id'] != boot_id():
@@ -111,6 +113,8 @@ def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | Non
         return dict(retry=False, recovery_status='Stopped for installation; manual recovery required')
     if run.get('task_kind') == 'rl_experiment':
         return dict(retry=False, recovery_status='RL attempts require a committed configuration/rerun_mark change or a new explicit resume request')
+    if run.get('task_kind') == 'maintenance_resume' and not run.get('revisions'):
+        return dict(retry=False, recovery_status='Standalone training requires manual recovery after an abnormal exit')
     now = time.time() if now is None else now
     reason = exit_reason(store, run)
     count = int(run.get('retry_index', 0))

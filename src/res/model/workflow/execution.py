@@ -90,11 +90,21 @@ class ScheduleWorklist:
             cls._release_gpu_memory(task)
             Logger.note(f'Schedule [{schedule_name}] finished; GPU memory released')
 
-    def run(self) -> None:
+    def run(self) -> Any:
+        from src.automation.scheduling.training_maintenance import TrainingPaused, enqueue
+
+        try:
+            return self._run()
+        except TrainingPaused as pause:
+            enqueue(pause)
+            return pause
+
+    def _run(self) -> None:
         import portalocker
 
         from src.res.model.workflow.worklist_state import AutomaticDeferred, WorklistState
         from src.res.model.util.training_history import collect_training_runs
+        from src.automation.scheduling.training_maintenance import TrainingPaused, continuation, worklist_entry
 
         worklist, _, errors = load_worklists(automatic=bool(self.kwargs.get('automatic')))
         for error in errors:
@@ -116,11 +126,18 @@ class ScheduleWorklist:
             schedules = [only_schedule]
         if not MACHINE.platform_server:
             schedules = schedules[:self.max_test_schedules]
+        ticket = self.kwargs.get('maintenance_ticket')
+        if ticket:
+            paused = ticket['worklist']
+            eligible = [name for name in schedules if name in paused['remaining']]
+            schedules = ([paused['name']] if paused['name'] in schedules else []) + eligible
+            if not schedules:
+                raise AutomaticDeferred('Paused worklist entries were removed')
         Logger.critical(f'Training schedule model list {", ".join(schedules)} started')
         failed = []
         with as_script_main(self.SCHEDULE_SCRIPT):
             main = self._load_schedule_main()
-            for schedule_name in schedules:
+            for index, schedule_name in enumerate(schedules):
                 entry = WorklistState.options(worklist, schedule_name)
                 resume, force = entry['resume'], entry['force']
                 state = WorklistState(schedule_name)
@@ -136,6 +153,18 @@ class ScheduleWorklist:
                     previous = state.read()
                     revisions = state.revisions(schedule_name, worklist=worklist)
                     automatic = bool(self.kwargs.get('automatic', False))
+                    resume_ticket = ticket if ticket and ticket['worklist']['name'] == schedule_name else None
+                    if resume_ticket and (resume_ticket['worklist']['revisions'] != revisions or
+                                          (previous or {}).get('maintenance_resume_id') != resume_ticket['id']):
+                        # The ordinary scheduler handles the new version.
+                        if len(schedules) == 1:
+                            raise AutomaticDeferred('Paused worklist version was superseded')
+                        continue
+                    if (not resume_ticket and previous and previous.get('status') == 'paused'
+                            and previous.get('revisions') == revisions):
+                        if self.kwargs.get('only_schedule'):
+                            raise AutomaticDeferred('Waiting for maintenance continuation')
+                        continue
                     if automatic and self.kwargs.get('expected_version'):
                         from src.automation.scheduling.idle_worklist import version
                         if version(revisions) != self.kwargs['expected_version']:
@@ -148,6 +177,8 @@ class ScheduleWorklist:
                         Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
                         continue
                     model_path = None  # Audit output only; the trainer selects its directory.
+                    if resume_ticket:
+                        effective_resume, reason = True, 'maintenance continuation'
                     if automatic and (recovery_run_id := self.kwargs.get('recovery_run_id')):
                         from src.automation.scheduling.recovery import validate_recovery_request
                         from src.automation.scheduling.runtime import RunStore
@@ -174,18 +205,24 @@ class ScheduleWorklist:
 
                     with collect_training_runs(on_update=record_progress) as runs:
                         try:
-                            task = self._train_one_schedule(
-                                main, schedule_name=reference_for(worklist, schedule_name), short_test=entry.get('short_test'),
-                                resume=effective_resume, start=entry.get('start'), end=entry.get('end'), email=True,
-                                **({'lifecycle_options': entry['lifecycle']} if entry.get('lifecycle') else {}),
-                                resume_selection='latest' if automatic else 'interactive',
-                            )
+                            metadata = {'name': schedule_name, 'revisions': revisions, 'remaining': schedules[index + 1:],
+                                        'reference': reference_for(worklist, schedule_name)}
+                            with worklist_entry(metadata), continuation(resume_ticket):
+                                task = self._train_one_schedule(
+                                    main, schedule_name=reference_for(worklist, schedule_name), short_test=entry.get('short_test'),
+                                    resume=effective_resume, start=entry.get('start'), end=entry.get('end'), email=True,
+                                    **({'lifecycle_options': entry['lifecycle']} if entry.get('lifecycle') else {}),
+                                    resume_selection='latest' if automatic else 'interactive',
+                                )
                             if not (task.success and task.execution_success and runs
                                     and all(run['status'] == 'success' for run in runs)):
                                 raise RuntimeError(f'Schedule [{schedule_name}] did not complete successfully')
                             # A pull/edit during training must not certify the new configuration.
                             if state.revisions(schedule_name) != revisions:
                                 raise RuntimeError('Worklist or schedule changed during training; completion not cached')
+                        except TrainingPaused as pause:
+                            state.save(status='paused', maintenance_resume_id=pause.ticket['id'], **details)
+                            raise
                         except BaseException as exc:
                             details['training_run_ids'] = [run['run_id'] for run in runs]
                             if runs and runs[-1].get('model_path'):

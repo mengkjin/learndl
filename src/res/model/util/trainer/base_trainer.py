@@ -12,7 +12,7 @@ from functools import wraps
 from typing import Any , Literal , TypeAlias , cast , Sized , Callable, TYPE_CHECKING
 
 from src.proj import Const , Base
-from src.proj.util.script.fit_lock import FitLock, FitLockNN
+from src.proj.util.script.fit_lock import FitLock
 
 from src.proj.bases import FittingEventType
 from src.res.model.util.core import BatchOutput , BatchData , epoch_key
@@ -106,9 +106,12 @@ class BaseTrainer(BasePipeline):
         return f'{self.__class__.__name__}(path={self.base_path})'
 
     def init_config(self) -> None:
+        from src.automation.scheduling.training_maintenance import configure_resume
+
         config_kwargs = dict(self._config_kwargs)
         model_kwargs = dict(self._kwargs)
-        schedule_resume = config_kwargs.get('schedule_name') and self._kwargs.get('resume') == 1
+        configure_resume(config_kwargs, model_kwargs)
+        schedule_resume = config_kwargs.get('schedule_name') and model_kwargs.get('resume') == 1
         from src.proj.env.schedules import is_linear_schedule
         linear_schedule = is_linear_schedule(config_kwargs.get('schedule_name'))
         automatic_resume = (schedule_resume and not linear_schedule
@@ -308,7 +311,9 @@ class BaseTrainer(BasePipeline):
         from src.automation.artifact_exchange.research import model_run
         tracker_label = self.config.model_name or self.config.full_module_name
         from src.res.model.util.lifecycle import ModelLifecycle
+        from src.automation.scheduling.training_maintenance import validate_active_checkpoint
         with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
+            validate_active_checkpoint()
             self.data.memory_tracker = self.memory_tracker
             self.memory_tracker.mark('trainer_setup_complete')
 
@@ -393,8 +398,10 @@ class BaseTrainer(BasePipeline):
         """stage of fitting"""
         self.memory_tracker.mark('stage_fit_start')
         from src.res.model.util.model_properties import track_phase
+        from src.automation.scheduling.training_maintenance import checkpoint, checkpoint_group
 
-        with FitLock.guard(), FitLockNN.guard(try_cuda=self.config.try_cuda), track_phase(self, 'initial_training'):
+        with (FitLock.trainer_guard(try_cuda=self.config.try_cuda, respect_production=checkpoint_group() is not None),
+              track_phase(self, 'initial_training')):
             with self.logger.paragraph('Stage [Fit]' , 2):
                 self.config.log_operation('fit' , 'start')
                 self.on_fit_start_before()
@@ -409,8 +416,9 @@ class BaseTrainer(BasePipeline):
                     ModelLifecycle.record_node(self)
                     self.record_model_work(self.data.datas.date[self.data.d0],
                                            self.data.datas.date[self.data.d1 - 1])
-                    if self.status.model_num == self.config.model_num:
+                    if self.status.model_num == self.config.model_num_list[-1]:
                         self.on_fit_model_date_end()
+                    checkpoint(self)
                 self.on_fit_end()
                 self.on_fit_end_after()
                 self.config.log_operation('fit' , 'end')
@@ -509,7 +517,9 @@ class BaseTrainer(BasePipeline):
             match self.status.stage:
                 case 'fit':
                     from src.res.model.util.lifecycle import ModelLifecycle
+                    from src.automation.scheduling.training_maintenance import validate_remaining_nodes
                     pending = set(ModelLifecycle.pending_nodes(self, model_iter))
+                    validate_remaining_nodes(model_iter, pending)
                     if self.config.lifecycle_repair and pending:
                         self.record.purge_retrained_model_preds(pending)
                     condition = np.array([node in pending for node in model_iter], dtype=bool)

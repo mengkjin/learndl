@@ -632,7 +632,9 @@ sys.stdin.buffer.read()
         self.assertTrue(version.needs_migration(self.root, self.runtime))
         with version.business_lease(self.scheduling, root=self.root):
             self.assertEqual(git_update._channel_update(self.root, {})['status'], 'deferred')
+            self.assertIn('"id": "0.7.2"', (self.scheduling / 'training-patch-request.json').read_text())
         self.assertEqual(git_update._channel_update(self.root, {})['patches'], ['0.7.2/001'])
+        self.assertFalse((self.scheduling / 'training-patch-request.json').exists())
 
     def test_blocked_worker_fetches_and_retries_once_per_new_commit(self):
         store = self.control()

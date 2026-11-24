@@ -215,7 +215,7 @@ def register(approval: dict) -> str:
     bundle = Path('/run/learndl-install') / identifier
     row = {key: approval[key] for key in ('id', 'unit', 'boot_id', 'created_at', 'expires_at')}
     row.update(phase='registering', bundle=str(bundle), groups=approval.get('plan', {}).get('impact', {}).get('groups'),
-               admission_plan=approval.get('plan', {}))
+               admission_plan=approval.get('plan', {}), force=bool(approval.get('force')))
     with requests.lock():
         if requests.current().get('phase') in requests.ACTIVE:
             raise RuntimeError('Another installation request is already pending')
@@ -289,7 +289,8 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
         raise ValueError('Resolve preview conflicts before installation')
     for name, content in plan['units'].items():
         install.validate_unit(name, content)
-    notice = ('If busy, authorize background installation without pausing managed tasks; wait up to 24 hours. '
+    notice = ('If busy, authorize background installation for up to 24 hours. '
+              'Supported training can yield after saving its current model. '
               'SSH disconnect is safe; reboot cancels waiting. ' if deferred else 'If busy, exit without installing. ')
     if force:
         notice = 'Authorize stopping the listed managed scopes (TERM then KILL), without automatic retry. '

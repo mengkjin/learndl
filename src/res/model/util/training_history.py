@@ -182,14 +182,23 @@ def record_training(func):
     def wrapped(self, *args, **kwargs):
         from src.proj.util.script.code_update_lock import training_code_guard
         from src.automation.scheduling.maintenance_gate import permit
+        from src.automation.scheduling.training_maintenance import TrainingPaused, previous_training_run
         with permit(), training_code_guard():
             run = TrainingRun(self)
+            if previous := previous_training_run():
+                run.data['resumed_from_training_run'] = previous
+                run.save()
             self.training_run = run
             try:
                 try:
                     result = func(self, *args, **kwargs)
                 finally:
                     Save.async_wait_all(caller_name='training_history')
+            except TrainingPaused as pause:
+                run.data['maintenance'] = pause.ticket['maintenance']
+                run.data['checkpoint_node'] = pause.ticket['node']
+                run.finish('paused')
+                raise
             except BaseException as exc:
                 run.finish('interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'failed', exc)
                 raise

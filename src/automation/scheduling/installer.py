@@ -242,7 +242,7 @@ def next_times(slots: set, timezone: str) -> list[str]:
 
 
 def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone: str) -> dict:
-    config = dict(config, scheduler_version=3, version_patch=True)
+    config = dict(config, scheduler_version=3, version_patch=True, training_maintenance=True)
     coverage, conflicts, global_conflicts = cron_coverage(cron, config, root, local_timezone)
     desired: dict[str, set] = {key: set() for key in config['tasks']}
     for schedule in config['schedules'].values():
@@ -313,7 +313,7 @@ def build_plan(config: dict, cron: str, root: Path, python: Path, local_timezone
         from .autofix_store import state_dir
         invocation = shlex.join([str(python), str(state_dir() / 'worker_bootstrap.py'), 'watchdog'])
         cron_lines.append(f'*/{tick // 60} * * * * cd {shlex.quote(str(root))} && {invocation} >> {shlex.quote(str(runtime_dir() / "cron.log"))} 2>&1')
-    if any(config['watchdog']['jobs'].get(job, {}).get('enabled') for job in ('idle_worklist', 'rl_experiment')):
+    if config['training_maintenance']:
         if config['default_backend'] == 'systemd':
             units['learndl-idle-worklist.service'] = protected_service(root, python, 'training')
             units['learndl-idle-worklist.service'] += (

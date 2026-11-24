@@ -388,8 +388,13 @@ def model_run(trainer):
                 from src.proj import Save
 
                 Save.async_wait_all(caller_name='model_run_log')
-    except BaseException:
-        status = 'failed'
+    except BaseException as exc:
+        from src.automation.scheduling.training_maintenance import TrainingPaused
+
+        if isinstance(exc, TrainingPaused):
+            status = 'paused'
+        else:
+            status = 'failed'
         raise
     finally:
         MODEL_ARTIFACTS.reset(token)
@@ -398,7 +403,7 @@ def model_run(trainer):
 
             Proj.exit_files.append(html)
         try:
-            config = None if sandboxed() else Config.load()
+            config = None if status == 'paused' or sandboxed() else Config.load()
             if config is not None and config.enabled and config.role == 'publisher':
                 for callback in trainer.callback.callbacks:
                     close = getattr(callback, 'reset_writer', None)

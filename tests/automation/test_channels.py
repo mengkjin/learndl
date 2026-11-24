@@ -217,12 +217,20 @@ class ChannelsTest(unittest.TestCase):
             result = git_update._channel_update(self.root, {'enabled': True})
         self.assertEqual(result['status'], 'up_to_date')
         self.assertEqual(channels.read(self.store)['phase'], 'idle')
+        self.assertFalse((self.base / 'training-git-request.json').exists())
 
     def test_available_git_target_waits_for_real_code_reader(self):
         from src.automation.scheduling import git_update
+        from src.automation.version_patch import VERSION_FILE
+        versions = {'old': '0.7.2', 'new': '0.7.3'}
+
         def git(root, args, deadline, **kwargs):
             if args[:2] == ['rev-parse', 'HEAD'] or args[0] == 'merge-base':
                 return 'old'
+            if args[0] == 'diff':
+                return VERSION_FILE if versions else ''
+            if args[0] == 'show':
+                return f"__version__ = '{versions[args[1].split(':')[0]]}'"
             return 'new'
         with patch.object(git_update, 'runtime_dir', return_value=self.base), \
              patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.control), \
@@ -232,9 +240,19 @@ class ChannelsTest(unittest.TestCase):
              patch.object(git_update, '_admitted_update') as update, \
              (self.control/'gate.lock').open('r+') as stream:
             portalocker.lock(stream, portalocker.LOCK_SH)
-            result = git_update._channel_update(self.root, {'enabled': True})
+            marker = self.base / 'training-git-request.json'
+            for new, stop in [('0.7.3', True), ('0.7.2', False), ('0.7.1', False), (None, False)]:
+                with self.subTest(version=new):
+                    if new is None:
+                        versions.clear()
+                    else:
+                        versions['new'] = new
+                    result = git_update._channel_update(self.root, {'enabled': True})
+                    self.assertEqual(result['status'], 'deferred')
+                    self.assertEqual(marker.exists(), stop)
+                    if stop:
+                        self.assertIn('"id": "new"', marker.read_text())
             update.assert_not_called()
-        self.assertEqual(result['status'], 'deferred')
         self.assertEqual(channels.read(self.store)['phase'], 'waiting')
 
     def test_scoped_autofix_does_not_wait_for_independent_channel(self):

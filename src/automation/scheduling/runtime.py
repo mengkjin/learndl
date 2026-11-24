@@ -125,6 +125,10 @@ def idle_exit_needs_email(store: RunStore, run: dict) -> bool:
     # Signals, reboot, launcher failure and watchdog termination are distinct
     # from an ordinary Python failure which the script may already have mailed.
     code = run.get('returncode')
+    if code is None and 'term_at' not in run:
+        from .recovery import exit_reason
+        if exit_reason(store, run) == 'maintenance_pause':
+            return False
     if 'term_at' in run or code is None or code < 0:
         return True
     if code == 75:
