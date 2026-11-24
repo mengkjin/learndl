@@ -182,7 +182,7 @@ class SessionControl:
             return inner_func
         return wrapper
 
-    @cached_property
+    @property
     def intro_pages(self) -> dict:
         """get intro pages"""
         from src.api.interactive.util.page import intro_pages

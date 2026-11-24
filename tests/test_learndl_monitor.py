@@ -60,5 +60,36 @@ class MonitorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.manager.submit(key, action, None)
 
+    def test_batch_restart_waits_for_each_running_service_and_skips_stale_targets(self):
+        rows = {key: {'state': 'running', 'pid': pid, 'created': 100, 'error': ''}
+                for key, pid in (('tasks', 10), ('experiments', 20), ('storage', 30), ('compare', 40))}
+        rows['storage']['state'] = 'stopped'
+        rows['compare']['created'] = 200
+        events = []
+
+        def submit(key, action, pid, created):
+            events.append(('submit', key))
+            self.assertEqual((action, pid, created), ('restart', rows[key]['pid'], 100))
+
+            def join():
+                events.append(('join', key))
+                rows[key]['pid'] += 1
+                rows[key]['created'] += 1
+
+            return MagicMock(join=join)
+
+        targets = [{'id': key, 'pid': row['pid'], 'created': 100} for key, row in rows.items()]
+        with patch.object(self.manager, 'snapshot', side_effect=rows.__getitem__), \
+                patch.object(self.manager, 'submit', side_effect=submit), \
+                patch.object(services.threading, 'Thread', ImmediateThread):
+            result = self.manager.restart_running(targets)
+
+        self.assertFalse(result['active'])
+        self.assertEqual(events, [('submit', 'tasks'), ('join', 'tasks'),
+                                  ('submit', 'experiments'), ('join', 'experiments')])
+        self.assertEqual({key: value['state'] for key, value in result['services'].items()},
+                         {'tasks': 'restarted', 'experiments': 'restarted',
+                          'storage': 'skipped', 'compare': 'skipped'})
+
 if __name__ == '__main__':
     unittest.main()

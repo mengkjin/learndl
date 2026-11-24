@@ -90,7 +90,9 @@ def custom_sidebar_navigation() -> None:
         # st.subheader(f'*_{PAGE_TITLE}_*')
         with st.container(key = "sidebar-quick-links"):
             # intro_links()
-            script_links()
+            from src.api.learndl_monitor.streamlit_language import text
+            with st.expander(text('脚本列表', 'Script list'), expanded=True):
+                script_links()
 
 def intro_links() -> None:
     """Render icon-button shortcuts for each intro page in the sidebar."""
@@ -156,6 +158,13 @@ def page_setup(navigation_position : NavigationPosition | None = None):
     if navigation_position is None:
         navigation_position = Const.Pref.interactive.get('navigation_position' , 'both')
     page_config()
+    from src.api.learndl_monitor.streamlit_language import page_toolbar
+    from .control_panel.buttons import ControlRefreshInteractiveButton
+    from .control_panel.popovers import GlobalSettingsPopover
+
+    refresh, _ = page_toolbar(default='en', render_settings=GlobalSettingsPopover().popover)
+    if refresh:
+        ControlRefreshInteractiveButton().run()
     pg = top_navigation(hidden = navigation_position == 'sidebar')
     if navigation_position == 'sidebar' or navigation_position == 'both':
         custom_sidebar_navigation()

@@ -5,6 +5,7 @@ import streamlit as st
 from abc import abstractmethod , ABC
 
 from src.api.interactive.util.session_control import SC
+from src.api.learndl_monitor.streamlit_language import text
 
 
 __all__ = ['ControlPanelPopover']
@@ -75,14 +76,13 @@ class GlobalSettingsPopover(ControlPanelPopover):
     title = f"**Setting**"
 
     def popover(self , script_key : str | None = None) -> None:
-        st.toggle('**:blue[Debug Mode]**', value=False , key = 'global-settings-debug-mode' , 
-                help="""Should use debug mode? Not selected will use default False.""")
-        st.toggle('**:blue[Max Verbosity]**', value=False , key = 'global-settings-max-vb' , 
-                help="""Should use max verbosity or min? Not selected will use default False.""")
-        st.toggle('**:blue[Disable Email]**', value=False , key = 'global-settings-disable-email'  , 
-                help="""If email after the script is complete? Not selected will use script header value.""")
-        st.toggle("**:blue[Silent Run]**", value=False , key = 'global-settings-silent-run'  , 
-                help="""Should the script run silently? Not selected will use script header value.""")
+        st.toggle(text('调试模式', 'Debug mode'), key='global-settings-debug-mode')
+        st.toggle(text('详细日志', 'Maximum verbosity'), key='global-settings-max-vb')
+        st.toggle(text('禁用完成通知邮件', 'Disable completion email'), key='global-settings-disable-email',
+                  help=text('默认采用脚本配置。', 'Defaults to the script configuration.'))
+        st.toggle(text('静默运行', 'Silent run'), key='global-settings-silent-run',
+                  help=text('默认采用脚本配置。', 'Defaults to the script configuration.'))
+
 
 class MoreButtonsPopover(ControlPanelPopover):
     """

@@ -19,19 +19,16 @@ __all__ = ['ControlPanel']
 class ControlPanel:
     """Horizontal action bar rendered at the top of every app page.
 
-    Contains a fixed set of :class:`ControlPanelButton` instances plus a
-    settings popover for global run toggles (verbosity, email, silent mode).
+    Contains controls for scripts, navigation, and task shortcuts.
     """
     control_panel_key = "control-panel"
     buttons : dict[str, buttons.ControlPanelButton] = {
         'script-runner-run' : buttons.ScriptRunnerRunButton(),
         'control-git-clear-pull' : buttons.ControlGitClearPullButton(),
         'control-pull-and-run' : buttons.ControlGitClearPullRunButton(),
-        'control-refresh-interactive' : buttons.ControlRefreshInteractiveButton(),
     }
     popovers : dict[str, popovers.ControlPanelPopover] = {
         'intro-page' : popovers.IntroPagePopover(),
-        'global-settings' : popovers.GlobalSettingsPopover(),
         'more-buttons' : popovers.MoreButtonsPopover(),
         'system-info' : popovers.SystemInfoPopover(),
     }

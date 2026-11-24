@@ -8,11 +8,12 @@ import sqlite3
 import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 import psutil
 
+from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import STATE, SERVICES
-from .restart_control import restart_link
 
 __all__ = ['main']
 
@@ -35,6 +36,12 @@ def main():
     status = {'busy': False, 'error': '', 'snapshot': '', 'progress': [], 'revision': 0}
     reports = []
     snapshot_style = Path(__file__).with_name('storage_snapshot.css').read_text(encoding='utf-8')
+    snapshot_script = Path(__file__).with_name('storage_snapshot.js').read_text(encoding='utf-8')
+
+    def embed_snapshot(page):
+        page = page.replace('</style>', f'</style><style>{snapshot_style}</style>', 1)
+        document, closing, suffix = page.rpartition('</html>')
+        return (document + f'<script>{snapshot_script}</script>' + closing + suffix).encode('utf-8')
 
     def progress(message):
         status['progress'] = [*status['progress'][-499:], str(message)]
@@ -130,13 +137,14 @@ def main():
             if not self.allowed():
                 self.send_error(403)
                 return
+            if self.path in PAGE_ASSETS:
+                return serve_page_asset(self, self.path)
             if self.path == '/' + token + '/status':
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
                 self.wfile.write(json.dumps(dict(status, sources=catalog.refresh())).encode())
                 return
-            from urllib.parse import urlsplit
             remote_prefix = '/' + token + '/remote/'
             if self.path.startswith(remote_prefix):
                 identity = urlsplit(self.path).path[len(remote_prefix):]
@@ -148,7 +156,7 @@ def main():
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.send_header('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'")
                 self.end_headers()
-                self.wfile.write(report['content'].encode('utf-8'))
+                self.wfile.write(embed_snapshot(report['content']))
                 return
             prefix = '/' + token + '/snapshot/'
             if self.path.startswith(prefix) and active:
@@ -160,17 +168,16 @@ def main():
                         content_type = response.headers.get('Content-Type', 'application/json')
                         if response.headers.get_content_type() == 'text/html':
                             page = content.decode().replace(snapshot.base, prefix)
-                            content = page.replace('</style>', f'</style><style>{snapshot_style}</style>', 1).encode()
+                            content = embed_snapshot(page)
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
                 self.end_headers()
                 self.wfile.write(content)
                 return
-            if self.path != '/' + token:
+            if urlsplit(self.path).path != '/' + token:
                 self.send_error(404)
                 return
             page = Path(__file__).with_name('storage.html').read_text().replace('__SERVICE_BASE__', '/' + token)
-            page = page.replace('__RESTART_LINK__', restart_link('storage', port))
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()

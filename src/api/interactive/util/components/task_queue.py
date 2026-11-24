@@ -5,6 +5,7 @@ from typing import Literal , TypeAlias
 from collections.abc import Callable
 
 from src.proj import PATH
+from src.api.learndl_monitor.streamlit_language import text
 
 from src.api.interactive.util.session_control import SC
 
@@ -48,7 +49,8 @@ def show_task_queue(queue_type : QueueType = 'filter') -> None:
         show_queue_header()
         if queue_type == 'filter': 
             show_task_filters()
-        show_queue_item_list(queue_type)
+        with st.expander(text('任务列表', 'Task list'), expanded=True):
+            show_queue_item_list(queue_type)
 
 def show_task_queue_header_button(name : str, click_on : Callable, icon : str, help : str , title : str) -> None:
     """Render a single icon-button with a small capitalised label below it.
@@ -83,38 +85,38 @@ def show_queue_header() -> None:
             'sync' : {
                 'call' : SC.click_queue_sync , 
                 'icon' : ":material/directory_sync:" ,
-                'help' : "Sync Historical Tasks into Current Queue" ,
-                'title' : "Sync Queue" ,
+                'help' : text("将历史任务同步到当前队列", "Sync Historical Tasks into Current Queue") ,
+                'title' : text("同步队列", "Sync Queue") ,
             } ,
             'refresh' : {
                 'call' : SC.click_queue_refresh , 
                 'icon' : ":material/refresh:" ,
-                'help' : "Refresh Queue" ,
-                'title' : "Refresh Queue" ,
+                'help' : text("刷新队列", "Refresh Queue") ,
+                'title' : text("刷新队列", "Refresh Queue") ,
             } ,
             'clean' : {
                 'call' : SC.click_queue_clean , 
                 'icon' : ":material/mop:" ,
-                'help' : "Remove All Error Tasks (Irreversible)" ,
-                'title' : "Remove Errors" ,
+                'help' : text("删除所有出错任务（不可撤销）", "Remove All Error Tasks (Irreversible)") ,
+                'title' : text("删除出错任务", "Remove Errors") ,
             } ,
             'delist-all' : {
                 'call' : SC.click_queue_delist_all , 
                 'icon' : ":material/clear_all:" ,
-                'help' : "Delist All Tasks in Queue" ,
-                'title' : "Delist All" ,
+                'help' : text("将所有任务移出队列", "Delist All Tasks in Queue") ,
+                'title' : text("全部移出队列", "Delist All") ,
             } ,
             'remove-all' : {
                 'call' : SC.click_queue_remove_all , 
                 'icon' : ":material/delete_history:" ,
-                'help' : "Backup and Remove All" ,
-                'title' : "Remove/Backup All" ,
+                'help' : text("备份并删除全部任务", "Backup and Remove All") ,
+                'title' : text("备份并删除全部任务", "Remove/Backup All") ,
             } ,
             'restore-all' : {
                 'call' : SC.click_queue_restore_all , 
                 'icon' : ":material/restore:" ,
-                'help' : "Restore from Backup" ,
-                'title' : "Restore Backup" ,
+                'help' : text("从备份恢复", "Restore from Backup") ,
+                'title' : text("恢复备份", "Restore Backup") ,
             } ,
         }
         cols = st.columns(len(buttons) + 2 , gap = "small" , vertical_alignment = "center")
@@ -129,27 +131,35 @@ def show_queue_header() -> None:
             st.error(SC.queue_last_action[0] , icon = ":material/error:")
         
     if SC.task_queue.empty:
-        st.warning("Queue is empty, click the script below to run and it will be displayed here" , icon = ":material/queue_play_next:")
+        st.warning(text("队列为空。运行脚本后可在此查看任务。", "Queue is empty, click the script below to run and it will be displayed here") , icon = ":material/queue_play_next:")
         return
 
     st.caption(f":blue[:material/bar_chart:] {SC.task_queue.status_message()}")
     st.caption(f":blue[:material/bar_chart:] {SC.task_queue.source_message()}")
         
+def status_source_filters(on_status=None, on_source=None):
+    labels = {"All": "全部", "Running": "运行中", "Complete": "完成", "Error": "错误", "Other": "其他"}
+    def caption(value):
+        return text(labels.get(value, value), value)
+    status = st.radio(text("运行状态", "Running status"), ["All", "Running", "Complete", "Error"],
+                      format_func=caption, key="task-filter-status", horizontal=True, on_change=on_status)
+    source = st.radio(text("脚本来源", "Script source"), ["All", "Py", "App", "Bash", "Other"],
+                      format_func=caption, key="task-filter-source", horizontal=True, on_change=on_source)
+    return status, source
+
+
 def show_task_filters() -> None:
     """Render the task-filter expander (status, source, folder, file multi-selects)."""
-    with st.container(key="task-filter-container").expander("Task Filters" , expanded = True , icon = ":material/filter_list:"):
-        status_options = ["All" , "Running" , "Complete" , "Error"]
-        source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
+    with st.container(key="task-filter-container").expander(
+        text("任务状态、来源与脚本", "Task status, source and script"), icon=":material/filter_list:"
+    ):
+        status_source_filters(SC.change_queue_filter_status, SC.change_queue_filter_source)
         folder_options = [item.path for item in SC.path_items if item.is_dir]
         file_options = [item.path for item in SC.path_items if item.is_file]
-        st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True ,
-                 on_change = SC.change_queue_filter_status)
-        st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True ,
-                    on_change = SC.change_queue_filter_source)
-        st.multiselect(":blue-badge[**Script Folder**]" , folder_options , key = "task-filter-path-folder" ,
+        st.multiselect(text(":blue-badge[**脚本文件夹**]", ":blue-badge[**Script Folder**]") , folder_options , key = "task-filter-path-folder" ,
                         format_func = lambda x: str(x.relative_to(PATH.scpt)) ,
                         on_change = SC.change_queue_filter_path_folder)
-        st.multiselect(":blue-badge[**Script File**]" , file_options , key = "task-filter-path-file" ,
+        st.multiselect(text(":blue-badge[**脚本文件**]", ":blue-badge[**Script File**]") , file_options , key = "task-filter-path-file" ,
                         format_func = lambda x: x.name ,
                         on_change = SC.change_queue_filter_path_file)    
         

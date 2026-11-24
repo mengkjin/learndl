@@ -50,9 +50,9 @@ def ports():
     return active
 
 
-def apache_config(host, phones, routes):
+def apache_config(host, phones, routes, published):
     modules = ('mpm_event', 'unixd', 'authz_core', 'headers', 'setenvif', 'proxy',
-               'proxy_http', 'filter', 'substitute')
+               'proxy_http')
     lines = [f'ServerRoot "{MOBILE}"', f'DefaultRuntimeDir "{MOBILE}"',
              f'Mutex "file:{MOBILE}" default', f'PidFile "{MOBILE}/httpd.pid"',
              f'ErrorLog "{MOBILE}/httpd.log"', 'LogLevel warn', f'ServerName {host}',
@@ -62,8 +62,7 @@ def apache_config(host, phones, routes):
     lines += ['ProxyRequests Off', 'ProxyAddHeaders Off', 'ProxyTimeout 180',
               '<Location />', 'Require all denied', '</Location>']
     ips = ', '.join(f"'{ip}'" for ip in phones)
-    native = {'tasks', 'storage', 'experiments', 'model_preview', 'mail_archive'}
-    native_ports = {record_port(STATE / f'{s}.json') or SERVICES[s]['port'] for s in native}
+    ready_ports = ','.join(str(port) for port in sorted(routes.keys() & published)) or 'pending'
     for front, backend in sorted(routes.items()):
         authority = host if front == 443 else f'{host}:{front}'
         public = f'https://{authority}'
@@ -86,16 +85,10 @@ def apache_config(host, phones, routes):
             f'  Header edit Location "^{re.escape(local)}(/|$)" "{public}$1"',
             '</Location>',
         ]
-        if backend == routes.get(443) or backend in native_ports:
-            # Rewrite navigation in native templates and service discovery only.
-            # Leave downloaded files, task output and stored reports untouched.
-            paths = r'(|preview|manage|remote|finished|api/services|api/action|api/status)'
-            if backend == (record_port(STATE / 'storage.json') or SERVICES['storage']['port']):
-                paths = r'[A-Za-z0-9_-]+'
-            lines += [f'<LocationMatch "^{prefix}{paths}$">',
-                      '  SetOutputFilter SUBSTITUTE', '  SubstituteMaxLineLength 16m',
-                      f'  Substitute "s|http://127.0.0.1:|https://{host}:|n"',
-                      '</LocationMatch>']
+        # The browser checks the source service before opening a newly registered port.
+        # Read this header through the same authenticated route as the page asset.
+        lines += [f'<Location "{prefix}monitor-navigation.js">',
+                  f'  Header set X-LearnDL-Mobile-Ports "{ready_ports}"', '</Location>']
     return '\n'.join(lines) + '\n'
 
 
@@ -133,6 +126,7 @@ def reconcile(host, routes):
             raise RuntimeError(f'Another Serve listener already uses {name}')
         subprocess.run([TAILSCALE, 'serve', '--bg', f'--https={port}', target],
                        check=True, timeout=15)
+    return published
 
 
 def main():
@@ -147,7 +141,8 @@ def main():
     os.umask(0o077)
     MOBILE.mkdir(mode=0o700, parents=True, exist_ok=True)
     worker = None
-    last = None
+    last = last_published = None
+    published = set()
     next_publish = 0
     config_text = ''
     def shutdown(*_):
@@ -157,7 +152,9 @@ def main():
         while True:
             routes = ports()
             if routes != last:
-                updated = apache_config(host, phones, routes)
+                next_publish = 0
+            if routes != last or published != last_published:
+                updated = apache_config(host, phones, routes, published)
                 draft = CONFIG.with_suffix('.new')
                 draft.write_text(updated)
                 subprocess.run([HTTPD, '-t', '-f', str(draft)], check=True)
@@ -166,7 +163,7 @@ def main():
                     worker = subprocess.Popen([HTTPD, '-DFOREGROUND', '-f', str(CONFIG)])
                 elif updated != config_text:
                     worker.send_signal(signal.SIGUSR1)
-                last, config_text, next_publish = routes, updated, 0
+                last, config_text, last_published = routes, updated, published
             if worker is not None and worker.poll() is not None:
                 raise RuntimeError(f'Private gateway exited with status {worker.returncode}')
             if time.monotonic() >= next_publish:
@@ -174,9 +171,10 @@ def main():
                     status = json.loads(subprocess.check_output(
                         [TAILSCALE, 'status', '--json'], text=True, timeout=10))
                     if host in (status.get('CertDomains') or []):
-                        reconcile(host, routes)
+                        published = reconcile(host, routes)
                         next_publish = time.monotonic() + 300
                     else:
+                        published = set()
                         next_publish = time.monotonic() + 8
                 except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
                     logger.error('Could not reconcile private mobile access: %s', exc)

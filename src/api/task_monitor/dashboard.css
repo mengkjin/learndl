@@ -19,12 +19,12 @@ h2 { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
 nav { margin: 18px 0 14px; border-bottom: 1px solid var(--border); }
 nav a { color: var(--muted); text-decoration: none; padding: 7px 13px; border-bottom: 2px solid transparent; }
 nav a:hover, nav a[aria-current="page"] { color: var(--accent); border-color: var(--accent); }
-button, select, input[type="number"], input[type="search"], input[type="date"], .popover summary {
+button, select, input[type="number"], input[type="search"], input[type="date"] {
   font: inherit; background: var(--control); color: inherit; border: 1px solid #3b4b60;
   border-radius: 6px; padding: 5px 10px;
 }
 button, select, summary { cursor: pointer; }
-button:enabled:hover, button:focus-visible, select:focus-visible, .popover summary:hover { border-color: var(--accent); }
+button:enabled:hover, button:focus-visible, select:focus-visible { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 label, .muted { font-size: 13px; color: var(--muted); }
 .inline { display: inline-flex; align-items: center; gap: 5px; }
@@ -68,16 +68,6 @@ pre { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; over
 .output .meta { color: #9ca3af; }
 .output .stderr { border-left: 2px solid #f87171; background: rgb(248 113 113 / 8%); padding-left: 6px; }
 #terminal button { margin-top: 7px; }
-.popover { position: relative; }
-.popover summary { list-style: none; }
-.popover-panel {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 2;
-  min-width: 205px; max-width: 350px; width: max-content; padding: 12px;
-  background: var(--panel); border: 1px solid #3b4b60; border-radius: 8px;
-  box-shadow: 0 10px 24px rgb(0 0 0 / 30%);
-}
-.popover-panel label { display: block; margin-bottom: 5px; }
-.popover-panel dl { font-size: 13px; }
 .terminal-size-setting { margin-top: 12px; }
 .terminal-size-setting .actions { justify-content: space-between; }
 .terminal-size-setting label { margin: 0; }
@@ -92,8 +82,15 @@ dialog .actions { margin-top: 16px; justify-content: flex-end; }
 @media (max-width: 760px) {
   body { padding: 20px 12px; }
   .page-header { position: relative; }
-  #settings { position: static; }
-  #settings .popover-panel { left: 0; right: auto; }
   .workspace { grid-template-columns: 1fr; }
   #cards { max-height: 230px; }
+}
+#task-list > summary { font-weight:600; }
+#task-list .toolbar { margin-top:8px; }
+@media (min-width:761px) {
+  .workspace:has(#task-list:not([open])) { grid-template-columns:minmax(145px,max-content) minmax(0,1fr); }
+}
+@media (max-width:760px) {
+  .workspace { grid-template-columns:minmax(0,1fr); }
+  #host { max-width:100%; }
 }

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,7 @@ import portalocker
 import psutil
 
 from .preferences import Preferences
+from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import ROOT, STATE, Manager, SERVICES
 
 __all__ = ['main']
@@ -94,11 +96,14 @@ def main():
             self.wfile.write(payload)
 
         def do_GET(self):
-            if urlsplit(self.path).path == '/':
+            path = urlsplit(self.path).path
+            if path == '/' or path in PAGE_ASSETS:
                 if (self.headers.get('Host') != f'127.0.0.1:{args.port}'
                         or self.headers.get('Origin', origin) != origin):
                     self.send_error(403)
                     return
+                if path in PAGE_ASSETS:
+                    return serve_page_asset(self, path)
                 self.send_response(200)
                 self.send_header('Content-Type', 'text/html; charset=utf-8')
                 self.send_header('Referrer-Policy', 'same-origin')
@@ -113,7 +118,12 @@ def main():
                 return
             if self.path == '/api/services':
                 self.reply({'application': 'learndl-monitor', 'services': [manager.snapshot(key) for key in SERVICES],
-                            'preferences': preferences.read(), 'instance': instance})
+                            'preferences': preferences.read(), 'instance': instance,
+                            'restart_batch': manager.restart_status()})
+            elif self.path == '/api/resources':
+                from src.api.task_monitor.resources import sample_resources
+
+                self.reply(asdict(sample_resources(ROOT)))
             elif self.path.startswith('/api/log/') and self.path.split('/')[-1] in SERVICES:
                 path = STATE / (self.path.split('/')[-1] + '.log')
                 if path.exists():
@@ -130,7 +140,7 @@ def main():
             if not self.authorized() or self.headers.get('Origin') != origin:
                 self.reply({'error': 'Console request was not authorized.'}, 403)
                 return
-            if self.path not in ('/api/action', '/api/preferences', '/api/restart'):
+            if self.path not in ('/api/action', '/api/preferences', '/api/restart', '/api/restart-services'):
                 self.reply({'error': 'Unknown console operation.'}, 404)
                 return
             try:
@@ -156,10 +166,13 @@ def main():
                     self.reply({'error': 'Could not save console preferences. Please try again.'}, 503)
                 else:
                     self.reply({'preferences': saved})
+            elif self.path == '/api/restart-services':
+                self.reply({'restart_batch': manager.restart_running(data.get('targets'))}, 202)
             elif self.path == '/api/restart':
                 from src.automation.patch_services import interface_operation
 
-                if any(lock.locked() for lock in manager.locks.values()):
+                batch = manager.restart_status()
+                if (batch and batch['active']) or any(lock.locked() for lock in manager.locks.values()):
                     self.reply({'error': 'A service operation is in progress. Try again shortly.'}, 409)
                     return
                 with interface_operation(STATE, key='console'):

@@ -24,6 +24,8 @@ from src.api.util.st_frontend import (
 )
 
 from src.api.interactive.util.session_control import SC
+from src.api.learndl_monitor.streamlit_language import text
+from .task_queue import status_source_filters
 from .param_control_buttons import param_control_buttons
 
 __all__ = [
@@ -105,7 +107,7 @@ def show_task_history(runner : ScriptRunner | str | None):
     script_queue = SC.task_queue.filter(file = [runner.path.path])
     emtpy_queue = not script_queue
     wkey = f'script-task-history-{runner.script_key}'
-    header = 'Task History'
+    header = text('任务历史', 'Task history')
     icon = ':material/history:'
     if emtpy_queue: 
         help = "Empty. No Past Task Item is Recorded for This Script."
@@ -121,10 +123,8 @@ def show_task_history(runner : ScriptRunner | str | None):
         if emtpy_queue: 
             return
 
-        status_options = ["All" , "Running" , "Complete" , "Error"]
-        source_options = ["All" , "Py" , "App" ,"Bash" , "Other"]
-        status = st.radio(":blue-badge[**Running Status**]" , status_options , key = "task-filter-status", horizontal = True)
-        source = st.radio(":blue-badge[**Script Source**]" , source_options , key = "task-filter-source", horizontal = True)
+        with st.expander(text('任务状态与来源', 'Task status and source')):
+            status, source = status_source_filters()
         queue = SC.task_queue.filter(status = status , source = source , queue = script_queue)
 
         cols = st.columns(2)
@@ -165,7 +165,7 @@ def show_task_history(runner : ScriptRunner | str | None):
             page_cols[4].button(":material/chevron_right:", key = f"choose-task-page-next", on_click = on_next_page , args = (max_page,))
             page_cols[5].button(":material/last_page:", key = f"choose-task-page-last", on_click = on_last_page , args = (max_page,))
         
-        with st.container(key = f"choose-task-item-container"):
+        with st.expander(text("任务列表", "Task list"), expanded=True):
             current_page = st.session_state.get('choose-task-page') or 1
             options = item_ids[(current_page - 1) * num_per_page : current_page * num_per_page]
             default_index = (choose_index % num_per_page) if choose_index is not None else None

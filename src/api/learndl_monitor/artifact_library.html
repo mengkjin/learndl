@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__ · Learndl</title>
+<link rel="stylesheet" href="/monitor-toolbar.css">
 <style>
 :root{color-scheme:dark;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
 *{box-sizing:border-box}body{margin:0}main{max-width:1240px;margin:36px auto;padding:0 24px}h1,h2{line-height:1.25}h1{font-size:28px;margin:0}header{justify-content:space-between;margin-bottom:16px}h2{font-size:19px;overflow-wrap:anywhere}
@@ -41,6 +42,7 @@ button,select{cursor:pointer}button:hover,button:focus-visible{border-color:#55c
 .mail-layout.collapsed :is(#actions,#mail-pages){display:none}
 .model-list{grid-area:list;padding:8px}.model-list-header{justify-content:space-between;min-height:32px;margin-bottom:6px}
 .model-layout.collapsed .model-list-header{margin:0}
+.sidebar-name{margin-left:6px}.model-layout.collapsed .sidebar-name{display:none}
 #sidebar-toggle{padding:1px 6px;min-height:28px;min-width:26px}
 #model-splitter{grid-area:split;align-self:stretch;cursor:col-resize;touch-action:none;display:grid;justify-items:center}
 #model-splitter::before{content:"";width:2px;height:100%;border-radius:2px;background:#293748}
@@ -74,42 +76,62 @@ small{display:block;color:#a6b8cc}pre{white-space:pre-wrap;overflow-wrap:anywher
  .model-layout,.model-layout[data-layout=right]{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;grid-template-areas:"list" "detail" "preview";gap:10px}
  #model-splitter{display:none}
  .model-layout #items{max-height:34vh}
+ .model-layout.collapsed .sidebar-name{display:inline}
+ .toolbar :is(input,select),.header-actions select{max-width:100%}
  .mail-layout{grid-template-areas:"list" "detail"}
 }
 .management-table{overflow:auto;margin:12px 0}.management-table table{width:100%;border-collapse:collapse}
 .management-table :is(th,td){padding:8px;text-align:left;border-bottom:1px solid #334155;overflow-wrap:anywhere}
 .management-table input[type=text]{width:9rem}.management-results li{margin:6px 0;overflow-wrap:anywhere}
-header .header-actions{margin-left:auto}
+#catalog-navigation{margin-bottom:12px}
+#management-error:empty{display:none}
+#management-error{color:#f4bd9b}
 dialog{background:#17212c;color:inherit;border:1px solid #52667e;border-radius:10px;max-width:90vw;max-height:85vh;overflow:auto}dialog::backdrop{background:#0009}.management-table th{vertical-align:top}.management-table details label{display:block;white-space:nowrap}.management-table{font-size:12px}.management-table :is(th,td){padding:4px 6px;line-height:1.3}
 .management-table td{white-space:nowrap}.management-table td:nth-child(3){max-width:230px;overflow:hidden;text-overflow:ellipsis}
 .management-table input[type=text]{width:100%;min-width:65px;font-size:12px;padding:4px}
 .management-table button{font-size:12px;padding:3px 7px}.column-dropdown{position:relative;min-width:55px}
 .column-menu{position:absolute;z-index:20;top:100%;left:0;min-width:130px;max-height:240px;overflow:auto;background:#202c3a;border:1px solid #52667e;border-radius:6px;padding:7px;box-shadow:0 6px 18px #0008}
 .column-menu label{display:flex;align-items:center;gap:5px;padding:3px;white-space:nowrap}
+.catalog-filters,.management-list{border:1px solid #344355;border-radius:8px;padding:4px 12px}
+.catalog-filters[open]>.toolbar,.management-fields{margin:6px 0 10px}
+.management-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,155px),1fr));gap:8px 12px}
+.management-fields>div>span{display:block;color:#a6b8cc;font-size:13px}
+.management-fields input[type=text],.column-dropdown>button{width:100%;min-width:0}
+.column-menu{max-width:min(80vw,240px)}
 </style>
 <main>
-<header class="row"><h1>__TITLE__</h1><div class="row header-actions"><select id="language" aria-label="Language">
-<option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header>
+<header class="row monitor-header"><h1>__TITLE__</h1><div class="monitor-toolbar">
+    <details id="settings" class="monitor-menu"><summary class="monitor-icon" data-monitor-icon="settings" aria-label="设置"></summary>
+    <div class="monitor-panel" id="settings-panel">
+      <label class="monitor-field"><span data-monitor-label="language">页面语言</span><select id="language"><option value="zh">中文</option><option value="en">English</option></select></label>
+    </div>
+  </details>
+  <button class="monitor-icon" id="refresh" type="button" data-monitor-icon="refresh" aria-label="刷新"></button>
+</div></header>
+<div id="catalog-navigation" class="toolbar" hidden></div>
 <div id="preview-page">
+<details class="catalog-filters"><summary id="filter-title"></summary>
 <div class="toolbar">
 <input id="search" type="search">
 <select id="host"></select><select id="status"></select><select id="view"></select>
-<button id="refresh"></button>
 </div>
 <div id="model-filters" class="toolbar" hidden></div>
+</details>
 <p id="notice" role="status"></p>
 <div class="layout">
 <section class="panel" id="list-panel"><div id="list-header"><div id="actions" class="actions"></div><small id="count" role="status"></small></div><div id="items"></div><nav id="mail-pages" class="row" hidden></nav></section>
 <section class="panel" id="detail" aria-live="polite"></section>
 </div>
 </div>
+<p id="management-error" role="alert"></p>
 <section id="management" class="panel" hidden></section>
 </main>
+<script src="/monitor-navigation.js"></script>
 <script>
 const kind='__KIND__', other='http://127.0.0.1:__OTHER__/';
 const modelPage=kind==='model_preview', $=id=>document.getElementById(id);
 const filters=new URLSearchParams(location.search), selected=new Set(), bindings=new WeakMap();
-let lang=localStorage.getItem('learndl-language')==='en'?'en':'zh';
+let lang=monitorNavigation.language();
 let rows=[], models={}, shown=[], active='', activeModel='', activeBuild=null, version='', blobURL='', loaded=false;
 const MAIL_PAGE_SIZE=50;
 let mailPage=0,mailTotal=0;
@@ -123,7 +145,7 @@ const terms={
  modelName:['模型名','Model name'], targetValue:['目标名称或编号','New name or number'],
  reviewChanges:['预览更改','Review changes'], applyChanges:['应用更改','Apply changes'],
  selectVisible:['勾选当前结果','Select visible builds'], allModels:['全部模型','All models'],
- managementFilter:['管理筛选','Management filter'], noSelection:['请先选择模型。','Select one or more models.'],
+ managementFilter:['模型来源、版本与状态','Model source, build and status'], buildList:['模型版本列表','Model builds'], noSelection:['请先选择模型。','Select one or more models.'],
  resumeMove:['继续未完成的移动','Resume pending move'],
  done:['成功','Done'], pendingChange:['待处理','Pending'], versionState:['状态','Status'],
  title:modelPage?['模型预览','Model Preview']:['邮件档案','Mail Archive'],
@@ -139,8 +161,9 @@ const terms={
  noMail:['没有符合条件的记录。','No matching records.'], noModel:['没有符合条件的模型。','No matching models.'],
  selectFile:['选择一个文件预览，或选择 TensorBoard / Optuna 启动。','Select a file to preview or choose TensorBoard / Optuna to launch.'],
  layout:['布局','Layout'], below:['下方预览','Preview below'], right:['右侧预览','Preview on right'],
- collapseSidebar:['收起模型列表','Collapse model list'], expandSidebar:['展开模型列表','Expand model list'],
- resizeSidebar:['调整模型列表宽度','Resize model list'], expandDetails:['全部展开','Expand all'],
+ collapseSidebar:modelPage?['收起模型列表','Collapse model list']:['收起邮件列表','Collapse mail list'],
+ expandSidebar:modelPage?['展开模型列表','Expand model list']:['展开邮件列表','Expand mail list'],
+ resizeSidebar:modelPage?['调整模型列表宽度','Resize model list']:['调整邮件列表宽度','Resize mail list'], expandDetails:['全部展开','Expand all'],
  collapseDetails:['全部折叠','Collapse all'], modelInfo:['模型信息','Model information'],
  modelFiles:['模型文件','Model files'], filePreview:['预览窗口','Preview'], noRecord:['暂无记录','No record yet'],
  openFile:['打开文件','Open file'], noPreview:['此文件请使用系统应用打开。','Open this file in its desktop application.'],
@@ -254,8 +277,7 @@ function setupModelLayout(){
  mode.onchange=()=>{
   layout.dataset.layout=mode.value;localStorage.setItem(preference+'layout',mode.value);
  };
- const modeLabel=element('label');modeLabel.append(label('span','layout'),' ',mode);
- $('refresh').after(modeLabel);
+ appendSetting(mode,'layout');
  document.querySelector('main').classList.add('model-library');
  $('actions').hidden=true;
  const preview=element('section');preview.id='model-file-detail';preview.className='panel';preview.hidden=true;
@@ -285,6 +307,8 @@ function setupSidebar(preference,initialWidth){
   if(save)localStorage.setItem(preference+'width',width);
  };
  const toggle=button('',()=>setCollapsed(!layout.classList.contains('collapsed')));
+ const listName=localized(element('span'),()=>modelPage?tr('模型列表','Model list'):tr('邮件列表','Mail list'));
+ listName.className='sidebar-name';
  toggle.id='sidebar-toggle';toggle.setAttribute('aria-controls','items');
  const toggleText=()=>t(layout.classList.contains('collapsed')?'expandSidebar':'collapseSidebar');
  localized(toggle,toggleText,'aria-label');localized(toggle,toggleText,'title');
@@ -293,7 +317,7 @@ function setupSidebar(preference,initialWidth){
   layout.classList.toggle('collapsed',collapsed);
   for(const id of ['items','count'])$(id).hidden=collapsed;
   splitter.hidden=collapsed;
-  toggle.textContent=collapsed?'›':'‹';
+  toggle.replaceChildren(collapsed?'›':'‹',listName);
   toggle.setAttribute('aria-expanded',String(!collapsed));
   for(const update of bindings.get(toggle))update();
   localStorage.setItem(preference+'collapsed',collapsed?'1':'0');
@@ -324,7 +348,7 @@ function setupSidebar(preference,initialWidth){
 function savePage(){
  const controls={};
  for(const el of document.querySelectorAll('input[id],select[id]'))
-  if(!el.id.startsWith('management-'))controls[el.id]=el.type==='checkbox'?el.checked:el.value;
+  if(el.id!=='language'&&!el.id.startsWith('management-'))controls[el.id]=el.type==='checkbox'?el.checked:el.value;
  history.replaceState({...history.state,controls,active,activeModel,activeBuild,scroll:scrollY,
   managementFilters,checked:[...managementChecked]},'');
 }
@@ -334,7 +358,7 @@ function restorePage(){
  activeModel=filters.get('model')||state.activeModel||'';
  activeBuild=filters.get('build')||state.activeBuild||null;
  for(const [id,value] of Object.entries(state.controls||{})){
-  const el=$(id);if(el){if(el.type==='checkbox')el.checked=value;else el.value=value;}
+  const el=$(id);if(el&&id!=='language'){if(el.type==='checkbox')el.checked=value;else el.value=value;}
  }
  managementFilters=state.managementFilters||{};managementChecked=new Set(state.checked||[]);
 }
@@ -394,28 +418,42 @@ async function showHistory(){
   body.append(section);
  }
 }
+async function refreshManagement(){
+ if($('refresh').disabled)return;
+ $('refresh').disabled=true;
+ try{await renderManagement();}
+ catch(error){$('management-error').textContent=t('catalogError')+' · '+error.message;}
+ finally{$('refresh').disabled=false;}
+}
 async function renderManagement(){
  const savedScroll=history.state?.scroll||0;
- const pane=$('management');
+ const pane=$('management');$('management-error').textContent='';
  const {records}=await (await api('/api/model-management')).json();
- const table=element('table'),head=table.createTHead(),titles=head.insertRow(),filterRow=head.insertRow(),
+ const table=element('table'),head=table.createTHead(),titles=head.insertRow(),
  body=table.createTBody(),scroll=element('div'),toolbar=element('div'),countLabel=element('small');
  scroll.className='management-table';scroll.append(table);toolbar.className='toolbar';
  const columns=[['host','host','text'],['name','modelName','text'],['build','build','text'],
  ['module_type','type','multi'],['module','module','multi'],['stage','stage','multi'],
  ['short','short','multi'],['started','initial_training','date'],['state','versionState','multi']];
- titles.append(element('th'));filterRow.insertCell();
+ const filterSection=element('details'), list=element('details'), fields=element('div');
+ filterSection.className='catalog-filters';list.className='management-list';fields.className='management-fields';
+ filterSection.open=pane.querySelector('.catalog-filters')?.open??false;
+ list.open=pane.querySelector('.management-list')?.open??true;
+ filterSection.append(label('summary','managementFilter'),fields);
+ list.append(label('summary','buildList'),toolbar,scroll);
+ titles.append(element('th'));
  const controls={};let visible=[];
  for(const [key,labelKey,type] of columns){
-  const th=localized(element('th'),()=>({modelName:tr('名称','Name'),build:tr('版本','Version'),type:tr('类型','Type'),module:tr('框架','Framework'),stage:tr('阶段','Stage'),initial_training:tr('开始','Started')})[labelKey]||t(labelKey));titles.append(th);const cell=filterRow.insertCell();
+  const th=localized(element('th'),()=>({modelName:tr('名称','Name'),build:tr('版本','Version'),type:tr('类型','Type'),module:tr('框架','Framework'),stage:tr('阶段','Stage'),initial_training:tr('开始','Started')})[labelKey]||t(labelKey));titles.append(th);const cell=element('div');cell.append(label('span',labelKey));fields.append(cell);
   if(type==='multi'){
-   const disclosure=element('div');disclosure.className='column-dropdown';const dropdown=button(()=>t('any'),()=>{const open=menu.hidden;for(const node of document.querySelectorAll('.column-menu'))node.hidden=true;menu.hidden=!open;});const menu=element('div');menu.className='column-menu';menu.hidden=true;disclosure.append(dropdown,menu);
+   const disclosure=element('div');disclosure.className='column-dropdown';const selectionLabel=()=>managementFilters[key]?.length?managementFilters[key].length+' '+tr('项','selected'):t('any');
+   const dropdown=button(selectionLabel,()=>{const open=menu.hidden;for(const node of document.querySelectorAll('.column-menu'))node.hidden=true;menu.hidden=!open;});const menu=element('div');menu.className='column-menu';menu.hidden=true;disclosure.append(dropdown,menu);
    const choices=key==='state'?['visible','hidden','active','archived']:[...new Set(records.map(row=>row[key]||'unknown'))].sort();
    controls[key]=[];
    for(const value of choices){
     const input=element('input');input.type='checkbox';input.value=value;
     input.checked=(managementFilters[key]||[]).includes(value);
-    input.onchange=()=>{managementFilters[key]=controls[key].filter(el=>el.checked).map(el=>el.value);dropdown.textContent=managementFilters[key].length?managementFilters[key].length+' '+tr('项','selected'):t('any');draw();};
+    input.onchange=()=>{managementFilters[key]=controls[key].filter(el=>el.checked).map(el=>el.value);dropdown.textContent=selectionLabel();draw();};
     const wrapper=element('label');wrapper.append(input,label('span',value));menu.append(wrapper);controls[key].push(input);
    }
    cell.append(disclosure);
@@ -426,7 +464,7 @@ async function renderManagement(){
    input.oninput=()=>{managementFilters[key]=input.value;draw();};cell.append(input);controls[key]=input;
   }
  }
- titles.append(label('th','rename'),label('th','goTo'));filterRow.insertCell();filterRow.insertCell();
+ titles.append(label('th','rename'),label('th','goTo'));
  function matches(row){
   for(const [key,,type] of columns){
    const value=managementFilters[key];if(!value?.length)continue;
@@ -460,7 +498,7 @@ async function renderManagement(){
      cell.textContent=(model.hidden?'◌':'●')+' '+(model.archived?'▣':'◇');
      localized(cell,()=>t(model.hidden?'hidden':'visible')+' · '+t(model.archived?'archived':'active'),'title');
     }
-    else if(key==='started')cell.textContent=model.started?formatDate(model.started):t('unknown');
+    else if(key==='started')localized(cell,()=>model.started?formatDate(model.started):t('unknown'));
     else if(type==='multi')localized(cell,()=>t(model[key]||'unknown'));
     else if(key==='name'){cell.textContent=model.short_name;cell.title=model.name;}
     else if(key==='build'){cell.textContent=model.build.replace(/^build/,'')||'—';cell.title=model.build;}
@@ -477,7 +515,9 @@ async function renderManagement(){
    go.onpointerdown=savePage;go.onkeydown=savePage;row.insertCell().append(go);
   }updateCount();savePage();
  }
- function updateCount(){countLabel.textContent=tr('已选 ','Selected ')+managementChecked.size+' · '+visible.length+'/'+records.length;}
+ const summary=()=>tr('已选 ','Selected ')+managementChecked.size+' · '+visible.length+'/'+records.length;
+ localized(countLabel,summary);
+ function updateCount(){countLabel.textContent=summary();}
  for(const operation of ['hide','show','archive','restore_archive','renumber']){
   const b=button(()=>t(operation==='renumber'?'batchRename':operation),()=>{
    if(!managementChecked.size)return;
@@ -488,16 +528,20 @@ async function renderManagement(){
   action('invert',()=>{for(const row of visible){if(managementChecked.has(row.id))managementChecked.delete(row.id);else managementChecked.add(row.id);}draw();}),
   action('clear',()=>{managementChecked.clear();draw();}),action('operationHistory',showHistory),countLabel);
 
- pane.replaceChildren(label('h2','manageModels'),toolbar,scroll);draw();scrollTo(0,savedScroll);
+ pane.replaceChildren(label('h2','manageModels'),filterSection,list);draw();scrollTo(0,savedScroll);
+}
+function appendSetting(control, key){
+ const wrapper=element('label');wrapper.className='monitor-field';
+ wrapper.append(label('span',key),control);$('settings-panel').append(wrapper);
 }
 function setup(){
+ localized($('filter-title'),()=>modelPage?tr('模型属性、产物与日期','Model properties, artifacts and dates'):tr('邮件来源、类型与状态','Mail source, type and status'));
  localized(document.querySelector('h1'),()=>t('title'));
  localized($('search'),()=>t('search'),'placeholder');
  localized($('search'),()=>t('search'),'aria-label');
  for(const id of ['host','status','view'])localized($(id),()=>t(id),'aria-label');
  $('view').append(...(modelPage?['active','archived']:['active','archived','trash']).map(value=>option(value)));
  options('host',[],'allHosts');options('status',[],'allStatus');
- localized($('refresh'),()=>t('refresh'));
  localized($('count'),()=>t('loading'));
  localized($('detail'),()=>t(modelPage?'selectModel':'selectMail'));
  $('status').hidden=modelPage;
@@ -505,7 +549,7 @@ function setup(){
   setupModelLayout();
   const navigation=label('a',location.pathname==='/manage'?'backPreview':'manageModels');
   navigation.href=location.pathname==='/manage'?'/preview':'/manage';navigation.onpointerdown=savePage;navigation.onkeydown=savePage;
-  $('language').before(navigation);
+  $('catalog-navigation').hidden=false;$('catalog-navigation').append(navigation);
   const bar=$('model-filters');bar.hidden=false;
   for(const id of Object.keys(modelFields))bar.append(field(id,id));
   const experiment=field('experiment','experiment');
@@ -534,11 +578,11 @@ function setup(){
   mode.append(option('preview','previewAttachment'),option('open','openAttachment'));
   mode.value=localStorage.getItem('learndl-mail-attachment-mode')==='open'?'open':'preview';
   mode.onchange=()=>localStorage.setItem('learndl-mail-attachment-mode',mode.value);
-  $('language').before(mode);
+  appendSetting(mode,'attachmentMode');
  }
  const ids=['search','host','status','view','mail-type',...Object.keys(modelFields),'experiment','dateField','from','to','dateUnknown'];
  for(const id of ids)if($(id))$(id).oninput=()=>{mailPage=0;render();};
- $('refresh').onclick=refresh;
+ $('refresh').onclick=location.pathname==='/manage' ? refreshManagement : refresh;
  $('language').value=lang;
  $('language').onchange=()=>{
   lang=$('language').value;localStorage.setItem('learndl-language',lang);updateLanguage();
@@ -547,10 +591,11 @@ function setup(){
  updateLanguage();
 }
 function updateLanguage(){
- document.documentElement.lang=lang;document.title=t('title')+' · Learndl';
+ monitorNavigation.apply(lang);document.title=t('title')+' · Learndl';
  for(const e of document.querySelectorAll('[data-localized]'))for(const update of bindings.get(e)||[])update();
 }
 async function refresh(){
+ if($('refresh').disabled)return;
  $('refresh').disabled=true;
  try{
   const data=await (await api(url(modelPage?'/api/models':'/api/list',{run:filters.get('run')||''}))).json();
@@ -819,7 +864,8 @@ function modelFileRow(r){
    const data=await (await api('/api/action',{action:'start',id:r.id})).json();
    const address=data.url||data.instance?.url;
    if(!address)throw Error(t('ready'));
-   const link=label('a','openInstance');link.href=address;link.target='_blank';link.rel='noopener';
+   await monitorNavigation.waitForRoute(address,lang);
+   const link=label('a','openInstance');link.href=monitorNavigation.address(address);link.target='_blank';link.rel='noopener';
    status.replaceChildren(link);
   });
   const stop=action('stop',async()=>{
@@ -924,7 +970,7 @@ async function spreadsheet(r,index,sheet=''){
 }
 function link(run,key,prefix=''){
  const a=localized(element('a'),()=>t(key)+prefix);
- a.href=url(other,{run});a.target='_blank';a.rel='noopener';return a;
+ localized(a,()=>monitorNavigation.address(url(other,{run}),lang),'href');a.target='_blank';a.rel='noopener';return a;
 }
 async function mailHtmlFrame(r,index,name,doc=document){
  const response=await api(url('/api/mail-html',{id:r.id,index}));
@@ -1048,7 +1094,7 @@ if(modelPage){
  if(filters.has('archived'))$('view').value=filters.get('archived')==='1'?'archived':'active';
  if(location.pathname==='/manage'){
   $('preview-page').hidden=true;$('management').hidden=false;
-  renderManagement().then(()=>scrollTo(0,history.state?.scroll||0));
+  refreshManagement();
  }else refresh().then(async()=>{if(active){const row=rows.find(row=>row.id===active);if(row)await modelFileDetails(row);}scrollTo(0,history.state?.scroll||0);});
 }else{
  refresh();

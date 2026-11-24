@@ -40,6 +40,8 @@ class Manager:
         self.locks = {key: threading.Lock() for key in SERVICES}
         self.status = {key: '' for key in SERVICES}
         self.errors = {key: '' for key in SERVICES}
+        self._restart_lock = threading.Lock()
+        self._restart_batch = None
         self.children: dict[str, subprocess.Popen] = {}
 
     def discover(self, key):
@@ -140,6 +142,61 @@ class Manager:
                     result['state'] = 'unavailable'
         return result
 
+    def restart_status(self):
+        with self._restart_lock:
+            if self._restart_batch is None:
+                return None
+            return {'active': self._restart_batch['active'],
+                    'services': self._restart_batch['services'].copy()}
+
+    def restart_running(self, targets):
+        if not isinstance(targets, list) or not 1 <= len(targets) <= len(SERVICES):
+            raise ValueError('Select one or more running services')
+        confirmed = {}
+        for target in targets:
+            if not isinstance(target, dict):
+                raise ValueError('Invalid service identity')
+            key, pid, created = target.get('id'), target.get('pid'), target.get('created')
+            if (not isinstance(key, str) or key not in SERVICES or key in confirmed
+                    or type(pid) is not int or type(created) not in (int, float)):
+                raise ValueError('Invalid service identity')
+            confirmed[key] = (pid, created)
+        with self._restart_lock:
+            if self._restart_batch and self._restart_batch['active']:
+                raise ValueError('A service restart batch is already running')
+            self._restart_batch = {'active': True, 'services': {key: {'state': 'pending'} for key in confirmed}}
+
+        def record(key, state, error=''):
+            with self._restart_lock:
+                self._restart_batch['services'][key] = {'state': state, 'error': error}
+
+        def run():
+            # Interface operations share a lock with version patches. Wait for
+            # each service to come back before submitting the next restart.
+            try:
+                for key, (pid, created) in confirmed.items():
+                    try:
+                        current = self.snapshot(key)
+                        if current['state'] != 'running' or (current['pid'], current['created']) != (pid, created):
+                            record(key, 'skipped')
+                            continue
+                        record(key, 'restarting')
+                        worker = self.submit(key, 'restart', pid, created)
+                        worker.join()
+                        current = self.snapshot(key)
+                        if current['state'] == 'running' and (current['pid'], current['created']) != (pid, created):
+                            record(key, 'restarted')
+                        else:
+                            record(key, 'failed', current['error'] or 'Service did not become ready')
+                    except Exception as exc:
+                        record(key, 'failed', str(exc))
+            finally:
+                with self._restart_lock:
+                    self._restart_batch['active'] = False
+
+        threading.Thread(target=run, daemon=True).start()
+        return self.restart_status()
+
     def submit(self, key, action, identity, created=None):
         if not isinstance(key, str) or not isinstance(action, str):
             raise ValueError('Invalid service or operation')
@@ -198,7 +255,9 @@ class Manager:
             finally:
                 self.status[key] = ''
                 self.locks[key].release()
-        threading.Thread(target=work, daemon=True).start()
+        worker = threading.Thread(target=work, daemon=True)
+        worker.start()
+        return worker
 
     def start(self, key, *, port=None):
         definition = SERVICES[key]

@@ -24,34 +24,38 @@ def calculate(sources, parameters):
 def main():
     from src.proj import PATH
     from src.res.model.analytic.compare import CompareConfig
-    st.set_page_config(page_title='Model Compare', layout='wide')
-    from src.api.learndl_monitor.restart_control import restart_link
+    from src.api.learndl_monitor.streamlit_language import page_toolbar, text as t
 
-    heading, language, restart = st.columns((7, 2, 1), vertical_alignment='center')
-    zh = language.selectbox('Language', ['中文', 'English'], label_visibility='collapsed') == '中文'
-    with restart:
-        st.html('<div style="text-align:right">' + restart_link('compare', int(st.get_option('server.port')), browser_url=st.context.url) + '</div>')
-    def t(chinese, english):
-        return chinese if zh else english
-    heading.title(t('模型对比', 'Model Compare'))
+    st.set_page_config(page_title='Model Compare', layout='wide')
+
+    def comparison_settings():
+        config = asdict(CompareConfig())
+        custom_periods = st.text_area(t('自定义分期 JSON', 'Custom periods JSON'), value='{}', key='compare-custom-periods')
+        config['top_n'] = st.number_input(t('Top N 选股数', 'Top N stock count'), min_value=1, value=50, key='compare-top-n')
+        labels = {
+            'submodel': ('子模型', 'Submodel'), 'ic_benchmark': ('IC 基准', 'IC benchmark'),
+            'top_sheet': ('Top N 结果工作表', 'Top N results worksheet'), 'top_strategy': ('Top N 策略', 'Top N strategy'),
+            'top_benchmark': ('Top N 策略基准', 'Top N strategy benchmark'), 'top_suffix': ('Top N 结果后缀', 'Top N results suffix'),
+        }
+        for key, names in labels.items():
+            config[key] = st.text_input(t(*names), value=config[key], key='compare-' + key)
+        return config, custom_periods
+
+    refresh, (config, custom_periods) = page_toolbar(render_settings=comparison_settings)
+    st.title(t('模型对比', 'Model Compare'))
     candidates = sorted(PATH.model.rglob('detailed_alpha_data.xlsx'))
     with st.form('comparison'):
-        selected = st.multiselect(t('选择至少两个模型', 'Select at least two models'), candidates,
-                                  format_func=lambda p: str(p.parent.parent.relative_to(PATH.model)))
-        extra = st.text_area(t('其他服务器报告或模型目录（每行一个）', 'Other server report/model paths (one per line)'))
-        left, right = st.columns(2)
-        start = left.text_input(t('开始日期 YYYYMMDD（可空）', 'Start YYYYMMDD (optional)'))
-        end = right.text_input(t('结束日期 YYYYMMDD（可空）', 'End YYYYMMDD (optional)'))
-        periods = st.multiselect(t('分期', 'Periods'), ['all', 'year', 'recent_year', 'quarter', 'month'], ['all', 'year', 'recent_year'])
-        templates = st.multiselect(t('分析模板', 'Templates'), ['ic', 'top', 'complementarity'], ['ic', 'top', 'complementarity'])
-        rolling = st.number_input(t('滚动窗口', 'Rolling window'), min_value=1, value=20)
-        method = st.selectbox(t('相关性方法', 'Correlation method'), ['pearson', 'spearman'])
-        config = asdict(CompareConfig())
-        with st.expander(t('高级设置', 'Advanced settings')):
-            custom_periods = st.text_area(t('自定义分期 JSON', 'Custom periods JSON'), value='{}')
-            config['top_n'] = st.number_input('top_n', min_value=1, value=50)
-            for key in ('submodel', 'ic_benchmark', 'top_sheet', 'top_strategy', 'top_benchmark', 'top_suffix'):
-                config[key] = st.text_input(key, value=config[key])
+        with st.expander(t('模型、日期与比较指标', 'Models, dates and comparison metrics'), expanded=True):
+            selected = st.multiselect(t('选择至少两个模型', 'Select at least two models'), candidates,
+                                      format_func=lambda p: str(p.parent.parent.relative_to(PATH.model)))
+            extra = st.text_area(t('其他服务器报告或模型目录（每行一个）', 'Other server report/model paths (one per line)'))
+            left, right = st.columns(2)
+            start = left.text_input(t('开始日期 YYYYMMDD（可空）', 'Start YYYYMMDD (optional)'))
+            end = right.text_input(t('结束日期 YYYYMMDD（可空）', 'End YYYYMMDD (optional)'))
+            periods = st.multiselect(t('分期', 'Periods'), ['all', 'year', 'recent_year', 'quarter', 'month'], ['all', 'year', 'recent_year'])
+            templates = st.multiselect(t('分析模板', 'Templates'), ['ic', 'top', 'complementarity'], ['ic', 'top', 'complementarity'])
+            rolling = st.number_input(t('滚动窗口', 'Rolling window'), min_value=1, value=20)
+            method = st.selectbox(t('相关性方法', 'Correlation method'), ['pearson', 'spearman'])
         submitted = st.form_submit_button(t('比较 / 重新读取', 'Compare / reread'))
     if submitted:
         try:
@@ -61,11 +65,20 @@ def main():
                 raise ValueError(t('请至少选择两个不同模型。', 'Select at least two distinct models.'))
             config['custom_periods'] = json.loads(custom_periods)
             if not isinstance(config['custom_periods'], dict):
-                raise ValueError('Custom periods must be an object')
+                raise ValueError(t('自定义分期必须是 JSON 对象', 'Custom periods must be a JSON object'))
             config.update(start=int(start) if start else None, end=int(end) if end else None,
                           periods=tuple(periods), templates=tuple(templates), rolling_window=rolling, corr_method=method,
                           analyze_pred=False, analyze_hidden=False)
             CompareConfig(**config).validate()
+            st.session_state['comparison_request'] = (paths, config)
+        except Exception as exc:
+            st.error(str(exc))
+            refresh = False
+        else:
+            refresh = True
+    if refresh and 'comparison_request' in st.session_state:
+        paths, config = st.session_state['comparison_request']
+        try:
             with st.spinner(t('读取并比较已有结果…', 'Comparing existing results…')):
                 sources = tuple((str(p), p.stat().st_mtime_ns, p.stat().st_size) for p in paths)
                 calculate.clear()
@@ -76,7 +89,8 @@ def main():
     result = st.session_state.get('comparison_result')
     if result is None:
         return
-    st.dataframe(result.summary, hide_index=True)
+    with st.expander(t('模型比较结果', 'Model comparison results'), expanded=True):
+        st.dataframe(result.summary, hide_index=True)
     for key in ('ic_series', 'top_series'):
         frame = result.tables.get(key)
         if frame is None or frame.empty:

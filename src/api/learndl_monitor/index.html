@@ -4,16 +4,16 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Learndl Monitor</title>
 <meta name="console-token" content="__CONSOLE_TOKEN__">
+<link rel="stylesheet" href="/monitor-toolbar.css">
 <style>
 :root{color-scheme:dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
 *{box-sizing:border-box}body{margin:0}main{max-width:1120px;margin:60px auto;padding:0 28px}
 header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;gap:20px}h1{font-size:30px;font-weight:550;letter-spacing:-1px;margin:0}
-.header-controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.filter{position:relative}
-.filter-panel{position:absolute;right:0;top:calc(100% + 8px);min-width:200px;max-width:calc(100vw - 40px);max-height:65vh;overflow:auto;z-index:20;padding:12px;background:#17212c;border:1px solid #344355;border-radius:9px;box-shadow:0 8px 24px #0008}
-.filter-panel label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer}
-.filter-panel input{accent-color:#55ccb9}
-.filter-panel button{margin-top:8px}
+#filter-options label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer}
+#filter-options input{accent-color:#55ccb9}
+#show-all{margin-top:8px}
+#batch-status{white-space:pre-line;color:#a8bdcc;margin:0 0 14px}
+#batch-status:empty{display:none}
 select,button{background:#202c3a;color:#dce8ee;border:1px solid #344355;border-radius:7px;padding:10px 12px;cursor:pointer}
 button:hover,button:focus-visible{border-color:#55ccb9}button:disabled{opacity:.3;cursor:default}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
@@ -23,7 +23,6 @@ button:hover,button:focus-visible{border-color:#55ccb9}button:disabled{opacity:.
 .card-controls{display:flex;justify-content:flex-end;gap:0;margin:0 -8px 2px}
 .card-controls button{display:grid;place-items:center;width:21px;height:23px;padding:0;font-size:15px;line-height:1;color:#a8bdcc;background:transparent;border-color:transparent}
 .hide-card svg{width:15px;height:15px}
-#restart-console{width:38px;padding:0;height:38px;font-size:22px;line-height:1}
 #restart-request{margin-bottom:16px}
 #restart-request[hidden]{display:none}
 #empty{text-align:center;padding:24px;color:#a8bdcc}
@@ -35,35 +34,52 @@ h2{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:550;margi
 .tooltip{display:none;position:absolute;z-index:10;left:16px;right:16px;top:65px;padding:16px;background:#243342;border:1px solid #466079;border-radius:8px;box-shadow:0 12px 30px #0008;font:13px/1.8 monospace;white-space:pre-line;overflow-wrap:anywhere;color:#c3d1df;pointer-events:none}
 h2:hover+.tooltip,h2:focus+.tooltip{display:block}#notice{color:#ffb6a6;margin-bottom:15px;font-size:13px}#notice:empty{display:none}
 @media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.grid{grid-template-columns:1fr}main{margin-top:30px}h1{font-size:25px}}
-@media(max-width:600px){header{flex-wrap:wrap;gap:12px}.header-controls{flex-wrap:wrap;max-width:100%}}
-@media(max-width:380px){.filter-panel{right:auto;left:0}}
+@media(max-width:600px){
+ main{padding:0 12px}
+ header{gap:8px}
+ h1{font-size:20px;overflow-wrap:anywhere}
+ .monitor-toolbar{flex:none;gap:6px}
+ .monitor-toolbar .monitor-icon{width:36px;height:36px}
+}
+
 </style>
 <main>
-<header><h1>Learndl Monitor</h1><div class="header-controls">
- <div class="filter" id="filter">
-  <button id="filter-toggle" type="button" aria-controls="filter-panel" aria-expanded="false" disabled>子服务</button>
-  <div class="filter-panel" id="filter-panel" hidden>
-   <div id="filter-options"></div><button id="show-all" type="button"></button>
-  </div>
+<header class="monitor-header"><h1>Learndl Monitor</h1>
+ <div class="monitor-toolbar">
+  <details id="resources" class="monitor-menu">
+   <summary class="monitor-icon" data-monitor-icon="resources" aria-label="系统资源"></summary>
+   <div class="monitor-panel" id="resource-data" role="status"></div>
+  </details>
+  <details id="settings" class="monitor-menu">
+   <summary class="monitor-icon" id="settings-toggle" data-monitor-icon="settings" aria-label="设置"></summary>
+   <div class="monitor-panel" id="settings-panel">
+    <label class="monitor-field"><span data-monitor-label="language">页面语言</span>
+     <select id="language"><option value="zh">中文</option><option value="en">English</option></select>
+    </label>
+    <h2 class="monitor-section-title" id="service-list-title">子服务列表</h2>
+    <div id="filter-options"></div><button id="show-all" type="button"></button>
+   </div>
+  </details>
+  <button class="monitor-icon" id="refresh-page" type="button" data-monitor-icon="refresh" aria-label="刷新"></button>
+  <button class="monitor-icon" id="restart-services" type="button" data-monitor-icon="restart" aria-label="重启运行中的子服务" disabled></button>
  </div>
- <select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>
- <button id="restart-console" type="button" title="重启控制台" aria-label="重启控制台">↻</button>
-</div></header>
+</header>
 <div id="notice" role="alert"></div><div id="preferences-error" role="alert"></div>
+<p id="batch-status" role="status"></p>
 <section class="actions" id="restart-request" hidden></section>
 <section class="grid" id="cards"></section>
 <div id="empty" hidden><p id="empty-message"></p><button id="empty-show-all" type="button"></button></div>
 </main>
+<script src="/monitor-navigation.js"></script>
 <script>
 let token=document.querySelector('meta[name=console-token]').content;
 const restartIntent=new URLSearchParams((location.hash||'').slice(1));
 if(token)sessionStorage.setItem('learndl-token',token);
+let lang=monitorNavigation.language(),services=[];
 history.replaceState(null,'',location.pathname);
-let lang=localStorage.getItem('learndl-language')||'zh',services=[];
 let hiddenServices=new Set(),preferencesReady=false,savingPreferences=false,preferencesGeneration=0;
 let serviceOrder=[];
-let restartingConsole=false;
-if(!['zh','en'].includes(lang))lang='zh';
+let submittingBatch=false,batch=null,resource=null,loadingResources=false,resourceError="";
 const labels={
  zh:{start:'启动',open:'打开',restart:'重启',stop:'关闭',stopped:'已关闭',running:'运行中',starting:'启动中',stopping:'关闭中',restarting:'重启中',scanning:'扫描中',unavailable:'未就绪',managed:'控制台启动',external:'外部发现',confirm:'确认执行此操作？',descriptions:{mail_archive:'同步邮件、执行信息及附件',model_preview:'训练、测试日志与实验结果',compare:'已有模型结果的交互对比',experiments:'TensorBoard 与 Optuna 多实例管理',tasks:'任务状态、运行输出与进程管理',storage:'磁盘占用、目录分布与快照报告',research:'数据、模型与研究工作流'}},
  en:{start:'Start',open:'Open',restart:'Restart',stop:'Stop',stopped:'Stopped',running:'Running',starting:'Starting',stopping:'Stopping',restarting:'Restarting',scanning:'Scanning',unavailable:'Not ready',managed:'Console managed',external:'Discovered externally',confirm:'Confirm this operation?',descriptions:{mail_archive:'Synced mail and attachments',model_preview:'Training and test logs and results',compare:'Interactive comparison of existing model results',experiments:'TensorBoard and Optuna instance management',tasks:'Task status, live output and process controls',storage:'Disk usage, directory insights and snapshot reports',research:'Data, models and research workflows'}}
@@ -89,7 +105,7 @@ async function api(path,body,retry=true){
  if(!r.ok){
   const fallback=lang==='zh'?'请求失败，请稍后重试。':'Request failed. Please try again.';
   const error=await r.json().catch(()=>({}));
-  if(r.status===403&&!error.error&&['/api/preferences','/api/restart'].includes(path)){
+  if(r.status===403&&!error.error&&['/api/preferences','/api/restart-services','/api/resources'].includes(path)){
    throw Error(lang==='zh'?'当前控制台后端尚未更新，请从 CLI 重启 Learndl Monitor。':'This console is running an older backend. Restart Learndl Monitor from the CLI.');
   }
   throw Error(error.error||fallback);
@@ -97,18 +113,8 @@ async function api(path,body,retry=true){
  return r.json();
 }
 function element(tag,text,cls){const e=document.createElement(tag);if(text)e.textContent=text;if(cls)e.className=cls;return e;}
-function setFilterOpen(open){
- document.getElementById('filter-panel').hidden=!open;
- document.getElementById('filter-toggle').setAttribute('aria-expanded',String(open));
-}
-function renderFilter(ordered){
- const restart=document.getElementById('restart-console');
- restart.title=lang==='zh'?'重启控制台':'Restart console';
- restart.setAttribute('aria-label',restart.title);
- restart.disabled=restartingConsole;
- const toggle=document.getElementById('filter-toggle');
- toggle.textContent=lang==='zh'?'子服务':'Services';
- toggle.disabled=!preferencesReady;
+function renderSettings(ordered){
+ document.getElementById('service-list-title').textContent=lang==='en'?'Service list':'子服务列表';
  const options=document.getElementById('filter-options');
  for(const [index,service] of ordered.entries()){
   let row=document.getElementById('filter-'+service.id);
@@ -136,32 +142,67 @@ function renderFilter(ordered){
  document.getElementById('empty-message').textContent=lang==='zh'?'所有子服务已隐藏。':'All services are hidden.';
  document.getElementById('empty').hidden=!preferencesReady||!services.length||services.some(s=>!hiddenServices.has(s.id));
 }
-async function restartConsole(){
- if(restartingConsole||!confirm(lang==='zh'?'重启 Learndl Monitor？子服务会继续运行。':'Restart Learndl Monitor? Child services will keep running.'))return;
- restartingConsole=true;
- render();
- const notice=document.getElementById('preferences-error');
- notice.textContent=lang==='zh'?'控制台正在重启…':'Restarting console…';
- try{
-  const {instance}=await api('/api/restart',{});
-  const deadline=Date.now()+20000;
-  while(Date.now()<deadline){
-   await new Promise(resolve=>setTimeout(resolve,500));
-   const status=await api('/api/services').catch(()=>null);
-   if(status?.instance&&status.instance!==instance){location.reload();return;}
-  }
-  throw Error(lang==='zh'?'控制台尚未重新连接，请稍后刷新。':'Console has not reconnected. Try refreshing shortly.');
- }catch(error){
-  notice.textContent=error.message;
-  restartingConsole=false;
-  render();
- }
+const batchActive=()=>submittingBatch||batch?.active;
+const runningServices=()=>services.filter(item=>item.state==='running'&&item.pid);
+function renderBatch(){
+ document.getElementById('restart-services').disabled=!!batchActive()||!runningServices().length;
+ const status=document.getElementById('batch-status');
+ if(submittingBatch&&!batch?.active){status.textContent=lang==='zh'?'正在提交重启请求…':'Requesting service restarts…';return;}
+ if(!batch){status.textContent='';return;}
+ const entries=Object.entries(batch.services);
+ const complete=entries.filter(([,item])=>item.state==='restarted').length;
+ const failed=entries.filter(([,item])=>item.state==='failed'||item.state==='skipped');
+ const title=batch.active?(lang==='zh'?'正在重启子服务':'Restarting services'):(lang==='zh'?'子服务重启结束':'Service restarts finished');
+ const message=[title+' · '+complete+'/'+entries.length,...failed.map(([key,item])=>{
+  const name=services.find(service=>service.id===key)?.[lang]||key;
+  const label=item.state==='skipped'?(lang==='zh'?'运行状态已变化，已跳过':'Skipped because the service changed'):(lang==='zh'?'重启失败':'Restart failed');
+  return [name,label,item.error].filter(Boolean).join(' · ');
+ })].join('\n');
+ if(status.textContent!==message)status.textContent=message;
 }
-function serviceAddress(id, address) {
- if (id !== 'tasks') return address;
- const url = new URL(address);
- url.searchParams.set('lang', lang);
- return url.href;
+async function restartServices(){
+ const targets=runningServices();
+ if(batchActive()||!targets.length)return;
+ const caption=lang==='zh'?'重启以下正在运行的子服务？':'Restart these running services?';
+ if(!confirm(caption+'\n'+targets.map(item=>item[lang]).join('\n')))return;
+ submittingBatch=true;render();
+ const notice=document.getElementById('preferences-error');
+ notice.textContent='';
+ try{
+  batch=(await api('/api/restart-services',{targets:targets.map(({id,pid,created})=>({id,pid,created}))})).restart_batch;
+  notifyChange();
+  await refresh();
+ }catch(error){notice.textContent=error.message;}
+ finally{submittingBatch=false;render();}
+}
+function renderResources(){
+ const panel=document.getElementById('resource-data');
+ if(!document.getElementById('resources').open)return;
+ if(resourceError){panel.textContent=resourceError;return;}
+ if(!resource){panel.textContent=lang==='zh'?'正在读取系统资源…':'Loading system resources…';return;}
+ const unknown=lang==='zh'?'不可用':'Unavailable';
+ const percent=value=>value==null?unknown:value.toFixed(1)+'%';
+ const format=stats=>stats?`${(stats[0]/2**30).toFixed(1)} / ${(stats[1]/2**30).toFixed(1)} GiB (${percent(stats[2])})`:unknown;
+ const stats=[[lang==='zh'?'内存':'Memory',format(resource.memory)],['CPU',percent(resource.cpu_percent)],
+  [lang==='zh'?'项目磁盘':'Project disk',format(resource.disk)]];
+ const gib=value=>value==null?'—':(value/1024).toFixed(1);
+ for(const gpu of resource.gpus)stats.push([gpu.name,`${gib(gpu.used_mib)} / ${gib(gpu.total_mib)} GiB · ${percent(gpu.utilization)}`]);
+ if(!resource.gpus.length)stats.push(['GPU',unknown]);
+ const list=element('dl');
+ list.append(...stats.flatMap(([key,value])=>[element('dt',key),element('dd',value)]));
+ const sampled=new Date(resource.sampled_at*1000).toLocaleString(lang==='zh'?'zh-CN':'en-US');
+ panel.replaceChildren(element('p', (lang==='zh'?'采样时间':'Sampled')+' · '+sampled),
+   list,...resource.errors.map(error=>element('p',error,'muted')));
+}
+async function refreshResources(){
+ if(loadingResources||!document.getElementById('resources').open)return;
+ loadingResources=true;resourceError='';renderResources();
+ try{resource=await api('/api/resources');}
+ catch(error){resourceError=error.message;}
+ finally{loadingResources=false;renderResources();}
+}
+function serviceAddress(address) {
+ return monitorNavigation.address(address, lang);
 }
 function prepareServiceRestart(){
  const key=restartIntent.get('restart-service'), port=Number(restartIntent.get('port'));
@@ -176,7 +217,7 @@ function prepareServiceRestart(){
  const caption=element('span',lang==='zh'?`重启 ${service[lang]}？`:`Restart ${service[lang]}?`);
  caption.setAttribute('role','status');
  const accept=element('button',t('restart')), cancel=element('button',lang==='zh'?'返回':'Back');
- cancel.onclick=()=>location.replace(serviceAddress(key, service.url));
+ cancel.onclick=()=>location.replace(serviceAddress(service.url));
  accept.onclick=async()=>{
   accept.disabled=true;cancel.disabled=true;caption.textContent=t('restarting')+' · '+service[lang];
   try{
@@ -186,7 +227,8 @@ function prepareServiceRestart(){
     const current=(await api('/api/services')).services.find(item=>item.id===key);
     if(current?.error)throw Error(current.error);
     if(current?.state==='running'&&current.url&&(current.pid!==service.pid||current.created!==service.created)){
-     location.replace(serviceAddress(key, current.url));return;
+     await monitorNavigation.waitForRoute(current.url, lang);
+     location.replace(serviceAddress(current.url));return;
     }
     await new Promise(resolve=>setTimeout(resolve,1000));
    }
@@ -211,7 +253,7 @@ async function savePreferences(change,returnFocus=false){
   const result=await api('/api/preferences',change);
   hiddenServices=new Set(result.preferences.hidden);
   serviceOrder=result.preferences.order||[];
-  if(returnFocus)document.getElementById('filter-toggle').focus();
+  if(returnFocus)document.getElementById('settings-toggle').focus();
   notifyChange();
  }catch(error){notice.textContent=error.message;}
  finally{
@@ -222,10 +264,10 @@ async function savePreferences(change,returnFocus=false){
  }
 }
 function render(){
- document.documentElement.lang=lang;
+ monitorNavigation.apply(lang);
  const ranks=new Map(serviceOrder.map((id,index)=>[id,index]));
  const ordered=[...services].sort((a,b)=>(ranks.get(a.id)??ranks.size)-(ranks.get(b.id)??ranks.size));
- renderFilter(ordered);
+ renderSettings(ordered);renderBatch();
  if(!preferencesReady)return;
  const root=document.getElementById('cards');
  const visible=ordered.filter(service=>!hiddenServices.has(service.id));
@@ -252,7 +294,7 @@ function render(){
    card.append(controls,title,tip,element('div',null,'actions'));root.append(card);
   }
   if(root.children[index]!==card)root.insertBefore(card,root.children[index]||null);
-  if(hiddenServices.has(s.id)&&card.contains(document.activeElement))document.getElementById('filter-toggle').focus();
+  if(hiddenServices.has(s.id)&&card.contains(document.activeElement))document.getElementById('settings-toggle').focus();
   card.hidden=hiddenServices.has(s.id);
   const hide=card.querySelector('.hide-card');
   hide.title=lang==='zh'?`隐藏 ${s[lang]}`:`Hide ${s[lang]}`;
@@ -266,17 +308,18 @@ function render(){
   later.disabled=savingPreferences||visible[visible.length-1]===s;
   card.className='card '+s.state+(s.error?' failed':'');
   card.querySelector('h2 span:last-child').textContent=s[lang];
-  card.querySelector('.tooltip').textContent=[labels[lang].descriptions[s.id],t(s.state),s.pid?`PID ${s.pid} · ${t(s.source)} · ${s.uptime}s · ${s.count} ${lang==='zh'?'个实例':'instance(s)'}`:'',s.url||`127.0.0.1:${s.port}`,s.snapshot,s.error].filter(Boolean).join('\n');
+  card.querySelector('.tooltip').textContent=[labels[lang].descriptions[s.id],t(s.state),s.pid?`PID ${s.pid} · ${t(s.source)} · ${s.uptime}s · ${s.count} ${lang==='zh'?'个实例':'instance(s)'}`:'',s.url?monitorNavigation.address(s.url):`127.0.0.1:${s.port}`,s.snapshot,s.error].filter(Boolean).join('\n');
   const actions=card.querySelector('.actions');
   for(const action of ['start','open','restart','stop']){
    let b=actions.querySelector('[data-action='+action+']');
    if(!b){b=element('button');b.dataset.action=action;actions.append(b);}
    b.textContent=t(action);b.className=action==='start'?'primary':'';
    b.disabled=action==='start'?s.state!=='stopped':action==='open'?!s.url:action==='stop'?(!s.pid||['stopping','restarting'].includes(s.state)):!['running','unavailable'].includes(s.state);
+   if(batchActive()&&action!=='open')b.disabled=true;
    b.onclick=async()=>{
     let popup=null;
     try{
-     if(action==='open'){window.open(serviceAddress(s.id, s.url),'_blank','noopener');return;}
+     if(action==='open'){await monitorNavigation.open(serviceAddress(s.url),lang);return;}
      if(['restart','stop'].includes(action)&&!confirm(`${t('confirm')}\n${s[lang]} · PID ${s.pid} · ${t(s.source)}`))return;
      if(action==='start'){popup=window.open('','_blank');if(popup){popup.opener=null;popup.document.body.textContent=lang==='zh'?'正在启动…':'Starting…';}}
      b.disabled=true;await api('/api/action',{service:s.id,action,pid:s.pid,created:s.created});notifyChange();await refresh();
@@ -289,7 +332,8 @@ function render(){
        await new Promise(resolve=>setTimeout(resolve,1000));
       }
       if(!address)throw Error(lang==='zh'?'启动尚未就绪，请稍后点击打开。':'Not ready yet. Use Open when ready.');
-      if(popup&&!popup.closed)popup.location.replace(serviceAddress(s.id, address));else document.getElementById('notice').textContent=lang==='zh'?'浏览器阻止了新窗口，请点击打开。':'Popup blocked. Click Open.';
+      await monitorNavigation.waitForRoute(address, lang);
+      if(popup&&!popup.closed)popup.location.replace(serviceAddress(address));else document.getElementById('notice').textContent=lang==='zh'?'浏览器阻止了新窗口，请点击打开。':'Popup blocked. Click Open.';
      }
     }catch(e){if(popup&&!popup.closed)popup.close();document.getElementById('notice').textContent=e.message;}
    };
@@ -310,6 +354,7 @@ function refresh(){
    const generation=preferencesGeneration;
    const response=await api('/api/services');
    services=response.services;
+   if(!submittingBatch)batch=response.restart_batch||null;
    if(!savingPreferences&&generation===preferencesGeneration){
     hiddenServices=new Set(response.preferences?.hidden||[]);
     serviceOrder=response.preferences?.order||[];
@@ -330,18 +375,17 @@ window.addEventListener('pageshow',()=>refresh());
 window.addEventListener('online',()=>refresh());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 document.getElementById('language').value=lang;
-document.getElementById('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);render();};
-const filter=document.getElementById('filter'),filterToggle=document.getElementById('filter-toggle');
-filterToggle.onclick=()=>setFilterOpen(document.getElementById('filter-panel').hidden);
+document.getElementById('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);render();renderResources();};
 document.getElementById('show-all').onclick=()=>savePreferences({show_all:true});
-document.getElementById('restart-console').onclick=restartConsole;
 document.getElementById('empty-show-all').onclick=()=>savePreferences({show_all:true},true);
-document.addEventListener('click',event=>{if(!filter.contains(event.target))setFilterOpen(false);});
-document.addEventListener('keydown',event=>{
- if(event.key==='Escape'&&!document.getElementById('filter-panel').hidden){
-  setFilterOpen(false);filterToggle.focus();
- }
-});
+document.getElementById('restart-services').onclick=restartServices;
+document.getElementById('resources').ontoggle=refreshResources;
+document.getElementById('refresh-page').onclick=async event=>{
+ const button=event.currentTarget;
+ button.disabled=true;
+ try{await Promise.all([refresh(),refreshResources()]);}
+ finally{button.disabled=false;}
+};
 refresh().then(prepareServiceRestart);setInterval(refresh,2000);
 </script>
 </html>

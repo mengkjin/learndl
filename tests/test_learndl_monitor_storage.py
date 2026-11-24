@@ -93,7 +93,10 @@ class StorageServiceTest(unittest.TestCase):
                     self.assertEqual(status()['sources'][0]['source_host'], 'server')
                     with urlopen(address + '/remote/server', timeout=5) as response:
                         self.assertIn('sandbox allow-scripts', response.headers['Content-Security-Policy'])
-                        self.assertIn(b'Project Storage Report', response.read())
+                        remote_page = response.read()
+                        self.assertIn(b'Project Storage Report', remote_page)
+                        self.assertIn(b'color-scheme: dark', remote_page)
+                        self.assertIn(b'learndl-storage-language', remote_page)
                     self.assertEqual(calls, [])
                     with post('scan', b'{"email":false}') as response:
                         self.assertEqual(response.status, 202)
@@ -112,12 +115,15 @@ class StorageServiceTest(unittest.TestCase):
                             break
                         time.sleep(.02)
                     self.assertEqual(calls, [False])
-                    with urlopen(address, timeout=5) as response:
-                        self.assertIn(b'emailAfter', response.read())
+                    with urlopen(address + '?lang=en', timeout=5) as response:
+                        page = response.read()
+                        self.assertIn(b'emailAfter', page)
+                        self.assertIn(b'role="tablist"', page)
                     with urlopen(address + '/snapshot/', timeout=5) as response:
                         snapshot_page = response.read()
                         self.assertIn(b'/snapshot/', snapshot_page)
-                        self.assertIn(b'color-scheme:dark', snapshot_page)
+                        self.assertIn(b'color-scheme: dark', snapshot_page)
+                        self.assertIn(b'learndl-storage-language', snapshot_page)
                     self.assertNotIn('color-scheme:dark', report.read_text())
                     with post('scan') as response:
                         self.assertEqual(response.status, 202)

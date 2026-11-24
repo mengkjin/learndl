@@ -17,7 +17,7 @@ from urllib.parse import parse_qsl, quote, urlsplit
 
 import psutil
 
-from src.api.learndl_monitor.restart_control import restart_link
+from src.api.learndl_monitor.page_assets import PAGE_ASSETS, serve_page_asset
 from src.api.task_monitor.web_api import TaskCenter
 
 __all__ = ['create_server', 'main']
@@ -69,10 +69,11 @@ def create_server(port=8502, *, center=None):
             if not self.local():
                 return self.reply({'error': 'Forbidden'}, 403)
             url = urlsplit(self.path)
+            if url.path in PAGE_ASSETS:
+                return serve_page_asset(self, url.path)
             if url.path in PAGES:
                 page = (ASSETS / 'dashboard.html').read_text(encoding='utf-8')
-                restart = restart_link('tasks', cast(ThreadingHTTPServer, self.server).server_port)
-                page = page.replace('__TOKEN__', token).replace('__RESTART_LINK__', restart)
+                page = page.replace('__TOKEN__', token)
                 return self.reply(page.encode(), mime='text/html; charset=utf-8')
             if url.path in STATIC:
                 asset = ASSETS / STATIC[url.path]

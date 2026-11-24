@@ -204,7 +204,8 @@ class stAPIEndpointList:
 def show_api_browser() -> stAPIEndpoint | None:
     """show the api browser , including the tree and detail of selected api endpoint"""
     wkey = f'api-browser-{API_ADAPTER_SCRIPT_KEY}'
-    header = 'API Browser'
+    from src.api.learndl_monitor.streamlit_language import text
+    header = text('API 浏览器', 'API Browser')
     icon = ':material/code:'
     sub = subheader_expander(header , icon , True , help = "Browse and select API endpoints." , key = wkey)
     tree_key = "api_sac_tree"
@@ -212,7 +213,8 @@ def show_api_browser() -> stAPIEndpoint | None:
         with st.container(height = 530):
             browser , detail = st.columns([2,3])
             with browser:
-                needle = st.text_input("**_Filter Endpoints by module or name_**" , key = "api_console_search").strip().lower()
+                with st.expander(text('接口模块与名称', 'Endpoint module and name')):
+                    needle = st.text_input(text('搜索接口', 'Search endpoints'), key='api_console_search').strip().lower()
                 endpoints = stAPIEndpointList.get_list(needle)
 
                 if not endpoints:
@@ -243,16 +245,17 @@ def show_api_browser() -> stAPIEndpoint | None:
                     if any(v not in valid_options for v in stored_option if v is not None):
                         del st.session_state[tree_key]
 
-                picked = sac.tree( # type: ignore[reportUnknownReturnType]
-                    items = tree_items ,
-                    index = default_index ,
-                    format_func = stAPIEndpointList.label_formatter ,
-                    open_all = True ,
-                    show_line = True ,
-                    height = 400 ,
-                    return_index = False ,
-                    key = tree_key ,
-                )
+                with st.expander(text('接口列表', 'Endpoint list'), expanded=True):
+                    picked = sac.tree( # type: ignore[reportUnknownReturnType]
+                        items = tree_items ,
+                        index = default_index ,
+                        format_func = stAPIEndpointList.label_formatter ,
+                        open_all = True ,
+                        show_line = True ,
+                        height = 400 ,
+                        return_index = False ,
+                        key = tree_key ,
+                    )
                 if picked:
                     option = picked[0] if isinstance(picked , list) else picked
                     if isinstance(option , str) and option:

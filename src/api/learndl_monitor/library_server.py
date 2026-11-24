@@ -13,7 +13,7 @@ from zipfile import BadZipFile
 
 from .artifact_library import Library, open_folder, open_local
 from .mail_html import static_mail_html
-from .restart_control import restart_link
+from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import SERVICES, STATE
 
 
@@ -52,7 +52,7 @@ def main(kind, *, state=STATE):
             self.headers_for(status, 'text/html; charset=utf-8' if html else 'application/json', len(output),
                              referrer='same-origin' if html else 'no-referrer')
             self.send_header('Content-Security-Policy',
-                             "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+                             "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "
                              "connect-src 'self'; img-src data: blob:; frame-src blob:; base-uri 'none'; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(output)
@@ -61,6 +61,8 @@ def main(kind, *, state=STATE):
             url = urlsplit(self.path)
             if not self.local():
                 return self.reply({'error': 'Forbidden'}, 403)
+            if url.path in PAGE_ASSETS:
+                return serve_page_asset(self, url.path)
             if url.path == '/health':
                 return self.reply({'ok': True})
             if url.path == '/' and kind == 'model_preview':
@@ -71,8 +73,7 @@ def main(kind, *, state=STATE):
             if url.path == '/' or kind == 'model_preview' and url.path in ('/preview', '/manage'):
                 page = Path(__file__).with_name('artifact_library.html').read_text()
                 return self.reply(page.replace('__TOKEN__', token).replace('__TITLE__', title)
-                                  .replace('__KIND__', kind).replace('__OTHER__', str(other))
-                                  .replace('__RESTART_LINK__', restart_link(kind, port, state=state)), html=True)
+                                  .replace('__KIND__', kind).replace('__OTHER__', str(other)), html=True)
             if not self.authorized():
                 return self.reply({'error': 'Forbidden'}, 403)
             params = parse_qs(url.query)

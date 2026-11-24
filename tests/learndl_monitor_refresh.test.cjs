@@ -14,10 +14,11 @@ function page(fetch,bus=[]){
  }
  const context=vm.createContext({fetch,URL,URLSearchParams,AbortController,queueMicrotask,setTimeout,clearTimeout,setInterval:()=>{},BroadcastChannel:Channel,
   DOMParser:class{parseFromString(){return {querySelector:()=>({content:'new-token'})};}},
-  sessionStorage:{setItem(){}},localStorage:{getItem:()=>null,setItem(){}},history:{replaceState(){}},location:{pathname:'/'},
+  sessionStorage:{setItem(){}},localStorage:{getItem:()=>null,setItem(){}},history:{replaceState(){}},location:new URL('http://127.0.0.1:8500/'),
   document:{hidden:false,querySelector:()=>({content:'old-token'}),getElementById:id=>elements[id]??=( {} ),addEventListener:(name,callback)=>events[name]=callback},
   window:{addEventListener:(name,callback)=>listeners[name]=callback},
  });
+ vm.runInContext(fs.readFileSync('src/api/learndl_monitor/navigation.js','utf8'),context);
  vm.runInContext(source,context);
  vm.runInContext('render=()=>{}',context);
  return {context,listeners,events,elements,refresh:()=>vm.runInContext('refresh()',context)};
@@ -55,4 +56,28 @@ test('an old tab recovers credentials after a server restart',async()=>{
  await tick();await tick();
  assert.deepEqual(calls,['/api/services','/','/api/services']);
  assert.equal(current.elements.notice.textContent,'');
+});
+test('mobile service links keep the browser host, port, deep link and language', async()=>{
+ const current=page(async()=>ok([]));
+ await tick();
+ current.context.location=new URL('https://console.fixture.ts.net/');
+ vm.runInContext("lang='en'",current.context);
+ const link=address=>vm.runInContext('serviceAddress('+JSON.stringify(address)+')',current.context);
+ assert.equal(link('http://127.0.0.1:8507/preview?run=a#details'),
+  'https://console.fixture.ts.net:8507/preview?run=a&lang=en#details');
+ current.context.location=new URL('http://127.0.0.1:8500/');
+ assert.equal(link('http://127.0.0.1:8503/report'),'http://127.0.0.1:8503/report?lang=en');
+});
+test('mobile startup waits for publication of the requested port', async()=>{
+ const current=page(async()=>ok([]));
+ await tick();
+ current.context.location=new URL('https://console.fixture.ts.net/');
+ let checks=0;
+ current.context.fetch=async path=>{
+  assert.equal(path,'/monitor-navigation.js');
+  return {ok:true,headers:{get:()=>++checks===1?'443,8500':'443,8500,8505'}};
+ };
+ current.context.setTimeout=(callback,delay)=>delay===500?queueMicrotask(callback):undefined;
+ await vm.runInContext("monitorNavigation.waitForRoute('http://127.0.0.1:8505', 'zh')",current.context);
+ assert.equal(checks,2);
 });

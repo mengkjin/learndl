@@ -1,80 +1,301 @@
 <!doctype html>
 <html lang="zh">
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Storage Insights</title>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>存储洞察</title>
+<link rel="stylesheet" href="/monitor-toolbar.css">
 <style>
-:root{color-scheme:dark;font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#10161e;color:#e2e8f0}
-*{box-sizing:border-box}
-body{max-width:1240px;margin:0 auto;padding:36px 24px 0;min-height:100dvh;display:flex;flex-direction:column;gap:14px}
-header,.actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-header{justify-content:space-between;gap:16px}h1{font-size:28px;line-height:1.25;margin:0}
-button,select{font:inherit;background:#202c3a;color:inherit;border:1px solid #3b4b60;border-radius:6px;padding:6px 10px;cursor:pointer}
-button:enabled:hover,button:focus-visible,select:focus-visible{border-color:#55ccb9}
-button:disabled{opacity:.4;cursor:default}label{font-size:13px;color:#a6b8cc}input{accent-color:#55ccb9}
-#activity{padding:8px 14px;background:#17212c;border:1px solid #293748;border-radius:10px}
-summary{cursor:pointer}pre{font:12px/1.8 monospace;color:#a6b8cc;white-space:pre-wrap;max-height:200px;overflow:auto;margin:8px 0 0}
-#error{color:#f4bd9b;margin:0;white-space:pre-wrap}#error:empty{display:none}
-iframe{border:0;width:100%;flex:1;min-height:320px;background:#10161e;display:block}iframe[hidden]{display:none}
-@media(max-width:760px){body{padding:20px 12px 0}}
+:root {
+  color-scheme: dark;
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #10161e;
+  color: #e2e8f0;
+  --panel: #17212c;
+  --border: #293748;
+  --control: #202c3a;
+  --muted: #a6b8cc;
+  --accent: #55ccb9;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { max-width: 1440px; min-height: 100dvh; margin: 0 auto; padding: 36px 24px 24px; display: flex; flex-direction: column; }
+.page-header, .actions, nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-header { justify-content: space-between; gap: 12px; }
+h1 { font-size: 28px; line-height: 1.25; margin: 0; }
+nav { margin: 18px 0 14px; border-bottom: 1px solid var(--border); }
+button, select { font: inherit; background: var(--control); color: inherit; border: 1px solid #3b4b60; border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+button:enabled:hover, button:focus-visible, select:focus-visible { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+nav button { color: var(--muted); background: transparent; padding: 7px 13px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; }
+nav button:hover, nav button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); }
+label, .muted { font-size: 13px; color: var(--muted); }
+.inline { display: inline-flex; align-items: center; gap: 5px; }
+input { accent-color: var(--accent); }
+.strip, #activity, #empty { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin: 0 0 12px; }
+#activity summary { cursor: pointer; }
+#progress { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; margin: 8px 0 0; }
+#error { color: #f4bd9b; margin: 0 0 12px; white-space: pre-wrap; }
+#error:empty { display: none; }
+#source { max-width: min(27rem, 100%); }
+#sourceInfo { overflow-wrap: anywhere; }
+main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+iframe { border: 0; width: 100%; flex: 1; min-height: 24rem; display: block; }
+@media (max-width: 760px) { body { padding: 20px 12px 12px; } }
 </style>
-<header><h1 id="title"></h1><div class="actions"><select id="source" aria-label="报告来源"></select><button id="newReport" hidden></button><button id="scan"></button><label><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label><button id="email"></button><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header>
-<details id="activity"><summary id="summary"></summary><pre id="progress" role="log" aria-live="polite"></pre></details><p id="error" role="alert"></p>
-<p id="sourceInfo"></p><iframe id="report" title="Storage snapshot" hidden></iframe>
+</head>
+<body>
+<header class="page-header monitor-header">
+  <h1 id="title">存储洞察</h1>
+  <div class="monitor-toolbar">
+    <details id="settings" class="monitor-menu"><summary class="monitor-icon" data-monitor-icon="settings" aria-label="设置"></summary>
+    <div class="monitor-panel" id="settings-panel">
+      <label class="monitor-field"><span data-monitor-label="language">页面语言</span><select id="language"><option value="zh">中文</option><option value="en">English</option></select></label>
+      <label class="inline"><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label>
+    </div>
+  </details>
+  <button class="monitor-icon" id="refresh-page" type="button" data-monitor-icon="refresh" aria-label="刷新"></button>
+</div>
+</header>
+<nav id="tabs" role="tablist" aria-label="报告来源">
+  <button type="button" id="local-tab" role="tab" aria-selected="true" aria-controls="report-panel">本机</button>
+  <button type="button" id="remote-tab" role="tab" aria-selected="false" aria-controls="report-panel" tabindex="-1">服务器</button>
+</nav>
+<main id="report-panel" role="tabpanel" aria-labelledby="local-tab">
+  <div id="local-tools" class="strip actions" hidden>
+    <button id="scan"></button>
+    <button id="email"></button>
+  </div>
+  <details id="remote-tools" class="strip" hidden><summary id="sourceFilters"></summary>
+    <div class="actions">
+    <label id="sourceLabel" for="source"></label>
+    <select id="source"></select>
+    <span id="sourceInfo" class="muted"></span>
+    <button id="newReport" hidden></button>
+    </div>
+  </details>
+  <details id="activity" hidden><summary id="summary"></summary><pre id="progress" role="log" aria-live="polite"></pre></details>
+  <p id="error" role="alert"></p>
+  <p id="empty" class="muted" hidden></p>
+  <iframe id="report" title="存储报告" hidden></iframe>
+</main>
+<script src="/monitor-navigation.js"></script>
 <script>
-const base='__SERVICE_BASE__';
-let lang=localStorage.getItem('learndl-language')||'zh',revision=-1;
-let selectedSource=localStorage.getItem('learndl-storage-source')||'',sources=[],loadedRevision='',loadedSource='';
-if(!['zh','en'].includes(lang))lang='zh';
-const words={zh:{title:'存储洞察',scan:'重新扫描',email:'发送当前报告',emailLabel:'扫描后发送邮件',busy:'正在处理',idle:'扫描进度',empty:'尚无快照，请重新扫描',confirm:'将发送当前报告邮件，是否继续？'},en:{title:'Storage Insights',scan:'Rescan',email:'Email current report',emailLabel:'Email after scan',busy:'Working',idle:'Scan progress',empty:'No snapshot yet. Start a scan.',confirm:'Send the current report by email?'}};
-const el=id=>document.getElementById(id),t=key=>words[lang][key];
-function renderLabels(){el('newReport').textContent=lang==='zh'?'查看新版':'View newer report';for(const key of ['title','scan','email','emailLabel'])el(key).textContent=t(key);document.documentElement.lang=lang;}
-async function refresh(){
- try{
-  const response=await fetch(base+'/status');if(!response.ok)throw Error(await response.text());
-  const status=await response.json();
-  sources=status.sources||[];
-  const choices=[{id:'local',label:lang==='zh'?'本机':'This computer'},...sources.map(s=>({id:'remote:'+s.id,label:s.source_host}))];
-  if(!choices.some(s=>s.id===selectedSource))selectedSource=status.snapshot?'local':(sources.length?'remote:'+sources.slice().sort((a,b)=>Date.parse(b.finished)-Date.parse(a.finished))[0].id:'local');
-  el('source').replaceChildren(...choices.map(s=>{const option=document.createElement('option');option.value=s.id;option.textContent=s.label;return option;}));
-  el('source').value=selectedSource;
-  const remote=selectedSource!=='local',info=sources.find(s=>'remote:'+s.id===selectedSource);
-  el('scan').hidden=remote;el('email').hidden=remote;el('emailAfter').parentElement.hidden=remote;el('activity').hidden=remote;
-  el('scan').disabled=status.busy;el('email').disabled=status.busy||!status.snapshot;el('emailAfter').disabled=status.busy;
-  el('summary').textContent=(status.busy?t('busy'):t('idle'))+(status.snapshot?' · '+status.snapshot:'');
-  const progress=el('progress'),atBottom=progress.scrollHeight-progress.scrollTop-progress.clientHeight<30;
-  progress.textContent=(status.progress||[]).join('\n')||(!status.snapshot?t('empty'):'');
-  if(atBottom)progress.scrollTop=progress.scrollHeight;
-  if(status.busy)el('activity').open=true;
-  el('error').textContent=remote?'':status.error;
-  if(remote&&info){
-   if(loadedSource!==selectedSource)loadRemote(info);
-   el('newReport').hidden=loadedRevision===info.revision;
-  }else{
-   el('newReport').hidden=true;el('sourceInfo').textContent='';
-   if(status.snapshot&&(loadedSource!=='local'||revision!==status.revision)){
-    revision=status.revision;loadedSource='local';el('report').removeAttribute('sandbox');
-    el('report').hidden=false;el('report').src=base+'/snapshot/';
-   }else if(!status.snapshot){el('report').hidden=true;loadedSource='';}
+const base = '__SERVICE_BASE__';
+const el = id => document.getElementById(id);
+const savedSource = localStorage.getItem('learndl-storage-source') || '';
+let lang = monitorNavigation.language();
+let tab = savedSource.startsWith('remote:') ? 'remote' : savedSource === 'local' ? 'local' : '';
+let host = savedSource.startsWith('remote:') ? savedSource.slice(7) : '';
+let latest, loaded, refreshing = false, pending = false, requestError = '';
+let hostOptions = '';
+const words = {
+  sourceFilters: ['服务器报告来源', 'Server report source'],
+  title: ['存储洞察', 'Storage Insights'], tabs: ['报告来源', 'Report source'],
+  local: ['本机', 'Local'], remote: ['服务器', 'Server'],
+  report: ['存储报告', 'Storage report'],
+  scan: ['重新扫描', 'Rescan'], email: ['发送当前报告', 'Email current report'],
+  emailLabel: ['扫描后发送邮件', 'Email after scan'], progress: ['执行记录', 'Activity'],
+  busy: ['正在处理', 'Working'], localEmpty: ['暂无本机报告。请重新扫描。', 'No local report yet. Start a scan.'],
+  remoteEmpty: ['等待 Syncthing 同步服务器报告。', 'Waiting for Syncthing to sync server reports.'],
+  newReport: ['查看新版', 'View newer report'], finished: ['扫描完成', 'Scan completed'],
+  partial: ['部分统计', 'Partial scan'], outdated: ['正在查看上一版', 'Viewing previous report'],
+  confirm: ['将发送当前报告邮件，是否继续？', 'Send the current report by email?'],
+  fetchError: ['无法获取存储洞察状态', 'Could not load storage status'],
+  actionError: ['操作未能启动', 'Could not start the operation'],
+  sending: ['正在发送当前报告…', 'Sending current report…'],
+  sent: ['邮件已发送', 'Email sent'],
+  mailError: ['邮件发送失败', 'Email delivery failed'],
+  scanMailError: ['报告已生成，但邮件发送失败', 'Report generated; email delivery failed'],
+};
+const t = key => words[key][lang === 'en' ? 1 : 0];
+function renderLabels() {
+  for (const id of ['title', 'scan', 'email', 'emailLabel', 'newReport', 'sourceFilters']) el(id).textContent = t(id);
+  for (const id of ['local', 'remote']) el(id + '-tab').textContent = t(id);
+  el('sourceLabel').textContent = t('remote');
+  el('tabs').setAttribute('aria-label', t('tabs'));
+  el('report').title = t('report');
+  document.title = t('title');
+  monitorNavigation.apply(lang);
+}
+function reportLanguage() {
+  // Synced HTML runs in an opaque-origin sandbox and receives only the language choice.
+  if (loaded) el('report').contentWindow?.postMessage(
+    {type: 'learndl-storage-language', language: lang}, loaded.remote ? '*' : window.location.origin);
+}
+function showReport(key, remote, url, info) {
+  loaded = {key, remote, info};
+  const report = el('report');
+  if (remote) report.setAttribute('sandbox', 'allow-scripts');
+  else report.removeAttribute('sandbox');
+  report.src = url;
+  report.hidden = false;
+}
+function loadRemote(info) {
+  const url = base + '/remote/' + encodeURIComponent(info.id) + '?revision=' + encodeURIComponent(info.revision);
+  showReport(info.revision, true, url, info);
+}
+function render() {
+  if (!latest) return;
+  const sources = latest.sources || [];
+  if (!tab) tab = latest.snapshot || !sources.length ? 'local' : 'remote';
+  const remote = tab === 'remote';
+  let info = sources.find(source => source.id === host);
+  if (!info && sources.length) {
+    info = sources.reduce((a, b) => Date.parse(a.finished) >= Date.parse(b.finished) ? a : b);
+    host = info.id;
   }
- }catch(error){el('error').textContent=error.message;}
+  const signature = JSON.stringify(sources.map(source => [source.id, source.source_host]));
+  if (signature !== hostOptions) {
+    el('source').replaceChildren(...sources.map(source => {
+      const option = document.createElement('option');
+      option.value = source.id;
+      option.textContent = source.source_host;
+      return option;
+    }));
+    hostOptions = signature;
+  }
+  el('source').value = info?.id || '';
+  for (const id of ['local', 'remote']) {
+    el(id + '-tab').setAttribute('aria-selected', String(tab === id));
+    el(id + '-tab').tabIndex = tab === id ? 0 : -1;
+  }
+  el('report-panel').setAttribute('aria-labelledby', tab + '-tab');
+  el('local-tools').hidden = remote;
+  el('remote-tools').hidden = !remote || !info;
+  el('scan').disabled = latest.busy || pending;
+  el('email').disabled = latest.busy || pending || !latest.snapshot;
+  el('emailAfter').disabled = latest.busy || pending;
+  el('activity').hidden = remote || !(latest.busy || pending || latest.progress.length);
+  el('summary').textContent = t(latest.busy || pending ? 'busy' : 'progress');
+  const progress = el('progress');
+  const atBottom = progress.scrollHeight - progress.scrollTop - progress.clientHeight < 30;
+  const lines = latest.progress.map(localProgress).join('\n');
+  if (progress.textContent !== lines) {
+    progress.textContent = lines;
+    if (atBottom) progress.scrollTop = progress.scrollHeight;
+  }
+  el('error').textContent = requestError || (remote ? '' : localError(latest.error));
+  const available = remote ? !!info : !!latest.snapshot;
+  el('empty').hidden = available;
+  el('empty').textContent = t(remote ? 'remoteEmpty' : 'localEmpty');
+  if (!available) {
+    if (loaded) el('report').removeAttribute('src');
+    el('report').hidden = true;
+    loaded = undefined;
+  } else if (remote && loaded?.info?.id !== info.id) {
+    loadRemote(info);
+  } else if (!remote && (loaded?.remote !== false || loaded.key !== latest.revision)) {
+    showReport(latest.revision, false, base + '/snapshot/');
+  }
+  renderRemoteStatus(info);
 }
-function loadRemote(info){
- loadedSource='remote:'+info.id;loadedRevision=info.revision;
- el('sourceInfo').textContent=info.source_host+' · '+(lang==='zh'?'扫描完成 ':'Scanned ')+info.finished+(info.complete?'':(lang==='zh'?' · 部分统计':' · Partial scan'));
- el('report').setAttribute('sandbox','allow-scripts');el('report').hidden=false;
- el('report').src=base+'/remote/'+encodeURIComponent(info.id)+'?revision='+encodeURIComponent(info.revision);
- el('newReport').hidden=true;
+function localError(message) {
+  if (message === words.mailError.join(' / ')) return t('mailError');
+  if (message === words.scanMailError.join(' / ')) return t('scanMailError');
+  return message;
 }
-el('source').onchange=()=>{selectedSource=el('source').value;localStorage.setItem('learndl-storage-source',selectedSource);loadedSource='';refresh();};
-el('newReport').onclick=()=>{const info=sources.find(s=>'remote:'+s.id===selectedSource);if(info)loadRemote(info);};
-async function submit(action){
- if(action==='email'&&!confirm(t('confirm')))return;
- el('scan').disabled=true;el('email').disabled=true;el('activity').open=true;
- try{const response=await fetch(base+'/'+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:el('emailAfter').checked})});if(!response.ok)throw Error(await response.text());await refresh();}
- catch(error){el('error').textContent=error.message;}
+function localProgress(line) {
+  for (const key of ['sending', 'sent', 'mailError', 'scanMailError']) {
+    if ([...words[key], words[key].join(' / ')].includes(line)) return t(key);
+  }
+  if (lang === 'en') return line;
+  return line
+    .replace(/^Scanning project storage: /, '正在扫描：')
+    .replace(/^Scanned ([\d,]+) entries: /, '已扫描 $1 个条目：')
+    .replace(/^Scan complete: ([\d,]+) entries, (.*), ([\d,]+) errors$/, '扫描完成 · $1 个条目 · $2 · $3 个错误')
+    .replace(/^Storage report saved: /, '报告已保存：')
+    .replace(/^Sending report email…$/, '正在发送报告邮件…')
+    .replace(/^Storage report email sent successfully\.$/, '报告邮件已发送。');
 }
-el('scan').onclick=()=>submit('scan');el('email').onclick=()=>submit('email');
-el('language').value=lang;el('language').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);renderLabels();refresh();};
-renderLabels();refresh();setInterval(refresh,1000);
+function renderRemoteStatus(info) {
+  const shown = loaded?.info;
+  const stale = tab === 'remote' && info && shown?.revision !== info.revision;
+  el('newReport').hidden = !stale;
+  if (tab !== 'remote' || !shown) return;
+  const date = new Date(shown.finished);
+  const finished = Number.isNaN(+date) ? shown.finished :
+    date.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US', {dateStyle: 'medium', timeStyle: 'short'});
+  el('sourceInfo').textContent = [t('finished') + ' ' + finished, shown.complete ? '' : t('partial'), stale ? t('outdated') : ''].filter(Boolean).join(' · ');
+  el('sourceInfo').title = shown.finished;
+}
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const response = await fetch(base + '/status');
+    if (!response.ok) throw Error(response.status);
+    latest = await response.json();
+    if (!pending) requestError = '';
+    render();
+  } catch (error) {
+    el('error').textContent = t('fetchError') + ' (' + error.message + ')';
+  } finally {
+    refreshing = false;
+  }
+}
+function selectTab(next) {
+  tab = next;
+  localStorage.setItem('learndl-storage-source', tab === 'local' ? 'local' : 'remote:' + host);
+  requestError = '';
+  render();
+}
+async function submit(action) {
+  if (action === 'email' && !confirm(t('confirm'))) return;
+  pending = true;
+  requestError = '';
+  el('activity').open = true;
+  render();
+  try {
+    const response = await fetch(base + '/' + action, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: el('emailAfter').checked}),
+    });
+    if (!response.ok) throw Error(response.status);
+    await refresh();
+  } catch (error) {
+    requestError = t('actionError') + ' (' + error.message + ')';
+  } finally {
+    pending = false;
+    render();
+  }
+}
+for (const id of ['local', 'remote']) {
+  const button = el(id + '-tab');
+  button.onclick = () => selectTab(id);
+  button.onkeydown = event => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'local' : event.key === 'End' ? 'remote' : id === 'local' ? 'remote' : 'local';
+    selectTab(next);
+    el(next + '-tab').focus();
+  };
+}
+el('source').onchange = () => {
+  host = el('source').value;
+  selectTab('remote');
+};
+el('newReport').onclick = () => {
+  const info = latest?.sources?.find(source => source.id === host);
+  if (info) { loadRemote(info); renderRemoteStatus(info); }
+};
+el('report').onload = reportLanguage;
+el('refresh-page').onclick = refresh;
+el('emailAfter').checked = localStorage.getItem('learndl-storage-email-after') !== 'false';
+el('emailAfter').onchange = event => localStorage.setItem('learndl-storage-email-after', String(event.target.checked));
+el('scan').onclick = () => submit('scan');
+el('email').onclick = () => submit('email');
+el('language').value = lang;
+el('language').onchange = event => {
+  lang = event.target.value;
+  localStorage.setItem('learndl-language', lang);
+  renderLabels();
+  render();
+  reportLanguage();
+};
+renderLabels();
+refresh();
+setInterval(refresh, 1000);
 </script>
+</body>
 </html>

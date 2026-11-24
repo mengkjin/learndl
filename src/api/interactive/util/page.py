@@ -29,6 +29,12 @@ PAGE_ICONS = {
     'script_structure' : ':material/account_tree:' ,
 }
 
+INTRO_LABELS_ZH = {'home': '首页', 'developer_info': '开发者信息', 'config_editor': '配置编辑器',
+                   'task_queue': '任务队列', 'api_console': 'API 控制台', 'script_structure': '脚本目录'}
+INTRO_HELP_ZH = {'home': '教程、系统信息与快捷入口。', 'developer_info': '勾选要查看的开发信息。',
+                 'config_editor': '编辑所选配置文件。', 'task_queue': '查看任务队列，按运行状态或来源筛选。',
+                 'api_console': '浏览接口，直接运行或加入队列。', 'script_structure': '选择脚本以查看详情。'}
+
 PAGE_HELPS = {
     'home' : f"Tutorial , System Info and Links." ,
     'developer_info' : f"This is for developer only. Check boxes to select what information to show." ,
@@ -89,8 +95,7 @@ def _script_detail_page_callable(script_key: str):
 def _get_intro_page(page_name : str) -> dict:
     """Return (and cache) the metadata dict for a single intro page.
 
-    The result is stored in ``st.session_state['app_intro_pages']`` so that
-    the ``st.Page`` object is only created once per session.
+    Reuse each language’s page objects within the current Streamlit session.
 
     Args:
         page_name: Must be one of :data:`INTRO_PAGES`.
@@ -99,20 +104,22 @@ def _get_intro_page(page_name : str) -> dict:
         Dict with keys ``page``, ``label``, ``head``, ``icon``, ``help``.
     """
     assert page_name in INTRO_PAGES , f"Page {page_name} not a valid intro page"
-    if 'app_intro_pages' not in st.session_state: 
-        st.session_state['app_intro_pages'] = {}
-    if page_name not in st.session_state['app_intro_pages']:
-        label = page_name.replace('_', ' ').title()
+    chinese = st.session_state.get('monitor_language') == 'zh'
+    cache_key = 'app_intro_pages_zh' if chinese else 'app_intro_pages_en'
+    if cache_key not in st.session_state:
+        st.session_state[cache_key] = {}
+    if page_name not in st.session_state[cache_key]:
+        label = INTRO_LABELS_ZH[page_name] if chinese else page_name.replace('_', ' ').title()
         icon = PAGE_ICONS[page_name]
-        help = PAGE_HELPS[page_name]
-        st.session_state['app_intro_pages'][page_name] = {
+        help = INTRO_HELP_ZH[page_name] if chinese else PAGE_HELPS[page_name]
+        st.session_state[cache_key][page_name] = {
             'page' : st.Page(f'pages/{page_name}.py' , title = label , icon = icon , url_path = f'_intro_{page_name}') ,
             'label' : label ,
             'head' : label ,
             'icon' : icon ,
             'help' : help ,
         }
-    return st.session_state['app_intro_pages'][page_name]
+    return st.session_state[cache_key][page_name]
 
 def _get_script_page(script_key: str) -> dict:
     """Return (and cache) the metadata dict for a script page.

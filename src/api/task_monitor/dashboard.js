@@ -11,10 +11,11 @@ const words = {
   title: ['任务中心', 'Task Center'], settings: ['设置', 'Settings'],
   outputStyle: ['输出样式', 'Output Style'], colored: ['彩色文本', 'Colored text'],
   terminalSize: ['终端字号', 'Terminal font size'],
-  plain: ['纯文本', 'Text only'], resources: ['系统资源', 'System resources'],
+  plain: ['纯文本', 'Text only'],
   running: ['运行中', 'Running'], remote: ['远程运行', 'Remote Running'],
   finished: ['已结束', 'Finished'], recent: ['最近结束', 'Recently finished'],
-  server: ['服务器', 'Server'], filters: ['筛选', 'Filters'],
+  server: ['服务器', 'Server'], filters: ['状态、脚本与日期', 'Status, script and dates'],
+  remoteFilters: ['服务器与任务状态', 'Server and task status'], taskList: ['任务列表', 'Task list'],
   complete: ['完成', 'Complete'], failed: ['错误', 'Error'], killed: ['已终止', 'Killed'],
   starting: ['启动中', 'Starting'], queued: ['排队中', 'Queued'], stale: ['状态过期', 'Stale'],
   startTime: ['开始时间', 'Started'], ended: ['结束时间', 'Ended'],
@@ -38,7 +39,7 @@ const words = {
   sampled: ['采样时间', 'Sampled'], lastOutput: ['最近输出', 'Last output'],
   availableUntil: ['保留至', 'Available until'], empty: ['暂无运行任务', 'No running tasks'],
   noFinished: ['没有符合条件的任务', 'No matching tasks'],
-  selectFinished: ['从左侧选择任务查看详情和输出', 'Select a task on the left to view its details and output'],
+  selectFinished: ['从列表选择任务查看详情和输出', 'Select a task from the list to view its details and output'],
   noHosts: ['等待 Syncthing 同步服务器快照', 'Waiting for server snapshots in Syncthing'],
   expired: ['快照已过期', 'Snapshot is out of date'],
   syncing: ['部分输出正在同步', 'Some output is still syncing'],
@@ -47,8 +48,6 @@ const words = {
   noOutput: ['暂无输出', 'No output yet'],
   unavailable: ['输出文件或缓存不可用', 'Output source or cache unavailable'],
   records: ['条记录', 'records'], results: ['条任务', 'tasks'],
-  memory: ['内存', 'Memory'], projectDisk: ['项目磁盘', 'Project disk'],
-  usageUnavailable: ['不可用', 'Unavailable'],
   lifecycle: ['生命周期检查', 'Lifecycle check'],
   cacheHealth: ['输出缓存维护', 'Output cache maintenance'],
   timeoutProtection: ['超时保护', 'Timeout protection'],
@@ -58,14 +57,7 @@ const words = {
   terminateGroup: ['整个进程组将被终止，自动恢复也将停用。', 'The entire process group will stop and automatic recovery will be disabled.'],
   terminateProcess: ['将终止选中的脚本进程。', 'The selected script process will stop.'],
 };
-const initialLanguage = new URLSearchParams(location.search).get('lang');
-if (initialLanguage === 'zh' || initialLanguage === 'en') {
-  localStorage.setItem('learndl-language', initialLanguage);
-  const address = new URL(location.href);
-  address.searchParams.delete('lang');
-  history.replaceState(null, '', address);
-}
-let lang = localStorage.getItem('learndl-language') === 'en' ? 'en' : 'zh';
+let lang = monitorNavigation.language();
 let style = localStorage.getItem(styleKey) === 'text' ? 'text' : 'colored';
 let hosts = [];
 let host = localStorage.getItem('learndl-tasks-host') || '';
@@ -123,7 +115,11 @@ function message(text = '') {
 }
 
 function labels() {
-  document.documentElement.lang = lang;
+  monitorNavigation.apply(lang);
+  document.querySelector('nav').setAttribute('aria-label', t('title'));
+  $('cards').setAttribute('aria-label', t('taskList'));
+  viewport.setAttribute('aria-label', lang === 'en' ? 'Task output' : '任务输出');
+  $('preview').title = t('report');
   document.title = t('title');
   document.querySelectorAll('[data-label]').forEach(node => {node.textContent = t(node.dataset.label);});
   $('language').value = lang;
@@ -490,6 +486,7 @@ $('style').onchange = event => {
     }
   });
 };
+$('refresh-page').onclick = updateNow;
 $('language').onchange = event => {
   lang = event.target.value;
   localStorage.setItem('learndl-language', lang);
@@ -543,24 +540,6 @@ $('next-page').onclick = () => {
     changeFinishedPage();
   }
 };
-
-$('resources').addEventListener('toggle', () => manual(async () => {
-  if (!$('resources').open) return;
-  const resource = await request('/api/resources');
-  const format = stats => stats ? `${(stats[0] / 2 ** 30).toFixed(1)} / ${(stats[1] / 2 ** 30).toFixed(1)} GiB (${stats[2].toFixed(1)}%)` : t('usageUnavailable');
-  const stats = [[t('memory'), format(resource.memory)], ['CPU', resource.cpu_percent == null ? '—' : resource.cpu_percent.toFixed(1) + '%'],
-                 [t('projectDisk'), format(resource.disk)]];
-  for (const gpu of resource.gpus) {
-    const memory = gpu.used_mib == null ? '—' : (gpu.used_mib / 1024).toFixed(1);
-    const total = gpu.total_mib == null ? '—' : (gpu.total_mib / 1024).toFixed(1);
-    const utilization = gpu.utilization == null ? '—' : gpu.utilization.toFixed(1) + '%';
-    stats.push([gpu.name, `${memory} / ${total} GiB · ${utilization}`]);
-  }
-  const list = element('dl');
-  list.append(...stats.flatMap(([key, value]) => [element('dt', key), element('dd', value)]));
-  $('resource-data').replaceChildren(element('p', t('sampled') + ' ' + date(resource.sampled_at), 'muted'),
-    list, ...resource.errors.map(error => element('p', error, 'muted')));
-}));
 
 $('stop-task').onclick = () => manual(async () => {
   if (!task) return;

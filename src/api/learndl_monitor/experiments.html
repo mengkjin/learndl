@@ -1,16 +1,240 @@
-<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Experiment Dashboards</title>
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实验面板</title>
+<link rel="stylesheet" href="/monitor-toolbar.css">
 <style>
-:root{color-scheme:dark;font:14px/1.6 system-ui;background:#10161e;color:#dce8ee}body{max-width:1200px;margin:40px auto;padding:0 24px}header,.controls,.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}header{justify-content:space-between}section{background:#17212c;border:1px solid #344355;border-radius:12px;padding:24px;margin:24px 0}input,select,button{background:#202c3a;color:inherit;border:1px solid #425468;border-radius:6px;padding:9px}select.path{flex:1;min-width:220px}button{cursor:pointer}button:disabled{opacity:.4}.instance{border-top:1px solid #344355;padding:16px 0;margin-top:14px}.row strong{flex:1;overflow-wrap:anywhere;min-width:180px}small,summary{color:#9eb3c8}pre{white-space:pre-wrap;overflow-wrap:anywhere}#error{color:#ffb6a6}h1{font-size:28px}input.limit{width:65px}</style>
-<header><h1 id="title"></h1><div style="display:flex;align-items:center;gap:8px"><select id="lang" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header><p id="error" role="alert"></p><main id="main"></main>
+:root {color-scheme:dark;font:15px/1.55 system-ui;background:#10161e;color:#dce8ee}
+* {box-sizing:border-box} body {max-width:1200px;margin:36px auto;padding:0 24px}
+header,.controls,.row,nav {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header {justify-content:space-between} h1 {font-size:28px;margin:0}
+nav {margin:18px 0 14px;border-bottom:1px solid #344355}
+input,select,button {font:inherit;background:#202c3a;color:inherit;border:1px solid #425468;border-radius:6px;padding:5px 10px}
+nav button {background:transparent;border:0;border-radius:0;border-bottom:2px solid transparent}
+nav button[aria-selected=true] {color:#8de2d3;border-color:#55ccb9}
+section {background:#17212c;border:1px solid #344355;border-radius:10px;padding:14px}
+select.path {flex:1 1 15rem;min-width:0;max-width:100%}
+button,summary {cursor:pointer} button:disabled {opacity:.45}
+.instance,.instance-list {border-top:1px solid #344355;margin-top:14px;padding-top:10px}
+.row strong {flex:1;min-width:min(180px,100%);overflow-wrap:anywhere}
+small {color:#a6b8cc} pre {white-space:pre-wrap;overflow-wrap:anywhere} #error {color:#ffb6a6}
+#error:empty {display:none} input.limit {width:5em}
+@media(max-width:760px){body{margin:20px auto;padding:0 12px}.controls .path{flex-basis:100%}}
+</style>
+<header class="monitor-header"><h1 id="title">实验面板</h1><div class="monitor-toolbar">
+    <details id="settings" class="monitor-menu"><summary class="monitor-icon" data-monitor-icon="settings" aria-label="设置"></summary>
+    <div class="monitor-panel" id="settings-panel">
+      <label class="monitor-field"><span data-monitor-label="language">页面语言</span><select id="lang"><option value="zh">中文</option><option value="en">English</option></select></label>
+<div class="monitor-field"><label for="tensorboard-limit">TensorBoard · <span data-key="limit"></span></label><div class="row"><input id="tensorboard-limit" type="number" min="1" class="limit"><button data-key="save" type="button" id="tensorboard-save"></button></div></div>
+<div class="monitor-field"><label for="optuna-limit">Optuna · <span data-key="limit"></span></label><div class="row"><input id="optuna-limit" type="number" min="1" class="limit"><button data-key="save" type="button" id="optuna-save"></button></div></div>
+    </div>
+  </details>
+  <button class="monitor-icon" id="refresh-page" type="button" data-monitor-icon="refresh" aria-label="刷新"></button>
+</div></header>
+<nav role="tablist" id="tabs" aria-label="实验类型">
+  <button id="tensorboard-tab" role="tab" aria-selected="true" aria-controls="tensorboard">TensorBoard</button>
+  <button id="optuna-tab" role="tab" aria-selected="false" aria-controls="optuna" tabindex="-1">Optuna</button>
+</nav>
+<p id="error" role="alert"></p>
+<main id="main"></main>
+<template id="panel">
+  <section role="tabpanel">
+    <div class="controls">
+      <select class="path"></select><button data-key="start"></button><button data-key="stopAll"></button>
+    </div>
+    <details class="instance-list" open><summary></summary><div class="instances"></div></details>
+  </section>
+</template>
+<script src="/monitor-navigation.js"></script>
 <script>
-const token='__TOKEN__',kinds=['tensorboard','optuna'];let lang=localStorage.getItem('learndl-language')||'zh',busy=false,refreshing=false,instances=[];
-const t=(zh,en)=>lang==='zh'?zh:en;
-const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('learndl-experiments'):null;
-async function api(path,body){const response=await fetch('/api/'+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await response.json();if(!response.ok)throw Error(data.error);return data;}
-function node(tag,text){const e=document.createElement(tag);if(text)e.textContent=text;return e;}
-function layout(){document.getElementById('title').textContent=t('实验面板','Experiment Dashboards');const main=document.getElementById('main');main.replaceChildren();for(const kind of kinds){const section=node('section');section.id=kind;section.append(node('h2',kind==='optuna'?'Optuna':'TensorBoard'));const controls=node('div');controls.className='controls';const path=node('select');path.className='path';path.id=kind+'-sources';path.setAttribute('aria-label',t('数据源','Data source'));const start=node('button',t('启动','Start'));start.onclick=()=>{if(!path.value){document.getElementById('error').textContent=t('请先选择数据源','Select a data source first');return;}act({action:'start',kind,source:path.value});};const label=node('label',t('上限 ','Limit '));const limit=node('input');limit.type='number';limit.min=1;limit.className='limit';label.append(limit);const save=node('button',t('保存','Save'));save.onclick=()=>act({action:'limit',kind,value:Number(limit.value)});const reload=node('button',t('刷新数据源','Refresh sources'));reload.onclick=sources;const stopAll=node('button',t('全部关闭','Stop all'));stopAll.onclick=()=>act({action:'stop_all',kind,targets:instances.filter(r=>r.kind===kind).map(r=>({pid:r.pid,created:r.created}))});controls.append(path,start,reload,label,save,stopAll);section.append(controls,node('div'));section.lastChild.className='instances';main.append(section);}sources();refresh();}
-async function sources(){try{const data=await api('sources');for(const kind of kinds){const list=document.getElementById(kind+'-sources'),selected=list.value;list.replaceChildren();const placeholder=node('option',t('请选择数据源','Select a data source'));placeholder.value='';placeholder.disabled=true;placeholder.selected=true;list.append(placeholder);for(const group of data[kind]){const options=node('optgroup');options.label=group[lang]||group.en;if(!group.items.length){const empty=node('option',t('暂无结果','No results'));empty.disabled=true;options.append(empty);}for(const source of group.items){const option=node('option',source.label);option.value=source.path;option.title=source.path;options.append(option);}list.append(options);}if([...list.options].some(o=>o.value===selected))list.value=selected;}}catch(e){document.getElementById('error').textContent=e.message;}}
-async function act(data){if(data.action==='stop_all'&&!confirm(t('确认关闭此类型的全部实例（包含外部实例）：','Stop all instances of this type (including external): ')+data.targets.length+'?'))return;if(data.action==='stop'&&!confirm(t('确认关闭实例 PID ','Stop instance PID ')+data.pid+'?'))return;let popup=null;if(data.action==='start'){popup=window.open('','_blank');if(popup){popup.opener=null;popup.document.body.textContent=t('正在启动…','Starting…');}}busy=true;if(data.action==='email')document.getElementById('error').textContent=t('正在打包并发送邮件…','Packaging and sending email…');document.querySelectorAll('button').forEach(b=>b.disabled=true);try{const result=await api('action',data);const url=result.url||result.instance?.url;if(data.action==='start'&&!url)throw Error(t('实例尚未就绪，请稍后点击打开。','Instance not ready yet. Use Open when ready.'));if(popup){if(url)popup.location.replace(url);else popup.close();}document.getElementById('error').textContent=data.action==='start'&&!popup?t('浏览器阻止了新窗口，请点击打开。','Popup blocked. Click Open.'):'';if(data.action==='email')document.getElementById('error').textContent=result.mail_status==='sent'?t('邮件已发送。','Email sent.'):t('邮件尚未全部发送，已交由项目邮件队列重试，请勿重复点击。','Delivery pending; the project mail queue will retry. Please do not resend.');channel?.postMessage('changed');}catch(e){if(popup&&!popup.closed)popup.close();document.getElementById('error').textContent=e.message;}finally{busy=false;await refresh();}}
-async function refresh(){if(refreshing)return;refreshing=true;try{const data=await api('status');instances=data.instances;for(const kind of kinds){const section=document.getElementById(kind),rows=data.instances.filter(r=>r.kind===kind);section.querySelector('h2').textContent=(kind==='optuna'?'Optuna':'TensorBoard')+` (${rows.length}/${data.limits[kind]})`;const limit=section.querySelector('.limit');if(document.activeElement!==limit)limit.value=data.limits[kind];section.querySelectorAll('button').forEach(b=>b.disabled=busy);section.querySelector('.controls button').disabled=busy||rows.length>=data.limits[kind];const root=section.querySelector('.instances');const expanded=new Set([...root.querySelectorAll('details[open]')].map(d=>d.dataset.pid));root.replaceChildren();for(const row of rows){const item=node('div');item.className='instance';const top=node('div');top.className='row';top.append(node('strong',row.display_source||row.source||t('外部实例','External instance')),node('small',row.status==='running'?t('运行中','Running'):t('未就绪','Not ready')));const open=node('button',t('打开','Open'));open.disabled=!row.url;open.onclick=()=>window.open(row.url,'_blank','noopener');const stop=node('button',t('关闭','Stop'));stop.disabled=busy||!row.controllable;stop.onclick=()=>act({action:'stop',kind,pid:row.pid,created:row.created});const email=node('button',t('发送邮件','Send email'));email.disabled=busy||!row.source;email.title=t('仅打包此实例的日志文件夹或数据库，发送到项目默认邮箱','Send only this instance’s logs or database to the project default recipient');email.onclick=()=>act({action:'email',kind,pid:row.pid,created:row.created});top.append(open,email,stop);const details=node('details');details.dataset.pid=String(row.pid);details.open=expanded.has(String(row.pid));details.append(node('summary',t('详情','Details')),node('pre',`PID ${row.pid} · ${row.origin==='managed'?t('面板启动','Managed'):t('外部发现','External')}\n${new Date(row.created*1000).toLocaleString()}\n${row.url}\n${row.ssh}\n${row.error}`));const logs=node('button',t('日志','Logs'));logs.onclick=async()=>{try{const data=await api('log/'+row.pid);alert(data.log);}catch(e){alert(e.message);}};details.append(logs);item.append(top,details);root.append(item);}}}catch(e){document.getElementById('error').textContent=e.message;}finally{refreshing=false;}}
-document.getElementById('lang').value=lang;document.getElementById('lang').onchange=e=>{lang=e.target.value;localStorage.setItem('learndl-language',lang);layout();};if(channel)channel.onmessage=()=>refresh();window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});layout();setInterval(refresh,2000);
-</script></html>
+const token = '__TOKEN__', kinds = ['tensorboard', 'optuna'];
+const $ = id => document.getElementById(id);
+const panels = {};
+let lang = monitorNavigation.language(), active = 'tensorboard';
+let busy = false, refreshing = false, status, sourceGroups;
+const t = (zh, en) => lang === 'zh' ? zh : en;
+const words = {start:['启动','Start'], limit:['实例上限','Instance limit'],
+  save:['保存','Save'], stopAll:['全部关闭','Stop all']};
+const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('learndl-experiments') : null;
+async function api(path, body) {
+  const response = await fetch('/api/' + path, {method:body ? 'POST' : 'GET',
+    headers:{Authorization:'Bearer ' + token, 'Content-Type':'application/json'},
+    body:body ? JSON.stringify(body) : undefined, cache:'no-store'});
+  const data = await response.json();
+  if (!response.ok) throw Error(data.error);
+  return data;
+}
+function node(tag, text) {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  return element;
+}
+function selectTab(next) {
+  active = next;
+  for (const kind of kinds) {
+    const selected = kind === active, tab = $(kind + '-tab');
+    tab.setAttribute('aria-selected', String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+    panels[kind].hidden = !selected;
+  }
+}
+function setup(kind) {
+  const panel = $('panel').content.firstElementChild.cloneNode(true);
+  panels[kind] = panel;
+  panel.id = kind;
+  panel.setAttribute('aria-labelledby', kind + '-tab');
+  $('main').append(panel);
+  const tab = $(kind + '-tab');
+  tab.onclick = () => selectTab(kind);
+  tab.onkeydown = event => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? kinds[0] : event.key === 'End' ? kinds[1] : kinds.find(k => k !== kind);
+    selectTab(next);
+    $(next + '-tab').focus();
+  };
+  const source = panel.querySelector('.path');
+  panel.querySelector('[data-key=start]').onclick = () => {
+    if (source.value) act({action:'start', kind, source:source.value});
+    else $('error').textContent = t('请先选择数据源','Select a data source first');
+  };
+  $(kind + '-limit').oninput = event => { event.target.dataset.edited = 'true'; };
+  $(kind + '-save').onclick = () => act({action:'limit', kind, value:Number($(kind + '-limit').value)});
+  panel.querySelector('[data-key=stopAll]').onclick = () => act({action:'stop_all', kind,
+    targets:status.instances.filter(r => r.kind === kind).map(r => ({pid:r.pid, created:r.created}))});
+}
+function renderSources() {
+  for (const kind of kinds) {
+    const list = panels[kind].querySelector('.path'), selected = list.value;
+    const placeholder = new Option(t('请选择数据源','Select a data source'), '', true, true);
+    placeholder.disabled = true;
+    list.replaceChildren(placeholder);
+    for (const group of sourceGroups?.[kind] || []) {
+      const options = document.createElement('optgroup');
+      options.label = group[lang] || group.en;
+      if (!group.items.length) {
+        const empty = new Option(t('暂无结果','No results'));
+        empty.disabled = true;
+        options.append(empty);
+      }
+      for (const source of group.items) {
+        const option = new Option(source.label, source.path);
+        option.title = source.path;
+        options.append(option);
+      }
+      list.append(options);
+    }
+    if ([...list.options].some(o => o.value === selected)) list.value = selected;
+  }
+}
+async function sources() {
+  try { sourceGroups = await api('sources'); renderSources(); }
+  catch (e) { $('error').textContent = e.message; }
+}
+async function act(data) {
+  if (busy) return;
+  if (data.action === 'stop_all' && !confirm(t('确认关闭此类型的全部实例（包含外部实例）？','Stop all instances of this type (including external)?') + ' (' + data.targets.length + ')')) return;
+  if (data.action === 'stop' && !confirm(t('确认关闭实例 PID ','Stop instance PID ') + data.pid + '?')) return;
+  let popup;
+  if (data.action === 'start') {
+    popup = window.open('', '_blank');
+    if (popup) { popup.opener = null; popup.document.body.textContent = t('正在启动…','Starting…'); }
+  }
+  busy = true;
+  renderStatus();
+  if (data.action === 'email') $('error').textContent = t('正在打包并发送邮件…','Packaging and sending email…');
+  try {
+    const result = await api('action', data), url = result.url || result.instance?.url;
+    if (data.action === 'limit') {
+      status.limits = result.limits;
+      delete $(data.kind + '-limit').dataset.edited;
+    }
+    if (data.action === 'start' && !url) throw Error(t('实例尚未就绪，请稍后点击打开。','Instance not ready yet. Use Open when ready.'));
+    if (data.action === 'start') await monitorNavigation.waitForRoute(url, lang);
+    if (popup && !popup.closed) popup.location.replace(monitorNavigation.address(url));
+    $('error').textContent = data.action === 'start' && !popup ? t('浏览器阻止了新窗口，请点击打开。','Popup blocked. Click Open.') : '';
+    if (data.action === 'email') $('error').textContent = result.mail_status === 'sent' ? t('邮件已发送。','Email sent.') :
+      t('邮件已交由项目队列重试，请勿重复发送。','Delivery pending. The mail queue will retry.');
+    channel?.postMessage('changed');
+  } catch (e) {
+    if (popup && !popup.closed) popup.close();
+    $('error').textContent = e.message;
+  } finally { busy = false; renderStatus(); await refresh(); }
+}
+function instanceRow(row, expanded) {
+  const item = document.createElement('div'), top = document.createElement('div');
+  item.className = 'instance'; top.className = 'row';
+  top.append(node('strong', row.display_source || row.source || t('外部实例','External instance')),
+    node('small', row.status === 'running' ? t('运行中','Running') : t('未就绪','Not ready')));
+  const url = row.url && monitorNavigation.address(row.url);
+  const open = node('button', t('打开','Open'));
+  open.disabled = !url;
+  open.onclick = () => monitorNavigation.open(url, lang).catch(error => { $('error').textContent = error.message; });
+  const action = name => act({action:name, kind:row.kind, pid:row.pid, created:row.created});
+  const email = node('button', t('发送邮件','Send email'));
+  email.title = t('将此实例的日志或数据库发送到项目默认邮箱','Email this instance’s logs or database to the project default recipient');
+  email.disabled = busy || !row.source; email.onclick = () => action('email');
+  const stop = node('button', t('关闭','Stop'));
+  stop.disabled = busy || !row.controllable; stop.onclick = () => action('stop');
+  top.append(open, email, stop);
+  const details = document.createElement('details');
+  details.dataset.pid = row.pid; details.open = expanded.has(String(row.pid));
+  const origin = row.origin === 'managed' ? t('面板启动','Managed') : t('外部发现','External');
+  const date = new Date(row.created * 1000).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US');
+  details.append(node('summary', t('详情','Details')), node('pre', ['PID ' + row.pid + ' · ' + origin, date, url, row.ssh, row.error].filter(Boolean).join('\n')));
+  const logs = node('button', t('日志','Logs'));
+  logs.onclick = async () => { try { alert((await api('log/' + row.pid)).log); } catch (e) { alert(e.message); } };
+  details.append(logs); item.append(top, details); return item;
+}
+function renderStatus() {
+  for (const kind of kinds) {
+    const panel = panels[kind], rows = status?.instances.filter(row => row.kind === kind) || [];
+    const limit = status?.limits[kind], input = $(kind + '-limit');
+    input.disabled = $(kind + '-save').disabled = busy || limit === undefined;
+    if (limit !== undefined && !input.dataset.edited) input.value = limit;
+    panel.querySelectorAll('.controls button').forEach(button => button.disabled = busy);
+    panel.querySelector('[data-key=start]').disabled = busy || limit === undefined || rows.length >= limit;
+    panel.querySelector('[data-key=stopAll]').disabled = busy || !rows.length;
+    panel.querySelector('.instance-list > summary').textContent = t('实例列表','Instance list') + (status ? ' (' + rows.length + '/' + limit + ')' : '');
+    const list = panel.querySelector('.instances');
+    const signature = JSON.stringify([lang, busy, rows]);
+    if (list.dataset.signature === signature) continue;
+    const expanded = new Set([...list.querySelectorAll('details[open]')].map(d => d.dataset.pid));
+    list.replaceChildren(...rows.map(row => instanceRow(row, expanded)));
+    list.dataset.signature = signature;
+  }
+}
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try { status = await api('status'); renderStatus(); }
+  catch (e) { $('error').textContent = e.message; }
+  finally { refreshing = false; }
+}
+function labels() {
+  monitorNavigation.apply(lang);
+  document.title = $('title').textContent = t('实验面板','Experiment Dashboards');
+  $('tabs').setAttribute('aria-label', t('实验类型','Experiment type'));
+  for (const panel of Object.values(panels)) {
+    panel.querySelector('.path').setAttribute('aria-label', t('数据源','Data source'));
+  }
+  for (const el of document.querySelectorAll('[data-key]')) el.textContent = t(...words[el.dataset.key]);
+  renderSources(); renderStatus();
+}
+for (const kind of kinds) setup(kind);
+selectTab(active);
+$('lang').value = lang;
+$('lang').onchange = e => { lang = e.target.value; localStorage.setItem('learndl-language', lang); labels(); };
+$('refresh-page').onclick = async event => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  $('error').textContent = '';
+  try { await Promise.all([sources(), refresh()]); } finally { button.disabled = false; }
+};
+if (channel) channel.onmessage = refresh;
+window.addEventListener('focus', refresh);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+labels(); sources(); refresh(); setInterval(refresh, 2000);
+</script>
+</html>
