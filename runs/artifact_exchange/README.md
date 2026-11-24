@@ -390,3 +390,12 @@ PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.4/support/results.py
 服务器报告以扫描时间和已有目录明细为准，新版同步到达时点击“查看新版”切换。
 打开子服务或切换来源不会自动扫描本机；本机扫描由页面按钮触发。发布端在页面点击重新扫描后，会把刚生成的报告通过同一发布流程强制覆盖到 `latest.html`，跳过当天已发布检查。
 该功能沿用 Daily Update 调度，更新代码并重启本机存储洞察服务即可，无需新增 watchdog 安装。
+
+### 跟踪组合与预测快照
+
+`daily_update` 在核心行情更新完成后，把最近十个交易日的 `use_daily`、`master_daily`、
+`gru_daily` 持仓及 `gru_day_V1` 预测发布到
+`$HOME/workspace/Syncthing/persistent/trading_audit/<source_host>/latest.zip`。
+`manifest.json` 列出实际文件日期，预测包含窗口首日需要的前序文件（如有）。
+在已启用投递的服务器执行 `.venv/bin/python -m src.automation.artifact_exchange.trading_audit`
+可用当前已落盘数据立即生成快照。每次发布原子替换压缩包，保留生产数据。
