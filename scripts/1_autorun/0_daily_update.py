@@ -22,6 +22,12 @@ def main(forfeit_if_done : bool = True , **kwargs):
     from src.api.pkgs.update import UpdateAPI
     SharedSync.sync()
     UpdateAPI.daily()
+    import time
+    from src.proj import PATH, MACHINE
+    from src.api.pkgs.data import DataAPI
+    from src.automation.artifact_exchange.storage_insights import publish_daily_safe
+    if MACHINE.updatable and DataAPI.is_updated():
+        publish_daily_safe(PATH.production, time.time())
 
 if __name__ == '__main__':
     main()

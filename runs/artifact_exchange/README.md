@@ -376,3 +376,17 @@ PYTHONPATH=. .venv/bin/python scripts/.version_patch/0.7.4/support/results.py
 出现冲突时先核对两处文件，保留需要的副本，再用
 `python -m src.automation.version_patch retry 0.7.4/001` 继续。升级后重启模型预览、
 实验、邮件和存储面板。旧 RL 请求、配置、身份文件使用原字节进行校验。
+
+### 存储洞察日报
+
+服务器的 Daily Update 完成且数据已更新到目标日期后，会使用 publisher 配置生成静态存储日报。
+每个服务器当地自然日最多成功发布一次，固定文件为
+`$HOME/workspace/Syncthing/persistent/storage_insights/<source_host>/latest.html`，其中目录名沿用发布器的安全主机名编码。
+日报复用现有扫描统计和展示深度，只生成 HTML，完整写好后原子替换。
+失败保留上一份并写入 Daily Update 日志，同日再次执行可重试。
+部分目录不可读时报告显示部分统计及错误数量。
+
+本机“存储洞察”提供本机和服务器来源选择，记住上次选择。
+服务器报告以扫描时间和已有目录明细为准，新版同步到达时点击“查看新版”切换。
+打开子服务或切换来源不会自动扫描本机；本机扫描由页面按钮触发。发布端在页面点击重新扫描后，会把刚生成的报告通过同一发布流程强制覆盖到 `latest.html`，跳过当天已发布检查。
+该功能沿用 Daily Update 调度，更新代码并重启本机存储洞察服务即可，无需新增 watchdog 安装。

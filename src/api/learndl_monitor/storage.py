@@ -22,6 +22,9 @@ def main():
     from src.proj.env.path import storage_reports
     from src.api.calls.computer import ProjectStorageReport
     from src.proj.util.filesys.storage_browser import StorageReportServer
+    from src.automation.artifact_exchange.storage_insights import ReportCatalog, publish_daily_safe
+    from src.automation.artifact_exchange.core import Config
+    catalog = ReportCatalog(Config.load().shared_root)
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     port = SERVICES['storage']['port']
     origin = f'http://127.0.0.1:{port}'
@@ -43,6 +46,7 @@ def main():
                 raise RuntimeError('Report generation was cancelled')
             if email and result['email_sent'] is False:
                 status['error'] = '报告已生成，但邮件发送失败 / Report generated; email delivery failed'
+            publish_daily_safe(PATH.production, 0, force=True, report=result['report'])
             server = StorageReportServer(result['report'])
             threading.Thread(target=server.serve_forever, daemon=True).start()
             with view_lock:
@@ -106,8 +110,6 @@ def main():
             break
         except (OSError, ValueError, sqlite3.Error):
             continue
-    if not active:
-        submit('scan', False)
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -132,7 +134,21 @@ def main():
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.end_headers()
-                self.wfile.write(json.dumps(status).encode())
+                self.wfile.write(json.dumps(dict(status, sources=catalog.refresh())).encode())
+                return
+            from urllib.parse import urlsplit
+            remote_prefix = '/' + token + '/remote/'
+            if self.path.startswith(remote_prefix):
+                identity = urlsplit(self.path).path[len(remote_prefix):]
+                report = catalog.entries.get(identity)
+                if report is None:
+                    self.send_error(404, 'Report unavailable')
+                    return
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'")
+                self.end_headers()
+                self.wfile.write(report['content'].encode('utf-8'))
                 return
             prefix = '/' + token + '/snapshot/'
             if self.path.startswith(prefix) and active:

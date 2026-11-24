@@ -26,6 +26,10 @@ class StorageServiceTest(unittest.TestCase):
             root = Path(temporary).resolve()
             (root / 'sample.txt').write_text('test')
             _, report = generate_report(root, root / 'snapshot.html')
+            from src.automation.artifact_exchange.storage_insights import embed_metadata, metadata
+            remote = root / 'share/persistent/storage_insights/server/latest.html'
+            remote.parent.mkdir(parents=True)
+            remote.write_text(embed_metadata(report.read_text(), dict(metadata(report.read_text()), source_host='server')))
             servers = []
             ready = threading.Event()
             entered = threading.Event()
@@ -56,6 +60,8 @@ class StorageServiceTest(unittest.TestCase):
                 return server
 
             with patch('src.api.calls.computer.ProjectStorageReport.run', report_run), \
+                    patch('src.automation.artifact_exchange.core.Config.load', return_value=SimpleNamespace(shared_root=root / 'share', enabled=False, role='receiver')), \
+                    patch('src.automation.artifact_exchange.storage_insights.publish_daily_safe') as publisher, \
                     patch('src.proj.PATH', SimpleNamespace(production=root)), \
                     patch('src.proj.util.web.emailer.Email.send', return_value=True) as email, \
                     patch('src.proj.util.filesys.storage_browser.StorageReportServer', snapshot_server), \
@@ -66,7 +72,6 @@ class StorageServiceTest(unittest.TestCase):
                 worker.start()
                 try:
                     self.assertTrue(ready.wait(10))
-                    self.assertTrue(entered.wait(10))
                     record = root / 'state/storage.json'
                     for _ in range(100):
                         if record.exists():
@@ -83,6 +88,16 @@ class StorageServiceTest(unittest.TestCase):
                         return urlopen(Request(address + '/' + action, data=body,
                                                headers={'Origin': request_origin}), timeout=5)
 
+                    self.assertFalse(status()['busy'])
+                    self.assertEqual(calls, [])
+                    self.assertEqual(status()['sources'][0]['source_host'], 'server')
+                    with urlopen(address + '/remote/server', timeout=5) as response:
+                        self.assertIn('sandbox allow-scripts', response.headers['Content-Security-Policy'])
+                        self.assertIn(b'Project Storage Report', response.read())
+                    self.assertEqual(calls, [])
+                    with post('scan', b'{"email":false}') as response:
+                        self.assertEqual(response.status, 202)
+                    self.assertTrue(entered.wait(10))
                     self.assertTrue(status()['busy'])
                     self.assertEqual(status()['progress'], ['Scanned 100 entries: sample'])
                     with self.assertRaises(HTTPError) as conflict:
@@ -111,6 +126,8 @@ class StorageServiceTest(unittest.TestCase):
                             break
                         time.sleep(.02)
                     self.assertEqual(calls, [False, True])
+                    self.assertEqual(publisher.call_count, 2)
+                    publisher.assert_called_with(root, 0, force=True, report=report)
                     with post('email') as response:
                         self.assertEqual(response.status, 202)
                     for _ in range(100):

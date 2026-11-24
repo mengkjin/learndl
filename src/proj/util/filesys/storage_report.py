@@ -14,6 +14,7 @@ __all__ = [
 ]
 
 import html
+import json
 import os
 import shutil
 import stat
@@ -193,9 +194,12 @@ def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
 
 def render_html(scan: StorageScan) -> str:
     escape = html.escape
+    report_metadata = dict(version=1, root=str(scan.root), started=scan.started, finished=scan.finished,
+                           report_id=scan.report_id, complete=scan.node.complete, error_count=scan.error_count)
+    metadata_tag = '<script id="storage-metadata" type="application/json">' + json.dumps(report_metadata).replace('<', '\\u003c') + '</script>'
 
     errors = ''.join(f'<li>{escape(error)}</li>' for error in scan.errors)
-    return '''<!doctype html><html lang="en"><meta charset="utf-8">
+    return '''<!doctype html><html lang="en"><meta charset="utf-8">''' + metadata_tag + '''
 <meta name="viewport" content="width=device-width, initial-scale=1"><title>Project Storage Report</title>
 <style>
 body{font:15px system-ui,sans-serif;max-width:1200px;margin:32px auto;padding:0 20px;background:#f5f7fb;color:#17243b}

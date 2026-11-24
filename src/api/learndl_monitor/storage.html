@@ -17,30 +17,56 @@ summary{cursor:pointer}pre{font:12px/1.8 monospace;color:#a6b8cc;white-space:pre
 iframe{border:0;width:100%;flex:1;min-height:320px;background:#10161e;display:block}iframe[hidden]{display:none}
 @media(max-width:760px){body{padding:20px 12px 0}}
 </style>
-<header><h1 id="title"></h1><div class="actions"><button id="scan"></button><label><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label><button id="email"></button><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header>
+<header><h1 id="title"></h1><div class="actions"><select id="source" aria-label="报告来源"></select><button id="newReport" hidden></button><button id="scan"></button><label><input id="emailAfter" type="checkbox" checked><span id="emailLabel"></span></label><button id="email"></button><select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>__RESTART_LINK__</div></header>
 <details id="activity"><summary id="summary"></summary><pre id="progress" role="log" aria-live="polite"></pre></details><p id="error" role="alert"></p>
-<iframe id="report" title="Storage snapshot" hidden></iframe>
+<p id="sourceInfo"></p><iframe id="report" title="Storage snapshot" hidden></iframe>
 <script>
 const base='__SERVICE_BASE__';
 let lang=localStorage.getItem('learndl-language')||'zh',revision=-1;
+let selectedSource=localStorage.getItem('learndl-storage-source')||'',sources=[],loadedRevision='',loadedSource='';
 if(!['zh','en'].includes(lang))lang='zh';
 const words={zh:{title:'存储洞察',scan:'重新扫描',email:'发送当前报告',emailLabel:'扫描后发送邮件',busy:'正在处理',idle:'扫描进度',empty:'尚无快照，请重新扫描',confirm:'将发送当前报告邮件，是否继续？'},en:{title:'Storage Insights',scan:'Rescan',email:'Email current report',emailLabel:'Email after scan',busy:'Working',idle:'Scan progress',empty:'No snapshot yet. Start a scan.',confirm:'Send the current report by email?'}};
 const el=id=>document.getElementById(id),t=key=>words[lang][key];
-function renderLabels(){for(const key of ['title','scan','email','emailLabel'])el(key).textContent=t(key);document.documentElement.lang=lang;}
+function renderLabels(){el('newReport').textContent=lang==='zh'?'查看新版':'View newer report';for(const key of ['title','scan','email','emailLabel'])el(key).textContent=t(key);document.documentElement.lang=lang;}
 async function refresh(){
  try{
   const response=await fetch(base+'/status');if(!response.ok)throw Error(await response.text());
   const status=await response.json();
+  sources=status.sources||[];
+  const choices=[{id:'local',label:lang==='zh'?'本机':'This computer'},...sources.map(s=>({id:'remote:'+s.id,label:s.source_host}))];
+  if(!choices.some(s=>s.id===selectedSource))selectedSource=status.snapshot?'local':(sources.length?'remote:'+sources.slice().sort((a,b)=>Date.parse(b.finished)-Date.parse(a.finished))[0].id:'local');
+  el('source').replaceChildren(...choices.map(s=>{const option=document.createElement('option');option.value=s.id;option.textContent=s.label;return option;}));
+  el('source').value=selectedSource;
+  const remote=selectedSource!=='local',info=sources.find(s=>'remote:'+s.id===selectedSource);
+  el('scan').hidden=remote;el('email').hidden=remote;el('emailAfter').parentElement.hidden=remote;el('activity').hidden=remote;
   el('scan').disabled=status.busy;el('email').disabled=status.busy||!status.snapshot;el('emailAfter').disabled=status.busy;
   el('summary').textContent=(status.busy?t('busy'):t('idle'))+(status.snapshot?' · '+status.snapshot:'');
   const progress=el('progress'),atBottom=progress.scrollHeight-progress.scrollTop-progress.clientHeight<30;
   progress.textContent=(status.progress||[]).join('\n')||(!status.snapshot?t('empty'):'');
   if(atBottom)progress.scrollTop=progress.scrollHeight;
   if(status.busy)el('activity').open=true;
-  el('error').textContent=status.error;
-  if(status.snapshot&&revision!==status.revision){revision=status.revision;el('report').hidden=false;el('report').src=base+'/snapshot/';}
+  el('error').textContent=remote?'':status.error;
+  if(remote&&info){
+   if(loadedSource!==selectedSource)loadRemote(info);
+   el('newReport').hidden=loadedRevision===info.revision;
+  }else{
+   el('newReport').hidden=true;el('sourceInfo').textContent='';
+   if(status.snapshot&&(loadedSource!=='local'||revision!==status.revision)){
+    revision=status.revision;loadedSource='local';el('report').removeAttribute('sandbox');
+    el('report').hidden=false;el('report').src=base+'/snapshot/';
+   }else if(!status.snapshot){el('report').hidden=true;loadedSource='';}
+  }
  }catch(error){el('error').textContent=error.message;}
 }
+function loadRemote(info){
+ loadedSource='remote:'+info.id;loadedRevision=info.revision;
+ el('sourceInfo').textContent=info.source_host+' · '+(lang==='zh'?'扫描完成 ':'Scanned ')+info.finished+(info.complete?'':(lang==='zh'?' · 部分统计':' · Partial scan'));
+ el('report').setAttribute('sandbox','allow-scripts');el('report').hidden=false;
+ el('report').src=base+'/remote/'+encodeURIComponent(info.id)+'?revision='+encodeURIComponent(info.revision);
+ el('newReport').hidden=true;
+}
+el('source').onchange=()=>{selectedSource=el('source').value;localStorage.setItem('learndl-storage-source',selectedSource);loadedSource='';refresh();};
+el('newReport').onclick=()=>{const info=sources.find(s=>'remote:'+s.id===selectedSource);if(info)loadRemote(info);};
 async function submit(action){
  if(action==='email'&&!confirm(t('confirm')))return;
  el('scan').disabled=true;el('email').disabled=true;el('activity').open=true;
