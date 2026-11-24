@@ -39,16 +39,16 @@ class RemoteCache:
                 _, data = self.ranges.popitem(last=False)
                 self.total -= len(data)
 
-    def render(self, root, task, start, end):
-        identity = (str(root), task['task_id'], task['generation'], start, end)
+    def render(self, root, task, start, end, style='text', *, compact=False):
+        identity = (str(root), task['task_id'], task['generation'], start, end, style, compact)
         if identity in self.rendered:
             self.rendered.move_to_end(identity)
             return self.rendered[identity]
         text = self.text(root, task, start, end)
         if text is None:
             return None
-        from .output import sanitize_inline_html
-        text = sanitize_inline_html(text, 'text')
+        from .output import format_live_output, sanitize_inline_html
+        text = format_live_output(text, style) if compact else sanitize_inline_html(text, style)
         self.rendered[identity] = text
         self.total += len(text.encode('utf-8'))
         self._trim()
@@ -126,7 +126,15 @@ class RemoteCache:
         prefix = max(0, start - 3)
         raw = self.read(root, task, prefix, end)
         if raw is None:
-            return None
+            # A neighboring segment may still be syncing. The requested bytes can
+            # already be displayed, minus any orphaned UTF-8 continuation bytes.
+            raw = self.read(root, task, start, end)
+            if raw is None:
+                return None
+            leading = 0
+            while leading < min(3, len(raw)) and raw[leading] & 0xc0 == 0x80:
+                leading += 1
+            return codecs.getincrementaldecoder('utf-8')(errors='replace').decode(raw[leading:], final=False)
         decoder = codecs.getincrementaldecoder('utf-8')(errors='replace')
         decoder.decode(raw[:start - prefix], final=False)
         return decoder.decode(raw[start - prefix:], final=False)

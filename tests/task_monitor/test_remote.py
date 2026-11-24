@@ -51,6 +51,42 @@ class RemotePublicationTest(unittest.TestCase):
         self.assertFalse((self.publisher.shared / 'tasks' / task_key('run-1')).exists())
         self.assertFalse((self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')).exists())
 
+    def test_published_queue_entries_disappear_when_linked_or_deferred(self):
+        from src.api.task_monitor.core import TaskMonitorRepository
+        from src.api.task_monitor.remote import collect
+        from src.automation.scheduling.runtime import RunStore
+        from test_core import _create_database
+
+        runtime = self.root / 'runtime'
+        store = RunStore(runtime / 'scheduling' / 'runs.sqlite')
+        db = self.root / 'tasks.sqlite'
+        repository = TaskMonitorRepository(db, runtime)
+        linked = {'id': 'linked', 'phase': 'queued', 'task': 'model', 'queued_at': 100}
+        deferred = dict(linked, id='deferred')
+        queued = dict(linked, id='queued')
+        for run in (linked, deferred, queued):
+            store.put(run)
+        packet = self.publisher.tick(collect(repository, now=100), now=100)
+        known = {row['task_id'] for row in packet['tasks']}
+        self.assertEqual(len(known), 3)
+
+        _create_database(db, [('script', 'schedule.py', '', 111, 'running', 'bash',
+                              123, 111, None, None, None, None)])
+        store.put(dict(linked, phase='running', pid=123, started_at=110))
+        store.link('script', 'linked')
+        store.put(dict(deferred, phase='deferred'))
+        hidden = set()
+        tasks = collect(repository, now=115, pending_ids=known, hidden=hidden)
+        self.assertEqual(hidden, {'managed:scheduler:linked', 'managed:scheduler:deferred'})
+        self.publisher.tick(tasks, now=115, hidden=hidden)
+        index = json.loads((self.publisher.shared / 'index.json').read_text())
+        self.assertEqual({row['task_id'] for row in index['tasks']}, {'script', 'managed:scheduler:queued'})
+
+        packet = self.publisher.tick([], now=130)
+        self.assertEqual({row['task_id'] for row in packet['tasks']}, {'script', 'managed:scheduler:queued'})
+        self.publisher.tick([], now=115 + RETENTION)
+        self.assertFalse((self.publisher.shared / 'tasks' / task_key('managed:scheduler:linked')).exists())
+
     def test_replacement_retains_previous_history_and_missing_volume_waits(self):
         self.log.write_text('before\n')
         self.tick()
@@ -82,20 +118,6 @@ class RemotePublicationTest(unittest.TestCase):
         self.assertFalse(catcher.retain_file)
         pending = self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')
         self.assertEqual(pending.read_text(), 'last output\n')
-
-    def test_remote_page_displays_synced_history(self):
-        from types import SimpleNamespace
-        from streamlit.testing.v1 import AppTest
-        self.log.write_text('remote log\n')
-        self.tick()
-        app = AppTest.from_string('from src.api.task_monitor.remote_view import render\nrender()')
-        with patch('src.automation.artifact_exchange.core.Config.load', return_value=SimpleNamespace(shared_root=self.root / 'shared')):
-            app.run()
-            self.assertFalse(app.exception)
-            self.assertEqual(app.code[0].value, 'remote log')
-            app.checkbox[1].uncheck().run()
-            self.assertFalse(app.exception)
-            self.assertEqual(app.code[0].value, 'remote log')
 
     def test_catchup_budget_and_retry_after_cursor_write_failure(self):
         from src.api.task_monitor import remote

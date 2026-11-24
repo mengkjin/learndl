@@ -30,11 +30,11 @@ def rows(path, query, parameters=(), *, strict=False):
         return []
 
 
-def snapshots(repository, *, detail=False, task_id=None, since=None):
+def snapshots(repository, *, detail=False, task_id=None, since=None, hidden=None):
     from .core import TaskSnapshot
     scheduler = repository.runtime_dir/'scheduling/runs.sqlite'
     links = {}
-    for linked_task_id, run_id in rows(scheduler, 'SELECT task_id,run_id FROM task_links'):
+    for linked_task_id, run_id in rows(scheduler, 'SELECT task_id,run_id FROM task_links', strict=since is not None):
         links.setdefault(run_id, set()).add(linked_task_id)
     # Metadata only. Never instantiate either lifecycle store (constructors may write).
     scripts = {r[0]: r[1:] for r in rows(repository.db_path,
@@ -47,7 +47,14 @@ def snapshots(repository, *, detail=False, task_id=None, since=None):
     result = []
     for kind, path, query in sources:
         parameters = ()
-        if since is not None:
+        if task_id is not None:
+            prefix = f'managed:{kind}:'
+            if not task_id.startswith(prefix):
+                continue
+            if kind == 'scheduler':
+                query += ' WHERE id=?'
+                parameters = (task_id.removeprefix(prefix),)
+        elif since is not None:
             query += " WHERE json_extract(data, '$.phase') IN ('queued','starting','running','terminating','finalizing') OR COALESCE(json_extract(data, '$.finished_at'),0)>=?"
             parameters = (since,)
         for (raw,) in rows(path, query, parameters, strict=since is not None):
@@ -55,10 +62,15 @@ def snapshots(repository, *, detail=False, task_id=None, since=None):
                 doc = json.loads(raw)
                 if not isinstance(doc, dict):
                     continue
-                if task_id is not None and task_id != f'managed:{kind}:{doc.get("id")}':
+                if not doc.get('id'):
+                    continue
+                identity = f'managed:{kind}:{doc["id"]}'
+                if task_id is not None and task_id != identity:
                     continue
                 phase = doc.get('phase')
-                if phase not in PHASES or not doc.get('id'):
+                if phase not in PHASES:
+                    if hidden is not None and phase == 'deferred':
+                        hidden.add(identity)
                     continue
                 status = PHASES[phase]
                 pid = doc.get('pid')
@@ -70,6 +82,8 @@ def snapshots(repository, *, detail=False, task_id=None, since=None):
                     and ('running' if scripts[key][1] in ('starting','running') else scripts[key][1])
                         == ('running' if status in ('starting','running') else status)
                     for key in links.get(doc['id'], ())):
+                    if hidden is not None:
+                        hidden.add(identity)
                     continue
                 item = doc.get('item', {})
                 started = doc.get('started_at')
@@ -88,7 +102,7 @@ def snapshots(repository, *, detail=False, task_id=None, since=None):
                     except psutil.Error:
                         alive = None
                 result.append(TaskSnapshot(
-                    task_id=f'managed:{kind}:{doc["id"]}',
+                    task_id=identity,
                     script=doc.get('script') or item.get('script') or doc.get('task') or doc['id'],
                     cmd=f'watchdog / {doc.get("owner",kind)} / {doc.get("task_kind",kind)}',
                     create_time=float(queued), status=status, source='watchdog', pid=pid,

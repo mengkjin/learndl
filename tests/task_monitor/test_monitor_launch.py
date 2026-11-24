@@ -1,4 +1,4 @@
-"""Regressions for monitor launch targeting and current Streamlit rendering."""
+"""Regressions for monitor launch targeting and native service entrypoints."""
 from __future__ import annotations
 
 __all__ = [
@@ -33,16 +33,7 @@ class MonitorLaunchTest(unittest.TestCase):
         self.assertEqual(argv[:5], ['wezterm', 'cli', 'spawn', '--window-id', '7'])
         self.assertNotIn('--new-window', argv)
 
-    def test_html_uses_current_api_and_strict_inner_sandbox(self):
-        from src.api.task_monitor.launch import _render_isolated_html
-        with patch('src.api.task_monitor.launch.st.iframe') as render:
-            _render_isolated_html('<script>alert("x")</script>', height=600)
-        document = render.call_args.args[0]
-        self.assertIn('sandbox=""', document)
-        self.assertNotIn('<script>', document)
-        self.assertIn('&lt;script&gt;', document)
-        self.assertEqual(render.call_args.kwargs['height'], 600)
-
-
-if __name__ == '__main__':
-    unittest.main()
+    def test_monitor_command_starts_native_service(self):
+        with patch('src.proj.util.shell.Shell.open') as launch:
+            LaunchTaskMonitor().run()
+        self.assertIn('python -m src.api.task_monitor.launch --open', launch.call_args.args[0])

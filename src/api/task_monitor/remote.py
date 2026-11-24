@@ -47,7 +47,7 @@ def retain_log(path: Path, task_id: str) -> bool:
 from .remote_transport import Publisher
 
 
-def collect(repository, *, now: float, pending_ids=(), since=None) -> list[dict]:
+def collect(repository, *, now: float, pending_ids=(), since=None, hidden=None) -> list[dict]:
     """Read scripts changed within the retention window, plus all active scripts."""
     tasks = []
     since = now - RETENTION if since is None else since
@@ -72,11 +72,12 @@ def collect(repository, *, now: float, pending_ids=(), since=None) -> list[dict]
                 log = Path(output[0]) if output and Path(output[0]).suffix.lower() in {'.md', '.txt', '.log', '.html'} else None
             tasks.append(replace(task, crash_log=log))
     # Managed adapter applies the same deduplication rules as the local monitor.
-    tasks.extend(repository._managed_tasks(detail=True, since=since))
+    hidden = set() if hidden is None else hidden
+    tasks.extend(repository._managed_tasks(detail=True, since=since, hidden=hidden))
     found = {task.task_id for task in tasks}
-    for task_id in pending_ids:
-        if task_id.startswith('managed:') and task_id not in found:
-            tasks.extend(repository._managed_tasks(detail=True, task_id=task_id, since=0))
+    for task_id in set(pending_ids) - found - hidden:
+        if task_id.startswith('managed:'):
+            tasks.extend(repository._managed_tasks(detail=True, task_id=task_id, since=0, hidden=hidden))
     result = []
     for task in tasks:
         log = task.crash_log or (task.exit_files[0] if task.exit_files else None)
@@ -112,18 +113,19 @@ def publish_once() -> int:
             atomic_json(heartbeat, health)
             try:
                 sampled_at = time.time()
+                hidden = set()
                 tasks = collect(repository, now=sampled_at, pending_ids=set(pending_ids),
-                                since=state.get('collected_at', sampled_at - RETENTION) - 60)
+                                since=state.get('collected_at', sampled_at - RETENTION) - 60, hidden=hidden)
                 limits = {}
                 deadline = time.monotonic() + 20
-                packet = publisher.tick(tasks, limits=limits)
+                packet = publisher.tick(tasks, limits=limits, hidden=hidden)
                 while any(task['offset'] < task['size'] for task in packet['tasks']):
                     from src.automation.scheduling.autofix_store import state_dir
                     from src.automation.scheduling.worker_bootstrap import wait_for_code
                     if time.monotonic() >= deadline or wait_for_code(state_dir(), 'remote_monitor'):
                         break
                     offsets = [(task['key'], task['generation'], task['offset']) for task in packet['tasks']]
-                    packet = publisher.tick(tasks, limits=limits)
+                    packet = publisher.tick(tasks, limits=limits, hidden=hidden)
                     if offsets == [(task['key'], task['generation'], task['offset']) for task in packet['tasks']]:
                         break
             except Exception as exc:

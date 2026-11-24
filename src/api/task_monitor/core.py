@@ -31,7 +31,7 @@ TIME_WINDOW_SECONDS: dict[TimeWindow, float | None] = {
 
 __all__ = [
     'ACTIVE_STATUSES', 'FINISHED_STATUSES', 'PageCursor', 'WatchdogHealth',
-    'TaskMonitorRepository', 'TaskPage', 'TaskSnapshot', 'TaskStatus', 'TimeWindow',
+    'TaskFilters', 'TaskMonitorRepository', 'TaskPage', 'TaskSnapshot', 'TaskStatus', 'TimeWindow',
     'is_background_source', 'read_live_log',
 ]
 
@@ -87,6 +87,43 @@ class TaskPage:
     has_active: bool
 
 
+def _script_name(script: str | None) -> str:
+    return (script or '').replace('\\', '/').rsplit('/', 1)[-1].casefold()
+
+
+@dataclass(frozen=True)
+class TaskFilters:
+    """Script name substring and half-open time ranges in Unix seconds."""
+
+    script: str = ''
+    started: tuple[float | None, float | None] = (None, None)
+    ended: tuple[float | None, float | None] = (None, None)
+
+    def matches(self, task: TaskSnapshot) -> bool:
+        if self.script and self.script.casefold() not in _script_name(task.script):
+            return False
+        for value, (lower, upper) in ((task.effective_start, self.started), (task.end_time, self.ended)):
+            if lower is not None and (value is None or value < lower):
+                return False
+            if upper is not None and (value is None or value >= upper):
+                return False
+        return True
+
+    def add_sql_conditions(self, where: list[str], params: list[object]) -> None:
+        if self.script:
+            where.append('instr(task_script_name(script), ?) > 0')
+            params.append(self.script.casefold())
+        for column, (lower, upper) in (
+            ('COALESCE(NULLIF(start_time, 0), create_time)', self.started), ('end_time', self.ended),
+        ):
+            if lower is not None:
+                where.append(f'{column} >= ?')
+                params.append(lower)
+            if upper is not None:
+                where.append(f'{column} < ?')
+                params.append(upper)
+
+
 @dataclass(frozen=True)
 class WatchdogHealth:
     last_run: float | None
@@ -140,6 +177,7 @@ class TaskMonitorRepository:
         connection = sqlite3.connect(f'{self.db_path.as_uri()}?mode=ro', uri=True, timeout=2)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA query_only = ON')
+        connection.create_function('task_script_name', 1, _script_name, deterministic=True)
         return connection
 
     @staticmethod
@@ -172,19 +210,21 @@ class TaskMonitorRepository:
             pid_alive=_pid_alive(pid) if status in ACTIVE_STATUSES else None,
         )
 
-    def _managed_tasks(self, *, detail=False, task_id=None, since=None):
+    def _managed_tasks(self, *, detail=False, task_id=None, since=None, hidden=None):
         from .managed import snapshots
-        return snapshots(self, detail=detail, task_id=task_id, since=since)
+        return snapshots(self, detail=detail, task_id=task_id, since=since, hidden=hidden)
 
-    def list_tasks(self, *, statuses=None, window: TimeWindow = 'last_day', cursor=None, limit=50, now=None):
+    def list_tasks(self, *, statuses=None, window: TimeWindow = 'last_day', cursor=None, limit=50,
+                   now=None, filters: TaskFilters = TaskFilters()):
         """Merge script rows and managed groups with one stable pagination cursor."""
         selected = {'running','complete','error','killed'} if statuses is None else statuses
         cutoff = self._cutoff(window, now)
         managed = [t for t in self._managed_tasks()
                    if ('running' if t.is_active else t.status) in selected
-                   and (cutoff is None or t.is_active or t.effective_start >= cutoff)]
+                   and (cutoff is None or t.is_active or t.effective_start >= cutoff)
+                   and filters.matches(t)]
         base = self._list_script_tasks(statuses=statuses, window=window, cursor=cursor,
-                                       limit=limit+1, now=now)
+                                       limit=limit+1, now=now, filters=filters)
         visible = [t for t in managed if cursor is None or (t.effective_start,t.task_id)<cursor]
         combined = sorted([*base.tasks,*visible], key=lambda t:(t.effective_start,t.task_id), reverse=True)
         more = len(combined)>limit or base.next_cursor is not None
@@ -195,6 +235,7 @@ class TaskMonitorRepository:
     def _list_script_tasks(
         self, *, statuses: set[TaskStatus] | None = None, window: TimeWindow = 'last_day',
         cursor: PageCursor | None = None, limit: int = 50, now: float | None = None,
+        filters: TaskFilters = TaskFilters(),
     ) -> TaskPage:
         """Return one metadata-only page using a stable descending cursor."""
         if not self.db_path.is_file():
@@ -212,6 +253,7 @@ class TaskMonitorRepository:
         if (cutoff := self._cutoff(window, now)) is not None:
             where.append("(COALESCE(start_time, create_time) >= ? OR status IN ('starting','running'))")
             params.append(cutoff)
+        filters.add_sql_conditions(where, params)
         count_where = list(where)
         count_params = list(params)
         if cursor is not None:
@@ -267,7 +309,7 @@ class TaskMonitorRepository:
 
     def status_counts(
         self, *, statuses: set[TaskStatus] | None = None, window: TimeWindow = 'last_day',
-        now: float | None = None,
+        now: float | None = None, filters: TaskFilters = TaskFilters(),
     ) -> dict[str, int]:
         """Count logical monitor statuses without loading task rows."""
         selected: set[TaskStatus] = (
@@ -280,7 +322,8 @@ class TaskMonitorRepository:
         cutoff = self._cutoff(window, now)
         for task in self._managed_tasks():
             logical = 'running' if task.is_active else task.status
-            if logical in selected and (cutoff is None or task.is_active or task.effective_start>=cutoff):
+            if (logical in selected and (cutoff is None or task.is_active or task.effective_start >= cutoff)
+                    and filters.matches(task)):
                 counts[logical] += 1
         if not self.db_path.is_file() or not database_statuses:
             return counts
@@ -289,6 +332,7 @@ class TaskMonitorRepository:
         if (cutoff := self._cutoff(window, now)) is not None:
             where.append("(COALESCE(start_time, create_time) >= ? OR status IN ('starting','running'))")
             params.append(cutoff)
+        filters.add_sql_conditions(where, params)
         try:
             with self._connect() as connection:
                 rows = connection.execute(

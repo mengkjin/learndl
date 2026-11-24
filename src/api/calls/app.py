@@ -43,14 +43,11 @@ class LaunchApp(DirectCall):
         Shell.open(cmd , cwd=os.getcwd(), **kwargs)
 
 class LaunchTaskMonitor(DirectCall):
-    """Launch the live Streamlit task monitor with confirmed operator actions."""
+    """Launch the native Task Center with confirmed operator actions."""
     category = 'App'
     def run(self) -> None:
         from src.proj.util.shell import Shell
-        cmd = (
-            'uv run --frozen streamlit run src/api/task_monitor/launch.py '
-            '--server.address 127.0.0.1 --server.port 8502'
-        )
+        cmd = 'uv run --frozen python -m src.api.task_monitor.launch --open'
         kwargs = {
             'done_action': 'pause',
             'title': 'Learndl Monitor',

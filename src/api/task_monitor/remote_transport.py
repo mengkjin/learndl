@@ -53,7 +53,7 @@ class Publisher:
         (self.private / 'journal.json').unlink()
         shutil.rmtree(self.private / 'staging', ignore_errors=True)
 
-    def tick(self, tasks, *, now=None, limits=None):
+    def tick(self, tasks, *, now=None, limits=None, hidden=()):
         now = time.time() if now is None else now
         limits = {} if limits is None else limits
         self.private.mkdir(parents=True, exist_ok=True)
@@ -85,6 +85,10 @@ class Publisher:
         for task in tasks:
             record = state['tasks'].setdefault(key(task['task_id']), {'offset': 0, 'generation': 0})
             record['task'] = task
+            record.pop('hidden_since', None)
+        for task_id in hidden:
+            if (record := state['tasks'].get(key(task_id))) is not None:
+                record.setdefault('hidden_since', now)
         summaries = []
         keys = sorted(state['tasks'])
         if keys:
@@ -96,10 +100,16 @@ class Publisher:
             record = state['tasks'][identity]
             task = record['task']
             directory = Path('tasks') / identity
-            if record.get('expires_at', float('inf')) <= now:
+            hidden_since = record.get('hidden_since')
+            if (record.get('expires_at', float('inf')) <= now
+                    or hidden_since is not None and hidden_since + RETENTION <= now):
                 deleted.append(str(directory))
                 pending_delete.extend([identity + '.md', identity + '.json'])
                 del state['tasks'][identity]
+                state.get('metadata', {}).pop(str(directory / 'manifest.json'), None)
+                continue
+            if hidden_since is not None:
+                # Retain its output briefly in case a distinct scheduler phase returns.
                 continue
             # Adopt v1 volumes as immutable historical ranges, including its partial last volume.
             if 'segments' not in record:

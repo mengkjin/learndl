@@ -739,8 +739,11 @@ its migration manifest together in the same commit.
 脚本退出前把运行日志原子移至私有 `remote_monitor/pending/`，与运行日志应位于同一文件系统。
 移交失败保留原文件。结束后进入最近结束列表，最终输出发布完成后保留 24 小时再清理。
 
-本机每 5 秒只检查索引和当前任务清单的文件标识，正文按需读取并缓存原字节及解析文本。
-每个页面会话默认使用 64 MiB 缓存，超过上限淘汰较旧内容。
+本机任务中心通过 Learndl Monitor 控制台启动，也可使用
+`uv run --frozen python -m src.api.task_monitor.launch --open`。
+Remote Running 每 5 秒检查索引和当前任务清单，正文按需读取。
+本机服务共享 64 MiB 的日志字节及渲染结果缓存，超过上限淘汰较旧内容。
+Running 和 Remote Running 共用输出样式设置。
 `Reload logs` 清除当前任务缓存，服务重启后按需重建。
 采样超过 60 秒标记过期，错误记录在 `scheduling/auxiliary/remote_monitor.json`。
 两端离线超过完成后保留窗口可能错过远程日志。
