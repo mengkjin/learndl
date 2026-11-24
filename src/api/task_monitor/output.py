@@ -28,6 +28,12 @@ DEFAULT_CACHE_BYTES = 512 * 1024 * 1024
 DEFAULT_CACHE_AGE_DAYS = 30
 
 _LOG_PREFIX = re.compile(r'^- \d{2}:\d{2}:\d{2}\.\d{3}:\s*')
+_TERMINAL_PREFIX = re.compile(
+    r'^- (?P<underline><u>)?(?:\d{4}-\d{2}-\d{2} )?\d{2}:\d{2}:\d{2}\.\d{3}:[ \t]*'
+)
+_CATCHER_TITLE = re.compile(r'# (.+ Initiated At \d{4}-\d{2}-\d{2} .+)', re.IGNORECASE)
+_CATCHER_SECTION = re.compile(r'## (Log (?:Start|Main|End))')
+_CATCHER_FIELD = re.compile(r'- \*((?:Machine|Python|Start at): .*?)\*')
 _CONTROL_ONLY = re.compile(r'^\^+$')
 _SAFE_CSS_PROPERTIES = frozenset((
     'color', 'background-color', 'font-weight', 'font-style', 'text-decoration',
@@ -36,7 +42,7 @@ _SAFE_CSS_VALUE = re.compile(r'^[#(),.%\w\s-]+$')
 
 __all__ = [
     'CachedOutputPage', 'OutputCache', 'OutputStyle', 'parse_live_output',
-    'sanitize_inline_html',
+    'sanitize_inline_html', 'format_live_output',
 ]
 
 
@@ -118,12 +124,24 @@ def _plain_payload(line: str) -> str:
     return _LOG_PREFIX.sub('', sanitize_inline_html(line, 'text')).strip()
 
 
-def _compact_records(records: Iterator[str], style: OutputStyle) -> Iterator[str]:
+def _terminal_record(record: str) -> str:
+    """Style MarkdownWriter's header and remove its outer record timestamp."""
+    stripped = record.rstrip()
+    heading = _CATCHER_TITLE.fullmatch(stripped) or _CATCHER_SECTION.fullmatch(stripped)
+    if heading:
+        return f'<span style="font-weight: bold">{html.escape(heading[1])}</span>'
+    if field := _CATCHER_FIELD.fullmatch(stripped):
+        return f'<span style="font-style: italic">{html.escape(field[1])}</span>'
+    # stderr wraps the timestamp and the message together. Keep the underline.
+    return _TERMINAL_PREFIX.sub(r'\g<underline>', record, count=1)
+
+
+def _compact_records(records: Iterator[str], style: OutputStyle, *, terminal: bool = False) -> Iterator[str]:
     suppressed = 0
     for record in records:
         if re.fullmatch(r'#{2,3} \d{4}-\d{2}-\d{2}(?: \d{2}(?::\d{2})?(?::\d{2})?)?\s*', record.strip()):
             continue
-        record = _LOG_PREFIX.sub('', record)
+        record = _terminal_record(record) if terminal else _LOG_PREFIX.sub('', record)
         payload = _plain_payload(record)
         if not payload or _CONTROL_ONLY.fullmatch(payload):
             suppressed += 1
@@ -294,7 +312,13 @@ def parse_live_output(
     text = raw.decode('utf-8', errors='replace')
     if size > max_bytes:
         text = text.split('\n', 1)[-1]
-    records = list(_compact_records(iter(text.splitlines()), style))[-max_lines:]
+    return format_live_output(text, style, max_lines=max_lines)
+
+
+def format_live_output(text: str, style: OutputStyle, *, max_lines: int | None = None) -> str:
+    records = list(_compact_records(iter(text.splitlines()), style, terminal=True))
+    if max_lines is not None:
+        records = records[-max_lines:]
     return '\n'.join(records) if style == 'text' else ''.join(f'<div>{record}</div>' for record in records)
 
 

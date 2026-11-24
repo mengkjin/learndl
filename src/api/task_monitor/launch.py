@@ -1,511 +1,167 @@
-"""Standalone Streamlit interface for Learndl task monitoring."""
+"""Serve the native Task Center on loopback."""
 
 from __future__ import annotations
 
-__all__ = [
-    'PAGE_SIZE',
-    'MAX_HTML_PREVIEW_BYTES',
-    'STATUS_OPTIONS',
-    'WINDOW_LABELS',
-    'STYLE_LABELS',
-]
-
-from datetime import datetime
-from html import escape
+import argparse
+import hmac
+import json
+import mimetypes
+import os
+import secrets
+import shutil
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from uuid import uuid4
+from urllib.parse import parse_qsl, quote, urlsplit
 
 import psutil
 
-import streamlit as st
-from streamlit.components.v2 import component
+from src.api.learndl_monitor.restart_control import restart_link
+from src.api.task_monitor.web_api import TaskCenter
 
-from src.api.task_monitor.core import (
-    PageCursor, TaskMonitorRepository, TaskSnapshot, TaskStatus, TimeWindow,
-)
-from src.api.task_monitor.actions import KillTarget, kill_task, kill_unavailable_reason, prepare_kill
-from src.api.task_monitor.resources import ResourceSnapshot, sample_resources
-from src.api.task_monitor.output import OutputCache, OutputStyle, parse_live_output
-
-PAGE_SIZE = 50
+ASSETS = Path(__file__).parent
 MAX_HTML_PREVIEW_BYTES = 4 * 1024 * 1024
-STATUS_OPTIONS: tuple[TaskStatus, ...] = ('complete', 'error', 'killed')
-WINDOW_LABELS: dict[str, TimeWindow] = {
-    'History': 'history',
-    'Last day': 'last_day',
-    'Last week': 'last_week',
-    'Last month': 'last_month',
-}
-STYLE_LABELS: dict[str, OutputStyle] = {'Colored text': 'colored', 'Text only': 'text'}
+PAGES = {'/', '/remote', '/finished'}
+STATIC = {'/dashboard.js': 'dashboard.js', '/dashboard.css': 'dashboard.css',
+          '/live_output.js': 'live_output.js'}
 
 
-def _time(value: float | None) -> str:
-    return datetime.fromtimestamp(value).strftime('%Y-%m-%d %H:%M:%S') if value else '—'
+def create_server(port=8502, *, center=None):
+    center = center if center is not None else TaskCenter()
+    token = secrets.token_urlsafe(32)
 
-
-def _duration(task: TaskSnapshot) -> str:
-    end = task.end_time if task.end_time is not None else datetime.now().timestamp()
-    seconds = max(0, int(end - task.effective_start))
-    hours, remainder = divmod(seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
-
-
-_LOG_CSS = """
-.output { white-space: pre-wrap; overflow-wrap: anywhere; padding: 10px; }
-.output-line { margin: 0 0 2px; }
-.meta { color: #9ca3af; }
-.muted { color: #a8bdcc; font-style: italic; }
-.stderr { border-left: 2px solid #f87171; background: rgba(248, 113, 113, 0.08); padding-left: 6px; }
-.stderr .meta { color: #fca5a5; }
-"""
-_LOG_COLORS = "background: #17212c; color: #e2e8f0; font: 12px/1.45 Monaco, Menlo, 'Ubuntu Mono', monospace;"
-
-_live_output = component(
-    'learndl_live_output',
-    html=('<div class="live-output" tabindex="0" role="region" aria-label="Live task output">'
-          '<div class="output"></div></div><button type="button" hidden>Jump to bottom</button>'),
-    css=_LOG_CSS + f"""
-.live-output {{ {_LOG_COLORS} height: clamp(180px, calc(100dvh - 260px), 560px); overflow: auto; overflow-anchor: none; position: relative; }}
-button {{ margin-top: 6px; }}
-""",
-    js=Path(__file__).with_name('live_output.js').read_text(encoding='utf-8'),
-)
-
-
-def _colored_document(content: str) -> str:
-    return f"""<!doctype html>
-<html><head><meta charset="utf-8"><style>
-body {{ margin: 0; {_LOG_COLORS} }}
-{_LOG_CSS}
-</style></head><body><div class="output">{content}</div></body></html>"""
-
-
-def _render_output(content: str, style: OutputStyle, *, height: int = 560) -> None:
-    if style == 'colored':
-        _render_isolated_html(_colored_document(content), height=height)
-    else:
-        st.code(content, language=None, height=height)
-
-
-def _render_isolated_html(document: str, *, height: int) -> None:
-    # st.iframe's own sandbox permits scripts/same-origin. Keep report content
-    # inside a second, strictly sandboxed frame and escape the srcdoc attribute.
-    wrapper = (f'<iframe title="Task output" sandbox="" srcdoc="{escape(document, quote=True)}" '
-               f'style="width:100%;height:{height - 8}px;border:0"></iframe>')
-    st.iframe(wrapper, height=height, width='stretch')
-
-
-def _render_full_html(path: Path) -> None:
-    if not path.is_file():
-        st.caption(f'Raw output file is no longer available: {path}')
-        return
-    size = path.stat().st_size
-    with st.expander('Full HTML report and download'):
-        if size <= MAX_HTML_PREVIEW_BYTES:
-            try:
-                _render_isolated_html(path.read_text(encoding='utf-8', errors='replace'), height=600)
-            except OSError as exc:
-                st.caption(f'Unable to preview output: {exc}')
-        else:
-            st.caption(f'The {size / 1024 / 1024:.1f} MB report exceeds the 4 MB inline preview limit.')
-        try:
-            with path.open('rb') as source:
-                st.download_button(
-                    'Download full HTML report', data=source, file_name=path.name,
-                    mime='text/html', key=f'download-{path}',
-                )
-        except OSError:
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
             pass
 
+        @property
+        def authority(self):
+            return f'127.0.0.1:{self.server.server_port}'
 
-def _output_candidates(task: TaskSnapshot) -> list[Path]:
-    paths = list(task.exit_files)
-    if task.crash_log is not None and task.crash_log not in paths:
-        paths.insert(0, task.crash_log)
-    return paths
+        def local(self):
+            origin = f'http://{self.authority}'
+            return self.headers.get('Host') == self.authority and self.headers.get('Origin', origin) == origin
 
+        def authorized(self):
+            return self.local() and hmac.compare_digest(self.headers.get('Authorization', ''), f'Bearer {token}')
 
-def _render_task_detail(task: TaskSnapshot, style: OutputStyle) -> None:
-    st.subheader(Path(task.script).name)
-    with st.expander('Task details'):
-        st.write(task.script)
-        st.caption(f'Task ID: {task.task_id} · Status: {task.display_status.upper()}')
-        st.caption(f'PID {task.pid or "—"} · Started {_time(task.effective_start)} · {_duration(task)}')
-        st.caption(f'Source: {task.source or "unknown"} · Ended: {_time(task.end_time)}')
-        st.code(task.cmd, language='shell')
-        if task.display_status == 'stale':
-            st.warning('The recorded PID is no longer alive. Waiting for watchdog reconciliation.')
-        if task.exit_message:
-            st.info(task.exit_message)
-        if task.exit_error:
-            st.error(task.exit_error)
-        source = _select_output_source(task)
-    _render_task_output(task, style, source=source)
+        def headers_for(self, status, mime, length):
+            self.send_response(status)
+            self.send_header('Content-Type', mime)
+            self.send_header('Content-Length', str(length))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'same-origin')
+            self.send_header('Content-Security-Policy',
+                             "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                             "connect-src 'self'; img-src data:; frame-src 'self'; base-uri 'none'; frame-ancestors 'none'")
 
+        def reply(self, value, status=200, mime='application/json'):
+            data = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=False).encode()
+            self.headers_for(status, mime, len(data))
+            self.end_headers()
+            self.wfile.write(data)
 
-def _select_output_source(task: TaskSnapshot) -> Path | None:
-    candidates = _output_candidates(task)
-    if not candidates:
-        return None
-    if len(candidates) == 1:
-        st.caption(f'Output file: {candidates[0]}')
-        return candidates[0]
-    labels = [f'{path.name} — {path}' for path in candidates]
-    selected_label = st.selectbox('Output file', labels, key=f'output-source-{"running" if task.is_active else "finished"}-{task.task_id}')
-    return candidates[labels.index(selected_label)]
+        def do_GET(self):
+            if not self.local():
+                return self.reply({'error': 'Forbidden'}, 403)
+            url = urlsplit(self.path)
+            if url.path in PAGES:
+                page = (ASSETS / 'dashboard.html').read_text(encoding='utf-8')
+                page = page.replace('__TOKEN__', token).replace('__RESTART_LINK__', restart_link('tasks', self.server.server_port))
+                return self.reply(page.encode(), mime='text/html; charset=utf-8')
+            if url.path in STATIC:
+                asset = ASSETS / STATIC[url.path]
+                return self.reply(asset.read_bytes(), mime=mimetypes.guess_type(asset)[0] + '; charset=utf-8')
+            if url.path == '/health':
+                return self.reply({'ok': True, 'service': 'tasks'})
+            if not self.authorized():
+                return self.reply({'error': 'Forbidden'}, 403)
+            try:
+                params = dict(parse_qsl(url.query, keep_blank_values=True, max_num_fields=20))
+                self.get_api(url.path, params)
+            except LookupError as exc:
+                self.reply({'error': str(exc)}, 404)
+            except (ValueError, TypeError, psutil.Error) as exc:
+                self.reply({'error': str(exc)}, 400)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except OSError as exc:
+                self.reply({'error': str(exc)}, 503)
 
+        def get_api(self, route, params):
+            if route in {'/api/running', '/api/finished'}:
+                return self.reply(center.local_list(route.rsplit('/', 1)[-1], params))
+            if route == '/api/resources':
+                return self.reply(center.resource_snapshot())
+            if route == '/api/task':
+                return self.reply(center.local_detail(params['task']))
+            if route == '/api/remote':
+                return self.reply(center.remote_list())
+            if route == '/api/remote/task':
+                return self.reply(center.remote_detail(params))
+            if route in {'/api/output', '/api/remote/output'}:
+                style = params.get('style', 'colored')
+                if style not in {'colored', 'text'}:
+                    raise ValueError('Unknown output style')
+                reader = center.remote_output if route == '/api/remote/output' else center.local_output
+                return self.reply(reader(params, style))
+            if route in {'/api/report', '/api/download'}:
+                return self.report(params, download=route.endswith('download'))
+            self.reply({'error': 'Unknown endpoint'}, 404)
 
-def _render_task_output(task: TaskSnapshot, style: OutputStyle, *, source: Path | None = None) -> None:
-    if source is None:
-        st.info('No output file is recorded for this task.')
-        return
+        def report(self, params, *, download):
+            task = center.local_task(params['task'])
+            source = center.source(task, int(params['source']))
+            if task.is_active or source.suffix.lower() not in {'.html', '.htm'} or not source.is_file():
+                raise LookupError('HTML report unavailable')
+            with source.open('rb') as stream:
+                if not download:
+                    data = stream.read(MAX_HTML_PREVIEW_BYTES + 1)
+                    if len(data) > MAX_HTML_PREVIEW_BYTES:
+                        return self.reply({'error': 'Report exceeds the 4 MiB preview limit'}, 413)
+                    return self.reply({'html': data.decode('utf-8', errors='replace')})
+                size = os.fstat(stream.fileno()).st_size
+                self.headers_for(200, 'application/octet-stream', size)
+                self.send_header('Content-Disposition', f"attachment; filename*=UTF-8''{quote(source.name, safe='')}")
+                self.end_headers()
+                shutil.copyfileobj(stream, self.wfile)
 
-    if task.is_active:
-        content = parse_live_output(source, style)
-        if content:
-            _live_output(data={"content": content, "style": style}, key=f"live-{task.task_id}-{source}")
-        else:
-            st.info('No live output is available yet.')
-        return
+        def do_POST(self):
+            if not self.authorized() or self.headers.get('Origin') != f'http://{self.authority}':
+                return self.reply({'error': 'Forbidden'}, 403)
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if not 0 < length <= 16384:
+                    raise ValueError('Invalid request length')
+                params = json.loads(self.rfile.read(length))
+                if not isinstance(params, dict):
+                    raise ValueError('Invalid request')
+                if self.path == '/api/kill/prepare':
+                    return self.reply(center.prepare_termination(params['task']))
+                if self.path == '/api/kill/confirm':
+                    return self.reply(center.confirm_termination(params['token']))
+                if self.path == '/api/remote/reload':
+                    return self.reply(center.reload_remote(params))
+                self.reply({'error': 'Unknown endpoint'}, 404)
+            except (KeyError, LookupError, ValueError, TypeError, psutil.Error) as exc:
+                self.reply({'error': str(exc)}, 400)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
-    cache = OutputCache()
-    page_key = f'output-page-{task.task_id}-{style}-{source}'
-    requested_page = st.session_state.get(page_key)
-    cached_page = cache.load_page(task.task_id, source, style, requested_page)
-    if cached_page is None:
-        st.info('The output source and its parsed cache are unavailable.')
-    elif cached_page.total_pages == 0:
-        st.info('The selected output contains no text records.')
-    else:
-        if cached_page.total_pages > 1:
-            selected_page = st.number_input(
-                'Output page', min_value=1, max_value=cached_page.total_pages,
-                value=cached_page.page + 1, step=1, key=f'{page_key}-input',
-            ) - 1
-            if selected_page != cached_page.page:
-                st.session_state[page_key] = selected_page
-                cached_page = cache.load_page(task.task_id, source, style, selected_page) or cached_page
-        _render_output(cached_page.content, style)
-        st.caption(
-            f'{cached_page.record_count} parsed records · page {cached_page.page + 1}/{cached_page.total_pages} '
-            f'· {"cache hit" if cached_page.cache_hit else "cache created"}'
-        )
-    if source.suffix.lower() in ('.html', '.htm'):
-        _render_full_html(source)
-
-
-def _reset_paging_if_filters_changed(signature: tuple[object, ...]) -> None:
-    if st.session_state.get('finished-filter-signature') != signature:
-        st.session_state['finished-filter-signature'] = signature
-        st.session_state['finished-cursors'] = [None]
-        st.session_state.pop('finished-selected-task', None)
-
-
-def _render_finished() -> None:
-    style_label = _render_header('finished-style')
-    with st.expander('Filters & results', expanded=False):
-        filter_columns = st.columns((2, 1))
-        st.session_state.setdefault('finished-statuses', list(STATUS_OPTIONS))
-        selected_statuses = filter_columns[0].multiselect(
-            'Status', STATUS_OPTIONS, key='finished-statuses',
-        )
-        window_label = filter_columns[1].selectbox('Start time', list(WINDOW_LABELS), index=0, key='finished-window')
-        statuses = set(selected_statuses)
-        window = WINDOW_LABELS[window_label]
-        style = STYLE_LABELS[style_label]
-        signature = (tuple(selected_statuses), window)
-        _reset_paging_if_filters_changed(signature)
-        st.caption(f'Filters: {", ".join(selected_statuses) or "none"} · {window_label} · {style_label}')
-        repository = TaskMonitorRepository()
-        cursors: list[PageCursor | None] = st.session_state.setdefault('finished-cursors', [None])
-        page_number = len(cursors)
-        page = repository.list_tasks(statuses=statuses, window=window, cursor=cursors[-1], limit=PAGE_SIZE)
-        counts = repository.status_counts(statuses=statuses, window=window)
-        metrics = st.columns(3)
-        metrics[0].metric('Complete', counts['complete'])
-        metrics[1].metric('Error', counts['error'])
-        metrics[2].metric('Killed', counts['killed'])
-        st.caption(f'{page.total} matching tasks · page {page_number} · up to {PAGE_SIZE} rows per page')
-
-        if not page.tasks:
-            st.info('No tasks match the selected filters.')
-        else:
-            rows = [
-                {
-                    'Status': task.display_status.upper(),
-                    'Background': task.is_background,
-                    'Script': task.script,
-                    'Started': _time(task.effective_start),
-                    'Duration': _duration(task),
-                    'Source': task.source or 'unknown',
-                    'PID': task.pid,
-                    'Task ID': task.task_id,
-                }
-                for task in page.tasks
-            ]
-            event = st.dataframe(
-                rows, hide_index=True, width='stretch', on_select='rerun',
-                selection_mode='single-row',
-                key=f'finished-table-{signature}-{page_number}-{tuple(task.task_id for task in page.tasks)}',
-            )
-            nav = st.columns((1, 1, 6))
-            if nav[0].button('Previous', disabled=page_number == 1, width='stretch'):
-                cursors.pop()
-                st.session_state.pop('finished-selected-task', None)
-                st.rerun()
-            if nav[1].button('Next', disabled=page.next_cursor is None, width='stretch'):
-                assert page.next_cursor is not None
-                cursors.append(page.next_cursor)
-                st.session_state.pop('finished-selected-task', None)
-                st.rerun()
-
-            selection = getattr(event, 'selection', None)
-            selected_rows = getattr(selection, 'rows', []) if selection is not None else []
-            if selected_rows and selected_rows[0] < len(page.tasks):
-                st.session_state['finished-selected-task'] = page.tasks[selected_rows[0]].task_id
-    selected_task_id = st.session_state.get('finished-selected-task')
-    if selected_task_id:
-        task = repository.get_task(selected_task_id)
-        if task is not None and not task.is_active:
-            st.divider()
-            _render_task_detail(task, style)
-    else:
-        st.caption('Select one table row to load its details and output.')
-
-    _render_health(repository)
-    _auto_refresh(30000, 'finished-refresh')
+    return ThreadingHTTPServer(('127.0.0.1', port), Handler)
 
 
-def _render_health(repository: TaskMonitorRepository) -> None:
-    lifecycle_health = repository.watchdog_health('task_lifecycle', stale_after_seconds=3 * 60)
-    cache_health = repository.watchdog_health('task_monitor_cache', stale_after_seconds=30 * 60)
-    timeout_health = repository.watchdog_health('task_timeouts', stale_after_seconds=3 * 60)
-    for label, health in [('Lifecycle', lifecycle_health), ('Cache maintenance', cache_health), ('Timeout protection', timeout_health)]:
-        if health.payload.get('disabled'):
-            st.caption(f'{label}: disabled')
-    if timeout_health.stale:
-        st.warning('Timeout protection heartbeat is missing or stale; task runtime limits may not be enforced.')
-
-    if lifecycle_health.stale:
-        message = 'No successful watchdog lifecycle heartbeat was found.' if lifecycle_health.last_run is None else f'Last lifecycle run: {_time(lifecycle_health.last_run)}.'
-        st.warning(f'{message} Check learndl-watchdog.timer; task states may be stale.')
-    elif cache_health.stale:
-        st.warning(
-            f'Task lifecycle is healthy, but monitor-cache maintenance is stale '
-            f'(last success: {_time(cache_health.last_run)}).'
-        )
-    elif not timeout_health.stale and not all(health.payload.get('disabled') for health in (lifecycle_health, cache_health, timeout_health)):
-        st.caption(
-            f'Watchdog healthy · lifecycle {_time(lifecycle_health.last_run)} · '
-            f'cache {_time(cache_health.last_run)}'
-        )
-
-
-@st.cache_data(ttl=3, show_spinner=False)
-def _resources() -> ResourceSnapshot:
-    from src.proj import PATH
-    return sample_resources(PATH.main)
-
-
-def _usage(value: tuple[float, float, float] | None) -> str:
-    if value is None:
-        return 'Unavailable'
-    used, total, percent = value
-    return f'{used / 1024**3:.1f} / {total / 1024**3:.1f} GiB ({percent:.1f}%)'
-
-
-def _percent(value: float | None) -> str:
-    return 'Unavailable' if value is None else f'{value:.1f}%'
-
-
-def _resource_row(label: str, value: str) -> None:
-    label_column, value_column = st.columns((2, 3))
-    label_column.markdown(f'**{label}**')
-    value_column.write(value)
-
-
-def _render_header(style_key: str = 'running-style') -> str:
-    st.markdown('<style>.block-container{padding-top:3.5rem;padding-bottom:.25rem}h1{padding-top:0!important;font-size:1.6rem!important}h3{font-size:1.1rem!important;padding:.2rem 0!important}.st-key-running-list [data-testid=stMarkdownContainer] p{font-size:12px;margin:0}.task-start{display:block;font-size:11px;line-height:1.5;color:#a8bdcc}</style>', unsafe_allow_html=True)
-    title, settings, system = st.columns((6, 1, 1), vertical_alignment='center')
-    title.title('Task Center')
-    with settings.popover('', icon=':material/settings:', help='Settings', width='content'):
-        style_label = st.radio('Output style', list(STYLE_LABELS), key=style_key)
-    with system.popover('', icon=':material/device_thermostat:', help='System resources', width='content'):
-        snapshot = _resources()
-        st.caption(f'Host resources · sampled {_time(snapshot.sampled_at)}')
-        _resource_row('Memory', _usage(snapshot.memory))
-        _resource_row('CPU', _percent(snapshot.cpu_percent))
-        _resource_row('Project disk', _usage(snapshot.disk))
-        for gpu in snapshot.gpus:
-            st.markdown(f'**GPU {gpu.index} · {gpu.name}**')
-            used = 'Unavailable' if gpu.used_mib is None else f'{gpu.used_mib / 1024:.1f} GiB'
-            total = 'Unavailable' if not gpu.total_mib else f'{gpu.total_mib / 1024:.1f} GiB'
-            _resource_row('GPU memory', f'{used} / {total} ({_percent(gpu.memory_percent)})')
-            _resource_row('GPU compute utilization', _percent(gpu.utilization))
-        for error in snapshot.errors:
-            st.caption(error)
-    return style_label
-
-
-def _auto_refresh(interval: int, key: str) -> None:
-    from streamlit_autorefresh import st_autorefresh
-    if not st.session_state.get('monitor-kill-target'):
-        st_autorefresh(interval=interval, key=key)
-
-
-def _clear_kill() -> None:
-    for key in ('monitor-kill-target', 'monitor-kill-token', 'monitor-kill-busy'):
-        st.session_state.pop(key, None)
-
-
-def _start_kill(task: TaskSnapshot) -> None:
-    try:
-        target = prepare_kill(task)
-    except (ValueError, psutil.Error) as exc:
-        st.session_state['monitor-action-result'] = ('error', str(exc))
-        return
-    st.session_state['monitor-kill-target'] = target
-    st.session_state['monitor-kill-token'] = uuid4().hex
-    st.session_state['monitor-kill-busy'] = False
-
-
-def _queue_kill(checkbox_key: str) -> None:
-    if st.session_state.get(checkbox_key) and st.session_state.get('monitor-kill-target'):
-        st.session_state['monitor-kill-busy'] = True
-
-
-@st.dialog('Kill running script?', on_dismiss=_clear_kill)
-def _confirm_kill(target: KillTarget, token: str) -> None:
-    st.warning('This will stop the entire watchdog process group and disable its automatic recovery.'
-               if target.managed_identity is not None else 'This will terminate the selected script process.')
-    st.write(target.script)
-    st.caption(f'Task ID: {target.task_id} · PID: {target.pid} · Started: {_time(target.started)}')
-    busy = st.session_state.get('monitor-kill-busy', False)
-    checkbox_key = f'kill-confirm-{token}'
-    confirmed = st.checkbox('I confirm that I want to terminate this task.',
-                            value=False, key=checkbox_key, disabled=busy)
-    cancel, execute = st.columns(2)
-    if cancel.button('Cancel', key=f'kill-cancel-{token}', disabled=busy):
-        _clear_kill()
-        st.rerun()
-    execute.button('Confirm Kill', key=f'kill-execute-{token}', type='primary',
-                   disabled=not confirmed or busy, on_click=_queue_kill, args=(checkbox_key,))
-    if busy and st.session_state.get('monitor-kill-token') == token:
-        # Consume this confirmation before any side effects, including repeated widget events.
-        _clear_kill()
-        with st.spinner('Terminating process…'):
-            result = kill_task(target)
-        st.session_state['monitor-action-result'] = (
-            'success' if result.status == 'success' else 'error', result.message,
-        )
-        if result.status == 'success':
-            st.session_state['finished-cursors'] = [None]
-            st.session_state.pop('finished-selected-task', None)
-        st.rerun()
-
-
-def _pin_task(task_id: str) -> None:
-    st.session_state['running-pinned-task'] = task_id
-
-
-def _follow_latest() -> None:
-    st.session_state.pop('running-pinned-task', None)
-
-
-def _running_tasks(repository: TaskMonitorRepository) -> list[TaskSnapshot]:
-    tasks: list[TaskSnapshot] = []
-    cursor = None
-    while True:
-        page = repository.list_tasks(statuses={'running'}, window='history', cursor=cursor, limit=PAGE_SIZE)
-        tasks.extend(page.tasks)
-        if page.next_cursor is None:
-            return tasks
-        cursor = page.next_cursor
-
-
-def _render_running() -> None:
-    style_label = _render_header()
-    if result := st.session_state.pop('monitor-action-result', None):
-        level, message = result
-        getattr(st, level)(message)
-    repository = TaskMonitorRepository()
-    tasks = _running_tasks(repository)
-    pinned = st.session_state.get('running-pinned-task')
-    if pinned and not any(task.task_id == pinned for task in tasks):
-        _follow_latest()
-        pinned = None
-        st.info('The selected task has finished or is no longer available. Following the latest task.')
-    selected = pinned or (tasks[0].task_id if tasks else None)
-    left, right = st.columns((1, 3), gap='large')
-    with left:
-        st.subheader(f'Running ({len(tasks)})')
-        st.button('Follow latest', on_click=_follow_latest, disabled=pinned is None,
-                  key='running-follow', width='stretch')
-        with st.container(height=400, border=False, key='running-list'):
-            if not tasks:
-                st.info('No running tasks.')
-            for task in tasks:
-                with st.container(border=True):
-                    status = f'{task.display_status.upper()} · PID {task.pid or "—"}'
-                    if task.managed_kind:
-                        status += f' · Watchdog {task.managed_phase}'
-                    st.markdown(f'**{Path(task.script).name}**', help=status)
-                    st.markdown(f'<span class="task-start" title="{escape(status, quote=True)}">{_time(task.effective_start)}</span>', unsafe_allow_html=True)
-                    view, kill = st.columns(2)
-                    view.button('Output', key=f'view-{task.task_id}', on_click=_pin_task,
-                                args=(task.task_id,), type='primary' if task.task_id == selected else 'secondary',
-                                help=f'{task.script} · {task.task_id}', width='stretch')
-                    reason = kill_unavailable_reason(task)
-                    kill.button('Kill', key=f'kill-{task.task_id}', disabled=reason is not None,
-                                help=reason or 'Review and confirm termination', on_click=_start_kill,
-                                args=(task,), width='stretch')
-    with right:
-        task = repository.get_task(selected) if selected else None
-        if task is not None and task.is_active:
-            st.subheader(Path(task.script).name)
-            with st.expander('Task details'):
-                st.caption(f'PID {task.pid or "—"} · Started {_time(task.effective_start)} · {_duration(task)}')
-                st.write(task.script)
-                st.caption(f'Task ID: {task.task_id} · Source: {task.source or "unknown"}')
-                st.code(task.cmd, language='shell')
-                if task.managed_kind:
-                    st.caption(f'Managed phase: {task.managed_phase} · Child PIDs: {task.child_pids or "none visible"}')
-                    if task.exit_message:
-                        st.info(task.exit_message)
-                if task.display_status == 'stale':
-                    st.warning('The recorded PID has exited; waiting for watchdog reconciliation.')
-                source = _select_output_source(task)
-            _render_task_output(task, STYLE_LABELS[style_label], source=source)
-        elif selected:
-            st.info('This task has just finished. The next refresh will select another running task.')
-        else:
-            st.info('Output will appear here when a task starts.')
-    _render_health(repository)
-    _auto_refresh(3000, 'running-refresh')
-    if target := st.session_state.get('monitor-kill-target'):
-        _confirm_kill(target, st.session_state['monitor-kill-token'])
-
-
-def _render_dashboard() -> None:
-    from src.api.learndl_monitor.restart_control import restart_link
-
-    # Preserve filters even when their page's widgets are not rendered this run.
-    for key in ('finished-statuses', 'finished-window', 'finished-style', 'running-style'):
-        if key in st.session_state:
-            st.session_state[key] = st.session_state[key]
-    from src.api.task_monitor.remote_view import render as render_remote
-    page = st.navigation([
-        st.Page(_render_running, title='Running', icon=':material/play_circle:', default=True),
-        st.Page(render_remote, title='Remote Running', icon=':material/dns:', url_path='remote'),
-        st.Page(_render_finished, title='Finished', icon=':material/task_alt:', url_path='finished'),
-    ], position='top')
-    if page.title != 'Running':
-        _clear_kill()
-    st.html(restart_link('tasks', int(st.get_option('server.port')), fixed=True))
-    page.run()
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--port', type=int, default=int(os.environ.get('LEARNDL_TASKS_PORT', '8502')))
+    parser.add_argument('--open', action='store_true', help='Open Task Center in the browser')
+    args = parser.parse_args()
+    with create_server(args.port) as server:
+        if args.open:
+            webbrowser.open(f'http://127.0.0.1:{server.server_port}/')
+        server.serve_forever()
 
 
 if __name__ == '__main__':
-    st.set_page_config(page_title='Task Center', layout='wide')
-    _render_dashboard()
+    main()

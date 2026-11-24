@@ -1,5 +1,5 @@
-// Streamlit calls the renderer again when data changes. Keep the viewport in place.
-export default function ({ data, parentElement }) {
+// One viewport for running, remote, and finished task output.
+export default function ({ data, parentElement, onJump }) {
     const viewport = parentElement.querySelector('.live-output');
     const lines = viewport.firstElementChild;
     const jump = parentElement.querySelector('button');
@@ -9,23 +9,6 @@ export default function ({ data, parentElement }) {
         viewport.scrollTop = top;
         state.top = viewport.scrollTop;
     }
-
-    function fitViewport() {
-        if (!viewport.isConnected) {
-            state.resizeObserver?.disconnect();
-            window.removeEventListener('resize', fitViewport);
-            return;
-        }
-        const height = Math.max(120, window.innerHeight - viewport.getBoundingClientRect().top - 32);
-        viewport.style.height = `${height}px`;
-        if (state.following) setTop(viewport.scrollHeight);
-    }
-    if (!state.resizeObserver) {
-        state.resizeObserver = new ResizeObserver(() => requestAnimationFrame(fitViewport));
-        state.resizeObserver.observe(viewport);
-        window.addEventListener('resize', fitViewport);
-    }
-    requestAnimationFrame(() => requestAnimationFrame(fitViewport));
 
     viewport.onscroll = () => {
         // A content update can also emit a scroll event.
@@ -39,11 +22,15 @@ export default function ({ data, parentElement }) {
         setTop(viewport.scrollHeight);
         jump.hidden = true;
         viewport.focus({ preventScroll: true });
+        onJump?.();
     };
 
     if (state.content === data.content && state.style === data.style) return;
 
     const previous = Array.from(lines.children);
+    const oldTop = viewport.scrollTop;
+    const oldHeight = lines.offsetHeight;
+    const sameStyle = state.style === data.style;
     const anchor = state.following ? -1 : previous.findIndex(
         line => line.offsetTop + line.offsetHeight > viewport.scrollTop,
     );
@@ -62,7 +49,7 @@ export default function ({ data, parentElement }) {
 
     // Match the retained suffix of the old tail against the new prefix.
     let retained = -1;
-    if (anchor >= 0 && state.style === data.style) {
+    if (anchor >= 0 && sameStyle && !data.prepend) {
         const oldLines = previous.map(line => line.innerHTML);
         const newLines = Array.from(incoming.children, line => line.innerHTML);
         for (let start = 0; start <= anchor; start++) {
@@ -79,10 +66,16 @@ export default function ({ data, parentElement }) {
     lines.replaceChildren(...incoming.children);
     state.content = data.content;
     state.style = data.style;
-    if (state.following) {
+    if (data.prepend) {
+        state.following = false;
+        setTop(oldTop + lines.offsetHeight - oldHeight);
+    } else if (data.startAtTop) {
+        state.following = false;
+        setTop(0);
+    } else if (state.following) {
         setTop(viewport.scrollHeight);
     } else {
-        setTop(retained < 0 ? 0 : lines.children[retained].offsetTop + offset);
+        setTop(retained < 0 ? oldTop : lines.children[retained].offsetTop + offset);
     }
     jump.hidden = state.following;
 }

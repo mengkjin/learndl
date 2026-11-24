@@ -17,7 +17,7 @@ __all__ = ['ROOT', 'STATE', 'SERVICES', 'Manager']
 ROOT = Path(__file__).resolve().parents[3]
 STATE = ROOT / '.local_resources' / 'learndl_monitor'
 SERVICES = {
-    'tasks': {'zh': '任务中心', 'en': 'Task Center', 'port': 8502, 'entry': 'src/api/task_monitor/launch.py'},
+    'tasks': {'zh': '任务中心', 'en': 'Task Center', 'port': 8502, 'entry': 'src.api.task_monitor.launch'},
     'storage': {'zh': '存储洞察', 'en': 'Storage Insights', 'port': 8503, 'entry': 'src.api.learndl_monitor.storage'},
     'research': {'zh': '研究工作台', 'en': 'Research Workbench', 'port': 8501, 'entry': 'src/api/interactive/launch.py'},
     'compare': {'zh': '模型对比', 'en': 'Model Compare', 'port': 8504, 'entry': 'src/api/learndl_monitor/compare_app.py'},
@@ -25,8 +25,8 @@ SERVICES = {
     'model_preview': {'zh': '模型预览', 'en': 'Model Preview', 'port': 8507, 'entry': 'src.api.learndl_monitor.model_preview'},
     'experiments': {'zh': '实验面板', 'en': 'Experiment Dashboards', 'port': 8505, 'entry': 'src.api.learndl_monitor.experiments'},
 }
-MODULE_SERVICES = ('storage', 'experiments', 'mail_archive', 'model_preview')
-HEALTH_SERVICES = ('experiments', 'mail_archive', 'model_preview')
+MODULE_SERVICES = ('tasks', 'storage', 'experiments', 'mail_archive', 'model_preview')
+HEALTH_SERVICES = ('tasks', 'experiments', 'mail_archive', 'model_preview')
 
 for _key, _definition in SERVICES.items():
     _definition['port'] = int(os.environ.get(f'LEARNDL_{_key.upper()}_PORT', str(_definition['port'])))
@@ -56,6 +56,11 @@ class Manager:
                     valid = any(Path(arg).name == 'streamlit' for arg in args) and 'run' in args and any(
                         (Path(arg) if Path(arg).is_absolute() else Path(process.cwd()) / arg).resolve() == ROOT / entry
                         for arg in args if arg.endswith('.py'))
+                if not valid and key == 'tasks':
+                    # Discover a pre-upgrade Streamlit instance so console Restart can replace it.
+                    valid = ('run' in args and any(Path(arg).name == 'streamlit' for arg in args)
+                             and any((Path(process.cwd()) / arg).resolve() == ROOT / 'src/api/task_monitor/launch.py'
+                                     for arg in args if arg.endswith('.py')))
                 if valid and process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
                     matches.append(process)
             except (psutil.Error, OSError, ValueError):
@@ -71,10 +76,12 @@ class Manager:
             result['uptime'] = int(time.time() - float(process.info['create_time']))
             result['source'] = 'managed' if key in self.children and self.children[key].pid == process.pid else 'external'
             try:
+                registered_port = None
                 try:
                     registered = json.loads((STATE / f'{key}.json').read_text())
                     if registered['pid'] == process.pid and registered['created'] == result['created']:
                         result['source'] = 'managed'
+                        registered_port = registered.get('port')
                 except (OSError, ValueError, KeyError):
                     pass
                 try:
@@ -82,7 +89,16 @@ class Manager:
                 except psutil.AccessDenied:
                     ports = []
                 if not ports and key in HEALTH_SERVICES:
-                    ports = [SERVICES[key]['port']]
+                    args = process.cmdline()
+                    port = registered_port or SERVICES[key]['port']
+                    for index, arg in enumerate(args):
+                        option, separator, value = arg.partition('=')
+                        if option in {'--port', '--server.port'}:
+                            if separator:
+                                port = int(value)
+                            elif index + 1 < len(args):
+                                port = int(args[index + 1])
+                    ports = [port]
                 if not ports and key not in MODULE_SERVICES:
                     args = process.cmdline()
                     port = SERVICES[key]['port']
@@ -96,7 +112,10 @@ class Manager:
                 if ports and key != 'storage':
                     for port in ports:
                         try:
-                            with urlopen(f'http://127.0.0.1:{port}' + ('/health' if key in HEALTH_SERVICES else '/_stcore/health'), timeout=1):
+                            path = '/health' if key in HEALTH_SERVICES else '/_stcore/health'
+                            if key == 'tasks' and SERVICES[key]['entry'] not in process.cmdline():
+                                path = '/_stcore/health'
+                            with urlopen(f'http://127.0.0.1:{port}{path}', timeout=1):
                                 result['port'] = port
                                 result['url'] = f'http://127.0.0.1:{port}'
                                 break

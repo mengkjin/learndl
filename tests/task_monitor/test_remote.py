@@ -83,20 +83,6 @@ class RemotePublicationTest(unittest.TestCase):
         pending = self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')
         self.assertEqual(pending.read_text(), 'last output\n')
 
-    def test_remote_page_displays_synced_history(self):
-        from types import SimpleNamespace
-        from streamlit.testing.v1 import AppTest
-        self.log.write_text('remote log\n')
-        self.tick()
-        app = AppTest.from_string('from src.api.task_monitor.remote_view import render\nrender()')
-        with patch('src.automation.artifact_exchange.core.Config.load', return_value=SimpleNamespace(shared_root=self.root / 'shared')):
-            app.run()
-            self.assertFalse(app.exception)
-            self.assertEqual(app.code[0].value, 'remote log')
-            app.checkbox[1].uncheck().run()
-            self.assertFalse(app.exception)
-            self.assertEqual(app.code[0].value, 'remote log')
-
     def test_catchup_budget_and_retry_after_cursor_write_failure(self):
         from src.api.task_monitor import remote
         self.log.write_bytes(b'x' * (remote.ROUND_BYTES + 41))

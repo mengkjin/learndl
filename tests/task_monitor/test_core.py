@@ -9,10 +9,11 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from src.api.task_monitor.core import TaskMonitorRepository, is_background_source, read_live_log
+from src.api.task_monitor.core import TaskFilters, TaskMonitorRepository, is_background_source, read_live_log
 from src.api.util.backend.task import TaskDatabase, TaskItem
 
 
@@ -67,6 +68,35 @@ class TaskMonitorRepositoryTest(unittest.TestCase):
         detail = repository.get_task('recent-error')
         assert detail is not None
         self.assertEqual(detail.exit_files, (Path('/tmp/report.html'),))
+
+    def test_script_and_date_ranges_filter_rows_counts_and_pagination(self) -> None:
+        db = self.root / 'filter.db'
+        cases = [
+            ('match', 'nested/Run_50%.PY', 12, 20),
+            ('other', 'Run_50%/other.py', 12, 20),
+            ('wildcard', 'runA50x.py', 12, 20),
+            ('start-outside', 'Run_50%.py', 15, 20),
+            ('end-outside', 'Run_50%.py', 12, 22),
+            ('missing-end', 'Run_50%.py', 12, None),
+        ]
+        _create_database(db, [(task_id, script, '', start, 'complete', 'script', None, None, end, 0, None, None)
+                              for task_id, script, start, end in cases])
+        repository = TaskMonitorRepository(db, self.root)
+        task = repository.get_task('match')
+        assert task is not None
+        managed = replace(task, task_id='managed:scheduler:match', script=r'C:\runs\RUN_50%.py',
+                          start_time=14, end_time=21, status='error')
+        filters = TaskFilters(script='RUN_50%', started=(12, 15), ended=(20, 22))
+        with patch.object(repository, '_managed_tasks', return_value=[managed]):
+            first = repository.list_tasks(window='history', filters=filters, limit=1)
+            self.assertEqual([item.task_id for item in first.tasks], ['managed:scheduler:match'])
+            self.assertIsNotNone(first.next_cursor)
+            second = repository.list_tasks(window='history', filters=filters, limit=1, cursor=first.next_cursor)
+            self.assertEqual([item.task_id for item in second.tasks], ['match'])
+            self.assertEqual((first.total, second.total), (2, 2))
+            self.assertIsNone(second.next_cursor)
+            self.assertEqual(repository.status_counts(window='history', filters=filters),
+                             {'running': 0, 'complete': 1, 'error': 1, 'killed': 0})
 
     def test_keyset_pagination_on_ten_thousand_records(self) -> None:
         large_path = self.root / 'large.db'

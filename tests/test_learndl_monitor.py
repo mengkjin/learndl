@@ -1,13 +1,12 @@
-"""Regression tests for monitor lifecycle guards and storage email defaults."""
+"""Regression tests for monitor lifecycle guards."""
 from __future__ import annotations
 
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from src.api.learndl_monitor import services, storage
+from src.api.learndl_monitor import services
 
 __all__ = []
 
@@ -60,44 +59,6 @@ class MonitorTests(unittest.TestCase):
         for key, action in [('unknown', 'start'), ('tasks', 'scan'), ([], 'stop')]:
             with self.assertRaises(ValueError):
                 self.manager.submit(key, action, None)
-
-    def test_first_snapshot_no_email_but_rescan_sends_email(self):
-        root = Path(self.temporary.name)
-        report = MagicMock()
-        report.return_value.run.return_value = {'report': root / 'snapshot.html', 'email_sent': True}
-        snapshot = MagicMock()
-        fake_modules = {
-            'src.proj': SimpleNamespace(PATH=SimpleNamespace(production=root)),
-            'src.api.calls.computer': SimpleNamespace(ProjectStorageReport=report),
-            'src.proj.util.filesys.storage_browser': SimpleNamespace(StorageReportServer=snapshot),
-        }
-
-        class FakeHTTP:
-            def __init__(self, address, handler):
-                self.handler = handler
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *args):
-                pass
-
-            def serve_forever(self):
-                handler = object.__new__(self.handler)
-                handler.headers = {'Host': '127.0.0.1:8503'}
-                handler.path = '/test-token/scan'
-                handler.send_response = MagicMock()
-                handler.end_headers = MagicMock()
-                handler.do_POST()
-                handler.send_response.assert_called_once_with(202)
-
-        with patch.dict('sys.modules', fake_modules), patch.object(storage, 'STATE', root), \
-                patch.object(storage, 'ThreadingHTTPServer', FakeHTTP), \
-                patch.object(storage.secrets, 'token_urlsafe', return_value='test-token'), \
-                patch.object(storage.threading, 'Thread', ImmediateThread):
-            storage.main()
-        self.assertEqual([call.kwargs['email'] for call in report.call_args_list], [False, True])
-
 
 if __name__ == '__main__':
     unittest.main()

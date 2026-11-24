@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="task-token" content="__TOKEN__">
+  <title>Task Center</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <script type="module" src="/dashboard.js"></script>
+</head>
+<body>
+<header class="page-header">
+  <h1 data-label="title">任务中心</h1>
+  <div class="actions">
+    <details class="popover" id="settings">
+      <summary data-label="settings">设置</summary>
+      <div class="popover-panel">
+        <label for="style" data-label="outputStyle">输出样式</label>
+        <select id="style">
+          <option value="colored" data-label="colored">彩色文本</option>
+          <option value="text" data-label="plain">纯文本</option>
+        </select>
+        <div class="terminal-size-setting">
+          <div class="actions">
+            <label for="terminal-size" data-label="terminalSize">终端字号</label>
+            <span id="terminal-size-value" class="muted" aria-hidden="true">12 px</span>
+          </div>
+          <input id="terminal-size" type="range" min="9" max="24" value="12">
+        </div>
+      </div>
+    </details>
+    <details class="popover" id="resources">
+      <summary data-label="resources">系统资源</summary>
+      <div class="popover-panel" id="resource-data"></div>
+    </details>
+    <select id="language" aria-label="Language"><option value="zh">中文</option><option value="en">English</option></select>
+    __RESTART_LINK__
+  </div>
+</header>
+<nav aria-label="Task Center">
+  <a href="/" data-label="running">运行中</a>
+  <a href="/remote" data-label="remote">远程运行</a>
+  <a href="/finished" data-label="finished">已结束</a>
+</nav>
+<p id="error" class="error" role="alert" hidden></p>
+<div id="remote-tools" class="strip actions" hidden>
+  <label for="host" data-label="server">服务器</label>
+  <select id="host"></select>
+  <label class="inline"><input id="recent" type="checkbox"> <span data-label="recent">最近结束</span></label>
+  <span id="sample" class="muted"></span>
+</div>
+<main>
+  <section id="finished-filters" class="strip" hidden>
+    <details id="filters">
+      <summary data-label="filters">筛选与结果</summary>
+      <div class="actions filter-controls">
+        <label class="inline"><input type="checkbox" name="status" value="complete" checked> <span data-label="complete">完成</span></label>
+        <label class="inline"><input type="checkbox" name="status" value="error" checked> <span data-label="failed">错误</span></label>
+        <label class="inline"><input type="checkbox" name="status" value="killed" checked> <span data-label="killed">已终止</span></label>
+        <label for="window" data-label="startTime">开始时间</label>
+        <select id="window">
+          <option value="history" data-label="history">全部</option>
+          <option value="last_day" data-label="lastDay">最近一天</option>
+          <option value="last_week" data-label="lastWeek">最近一周</option>
+          <option value="last_month" data-label="lastMonth">最近一月</option>
+        </select>
+      </div>
+      <div class="actions filter-controls">
+        <label class="script-filter">
+          <span data-label="scriptName">脚本名</span>
+          <input id="script-filter" type="search" autocomplete="off">
+        </label>
+        <fieldset class="actions date-filter" data-date-range="started">
+          <legend data-label="startDate">开始日期</legend>
+          <label><span data-label="dateFrom">从</span> <input type="date" data-bound="from"></label>
+          <label><span data-label="dateTo">到</span> <input type="date" data-bound="before"></label>
+        </fieldset>
+        <fieldset class="actions date-filter" data-date-range="ended">
+          <legend data-label="endDate">结束日期</legend>
+          <label><span data-label="dateFrom">从</span> <input type="date" data-bound="from"></label>
+          <label><span data-label="dateTo">到</span> <input type="date" data-bound="before"></label>
+        </fieldset>
+      </div>
+    </details>
+    <p id="counts" class="muted"></p>
+  </section>
+  <div id="workspace" class="workspace">
+    <aside id="sidebar" class="panel">
+      <div class="toolbar">
+        <h2 id="queue-title"></h2>
+        <button id="follow-task" data-label="followTask">跟随最新任务</button>
+      </div>
+      <div id="cards" aria-label="Tasks"></div>
+      <div id="finished-pagination" class="actions pagination" hidden>
+        <button id="prev-page" data-label="previous">上一页</button>
+        <span id="page-info" class="muted"></span>
+        <button id="next-page" data-label="next">下一页</button>
+      </div>
+    </aside>
+    <section class="panel task-panel">
+      <p id="empty" class="muted"></p>
+      <div id="task" hidden>
+        <div class="toolbar">
+          <h2 id="script"></h2>
+          <button id="stop-task" class="danger" data-label="kill" hidden>终止任务</button>
+        </div>
+        <p class="subline muted" id="task-status"></p>
+        <details id="details">
+          <summary data-label="details">任务详情</summary>
+          <dl id="metadata"></dl>
+          <pre id="command"></pre>
+          <p id="exit-error" class="error" hidden></p>
+        </details>
+        <div class="actions output-tools">
+          <label id="source-label" for="source" data-label="source" hidden>输出文件</label>
+          <select id="source" hidden></select>
+          <label id="generation-label" for="generation" data-label="generation" hidden>日志代次</label>
+          <select id="generation" hidden></select>
+          <button id="earlier" data-label="earlier" hidden>加载更早输出</button>
+          <button id="reload" data-label="reload" hidden>重新加载日志</button>
+          <label id="output-page-label" for="output-page" data-label="outputPage" hidden>输出页</label>
+          <input id="output-page" type="number" min="1" hidden>
+          <span id="output-info" class="muted"></span>
+        </div>
+        <div id="terminal">
+          <div class="live-output" tabindex="0" role="region" aria-label="Task output"><div class="output"></div></div>
+          <button type="button" data-label="bottom" hidden>回到底部</button>
+        </div>
+        <details id="report" hidden>
+          <summary data-label="report">完整 HTML 报告</summary>
+          <div class="actions"><button id="download" data-label="download">下载报告</button></div>
+          <p id="report-info" class="muted"></p>
+          <iframe id="preview" title="HTML report" sandbox="" hidden></iframe>
+        </details>
+      </div>
+    </section>
+  </div>
+</main>
+<footer id="health" class="muted" hidden></footer>
+<dialog id="confirm">
+  <form method="dialog">
+    <h2 data-label="kill">终止任务</h2>
+    <p id="kill-info"></p>
+    <label class="inline"><input type="checkbox" id="confirmed"> <span data-label="confirmText">确认终止此任务</span></label>
+    <div class="actions">
+      <button data-label="cancel">取消</button>
+      <button id="execute" type="button" class="danger" data-label="kill" disabled>终止任务</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

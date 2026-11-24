@@ -62,6 +62,32 @@ class TaskOutputTest(unittest.TestCase):
             self.assertNotIn('23:12:01.123', content)
             self.assertIn('26-11-12 23:12:01 | epoch 1', content)
 
+    def test_terminal_formats_catcher_header_and_strips_stderr_record_time(self):
+        path = self.root / 'raw.md'
+        path.write_text(
+            '# Train.Py@1795486198 Initiated At 2026-11-24 10:09:58.761374\n'
+            '## Log Start \n- *Machine: mengkjin-server*  \n'
+            '- *Python: 3.12.11-x86_64*  \n- *Start at: 2026-11-24 10:09:58.761683*  \n'
+            '## Log Main \n### 2026-11-24 10:09 \n'
+            '- <u>10:09:58.846: <span style="color: #ff5555; font-weight: bold;">'
+            'Project Verbosity Unchanged at 3</span></u>  \n'
+            '- <u>2026-11-24 10:09:58.847: 26-11-24 10:09:58|INFO|: next</u>  \n'
+            '- 10:09:58.848: # literal heading\n', encoding='utf-8',
+        )
+        plain = parse_live_output(path, 'text')
+        colored = parse_live_output(path, 'colored')
+        for content in (plain, colored):
+            self.assertNotIn('## Log', content)
+            self.assertNotIn('- *Machine', content)
+            self.assertNotIn('10:09:58.846', content)
+            self.assertNotIn('10:09:58.847', content)
+            self.assertIn('26-11-24 10:09:58|INFO|', content)
+            self.assertIn('# literal heading', content)
+        self.assertIn('Machine: mengkjin-server', plain)
+        self.assertIn('<span style="font-weight: bold">Log Main</span>', colored)
+        self.assertIn('<span style="font-style: italic">Machine: mengkjin-server</span>', colored)
+        self.assertIn('<u><span style="color: #ff5555; font-weight: bold">Project Verbosity', colored)
+
     def test_html_cache_is_style_specific_chunked_and_survives_source_removal(self) -> None:
         path = self.root / 'report.html'
         rows = ''.join(

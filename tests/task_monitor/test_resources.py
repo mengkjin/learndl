@@ -66,12 +66,12 @@ class MonitorResourcesTest(unittest.TestCase):
         self.assertIsNone(gpu.utilization)
 
     def test_resource_cache_reuses_sample_within_refresh_interval(self):
-        from src.api.task_monitor.launch import _resources
+        from src.api.task_monitor.web_api import TaskCenter
         from src.api.task_monitor.resources import ResourceSnapshot
-        _resources.clear()
-        self.addCleanup(_resources.clear)
-        sample = ResourceSnapshot(100, None, None, None, (), ())
-        with patch('src.api.task_monitor.launch.sample_resources', return_value=sample) as probe:
-            self.assertEqual(_resources(), sample)
-            self.assertEqual(_resources(), sample)
+        from time import time
+        center = TaskCenter(repository=object())
+        sample = ResourceSnapshot(time(), None, None, None, (), ())
+        with patch('src.api.task_monitor.web_api.sample_resources', return_value=sample) as probe:
+            self.assertEqual(center.resource_snapshot()['sampled_at'], sample.sampled_at)
+            self.assertEqual(center.resource_snapshot()['sampled_at'], sample.sampled_at)
         probe.assert_called_once()
