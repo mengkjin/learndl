@@ -183,6 +183,10 @@ def transact(approval: dict) -> None:
         install._apply_plan(plan, approval['baseline']['cron'], directory)
         if plan['conflicts']:
             raise RuntimeError(f'Installation conflicts: {plan["conflicts"]}')
+        (directory / 'automatic-retiming-failure.json').unlink(missing_ok=True)
+        if 'host' in approval and 'config_dir' in approval:
+            install.atomic_json(directory / 'installation-context.json',
+                                {key: approval[key] for key in ('host', 'config_dir')})
     except Exception:
         after = transaction_path.read_bytes() if transaction_path.exists() else None
         if after != before:
@@ -310,7 +314,7 @@ def run_interactive(*, deferred: bool, host: str, config_dir: Path | None = None
                             (plan['units'].get(name), old.decode('utf-8') if old is not None else None)
                             if value is not None))
     approval = dict(id=identifier, unit=f'learndl-install-{identifier}.service', uid=os.getuid(),
-                    root=str(root), python=sys.executable, config_dir=str(config_dir), plan=plan,
+                    root=str(root), python=sys.executable, host=host, config_dir=str(config_dir), plan=plan,
                     baseline=snapshot, allowed_units=allowed, boot_id=boot_id(),
                     helper_source=helper_source, force=force, force_targets=force_targets,
                     created_at=time.time(), expires_at=time.time() + 86400)

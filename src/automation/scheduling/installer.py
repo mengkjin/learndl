@@ -80,6 +80,9 @@ def desktop_entry(root: Path, python: Path) -> str:
 
 
 def command(argv: list[str], *, input_text: str | None = None) -> str:
+    from .install_check import RETIMING, privileged_command
+    if argv and argv[0] == 'sudo' and RETIMING.get():
+        return privileged_command(argv)
     if argv and argv[0] == 'sudo' and os.environ.get('LEARNDL_INSTALL_BROKER'):
         from .install_flow import broker_command
         return broker_command(argv)
@@ -653,6 +656,9 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
         if names:
             command(['sudo', 'systemctl', 'daemon-reload'])
         for name in sorted(plan['units']):
+            from .install_check import RETIMING
+            if RETIMING.get() and name not in changed:
+                continue
             if name.endswith('.timer'):
                 restore_state = plan.get('timer_states', {}).get(name)
                 if restore_state is None:
@@ -670,13 +676,16 @@ def _apply_plan(plan: dict, original_cron: str, directory: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['plan', 'apply', 'defer', 'force', 'pending', 'cancel', 'status', 'rollback'])
+    parser.add_argument('action', choices=['plan', 'apply', 'defer', 'force', 'pending', 'cancel', 'status', 'rollback', 'authorize-retiming', 'revoke-retiming'])
     parser.add_argument('--host', default=socket.gethostname().split('.')[0])
     parser.add_argument('--config-dir', type=Path)
     parser.add_argument('--crontab-file', type=Path, help='Read-only offline planning input')
     parser.add_argument('--server-timezone', help='Required for offline planning; apply detects actual timezone')
     parser.add_argument('--diff', action='store_true', help='Show exact cron/unit changes in plan output')
     args = parser.parse_args()
+    if args.action in {'authorize-retiming', 'revoke-retiming'}:
+        from .install_check import authorize
+        return authorize('authorize' if args.action == 'authorize-retiming' else 'revoke', args.host, args.config_dir)
     if args.action in {'apply', 'defer', 'force', 'pending', 'cancel'}:
         from .install_flow import run_interactive
         from . import install_request

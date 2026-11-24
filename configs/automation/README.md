@@ -744,3 +744,67 @@ its migration manifest together in the same commit.
 `Reload logs` 清除当前任务缓存，服务重启后按需重建。
 采样超过 60 秒标记过期，错误记录在 `scheduling/auxiliary/remote_monitor.json`。
 两端离线超过完成后保留窗口可能错过远程日志。
+
+## Installation checks and authorized business retiming
+
+The independent Git maintenance service checks installation drift on each tick,
+including when automatic fetching is disabled. A fresh process checks the current
+checkout before fetching, so a newly pulled revision is checked on the next tick.
+The first deployment of this capability requires a normal authorized installation.
+That installation records the host and configuration directory for future checks.
+Older installations use the installed host and the standard configuration directory
+until their next installation records the exact location.
+
+The check compares effective host configuration, installed framework source hashes,
+bootstrap/policy copies, live unit contents and timer state, desktop autostart and
+managed cron. Plain business source changes that require no publication are silent.
+Installation drift produces one durable email per observed difference episode,
+with file/configuration differences and the exact preview and deferred-installation
+commands. Unrelated commits do not repeat the notice. SMTP failures retry through
+the existing notification outbox. Invalid configuration and unfinished installation
+transactions are reported with state-inspection commands.
+
+After completing the initial installation, authorize automatic business retiming
+once on each Linux server, as the normal service user:
+
+```bash
+bash runs/install_schedules.sh authorize-retiming --host mengkjin-server
+```
+
+The command previews the enabled, already scheduled tasks and asks for administrator
+confirmation. Use the same `--config-dir` used for installation when applicable.
+It installs a root-owned standalone helper and a narrowly scoped sudoers rule under
+`/usr/local/lib/learndl-retiming/<uid>/` and `/etc/sudoers.d/learndl-retiming-<uid>`.
+The helper is invoked with the system Python and accepts bounded JSON on stdin.
+It verifies the authorizing UID, pinned service hashes and timer structure. Its
+privileged writes can change only `OnCalendar` lines of approved business timers
+in the existing timezone. Cron retiming changes the managed block through the
+ordinary user's crontab. There is one permission record per service UID.
+
+Only weekdays, times and frequency on existing schedules for authorized tasks may
+change automatically. The entire effective change must qualify. New/removed tasks
+or schedules, enabling/disabling tasks, entrypoints, arguments, timeouts, timezone,
+backend, internal maintenance frequency and installed framework changes require the
+normal manual preview and authorization. A mixed change also uses manual installation.
+Manual installation of new tasks does not silently expand the grant. The command
+above explicitly refreshes it after that installation.
+
+Automatic retiming waits for version patches and existing installation transactions.
+It uses the normal admission lock, immutable configuration publication, missed-slot
+handling and rollback. Existing executions retain their policies. It sends a result
+email containing the previous and new schedules and timezone. An interrupted
+transaction, external unit drift or failed automatic transaction requires manual
+inspection. A failed automatic transaction is not retried for the same difference.
+Inspect and roll back if needed, then complete an ordinary installation to recover,
+or correct the desired inputs.
+
+Revoke the standing authorization with:
+
+```bash
+bash runs/install_schedules.sh revoke-retiming --host mengkjin-server
+```
+
+Revocation removes the root policy and sudoers rule. The remaining installed helper
+has no standing authorization. Subsequent differences produce manual-action emails.
+Linux privilege/systemd integration must be validated on an isolated Linux host.
+macOS unit tests validate classification, notification, locking and helper validation.

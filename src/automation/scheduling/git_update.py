@@ -195,6 +195,8 @@ def deliver_update_emails(sender: Callable, *, notice_id: str | None = None) -> 
                     f'Data version: {data["source_version"]} -> {data["target_version"]}\n'
                     f'Completed at: {finished}\nVerified patches ({len(data["patches"])}):\n{patches}\n'
                     f'Attempt logs: {data["attempts_dir"]}')
+        elif data.get('kind') == 'installation_check':
+            subject, body = data['subject'], data['body']
         elif data.get('kind') == 'git_operation':
             subject = f'Watchdog Git Update Blocked - {data["host"]} - Git operation or lock'
             body = data['body']
@@ -610,6 +612,12 @@ def main():
     if not channels.enabled():
         return 0
     options = config['watchdog']['jobs'].get('git_auto_update', {})
+    # Inspect the current checkout in this fresh process before any Git mutation.
+    from .install_check import check
+    try:
+        check()
+    except Exception as exc:
+        logger.error('Could not reconcile installation requirements: %s', exc)
     try:
         result = check_and_update(options)
     except Exception as exc:
