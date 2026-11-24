@@ -109,6 +109,19 @@ def live_process(record):
     return None
 
 
+def _wait_for_stop(targets, timeout):
+    _, remaining = psutil.wait_procs(targets, timeout=timeout)
+    alive = []
+    for process in remaining:
+        try:
+            # A non-child can remain visible as a zombie until its parent reaps it.
+            if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                alive.append(process)
+        except psutil.NoSuchProcess:
+            pass
+    return alive
+
+
 def stop_process(record, *, descendants=True):
     process = live_process(record)
     if process is None:
@@ -122,9 +135,17 @@ def stop_process(record, *, descendants=True):
             target.terminate()  # psutil verifies process creation time before signalling.
         except psutil.NoSuchProcess:
             continue
-    _, alive = psutil.wait_procs(targets, timeout=8)
-    if alive:
-        raise RuntimeError(f'Processes did not stop after SIGTERM: {[proc.pid for proc in alive]}')
+    alive = _wait_for_stop(targets, timeout=8)
+    if not alive:
+        return
+    for target in alive:
+        try:
+            target.kill()  # Reuse the original psutil identity for escalation.
+        except psutil.NoSuchProcess:
+            pass
+    remaining = _wait_for_stop(alive, timeout=3)
+    if remaining:
+        raise RuntimeError(f'Processes did not stop after SIGTERM and SIGKILL: {[proc.pid for proc in remaining]}')
 
 
 class PatchServices:

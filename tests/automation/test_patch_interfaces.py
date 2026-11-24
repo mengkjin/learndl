@@ -8,7 +8,9 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from typing import cast
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
+
+import psutil
 
 from src.automation import cli_recovery, patch_diagnostics, patch_services
 from src.automation.scheduling import git_update
@@ -127,6 +129,46 @@ class PatchDiagnosticsTest(unittest.TestCase):
         current = 'b68b6b3bec58dbae2541085f28dc8a532c1c237cd8049e64b7628e2644ce8c93'
         self.assertTrue(_matches_success(Patch('0.7.7/001', '0.7.7', 1, name, current, 10), name, known))
         self.assertFalse(_matches_success(Patch('0.7.7/001', '0.7.7', 1, name, 'changed', 10), name, known))
+
+
+class InterfaceStopTest(unittest.TestCase):
+    def setUp(self):
+        self.service = Mock(pid=40)
+        self.record = dict(pid=40, created=2)
+        self.enterContext(patch.object(patch_services, 'live_process', return_value=self.service))
+        current = self.enterContext(patch.object(psutil, 'Process'))
+        current.return_value.parents.return_value = []
+        self.wait = self.enterContext(patch.object(psutil, 'wait_procs'))
+
+    def test_escalates_only_for_live_members_of_the_original_tree(self):
+        zombie, reused, stubborn = Mock(pid=41), Mock(pid=42), Mock(pid=43)
+        self.service.children.return_value = [zombie, reused, stubborn]
+        zombie.status.return_value = psutil.STATUS_ZOMBIE
+        reused.is_running.return_value = False
+        stubborn.status.return_value = psutil.STATUS_SLEEPING
+        self.wait.side_effect = [([self.service], [zombie, reused, stubborn]), ([stubborn], [])]
+
+        patch_services.stop_process(self.record)
+
+        self.assertEqual(self.wait.call_args_list, [
+            call([stubborn, reused, zombie, self.service], timeout=8), call([stubborn], timeout=3)])
+        for target in [self.service, zombie, reused, stubborn]:
+            target.terminate.assert_called_once_with()
+        for target in [self.service, zombie, reused]:
+            target.kill.assert_not_called()
+        stubborn.kill.assert_called_once_with()
+
+    def test_exit_during_escalation_is_success(self):
+        self.wait.side_effect = [([], [self.service]), ([self.service], [])]
+        self.service.kill.side_effect = psutil.NoSuchProcess(self.service.pid)
+        patch_services.stop_process(self.record, descendants=False)
+        self.service.children.assert_not_called()
+
+    def test_live_survivor_still_blocks_migration(self):
+        self.wait.return_value = ([], [self.service])
+        with self.assertRaisesRegex(RuntimeError, r'SIGKILL: \[40\]'):
+            patch_services.stop_process(self.record, descendants=False)
+        self.assertEqual(self.wait.call_count, 2)
 
 
 class InterfaceLifecycleTest(unittest.TestCase):
