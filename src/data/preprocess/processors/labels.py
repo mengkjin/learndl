@@ -25,6 +25,8 @@ class _ReturnLabelPreProcessor(TradePreProcessor):
     """
 
     LABEL_KEYS = ('ret10_lag', 'ret20_lag', 'ret5_lag', 'ret3_lag')
+    # Revisit outstanding forward returns when shorter horizons already have data.
+    ExtentionOverlay = 21
     NEUTRALIZE_EXCLUDE_SUFFIXES = ('_3', '_open', '_vwap')
 
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:

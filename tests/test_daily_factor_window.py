@@ -16,13 +16,43 @@ class DailyFactorWindowTest(unittest.TestCase):
                 stack.enter_context(patch.object(update, 'MACHINE', SimpleNamespace(updatable=True)))
                 stack.enter_context(patch.object(update.CALENDAR, 'update_to', return_value=target))
                 stack.enter_context(patch.object(update.DiskTTLCache, 'get', return_value=SimpleNamespace(valid_value=target)))
-                for name in ('DataAPI', 'ModelAPI', 'TradingAPI', 'SummaryAPI', 'NotificationAPI', 'Proj', 'print_update_records'):
+                models = stack.enter_context(patch.object(update, 'ModelAPI'))
+                for name in ('DataAPI', 'TradingAPI', 'SummaryAPI', 'NotificationAPI', 'Proj', 'print_update_records'):
                     stack.enter_context(patch.object(update, name))
-                stack.enter_context(patch('src.res.model.util.lifecycle.ModelLifecycle.inspect_registered'))
+
                 api = stack.enter_context(patch.object(update, 'FactorAPI'))
                 update.UpdateAPI.daily()
+                models.update.assert_called_once_with(update_due_models=True)
                 for name in ('market_factors', 'stock_factors', 'affiliate_factors', 'pooling_factors', 'factor_stats'):
                     self.assertEqual(getattr(api, 'update_' + name).call_args.kwargs['missing_since'], expected)
+
+    def test_daily_checks_and_runs_due_models_before_predictions(self):
+        import src.api.pkgs.model as api
+        from src.res.model.model_module.application import trainer
+        from src.res.model.util.lifecycle import ModelLifecycle
+
+        events = []
+        with (
+            patch.object(api, 'MACHINE', SimpleNamespace(cuda_server=True)),
+            patch.object(trainer, 'MACHINE', SimpleNamespace(cuda_server=True)),
+            patch.object(trainer, 'Proj'),
+            patch.object(api, 'wrap_update', side_effect=lambda fn, title: fn()),
+            patch.object(api.ModelAPI, 'prepare_predict_data', side_effect=lambda: events.append('data')),
+            patch.object(api.ArchivedPredictorModel, 'update', side_effect=lambda: events.append('predict')),
+            patch.object(api.ModelPortfolioBuilder, 'update', side_effect=lambda: events.append('portfolio')),
+            patch.object(ModelLifecycle, 'inspect_registered',
+                         side_effect=lambda **kwargs: events.append('check') or [{'base': '/tmp/day'}]) as inspect,
+            patch.object(ModelLifecycle, 'repair', autospec=True, side_effect=lambda *args: events.append('fit')) as resume,
+        ):
+            api.ModelAPI.update(update_due_models=True)
+            self.assertEqual(events, ['data', 'check', 'fit', 'predict', 'portfolio'])
+            manager, request, run = resume.call_args.args
+            self.assertEqual(str(manager.base), request['base'])
+            self.assertEqual(run, trainer.ModelTrainer.GO)
+            events.clear()
+            inspect.side_effect = lambda **kwargs: events.append('check') or []
+            api.ModelAPI.update(update_due_models=True)
+            self.assertEqual(events, ['data', 'check', 'predict', 'portfolio'])
 
     def test_factor_apis_forward_window(self):
         with patch.object(factor, 'wrap_update') as wrap:

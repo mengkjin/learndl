@@ -4,6 +4,7 @@ Trainer for model , which can train the model
 from __future__ import annotations
 from src.res.model.util.schedule_output import linear_model_available
 from contextlib import nullcontext
+from pathlib import Path
 from typing import Literal , TypeAlias
 
 from src.proj import MACHINE , Proj , PATH , Base
@@ -79,15 +80,16 @@ class ModelTrainer(BaseTrainer):
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             from src.res.model.util.lifecycle import ModelLifecycle
-            ModelLifecycle.inspect_registered()
-            for model in PredictorPath.SelectModels():
-                if ModelLifecycle(model.base).state:
-                    continue  # Managed repairs run on the shared training worker.
-                cls.GO(base_path = model , 
-                       title = f'Updating Model {model.model_name}' , paragraph = True ,
-                       check_operation = None if force_update else 'update_models' ,
-                       log_operation = 'update_models' , use_data = 'both' ,
-                       stage = 0 , resume = 1 , selection = 0)
+            failures = []
+            for request in ModelLifecycle.inspect_registered(force_check=force_update):
+                try:
+                    ModelLifecycle(Path(request['base'])).repair(request, cls.GO)
+                except Exception as exc:
+                    exc.add_note(f"Production model {request['name']}")
+                    cls.logger.error(f"Update failed for {request['name']}: {exc}")
+                    failures.append(exc)
+            if failures:
+                raise ExceptionGroup('Production model updates failed', failures)
 
     @classmethod
     def resume_testing(cls , models = True , factors = True , force_resume = False):

@@ -2,7 +2,7 @@
 # author: jinmeng
 # date: 2024-11-27
 # description: Run Weekly Update
-# content: 每周更新模型(只在服务器上)
+# content: 每周维护训练分析数据并增量更新 fit 数据
 # blacklist:
 #   machine: ['Mathews-Mac']
 # email: True

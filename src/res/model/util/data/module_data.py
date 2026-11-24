@@ -185,6 +185,11 @@ class ModuleData(Base.BoundLogger):
     def sources_for_labels(labels: list[str] | None) -> list[str]:
         return ['y'] if labels is None else list(dict.fromkeys(spec.source for spec in parse_labels(labels)))
 
+    @classmethod
+    def fit_end_date(cls, labels: list[str] | None) -> int:
+        end = max((DataBlock.max_data_date(key, 'fit') or 0 for key in cls.sources_for_labels(labels)), default=0)
+        return end or CALENDAR.updated()
+
     @cached_property
     def blocks(self) -> dict[str, DataBlock]:
         return {}
@@ -273,11 +278,10 @@ class ModuleData(Base.BoundLogger):
             else 20070101
         )
         end = (
-            max((DataBlock.max_data_date(key, "fit") or 0 for key in self.label_sources), default=0)
+            self.fit_end_date(self.y_labels)
             if self.use_data == "fit"
             else CALENDAR.updated()
         )
-        end = end or CALENDAR.updated()
         return start, end
 
     def load(self) -> ModuleData:

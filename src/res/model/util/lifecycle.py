@@ -1,8 +1,4 @@
-"""Model lifecycle policy, portable provenance and isolated production repair plans.
-
-Training and automation execute plans; this module owns their policy and never imports
-an application trainer or a scheduler. Production aliases point only to approved runs.
-"""
+"""Model lifecycle policy, portable provenance and daily production training plans."""
 from __future__ import annotations
 
 import hashlib
@@ -12,6 +8,7 @@ import shutil
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from threading import local
 from typing import Any
 from collections.abc import Callable, Iterator, Mapping, Sequence
 
@@ -66,7 +63,7 @@ class ModelLifecycle:
     """One model's policy. Runtime dictionaries contain serialized config values."""
 
     STAGES = ('exploration', 'validation', 'production')
-    TASK = 'model_lifecycle'
+    _locks = local()
 
     def __init__(self, base: Path):
         self.base = Path(base)
@@ -76,13 +73,29 @@ class ModelLifecycle:
 
     @property
     def state(self) -> dict[str, Any]:
-        return _read(self.file)
+        state = _read(self.file)
+        if state.get('stage') == 'production' and not self.is_registered():
+            return state | {'stage': 'exploration', 'budget': state.get('budget', {}) | {'enabled': False, 'mode': 'full'}}
+        return state
+
+    def is_registered(self) -> bool:
+        return any(row['base'] == str(self.base) for row in self.registrations())
 
     @contextmanager
     def lock(self) -> Iterator[None]:
+        # Daily repair and its synchronous trainer share the same model directory.
+        owned = self._locks.__dict__.setdefault('owned', set())
+        key = (os.getpid(), self.base.resolve())
+        if key in owned:
+            yield
+            return
         self.base.mkdir(parents=True, exist_ok=True)
         with portalocker.Lock(str(self.base / '.lifecycle.lock'), timeout=0):
-            yield
+            owned.add(key)
+            try:
+                yield
+            finally:
+                owned.remove(key)
 
     def save(self, **changes) -> None:
         state = self.state | changes
@@ -115,12 +128,12 @@ class ModelLifecycle:
 
     @classmethod
     def validate_entry(cls, config) -> None:
-        state = cls(config.base_path.base).state
+        manager = cls(config.base_path.base)
         if config.lifecycle_repair:
-            if not state.get('origin') or state.get('stage') != 'validation':
-                raise ValueError('Repair resume requires an isolated validation candidate')
-        elif 'fit' in config.queue_of_stages and state.get('stage') == 'production':
-            raise ValueError('Production weights are immutable; use lifecycle repair')
+            if not (config.is_resuming and manager.is_registered() and manager.state.get('status') == 'updating'):
+                raise ValueError('Production resume requires an active registered model update')
+        elif 'fit' in config.queue_of_stages and manager.is_registered():
+            raise ValueError('Use the production update to continue a registered model')
 
     @classmethod
     def dump_training_config(cls, config, kwargs: dict) -> None:
@@ -135,12 +148,19 @@ class ModelLifecycle:
     @classmethod
     def training_nodes(cls, config, available_dates) -> list[int]:
         from src.proj import CALENDAR
-        if not cls(config.base_path.base).state:
-            return [int(d) for d in available_dates[::config.interval]]
         anchor = config.model_config.beg_date
-        grid = CALENDAR.range(anchor, int(max(available_dates)), 'td')[::config.interval]
+        grid = CALENDAR.range(anchor, config.end_date, 'td')[::config.interval]
+        nodes = cls.selected_nodes(config, grid.tolist())
         available = set(int(d) for d in available_dates)
-        return [d for d in cls.selected_nodes(config, grid.tolist()) if d in available]
+        if 'fit' not in config.queue_of_stages:
+            return [d for d in nodes if d in available]
+        return [d for d in nodes if cls.fit_sample_cutoff(config, d) in available]
+
+    @staticmethod
+    def fit_sample_cutoff(config, model_date: int) -> int:
+        """Last inclusive sample day, measured from the model day on the trading calendar."""
+        from src.proj import CALENDAR
+        return int(CALENDAR.td(model_date, -1 - config.skip_horizon))
 
     @staticmethod
     def training_options(mode: str | None = None, options: Mapping | None = None) -> dict[str, Any]:
@@ -295,12 +315,8 @@ class ModelLifecycle:
         signatures = {}
         for reference in references:
             path = model_source_path(reference)
-            state = cls(path.base).state
             if production:
-                legacy_registered = any(item['base'] == str(path.base) and item['stage'] == 'production'
-                                        for item in cls.registrations()) if not state else False
-                if (state and state.get('stage') != 'production') or (not state and not legacy_registered):
-                    raise ValueError(f'Upstream model is not production-approved: {reference}')
+                cls.approved_path(path, registered=True)
             signatures[reference] = _digest({str(file.relative_to(path.base)): (file.stat().st_size, file.stat().st_mtime_ns)
                                             for file in sorted(path.archive().rglob('*.pt'))})
         return signatures
@@ -358,6 +374,13 @@ class ModelLifecycle:
                     or not manager.compatible(trainer.config, int(number), int(date))):
                 pending.append((date, number))
                 changed_numbers.add(int(number))
+        if pending and trainer.config.transfer_training and trainer.config.lifecycle_repair:
+            # A retry after a partial transfer chain must still refit downstream nodes.
+            manifest = _read(manager.manifest_file)
+            for date, number in pending:
+                for submodel in trainer.config.submodels:
+                    manifest.pop(f'{number}:{date}:{submodel}', None)
+            _write(manager.manifest_file, manifest)
         return pending
 
     @classmethod
@@ -387,22 +410,18 @@ class ModelLifecycle:
 
     @classmethod
     def approved_path(cls, path, *, registered: bool = False):
-        """Resolve an approved alias; legacy registrations remain available."""
+        """Select the exact configured identity, including its optional directory index."""
         manager = cls(path.base)
+        listed = manager.is_registered()
+        if registered and not listed:
+            raise ValueError(f'Model is not registered in prediction: {path.full_name}')
         state = manager.state
-        if not state:
-            return path
-        approved = state.get('approved_model') or state.get('approved_path')
-        if approved:
-            result = path.copy()
-            result.parse_input(approved if state.get('approved_model') else Path(approved))
-            if not result.base.is_dir():
-                raise FileNotFoundError(f'Approved model directory is missing: {result.base}')
-            return result
-        if registered and state.get('legacy'):
-            return path
-        if registered and state.get('stage') != 'production':
-            raise ValueError(f'Model is not approved for production: {path.full_name}')
+        if listed:
+            updating = state.get('update_in_place') and state.get('status') in ('updating', 'failed')
+            awaiting_acceptance = (registered and state and not state.get('legacy')
+                                   and (state.get('stage') != 'production' or state.get('status') == 'needs_training'))
+            if updating or awaiting_acceptance:
+                raise ValueError(f'Production update has not passed acceptance: {path.full_name}')
         return path
 
     @classmethod
@@ -410,49 +429,59 @@ class ModelLifecycle:
         from src.proj import Const
         from src.res.model.util.core import ModelPath
         strategy = Const.Model.strategies
-        entries = dict(strategy.get('lifecycle', {}))
-        # Existing prediction registrations are explicit legacy production intent.
-        for entry in [*strategy.get('prediction', {}).values(), *strategy.get('hidden_extraction', {}).values()]:
-            entries.setdefault(entry['name'], {'stage': 'production'})
-        result = []
-        for name, entry in entries.items():
-            if not isinstance(entry, dict) or entry.get('stage') not in ('validation', 'production'):
-                raise ValueError(f'Invalid lifecycle registration: {name}')
+        entries = {}
+        for entry in strategy.get('prediction', {}).values():
+            name = entry['name']
             path = ModelPath(name)
-            if path.module_type not in ('nn', 'boost'):
-                continue  # Non-fitting linear/factor lifecycles retain their existing owners.
             if path.is_short_test:
-                raise ValueError(f'Cannot promote short test: {name}')
-            result.append({'name': name, 'base': str(path.base), **entry})
-        return sorted(result, key=lambda item: item['stage'] != 'production')
+                raise ValueError(f'Cannot register a short test for prediction: {name}')
+            options = strategy.get('lifecycle', {}).get(name, {})
+            entries[str(path.base)] = {'name': name, 'base': str(path.base), 'stage': 'production',
+                                       **{key: options[key] for key in ('start', 'end') if key in options}}
+        return list(entries.values())
 
     @classmethod
-    def inspect_registered(cls) -> list[dict[str, Any]]:
-        """Cheap daily reconciliation; no training and no worklist mutations."""
+    def production_names(cls) -> set[str]:
+        from .core import ModelPath
+        return {ModelPath(row['name']).full_name for row in cls.registrations()}
+
+    @staticmethod
+    def catalog_stage(name: str, saved: str | None, registered: set[str], *, archived: bool):
+        if name in registered and not archived:
+            return 'production'
+        return 'exploration' if saved == 'production' else saved
+
+    @classmethod
+    def inspect_registered(cls, *, force_check: bool = False) -> list[dict[str, Any]]:
+        """Reconcile the prediction registry against the calendar and accepted weights."""
         from src.proj import CALENDAR, Logger
         from src.res.model.util.config import ModelConfig
         from src.res.model.util.core import ModelPath
         requests = []
         for registration in cls.registrations():
             manager = cls(Path(registration['base']))
+            active = ModelPath(registration['name'])
+            if not active.requires_fit:
+                continue
             try:
-                if not manager.base.is_dir():
-                    raise FileNotFoundError(f'Model directory missing: {manager.base}')
+                if not active.conf_file('model').is_file():
+                    raise FileNotFoundError(f'Model configuration missing: {manager.base}')
                 with manager.lock():
                     if not manager.file.exists():
-                        config = ModelConfig(ModelPath(manager.base), stage=2, resume=1, selection=0, short_test=False)
-                        if not config.base_path.conf_file('model').exists():
-                            raise FileNotFoundError(f'Model configuration missing: {manager.base}')
+                        config = ModelConfig(active, stage=2, resume=1, selection=0, short_test=False)
                         cls.prepare(config)
-                        manager.save(stage='production' if registration['stage'] == 'production' else 'validation',
-                                     legacy=True, status='legacy', approved_path=str(manager.base)
-                                     if registration['stage'] == 'production' else None)
                     state = manager.state
-                    if state.get('legacy') and registration['stage'] == 'production' and state.get('stage') == 'exploration':
-                        manager.save(stage='production', approved_path=str(manager.base))
-                        state = manager.state
-                    if state.get('target_stage') != registration['stage']:
-                        manager.save(target_stage=registration['stage'])
+                    # Previous versions could point a prediction registration at another directory.
+                    redirected = (state.get('approved_model') not in (None, active.full_name)
+                                  if state.get('approved_model') else
+                                  state.get('approved_path') not in (None, str(manager.base)))
+                    if redirected:
+                        manager.save(approved_model=None, approved_path=None, validated_model=None,
+                                     validated_path=None, candidate_path=None, accepted_request=None,
+                                     audit_version=None, legacy=bool(state.get('audit_note') or state.get('legacy')))
+                    if state.get('stage') != 'production' or redirected:
+                        manager.save(stage='production', target_stage='production', status='needs_training')
+                    state = manager.state
                     target = _read(manager.target_file)
                     model = target['model']
                     start = int(registration.get('start', model['model.beg_date']))
@@ -476,33 +505,41 @@ class ModelLifecycle:
                                               'repair_generation': int(state.get('repair_generation', 0)),
                                               'end': end, 'training_start': training_start, 'nodes': grid}
                     request['version'] = _digest({k: v for k, v in request.items() if k != 'end'})
-                    # Legacy existing artifacts are grandfathered, but new grid nodes still repair.
-                    if registration['stage'] == 'validation' and state.get('validated_model'):
-                        active = ModelPath(state['validated_model'])
-                    else:
-                        active = ModelPath(state['approved_model']) if state.get('approved_model') else ModelPath(Path(state.get('approved_path') or str(manager.base)))
-                    if state.get('legacy') and not state.get('audit_version'):
-                        manager.save(audit_version=request['version'], status='legacy',
-                                     audit_note='Historical training evidence incomplete; existing artifacts retained')
-                        if grid and all(active.exists(number, date, submodel)
-                                    for date in grid for number in dependency_config.model_num_list
-                                    for submodel in dependency_config.submodels):
-                            manager.save(accepted_request=request['version'])
-                            continue
-                    if state.get('accepted_request') == request['version'] and not state.get('legacy'):
-                        active_manager = cls(active.base)
-                        records = _read(active_manager.manifest_file)
+                    if not grid:
+                        continue
+                    accepted = state.get('accepted_request') == request['version']
+                    if state.get('legacy') and not state.get('force_retrain') and not state.get('target_changed'):
+                        first_audit = not state.get('audit_version')
+                        if first_audit:
+                            manager.save(audit_version=request['version'], status='legacy',
+                                         audit_note='Historical training evidence incomplete; existing artifacts retained')
+                        if (first_audit or accepted) and not force_check:
+                            weights = cls.required_weights(dependency_config)
+                            files = (manager.file_stats(n, d, sub) for d in grid
+                                     for n in dependency_config.model_num_list for sub in dependency_config.submodels)
+                            if all(all(record.get(w, [0])[0] > 0 for w in weights) for record in files):
+                                if first_audit:
+                                    manager.save(accepted_request=request['version'])
+                                continue
+                        if accepted:
+                            manager.save(accepted_request=None)
+                    elif accepted:
+                        records = _read(manager.manifest_file)
                         evaluation = _read(active.base / 'snapshot/evaluation_manifest.json')
-                        healthy = bool(records) and evaluation.get('artifacts') == _digest(records) and all(
-                            active_manager.healthy_record(key, record) for key, record in records.items())
-                        if not healthy:
-                            manager.save(accepted_request=None, status='needs_training',
-                                         repair_generation=int(state.get('repair_generation', 0)) + 1)
-                            request['repair_generation'] = int(state.get('repair_generation', 0)) + 1
-                            request['version'] = _digest({k: v for k, v in request.items() if k not in ('version', 'end')})
-                            requests.append(request)
-                    elif state.get('accepted_request') != request['version']:
-                        requests.append(request)
+                        required = {f'{n}:{d}:{s}' for d in grid for n in dependency_config.model_num_list
+                                    for s in dependency_config.submodels}
+                        if (required.issubset(records) and evaluation.get('artifacts') == _digest(records)
+                                and all(manager.healthy_record(key, record) for key, record in records.items())):
+                            continue
+                        request['repair_generation'] += 1
+                        manager.save(accepted_request=None, status='needs_training',
+                                     repair_generation=request['repair_generation'])
+                        request['version'] = _digest({k: v for k, v in request.items() if k not in ('version', 'end')})
+                    if not folds and not model.get('input.factor_sequence.dataset'):
+                        cutoff = cls.fit_sample_cutoff(dependency_config, grid[-1])
+                        if CALENDAR.updated() < cutoff:
+                            continue  # The both loader extends the historical dump through this date.
+                    requests.append(request)
             except Exception as exc:
                 Logger.warning(f'Lifecycle check failed for {registration["name"]}: {exc}')
         return requests
@@ -549,140 +586,119 @@ class ModelLifecycle:
         with self.lock():
             _write(self.target_file, rename_status_callback(target))
             self.save(target_version=_target_digest(target), status='needs_training', accepted_request=None,
-                      repair_generation=int(self.state.get('repair_generation', 0)) + 1, force_retrain=retrain)
+                      repair_generation=int(self.state.get('repair_generation', 0)) + 1, force_retrain=retrain, target_changed=True)
+
+    def check_registration(self, request: Mapping) -> None:
+        current = next((r for r in self.registrations() if r['base'] == str(self.base)), None)
+        if (current is None or current['stage'] != request['stage']
+                or _digest(current) != request.get('registration_version', _digest(current))):
+            raise ValueError('Lifecycle registration changed during repair')
 
     def repair(self, request: Mapping, run: Callable[..., Any]) -> None:
-        """Build an isolated existing-index run, then atomically publish its reference."""
-        from src.res.model.util.core import ModelPath
-        target = _read(self.target_file)
-        if _target_digest(target) != request['target_version']:
-            raise ValueError('Lifecycle target changed; repair request is stale')
+        """Resume in the prediction directory, preserving compatible weights and saved predictions."""
+        from .core import ModelPath
+        from .config import ModelConfig
+
         with self.lock():
+            target = _read(self.target_file)
+            if _target_digest(target) != request['target_version']:
+                raise ValueError('Lifecycle target changed; repair request is stale')
+            self.check_registration(request)
             state = self.state
             if state.get('accepted_request') == request['version']:
                 return
-            source = (ModelPath(state['validated_model']) if state.get('validated_model')
-                      else ModelPath(state['approved_model']) if state.get('approved_model')
-                      else ModelPath(Path(state.get('validated_path') or state.get('approved_path') or str(self.base))))
-            previous_candidate = state.get('candidate_path')
-            staged = ModelLifecycle(Path(previous_candidate)) if previous_candidate else None
-            reuse = bool(staged and staged.state.get('request_version') == request['version'])
-            if reuse and staged is not None:
-                candidate = ModelPath(staged.base)
-                # Retry training preserves completed weights; evaluation always starts fresh.
-                for folder in ('pred_recorder', 'basic_test', 'detailed_alpha'):
-                    shutil.rmtree(candidate.snapshot(folder), ignore_errors=True)
-                shutil.rmtree(candidate.rslt(), ignore_errors=True)
-            else:
-                candidate = ModelPath(self.base).with_new_index(ModelPath(self.base).find_new_index(folder_not_exist=True))
-                candidate.base.mkdir(parents=True, exist_ok=False)
-                candidate.conf().mkdir()
-                _write(candidate.conf_file('model'), target['model'])
-                _write(candidate.conf_file('schedule'), {})
-                _write(candidate.conf_file(f'algo.{candidate.model_module}'), target['algo'])
-                if target.get('boost_head'):
-                    # Preserve the algorithm file name of the original boost head.
-                    for file in self.base.joinpath('configs').glob('algo.*.yaml'):
-                        if file.name != f'algo.{candidate.model_module}.yaml':
-                            _write(candidate.conf() / file.name, target['boost_head'])
-                staged = ModelLifecycle(candidate.base)
-                _write(staged.target_file, target)
-                staged.save(schema_version=1, stage='validation', status='needs_training', legacy=False,
-                            target_version=request['target_version'], budget={'enabled': False},
-                            origin=str(self.base), origin_model=ModelPath(self.base).full_name, request_version=request['version'])
-                self.save(status='repairing', candidate_path=str(candidate.base))
-            assert staged is not None
-            # Only independent, matching nodes can be copied. Unknown dependencies retrain.
-            model = target['model']
-            input_types = (model.get('input.combo.types', []) if model.get('input.type') == 'combo'
-                           else [model.get('input.type')])
-            dependent = bool(state.get('force_retrain') or model.get('train.trainer.transfer')
-                             or set(input_types).intersection(('hidden', 'final')))
-            if not dependent and not reuse:
-                source_manager = ModelLifecycle(source.base)
-                manifest = _read(source_manager.manifest_file)
-                if source_manager.state.get('legacy'):
-                    from .config import ModelConfig
-                    saved = ModelConfig(source, stage=2, resume=1, selection=0, short_test=False, vb_level='never')
-                    if self.semantic(self.snapshot(saved)) == self.semantic(target):
-                        for number in saved.model_num_list:
-                            for date in request['nodes']:
-                                for submodel in saved.submodels:
-                                    key = f'{number}:{date}:{submodel}'
-                                    weights = source_manager.weights(int(number), int(date), submodel)
-                                    if self.required_weights(saved).issubset(weights):
-                                        manifest.setdefault(key, {'definition': _digest(self.semantic(target)),
-                                                                 'weights': weights, 'legacy': True})
-                copied = {}
-                for key, record in manifest.items():
-                    number, date, submodel = key.split(':')
-                    if int(date) not in request['nodes']:
-                        continue
-                    # Final compatibility is checked after production callbacks run.
-                    # Incompatible copied nodes are retrained inside this isolated candidate.
-                    weights = source_manager.weights(int(number), int(date), submodel)
-                    if not weights or weights != record.get('weights'):
-                        continue
-                    shutil.copytree(source.full_path(number, date, submodel),
-                                    candidate.full_path(number, date, submodel))
-                    copied[key] = record
-                _write(staged.manifest_file, copied)
-            # A new candidate can legitimately contain zero artifacts; lifecycle repair
-            # explicitly resumes its immutable configuration, not a failed ordinary resume.
+            model = ModelPath(self.base)
+            self.save(stage='production', status='updating', update_in_place=True, accepted_request=None)
             try:
-                trainer = run(base_path=candidate, stage=0, resume=1, selection=0, short_test=False,
-                              start=request.get('training_start', request['start']), end=request['end'], lifecycle_repair=True)
+                saved = ModelConfig(model, stage=2, resume=1, selection=0, short_test=False)
+                matches_target = self.semantic(self.snapshot(saved)) == self.semantic(target)
+                manifest = _read(self.manifest_file)
+                if state.get('force_retrain'):
+                    manifest = {}
+                elif state.get('legacy') and matches_target and not request.get('dependencies'):
+                    for number in saved.model_num_list:
+                        for date in request['nodes']:
+                            for submodel in saved.submodels:
+                                key = f'{number}:{date}:{submodel}'
+                                if key in manifest:
+                                    continue
+                                weights = self.weights(number, date, submodel)
+                                if self.required_weights(saved).issubset(weights):
+                                    manifest[key] = {'definition': _digest(self.semantic(target)),
+                                                     'weights': weights, 'legacy': True,
+                                                     'files': self.file_stats(number, date, submodel)}
+                _write(self.manifest_file, manifest)
+                if state.get('target_changed') or not matches_target:
+                    # The production snapshot is fully resolved. Keep the
+                    # original schedule for provenance before removing its overrides.
+                    schedule = model.conf_file('schedule')
+                    if schedule.is_file() and _read(schedule):
+                        _write(model.snapshot(f'schedule_before_{request["target_version"]}.yaml'), _read(schedule))
+                    _write(schedule, {})
+                    _write(model.conf_file('model'), target['model'])
+                    _write(model.conf_file(f'algo.{model.model_module}'), target['algo'])
+                    if target.get('boost_head'):
+                        head = target['model']['model.module.nn.boost_head.boost']
+                        _write(model.conf_file(f'algo.{head}'), target['boost_head'])
+                self.save(legacy=False, force_retrain=False, target_changed=False)
+                trainer = run(base_path=model, stage=0, resume=1, selection=0, short_test=False, use_data='both',
+                              start=request.get('training_start', request['start']), end=request['end'],
+                              title=f'Updating {model.full_name}', log_operation='update_models', lifecycle_repair=True)
                 from src.proj import Save
                 Save.async_wait_all(caller_name='ModelLifecycle.repair')
-                expected = [(int(d), int(n)) for d in trainer.data.model_date_list for n in trainer.config.model_num_list]
-                if not expected or any(not staged.compatible(trainer.config, n, d) for d, n in expected):
+                requested_dates = set(map(int, request['nodes']))
+                missing = requested_dates.difference(trainer.data.model_date_list)
+                if missing:
+                    raise ValueError(f'Trainer omitted requested model dates: {sorted(missing)}')
+                expected = [(d, int(n)) for d in sorted(requested_dates) for n in trainer.config.model_num_list]
+                if not expected or any(not self.compatible(trainer.config, n, d) for d, n in expected):
                     raise ValueError('Production artifact coverage is incomplete')
-                self._validate_predictions(candidate, trainer, expected)
+                try:
+                    self._validate_predictions(model, trainer, expected)
+                except ValueError:
+                    # A partial saved evaluation can otherwise be skipped on every resume.
+                    self.invalidate_evaluation()
+                    raise
                 if _target_digest(_read(self.target_file)) != request['target_version']:
                     raise ValueError('Target changed during repair')
                 if self.dependencies(trainer.config, production=True) != request.get('dependencies', {}):
                     raise ValueError('Upstream dependencies changed during repair')
-                current = next((r for r in self.registrations() if r['base'] == str(self.base)), None)
-                if (current is None or current['stage'] != request['stage']
-                        or _digest(current) != request.get('registration_version', _digest(current))):
-                    raise ValueError('Lifecycle registration changed during repair')
-                evaluation = {'request': dict(request), 'artifacts': _digest(_read(staged.manifest_file)),
+                self.check_registration(request)
+                evaluation = {'request': dict(request), 'artifacts': _digest(_read(self.manifest_file)),
                               'status': 'passed'}
-                _write(candidate.snapshot('evaluation_manifest.json'), evaluation)
-                staged.save(stage=request['stage'], status='ready', accepted_request=request['version'])
-                self.save(stage=request['stage'], status='ready', legacy=False, force_retrain=False,
-                          accepted_request=request['version'],
-                          approved_path=str(candidate.base) if request['stage'] == 'production' else state.get('approved_path'),
-                          validated_path=str(candidate.base), validated_model=candidate.full_name,
-                          approved_model=candidate.full_name if request['stage'] == 'production' else state.get('approved_model'),
-                          previous_approved_path=state.get('approved_path'), previous_approved_model=state.get('approved_model'))
+                _write(model.snapshot('evaluation_manifest.json'), evaluation)
+                self.save(status='ready', accepted_request=request['version'], approved_path=str(self.base),
+                          approved_model=model.full_name, candidate_path=None, error=None)
             except BaseException as exc:
-                self.save(status='failed', candidate_path=str(candidate.base), error=f'{type(exc).__name__}: {exc}')
+                self.save(status='failed', error=f'{type(exc).__name__}: {exc}')
                 raise
-            if request['stage'] == 'production':
-                from src.automation.artifact_exchange.production import publish_approved_model_safe
-                publish_approved_model_safe(candidate.base)
+            from src.automation.artifact_exchange.production import publish_approved_model_safe
+            publish_approved_model_safe(self.base)
 
     @staticmethod
     def _validate_predictions(candidate, trainer, expected: list[tuple[int, int]]) -> None:
         from src.proj import Load
         import numpy as np
+        if not len(trainer.data.test_full_dates):
+            return  # No out-of-sample date exists for this first node yet.
         folder = candidate.snapshot('pred_recorder', 'preds')
-        frames = [Load.df(file) for file in folder.glob('*.feather')]
-        if not frames:
+        coverage: dict[tuple[int, int, str], set[int]] = {}
+        for file in folder.glob('*.feather'):
+            frame = Load.df(file)
+            if frame.empty or not np.isfinite(frame['pred'].to_numpy()).all():
+                raise ValueError('Production predictions are empty or non-finite')
+            distinct = frame[['model_date', 'model_num', 'submodel', 'date']].drop_duplicates()
+            for node, number, submodel, date in distinct.to_numpy():
+                coverage.setdefault((int(node), int(number), str(submodel)), set()).add(int(date))
+        if not coverage:
             raise ValueError('No production evaluation predictions')
-        import pandas as pd
-        frame = pd.concat(frames, ignore_index=True)
-        if frame.empty or not np.isfinite(frame['pred'].to_numpy()).all():
-            raise ValueError('Production predictions are empty or non-finite')
-        dates = set(int(d) for d in frame['date'].unique())
-        if not set(int(d) for d in trainer.data.test_full_dates).issubset(dates):
+        test_dates = set(map(int, trainer.data.test_full_dates))
+        observed = set().union(*coverage.values())
+        if not test_dates.issubset(observed):
             raise ValueError('Production prediction dates are incomplete')
         for date, number in expected:
-            required_dates = {int(d) for d in trainer.data.test_full_dates
-                              if date < int(d) <= trainer.data.next_model_date(date)}
+            end = trainer.data.next_model_date(date)
+            required_dates = {d for d in test_dates if date < d <= end}
             for submodel in trainer.config.submodels:
-                subset = frame[(frame['model_date'] == date) & (frame['model_num'] == number)
-                               & (frame['submodel'] == submodel)]
-                if not required_dates.issubset(set(int(d) for d in subset['date'].unique())):
+                if not required_dates.issubset(coverage.get((date, number, submodel), set())):
                     raise ValueError(f'Missing evaluated model dates: {number}/{date}/{submodel}')

@@ -187,31 +187,31 @@ class PredRecorder(TrainerPipeline):
     def has_purged_preds(self) -> bool:
         return False
 
-    def purge_retrained_model_preds(self) -> None:
-        """purge past predictions when trained new models"""
-        if not self.retrained_models:
-            self.logger.stdout(f'No retrained models, no purge needed')
+    def purge_retrained_model_preds(self, nodes=None) -> None:
+        """Invalidate refitted members and trim earlier predictions routed past a new node."""
+        nodes = self.retrained_models if nodes is None else nodes
+        if not nodes:
             return
-        min_retrained_model_date = min([model_date for model_date , _ in self.retrained_models])
-        pred_records = self.pred_records()
-        purge_models = pred_records.query('model_date >= @min_retrained_model_date')
-        trim_models = pred_records.query('model_date < @min_retrained_model_date and max_pred_date > @min_retrained_model_date')
-        if not purge_models.empty or not trim_models.empty:
-            purge_info = f'Purged saved predictions after retrained model date {min_retrained_model_date}'
-            if not purge_models.empty:
-                purge_info += f', {len(purge_models)} models(date/num) purged'
-            if not trim_models.empty:
-                purge_info += f', {len(trim_models)} models(date/num) trimed'
-            
-            for _ , (model_date , model_num , path) in trim_models.loc[:,['model_date' , 'model_num' , 'path']].iterrows():
-                df = Load.df(path).query('date <= @min_retrained_model_date')
-                Path(path).unlink()
-                self.save_preds(df , model_date , model_num)
-                
-            self.has_purged_preds = True
-        else:
-            purge_info = f'Total {len(self.retrained_models)} models retrained, but no pred need to be purged'
-        self.logger.stdout(purge_info)
+        by_number: dict[int, set[int]] = {}
+        for date, number in nodes:
+            by_number.setdefault(number, set()).add(date)
+        all_dates = set().union(*by_number.values())
+        for records in (self.pred_records(), self.avg_pred_records()):
+            for row in records.to_dict('records'):
+                changed = by_number.get(row['model_num'], set()) if 'model_num' in row else all_dates
+                cutoff = min((d for d in changed if d >= row['model_date']), default=None)
+                if cutoff is None or row['max_pred_date'] <= cutoff:
+                    continue
+                old_path = Path(row['path'])
+                if row['model_date'] < cutoff and row['min_pred_date'] <= cutoff:
+                    frame = Load.df(old_path)
+                    frame = frame.loc[frame['date'] <= cutoff]
+                    if not frame.empty:
+                        prefix = old_path.name.rsplit('.', 3)[0]
+                        path = old_path.with_name(f'{prefix}.{frame.date.min()}.{frame.date.max()}.feather')
+                        Save.df(frame, path, overwrite=True, vb_level='max')
+                old_path.unlink()
+                self.has_purged_preds = True
 
     def purge_outdated_model_preds(self) -> None:
         archive_records = self.archive_model_records()
@@ -267,6 +267,7 @@ class PredRecorder(TrainerPipeline):
         if self.config.module_type == 'linear' or not self.config.is_resuming or not Const.Model.resume_test:
             return
         
+        self.resumed_models = pd.DataFrame(columns=['model_date', 'model_num'])
         pred_records = self.pred_records().query('max_pred_date >= @self.min_test_date & min_pred_date <= @self.max_test_date')
         if pred_records.empty:
             self.resume_info = f', no saved preds found'

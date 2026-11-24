@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import torch
+import numpy as np
 
 from src.proj import PATH
 from src.res.model.util.config import ModelConfig
@@ -66,7 +67,7 @@ class ModelLifecycleTest(unittest.TestCase):
         config = self.config()
         manager = ModelLifecycle(config.base_path.base)
         manager.save(short_test=True, stage='production')
-        with self.assertRaises(ValueError):
+        with patch.object(ModelLifecycle, 'registrations', return_value=[{'base': str(config.base_path.base)}]), self.assertRaises(ValueError):
             ModelLifecycle.prepare(config)
 
     def test_grid_is_sampled_before_range_filter(self):
@@ -83,6 +84,63 @@ class ModelLifecycleTest(unittest.TestCase):
         directory.mkdir(parents=True)
         (directory / 'metadata.json').write_text('{}')
         self.assertFalse(config.base_path.exists(0, 20200102, 'best'))
+
+    def test_new_calendar_node_uses_identical_historical_train_and_valid_batches(self):
+        from src.data.util import DataBlock
+        from src.data.preprocess import PreProHistNorm
+        from src.proj import CALENDAR
+        from src.res.model.util.data.data_module import DataModule
+        from src.res.model.util.data.module_data import ModuleData
+
+        self.enterContext(patch.object(CALENDAR, 'update_to', return_value=20261231))
+        config = self.config(training_mode='full', override={
+            'model.beg_date': 20170103, 'model.end_date': 20261124, 'model.interval': 120,
+            'model.window': 60, 'model.labels': ['std_lag1_10'], 'train.skip_horizon': 20,
+            'input.data.prenorm.day.histnorm': True, 'env.mem_storage': True,
+        })
+        config.options.start = 20261124
+        dates = CALENDAR.range(20260105, 20261201)
+        secids = np.arange(64)
+        rng = torch.Generator().manual_seed(13)
+        panel = torch.rand((len(secids), len(dates), 1, 2), generator=rng) + 1
+
+        def batches(end, *, missing_label=False):
+            selected = dates <= end
+            values = panel[:, torch.as_tensor(selected)].clone()
+            if end > 20261124:
+                values[:, torch.as_tensor(dates[selected] > 20261026)] *= -1000
+            if missing_label:
+                values[:, int(np.searchsorted(dates, 20261026)), :, 1] = torch.nan
+            module = ModuleData.initialize(['day'], config.labels, use_data='both')
+            module.blocks['day'] = DataBlock(values[..., :1], secids, dates[selected], ['close'])
+            module.blocks['y'] = DataBlock(values[..., 1:], secids, dates[selected], config.labels)
+            module.label_coverage = torch.ones_like(values[..., 0], dtype=torch.bool)
+            module.norms['day'] = PreProHistNorm(torch.zeros(60, 1), torch.ones(60, 1))
+            data = DataModule(config, 'both', vb_level='never')
+            with patch.object(ModuleData, 'initialize', return_value=module), patch.object(module, 'load'):
+                data.load_data()
+            self.assertEqual(data.model_date_list.tolist(), [20261124])
+            data.setup('fit', {'seqlens': {'day': 3}}, 20261124)
+            self.assertEqual(data.y_date[-1], 20261026)
+            self.assertLess(int(CALENDAR.td(int(data.y_date[-1]), 11)), 20261124)
+            return {group: [loader.storage.load(key) for key in sorted(loader.keys)]
+                    for group, loader in data.loader_dict.items()}
+
+        truncated = batches(20261109)
+        extended = batches(20261201)
+        for group in ('train', 'valid'):
+            self.assertGreater(len(truncated[group]), 0)
+            for left, right in zip(truncated[group], extended[group], strict=True):
+                torch.testing.assert_close(left.x, right.x)
+                torch.testing.assert_close(left.y, right.y)
+                torch.testing.assert_close(left.i, right.i)
+        with self.assertRaisesRegex(ValueError, 'No model dates with available fit history'):
+            batches(20261023)
+        with self.assertRaisesRegex(ValueError, 'Missing fit labels on 20261026'):
+            batches(20261109, missing_label=True)
+        config.model_config['train.skip_horizon'] = 3
+        with self.assertRaisesRegex(ValueError, 'crosses model date'):
+            batches(20261201)
 
     def artifact(self, config, date):
         directory = config.base_path.full_path(0, date, 'best')
@@ -118,9 +176,10 @@ class ModelLifecycleTest(unittest.TestCase):
         config.base_path.full_path(0, 20200102, 'best').joinpath('state_dict.pt').write_bytes(b'changed')
         self.assertFalse(manager.compatible(config, 0, 20200102))
 
-    def test_production_entry_is_read_only(self):
+    def test_registered_fit_uses_daily_entry(self):
         config = self.config()
         ModelLifecycle(config.base_path.base).save(stage='production')
+        self.enterContext(patch.object(ModelLifecycle, 'registrations', return_value=[{'base': str(config.base_path.base)}]))
         with self.assertRaises(ValueError):
             ModelLifecycle.validate_entry(config)
         config.queue_of_stages = ['test']
@@ -134,7 +193,77 @@ class ModelLifecycleTest(unittest.TestCase):
         approved = config.base_path.copy().with_new_index(2)
         approved.base.mkdir()
         manager.save(approved_path=str(approved.base))
-        self.assertEqual(ModelLifecycle.approved_path(config.base_path, registered=True).base, approved.base)
+        with patch.object(ModelLifecycle, 'registrations', return_value=[{'base': str(config.base_path.base)}]):
+            manager.save(stage='production', legacy=True)
+            self.assertEqual(ModelLifecycle.approved_path(config.base_path, registered=True).base, config.base_path.base)
+            with self.assertRaisesRegex(ValueError, 'not registered'):
+                ModelLifecycle.approved_path(approved, registered=True)
+
+    def test_prediction_registry_is_exact_and_hidden_or_stale_production_cannot_opt_in(self):
+        from src.proj import Const
+        from src.res.model.util.core import PredictorPath
+        from unittest.mock import PropertyMock
+        def alias(name):
+            return {'name': name, 'num': 0, 'submodel': 'best'}
+
+        prediction = {'day': alias('gru@day'), 'average': alias('gru@average'),
+                      'another_member': alias('gru@day')}
+        strategy = {'prediction': prediction, 'hidden_extraction': {'hidden': alias('gru@hidden')},
+                    'lifecycle': {'gru@day@2': {'stage': 'production'}, 'gru@day': {'stage': 'validation'}}}
+        with patch.object(type(Const.Model), 'strategies', new_callable=PropertyMock, return_value=strategy), \
+             patch.object(PredictorPath, 'MODEL_DICT', prediction):
+            model = ModelPath('gru@day')
+            old = ModelPath('gru@day@2')
+            ModelLifecycle(model.base).save(stage='production', approved_model=old.full_name)
+            ModelLifecycle(old.base).save(stage='production')
+            self.assertEqual(ModelLifecycle(old.base).state['stage'], 'exploration')
+            self.assertEqual([(row['name'], row['stage']) for row in ModelLifecycle.registrations()],
+                             [('gru@day', 'production'), ('gru@average', 'production')])
+            self.assertEqual([p.base for p in PredictorPath.SelectModels()],
+                             [model.base, ModelPath('gru@average').base, model.base])
+            self.assertEqual(ModelLifecycle.catalog_stage(old.full_name, 'production',
+                                                         ModelLifecycle.production_names(), archived=False), 'exploration')
+            with self.assertRaisesRegex(ValueError, 'not registered'):
+                ModelLifecycle.approved_path(old, registered=True)
+
+    def test_resuming_predictions_keeps_unaffected_history_and_trims_at_new_node(self):
+        import pandas as pd
+        from src.res.model.util.trainer.pred_recorder import PredRecorder
+
+        recorder = PredRecorder(self.config())
+        for directory, prefix in [(recorder.folder_preds, '0.'), (recorder.folder_avg_preds, '')]:
+            (directory / f'{prefix}20230103.20230104.20230106.feather').write_bytes(b'later')
+            (directory / f'{prefix}20200102.20200103.20200103.feather').write_bytes(b'untouched')
+            pd.DataFrame({'date': [20210105, 20220104, 20220105]}).to_feather(
+                directory / f'{prefix}20210104.20210105.20220105.feather')
+            (directory / f'{prefix}20220104.20220105.20220106.feather').write_bytes(b'stale')
+
+        recorder.purge_retrained_model_preds([(20220104, 0)])
+        recorder.purge_retrained_model_preds([(20220104, 0)])
+        for directory, prefix in [(recorder.folder_preds, '0.'), (recorder.folder_avg_preds, '')]:
+            untouched = directory / f'{prefix}20200102.20200103.20200103.feather'
+            trimmed = directory / f'{prefix}20210104.20210105.20220104.feather'
+            later = directory / f'{prefix}20230103.20230104.20230106.feather'
+            self.assertEqual(set(directory.iterdir()), {untouched, trimmed, later})
+            self.assertEqual(later.read_bytes(), b'later')
+            self.assertEqual(untouched.read_bytes(), b'untouched')
+            self.assertEqual(pd.read_feather(trimmed)['date'].tolist(), [20210105, 20220104])
+
+    def test_daily_repair_and_trainer_share_lock_only_on_owning_thread(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import portalocker
+
+        path = self.root / 'lock-test'
+        def train():
+            with ModelLifecycle(path).lock():
+                return True
+
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            with ModelLifecycle(path).lock():
+                self.assertTrue(train())
+                with self.assertRaises(portalocker.exceptions.LockException):
+                    worker.submit(train).result()
+            self.assertTrue(worker.submit(train).result())
 
     def test_target_update_invalidates_acceptance(self):
         config = self.config()
@@ -158,7 +287,7 @@ class ModelLifecycleTest(unittest.TestCase):
         self.assertEqual(_read(manager.file)['stage'], 'exploration')
         self.assertFalse(list(manager.file.parent.glob('*.tmp')))
 
-    def test_repair_publishes_only_after_acceptance_and_reuses_failed_candidate(self):
+    def test_daily_update_accepts_exact_directory_and_retries_after_failure(self):
         config = self.config()
         manager = ModelLifecycle(config.base_path.base)
         request = {'name': config.base_path.full_name, 'base': str(manager.base),
@@ -169,6 +298,8 @@ class ModelLifecycleTest(unittest.TestCase):
         def run(**kwargs):
             candidate_config = ModelConfig(**kwargs, vb_level='never').start_model()
             candidates.append(candidate_config.base_path.base)
+            self.assertEqual(kwargs['use_data'], 'both')
+            self.assertEqual(candidate_config.base_path.base, manager.base)
             self.assertEqual(candidate_config.max_epoch, 200)
             self.assertEqual(candidate_config.window, 2400)
             ModelLifecycle.configured(candidate_config)
@@ -180,13 +311,16 @@ class ModelLifecycleTest(unittest.TestCase):
             with patch.object(ModelLifecycle, '_validate_predictions', side_effect=ValueError('bad test')):
                 with self.assertRaisesRegex(ValueError, 'bad test'):
                     manager.repair(request, run)
+            with self.assertRaisesRegex(ValueError, 'not passed acceptance'):
+                ModelLifecycle.approved_path(config.base_path, registered=True)
             self.assertFalse(manager.state.get('approved_path'))
             self.assertEqual(manager.state['status'], 'failed')
             with patch.object(ModelLifecycle, '_validate_predictions'):
                 manager.repair(request, run)
         self.assertEqual(candidates[0], candidates[1])
         self.assertEqual(manager.state['approved_path'], str(candidates[0]))
-        self.assertEqual(manager.state['stage'], 'production')
+        with patch.object(ModelLifecycle, 'registrations', return_value=[request]):
+            self.assertEqual(manager.state['stage'], 'production')
         self.assertEqual(manager.state['accepted_request'], 'request-one')
         self.assertEqual(ModelLifecycle(config.base_path.base).state['budget']['max_epoch'], 20)
 
@@ -209,6 +343,43 @@ class ModelLifecycleTest(unittest.TestCase):
         with patch.object(ModelLifecycle, 'registrations', return_value=[registration]):
             self.assertEqual(ModelLifecycle.inspect_registered(), [])
             self.assertEqual(ModelLifecycle.inspect_registered(), [])
+
+    def test_november_daily_update_resumes_only_due_node_with_stale_fit_dump(self):
+        from src.proj import CALENDAR
+        from src.res.model.util.data.module_data import ModuleData
+
+        model_day = 20261124
+        previous = int(CALENDAR.range(20170103, model_day, until_today=False)[::120][-2])
+        config = self.config(training_mode='full', override={'model.beg_date': 20170103, 'model.interval': 120})
+        model = config.base_path
+        manager = ModelLifecycle(model.base)
+        registration = {'base': str(manager.base), 'name': model.full_name, 'stage': 'production', 'start': previous}
+        self.enterContext(patch.object(ModelLifecycle, 'registrations', return_value=[registration]))
+        self.enterContext(patch.object(CALENDAR, 'updated', return_value=20261109))
+        self.enterContext(patch.object(ModuleData, 'fit_end_date', side_effect=AssertionError('fit-only gate')))
+        manager.save(stage='production', legacy=True)
+        self.artifact(config, previous)
+        with patch.object(CALENDAR, 'update_to', return_value=20261123):
+            self.assertEqual(ModelLifecycle.inspect_registered(), [])
+        with patch.object(CALENDAR, 'update_to', return_value=model_day):
+            request, = ModelLifecycle.inspect_registered()
+            self.assertEqual(request['nodes'], [previous, model_day])
+
+            def run(**kwargs):
+                self.assertEqual(kwargs['use_data'], 'both')
+                resumed = ModelConfig(**kwargs, vb_level='never').start_model()
+                ModelLifecycle.configured(resumed)
+                trainer = SimpleNamespace(base_path=model, config=resumed,
+                                          data=SimpleNamespace(model_date_list=request['nodes']))
+                self.assertEqual(ModelLifecycle.pending_nodes(trainer, [(previous, 0), (model_day, 0)]),
+                                 [(model_day, 0)])
+                self.artifact(resumed, model_day)
+                return trainer
+
+            with patch.object(ModelLifecycle, '_validate_predictions'):
+                manager.repair(request, run)
+            self.assertEqual(ModelLifecycle.inspect_registered(), [])
+            self.assertEqual(manager.state['approved_model'], model.full_name)
 
     def test_boost_keeps_training_parameters_and_samples_nodes(self):
         (PATH.sched / 'boost_lifecycle.yaml').write_text('model.module: lgbm\nmodel.window: 240\n')
@@ -250,7 +421,7 @@ class ModelLifecycleTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'non-finite'):
                 ModelLifecycle._validate_predictions(candidate, trainer, [(20200102, 0)])
 
-    def test_sparse_full_repair_copies_compatible_weights(self):
+    def test_sparse_full_update_preserves_compatible_weights(self):
         config = self.config(override={'train.max_epoch': 10, 'model.window': 600})
         manager = ModelLifecycle(config.base_path.base)
         self.artifact(config, 20200102)
@@ -273,7 +444,7 @@ class ModelLifecycleTest(unittest.TestCase):
                 manager.repair(request, run)
         self.assertEqual(manager.state['status'], 'ready')
 
-    def test_daily_plan_stops_after_publication_and_exports_alias(self):
+    def test_daily_plan_stops_after_acceptance_and_exports_registered_model(self):
         config = self.config(override={'model.beg_date': 20200102, 'model.end_date': 20200103})
         manager = ModelLifecycle(config.base_path.base)
         registration = {'base': str(manager.base), 'name': config.base_path.full_name, 'stage': 'production'}
@@ -299,6 +470,36 @@ class ModelLifecycleTest(unittest.TestCase):
             repaired = ModelLifecycle.inspect_registered()
             self.assertEqual(len(repaired), 1)
             self.assertNotEqual(repaired[0]['version'], plans[0]['version'])
+
+    def test_incomplete_request_is_rejected_and_old_incomplete_approval_is_repaired(self):
+        config = self.config(override={'model.beg_date': 20200102, 'model.end_date': 20200103, 'model.interval': 1})
+        manager = ModelLifecycle(config.base_path.base)
+        registration = {'base': str(manager.base), 'name': config.base_path.full_name, 'stage': 'production'}
+        self.enterContext(patch.object(ModelLifecycle, 'registrations', return_value=[registration]))
+        cutoff = ModelLifecycle.fit_sample_cutoff(config, 20200103)
+        with patch('src.proj.CALENDAR.updated', return_value=cutoff - 1):
+            self.assertEqual(ModelLifecycle.inspect_registered(), [])
+        with patch('src.proj.CALENDAR.updated', return_value=cutoff):
+            request, = ModelLifecycle.inspect_registered()
+        self.assertEqual(request['nodes'], [20200102, 20200103])
+
+        def run(**kwargs):
+            candidate = ModelConfig(**kwargs, vb_level='never').start_model()
+            self.artifact(candidate, 20200102)
+            return SimpleNamespace(config=candidate, data=SimpleNamespace(model_date_list=[20200102]))
+
+        with self.assertRaisesRegex(ValueError, 'omitted requested model dates.*20200103'):
+            manager.repair(request, run)
+        self.assertFalse(manager.state.get('approved_model'))
+        # Emulate a pre-fix publication with an internally consistent but incomplete manifest.
+        active = config.base_path
+        records = _read(ModelLifecycle(active.base).manifest_file)
+        _write(active.snapshot('evaluation_manifest.json'), {'request': request, 'artifacts': _digest(records)})
+        manager.save(legacy=False, stage='production', approved_model=active.full_name,
+                     accepted_request=request['version'])
+        repaired, = ModelLifecycle.inspect_registered()
+        self.assertEqual(repaired['nodes'], request['nodes'])
+        self.assertNotEqual(repaired['version'], request['version'])
 
     def test_sparse_and_full_modes_preserve_single_node_parameters(self):
         config = self.config(training_mode='sparse', lifecycle_options={'step': 3})

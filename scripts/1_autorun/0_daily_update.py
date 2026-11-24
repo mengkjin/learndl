@@ -2,7 +2,7 @@
 # author: jinmeng
 # date: 2024-11-27
 # description: Run Daily Update
-# content: 同步共享模型配置,每日更新数据,因子,模型隐变量,模型推理
+# content: 同步共享配置，更新数据和因子，续训到期生产模型并推算预测
 # email: True
 # mode: shell
 # parameters:

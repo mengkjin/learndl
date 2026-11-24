@@ -61,6 +61,8 @@ def inventory(context):
     from yaml import safe_load
     from src.res.model.util.core.basic import parse_model_input
     from src.res.model.util.core.model_path import ModelPath
+    from src.res.model.util.lifecycle import ModelLifecycle
+    registered = ModelLifecycle.production_names()
     for row in rows.values():
         model = ModelPath(row['name'])
         row['short_name'] = model.model_name
@@ -75,4 +77,5 @@ def inventory(context):
             row['started'] = read_properties(base / PROPERTY_FILE).get('initial_training', {}).get('started_at', '')
         with suppress(OSError, ValueError, KeyError, TypeError, AttributeError):
             row['stage'] = safe_load((base / 'configs/lifecycle.yaml').read_text()).get('stage', 'unknown')
+        row['stage'] = ModelLifecycle.catalog_stage(row['name'], row['stage'], registered, archived=row['archived'])
     return rows

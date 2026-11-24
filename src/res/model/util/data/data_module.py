@@ -174,9 +174,12 @@ class DataModule(Base.BoundLogger):
     def set_critical_dates(self):
         """set critical dates for model date list and test full dates"""
         dates = self.datas.date_within(self.beg_date , self.end_date)
+        folds = self.config.Param.get('train.factor_sequence.folds', [])
+        rolling = self.config.requires_fit and self.use_data != 'predict' and not folds
         # check if dates is align with CALENDAR
-        assert len(dates) > 0 , f'dates is empty: {self.beg_date} , {self.end_date}'
-        calendar_dates = CALENDAR.range(min(dates) , max(dates) , 'td')
+        if not len(dates) and not rolling:
+            raise ValueError(f'dates is empty: {self.beg_date} , {self.end_date}')
+        calendar_dates = CALENDAR.range(min(dates), max(dates), 'td') if len(dates) else dates
         if not np.isin(dates , calendar_dates).all() or not np.isin(calendar_dates , dates).all():
             self.logger.error(f'dates is not align with calendar dates!')
             if len(np.setdiff1d(dates , calendar_dates)) > 0:
@@ -195,11 +198,15 @@ class DataModule(Base.BoundLogger):
             self.test_full_dates = dates[1:]
             if self.use_data == 'predict':
                 self.model_date_list = dates[:1]
-            else:
+            elif rolling:
                 from src.res.model.util.lifecycle import ModelLifecycle
-                self.model_date_list = np.asarray(ModelLifecycle.training_nodes(self.config, dates), dtype=int)
+                self.model_date_list = np.asarray(ModelLifecycle.training_nodes(self.config, self.datas.date), dtype=int)
+                if not len(self.model_date_list):
+                    raise ValueError(f'No model dates with available fit history in {self.beg_date}..{self.end_date}')
+                self.test_full_dates = dates[dates > self.model_date_list[0]]
+                if not len(self.test_full_dates) and 'test' in self.config.queue_of_stages:
+                    self.config.queue_of_stages.remove('test')
 
-        folds=self.config.Param.get('train.factor_sequence.folds',[])
         if folds and self.use_data != 'predict':
             from src.res.model.util.lifecycle import ModelLifecycle
             self.model_date_list, self.test_full_dates = ModelLifecycle.fold_nodes(self.config, folds, dates)
@@ -228,10 +235,10 @@ class DataModule(Base.BoundLogger):
                     hd_model_date = hd_model.model_dates[hd_model.model_dates <= model_date][-1]
 
                     # fit dates
-                    model_date_col = (self.datas.date < model_date).sum()
-                    d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - 1)
-                    d1 = max(0 , model_date_col - self.config.skip_horizon)
-                    hd_model_hd_dates[hd_model_date].extend(self.datas.date[d0:d1][::self.config.interval].tolist())
+                    if 'fit' in self.config.queue_of_stages:
+                        d1 = self.fit_history_end(model_date)
+                        d0 = max(0, d1 - self.config.window - 1)
+                        hd_model_hd_dates[hd_model_date].extend(self.datas.date[d0:d1][::self.config.interval].tolist())
                     
                     # test dates
                     next_model_date = self.next_model_date(model_date)
@@ -326,6 +333,26 @@ class DataModule(Base.BoundLogger):
             self.data_operator = DataOperator(self.config , loader_param)
             return True
 
+    def fit_history_end(self, model_date: int) -> int:
+        """Exclusive fit bound; frozen splits validate their exact sample dates separately."""
+        from src.res.model.util.lifecycle import ModelLifecycle
+        cutoff = ModelLifecycle.fit_sample_cutoff(self.config, model_date)
+        end = int(np.searchsorted(self.datas.date, cutoff, side='right'))
+        if ('factorseq' in self.input_keys and (self.config.Param.get('train.factor_sequence.folds')
+                or self.config.Param.get('train.factor_sequence.train_dates'))):
+            return end
+        if end == 0 or self.datas.date[end - 1] != cutoff:
+            raise ValueError(f'Missing fit history through {cutoff} for model date {model_date}')
+        for label in self.config.labels:
+            horizon = DataOperator.parse_label_horizon(label)
+            if horizon and sum(horizon) > self.config.skip_horizon + 1:
+                raise ValueError(f'Label {label} crosses model date {model_date}; increase train.skip_horizon')
+        # A label dump can contain calendar padding beyond its mature observations.
+        last_labels = self.datas.y.values[:, end - 1]
+        if not torch.isfinite(last_labels).any(dim=(0, 1)).all():
+            raise ValueError(f'Missing fit labels on {cutoff} for model date {model_date}')
+        return end
+
     def setup_loader_kwargs(self):
         assert all(k > 0 for k in self.seq_lens.values()) , self.seq_lens
         assert all(k > 0 for k in self.seq_steps.values()) , self.seq_steps
@@ -336,9 +363,8 @@ class DataModule(Base.BoundLogger):
 
         match self.stage:
             case 'fit':
-                model_date_col = (self.datas.date < self.model_date).sum()
-                self.d0 = max(0 , model_date_col - self.config.skip_horizon - self.config.window - d_extend)
-                self.d1 = max(0 , model_date_col - self.config.skip_horizon)
+                self.d1 = self.fit_history_end(self.model_date)
+                self.d0 = max(0, self.d1 - self.config.window - d_extend)
             case 'predict' | 'test' | 'retrospective':
                 if self.stage == 'retrospective':
                     start_date = self.loader_param.retro_start_date
@@ -577,7 +603,7 @@ class DataModule(Base.BoundLogger):
         if self.stage == 'retrospective':
             return model_date + 10000
         late_dates = self.model_date_list[self.model_date_list > model_date]
-        return min(late_dates) if len(late_dates) > 0 else max(self.test_full_dates) + 1
+        return min(late_dates) if len(late_dates) > 0 else max(model_date, self.max_test_date) + 1
 
     def y_label(self , dates : Base.alias.DateType) -> pd.DataFrame:
         dates = Dates(dates)
@@ -626,6 +652,10 @@ class DataModule(Base.BoundLogger):
             tr = explicit['train']
             va = explicit['valid']
             horizon = self.config.Param.get('train.dataloader.purge_horizon', 0)
+            for label in self.config.labels:
+                label_horizon = DataOperator.parse_label_horizon(label)
+                if label_horizon:
+                    horizon = max(horizon, sum(label_horizon))
             if not va or int(CALENDAR.td(max(tr), horizon)) >= min(va):
                 raise ValueError('Factor sequence train labels cross the validation boundary')
             if int(CALENDAR.td(max(va), horizon)) > self.model_date:

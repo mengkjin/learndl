@@ -17,9 +17,9 @@ __all__ = ['ModelAPI']
 class ModelAPI:
     """API for model operations of this project."""
     @classmethod
-    def update(cls):
+    def update(cls, *, update_due_models: bool = False):
         """
-        Update prediction interims and results periodically:
+        Refresh prediction data, optionally resume due production models, and compute forecasts.
 
         [API Interaction]:
           expose: true
@@ -32,6 +32,8 @@ class ModelAPI:
           memory_usage: medium
         """
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
+        if update_due_models and MACHINE.cuda_server:
+            wrap_update(cls.update_models, 'continue due production models')
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     
@@ -43,7 +45,7 @@ class ModelAPI:
         b. for server, continue training prediction models in model'
 
         Args:
-            force_update: Whether to force update models even if the models are already updated recently.
+            force_update: Require full acceptance evidence for previously grandfathered legacy weights.
 
         [API Interaction]:
           expose: true
@@ -56,7 +58,6 @@ class ModelAPI:
           memory_usage: high
         """
         if MACHINE.cuda_server:
-            wrap_update(cls.prepare_fit_data , 'prepare fit data')
             ModelTrainer.update_models(force_update = force_update)
         else:
             Logger.alert1('This is not a server with cuda, skip this process')

@@ -497,7 +497,11 @@ class BaseTrainer(BasePipeline):
     def iter_model_num_date(self): 
         """iter of model_date and model_num , considering is_resuming"""
        
-        model_iter = list(itertools.product(self.data.model_date_list , self.config.model_num_list))
+        dates = self.data.model_date_list
+        if self.status.stage == 'test' and self.config.requires_fit:
+            # A node can be fit before its first out-of-sample observation exists.
+            dates = dates[dates < self.data.max_test_date]
+        model_iter = list(itertools.product(dates, self.config.model_num_list))
         assert self.status.stage in ['fit' , 'test'] , self.status.stage
         num_all_models = len(model_iter)
         iter_info = f'In Stage [{self.status.stage}], number of all models (model_date x model_num) is {num_all_models}, '
@@ -506,6 +510,8 @@ class BaseTrainer(BasePipeline):
                 case 'fit':
                     from src.res.model.util.lifecycle import ModelLifecycle
                     pending = set(ModelLifecycle.pending_nodes(self, model_iter))
+                    if self.config.lifecycle_repair and pending:
+                        self.record.purge_retrained_model_preds(pending)
                     condition = np.array([node in pending for node in model_iter], dtype=bool)
                 case 'test':
                     resumed_models_finished = self.record.resumed_models.groupby(['model_date' , 'model_num']).groups

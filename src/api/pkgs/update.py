@@ -54,9 +54,7 @@ class UpdateAPI:
         FactorAPI.update_market_factors(missing_since=factor_start)
         FactorAPI.update_stock_factors(timeout = 3, missing_since=factor_start)
         FactorAPI.update_affiliate_factors(missing_since=factor_start)
-        from src.res.model.util.lifecycle import ModelLifecycle
-        ModelLifecycle.inspect_registered()
-        ModelAPI.update()
+        ModelAPI.update(update_due_models=True)
         FactorAPI.update_pooling_factors(timeout = 3, missing_since=factor_start)
         FactorAPI.update_factor_stats(missing_since=factor_start)
         FactorAPI.export_factor_table()
@@ -105,7 +103,7 @@ class UpdateAPI:
     @classmethod
     def weekly(cls):
         """
-        Refresh training analysis inputs, then update models on updatable machines.
+        Refresh training analysis inputs and extend historical fit data.
 
         [API Interaction]:
           expose: true
@@ -128,7 +126,8 @@ class UpdateAPI:
                 Logger.info(f'Training analysis snapshot: {report}')
         except Exception as error:
             Logger.warning(f'Training analysis snapshot maintenance failed: {error}')
-        ModelAPI.update_models()
+        if MACHINE.cuda_server:
+            wrap_update(ModelAPI.prepare_fit_data, 'prepare fit data')
         print_update_records()
 
     @classmethod

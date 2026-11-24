@@ -331,18 +331,17 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             
         span_tuples : list[tuple[int,int]] = []
         meaningful_dates = block.meaningful_dates
-        if len(meaningful_dates) == 0:
-            block_start , block_end = 99991231 , 19000101
-        else:
-            block_start , block_end = meaningful_dates[0] , meaningful_dates[-1]
-
-        if block.empty:
+        if not len(meaningful_dates):
             span_tuples.append((start , end))
-        elif dates_for_query:
-            if start < block_start:
-                span_tuples.append((start , CALENDAR.td(block_start , -1).td))
+        else:
+            block_start = meaningful_dates[0] if dates_for_query else block.date[0]
+            block_end = meaningful_dates[-1]
+            previous_day = CALENDAR.td(block_start, -1).td
+            if start <= previous_day:
+                span_tuples.append((start, previous_day))
             if end > block_end:
-                span_tuples.append((CALENDAR.td(block_end , -self.ExtentionOverlay + 1).td , end))
+                overlap_start = CALENDAR.td(block_end , -self.ExtentionOverlay + 1).td
+                span_tuples.append((max(start, overlap_start), end))
 
         extentions : list[DataBlock] = []
         chunk_years = int(self.DateChunkYears or 0)

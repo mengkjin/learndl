@@ -188,9 +188,11 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
 
 
 def _defer_retired_requests(store: RunStore) -> None:
+    retired = {'nn_metrics_ab': 'NN metrics A/B workflow retired',
+               'model_lifecycle': 'Production training moved to daily_update'}
     for run in store.owned(OWNER):
-        if run.get('task_kind') == 'nn_metrics_ab' and run['phase'] == 'queued':
-            run.update(phase='deferred', blocked_by='NN metrics A/B workflow retired')
+        if run['phase'] == 'queued' and run.get('task_kind') in retired:
+            run.update(phase='deferred', blocked_by=retired[run['task_kind']])
             store.put(run)
 
 
@@ -229,8 +231,6 @@ def _dispatch(options: dict, store: RunStore) -> dict:
                    else model_request)
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
-        from .model_lifecycle import candidate as lifecycle_candidate
-        request = lifecycle_candidate(store, options) or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         request.update(id=uuid.uuid4().hex, owner=OWNER, phase='queued', queued_at=time.time(),
@@ -309,10 +309,7 @@ def worker() -> int:
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
-                if request.get('task_kind') == 'model_lifecycle':
-                    from .model_lifecycle import candidate as lifecycle_candidate
-                    next_candidate = lifecycle_candidate(store, options)
-                elif request.get('task_kind') == 'factor_sequence':
+                if request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
@@ -351,10 +348,7 @@ def child(run_id: str) -> int:
         return 1
     store = RunStore()
     request = store.get(run_id)
-    if request.get('task_kind') == 'model_lifecycle':
-        from .model_lifecycle import execute
-        return execute(request, store)
-    if request.get('task_kind') == 'nn_metrics_ab':
+    if request.get('task_kind') in ('model_lifecycle', 'nn_metrics_ab'):
         return DEFERRED
     if request.get('task_kind') == 'factor_sequence':
         from .factor_sequence import execute

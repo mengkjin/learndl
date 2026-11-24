@@ -66,7 +66,8 @@ class ModelMetadataTest(unittest.TestCase):
             self.assertEqual(receive(self.rec)[0]['status'], 'received')
             listing = self.library.model_listing()
             model = next(iter(listing['models'].values()))
-            self.assertEqual(model['stage'], 'production')
+            # The received metadata belongs to a model outside the prediction registry.
+            self.assertEqual(model['stage'], 'exploration')
             self.assertEqual(len(model['versions']), 2)
             self.assertEqual(len(model['versions'][0]['files']), 2)
             self.assertEqual(model['versions'][0]['missing'], 0)

@@ -1,3 +1,4 @@
+# Production models are exactly the directories named below.
 # For predictions
 # prediction name
 #   name: module_name
@@ -30,11 +31,9 @@ hidden_extraction:
     submodels: [best]
     nums: NULL
 
-# Explicit promotion intent, keyed by exact model identity (including @index when needed).
-# Existing prediction registrations without an entry retain legacy production service.
+# Optional training date bounds for identities already listed in prediction.
 # lifecycle:
-#   gru@research_model:
-#     stage: validation  # production authorizes automatic publication after acceptance
-#     start: 20170103    # optional: defaults to the saved full configuration
-#     end: 99991231      # optional: bounded by currently available trading dates
+#   gru@gru_day:
+#     start: 20170103
+#     end: 99991231
 lifecycle: {}

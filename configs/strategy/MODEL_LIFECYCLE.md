@@ -4,8 +4,7 @@ This manager owns NN/boost training lifecycles; non-fitting linear/factor models
 retain their existing lifecycle implementations.
 
 The policy and public Python interface live in `src/res/model/util/lifecycle.py`.
-Training, prediction and automation call this module; queue ownership and retry
-admission remain in the existing automation scheduler.
+The CUDA server's daily update calls this module to resume due production models.
 
 ## Exploration
 
@@ -91,73 +90,42 @@ Worklist settings remain in revision checks, so changed
 options invalidate completion and stale queued configurations are not executed.
 Abnormal-exit recovery may force resume, as before, to retain completed work.
 
-## Promotion intent
+## Production registration and daily updates
 
-Add exact model identities to `configs/strategy/model.yaml`:
+The `prediction` section of `configs/strategy/model.yaml` selects production
+directories by exact identity, including an index only when the name specifies
+one. Several prediction aliases may use different members of the same directory.
+Each directory gets one update check. Hidden extraction and exploration schedules
+serve their own purposes and do not register production models. The optional
+`lifecycle` mapping can supply `start` and `end` bounds for a listed identity.
 
-```yaml
-lifecycle:
-  gru@research_model:
-    stage: validation
-  lgbm@tree_model:
-    stage: production
-    start: 20170103
-    end: 99991231
-```
+On the CUDA server, daily_update prepares prediction data, checks registered
+models and resumes due training before it computes predictions and portfolios.
+The weekly job extends historical fit dumps. The idle research worker leaves
+production training to daily_update.
 
-`validation` requests full fitting and evaluation but does not publish a production
-alias. Changing it to `production` authorizes automatic publication after successful
-acceptance. No second confirmation is required. Existing prediction and hidden
-extraction registrations are treated as legacy production intent unless overridden
-by an explicit lifecycle entry. Do not register short-test identities.
+Model dates follow the saved calendar anchor and interval. A rolling fit uses
+samples through the trading day at offset `-1 - skip_horizon` from its model date.
+The update uses `both` data, which can extend the historical dump through the
+latest available market data. The trainer checks that the cutoff has finite
+labels and that the label horizon fits the historical window.
 
-Daily reconciliation and the automatic training worker inspect these registrations.
-The worker must be enabled on the training host. Production repairs have priority
-over validation and ordinary exploration; tasks use the existing research lane,
-maintenance admission, bounded retry policy and model lock. Repeated checks do not
-mutate the worklist YAML or enqueue duplicate requests.
+## Resume and acceptance
 
-`ModelLifecycle.inspect_registered()` returns pending repair plans and records legacy
-audits. It is a reconciliation operation, not a purely read-only status query.
-`manager.inspect()` reads one model's current state, target and artifact manifest.
+Training resumes in the exact prediction directory. Its manifest allows
+compatible weights to be reused and its prediction recorder resumes saved
+evaluation. Legacy weights with matching saved settings are recorded when the
+first update runs. Old indexed candidates remain on disk as historical runs.
 
-## Repair and serving
+Acceptance checks every requested date, model number and submodel. For dates with
+observable out-of-sample trading days it also checks prediction coverage and finite
+values. The update writes `snapshot/evaluation_manifest.json` and releases the
+model for production use after acceptance. An interrupted in-place update stays
+pending for the next daily check. Per-node training evidence is stored in
+`snapshot/model_manifest.json` and transitions in `logs/lifecycle.jsonl`.
 
-Repairs create an existing-style `@index` model instance and keep the approved
-instance unchanged. Compatible independent nodes are copied; missing or incompatible
-nodes are trained. Transfer-dependent and hidden/final-dependent repairs conservatively
-retrain their chain. Ordinary managed resumes fill individual holes and propagate
-transfer invalidation to subsequent nodes.
+`manager.update_target(full_snapshot, retrain=True)` explicitly replaces the
+resolved target and invalidates existing weights. The next update archives the
+previous saved schedule before applying the replacement.
 
-The candidate always performs a fresh full evaluation over the selected interval.
-A scope beginning between training nodes includes its preceding node to cover the
-requested evaluation period. Production acceptance requires complete weights and
-finite predictions covering every required date, model number and submodel, and
-successful completion of the existing test/report pipeline. No return or IC threshold
-is imposed. Choosing production in the strategy file expresses the research decision.
-
-Publication atomically changes the approved reference after evaluation succeeds.
-The original model's lifecycle file retains the previous approved reference and the
-candidate directory for diagnostics. Canonical model names accompany absolute paths
-so the approved alias can resolve under another host's data root. Old directories
-are retained; there is no automatic artifact deletion. Failed repairs reuse their
-candidate directory on retry, retain completed compatible weights and reset candidate
-evaluation outputs.
-
-`stage`, `status`, `approved_model`, `validated_model`, `accepted_request` and
-`candidate_path` in the lifecycle file show progress. Per-node provenance is in
-`snapshot/model_manifest.json`; acceptance evidence is in the candidate's
-`snapshot/evaluation_manifest.json`; transitions are appended to `logs/lifecycle.jsonl`.
-
-Legacy production continues serving while evidence is incomplete. Matching saved
-legacy weights can be reused, with their provenance explicitly marked legacy.
-Newly trained or changed weights are never published before candidate acceptance.
-Daily integrity checks use artifact size/mtime and manifest integrity; fitting/reuse
-checks hash weight content. Upstream model files are tracked by size/mtime. Historical
-raw-data revisions are not independently versioned by this module; after a data
-correction, call `manager.update_target(full_snapshot, retrain=True)` to require fresh weights
-and revalidation. An explicit target update also creates a new request generation,
-even if its parameter values are unchanged.
-
-Deployment uses the project's existing scheduler installation/publication workflow.
-A source checkout alone does not publish installed automation code.
+Deployment follows the existing project release workflow.

@@ -44,6 +44,8 @@ def versions(rows):
 
 
 def _describe_builds(rows, identifier):
+    from src.res.model.util.lifecycle import ModelLifecycle
+    registered = ModelLifecycle.production_names()
     groups = defaultdict(list)
     for row in rows:
         if row.get('model') and not row.get('trashed'):
@@ -68,6 +70,8 @@ def _describe_builds(rows, identifier):
                     value = safe_load(lifecycle['path'].read_text()).get('stage')
                     if value in ('exploration', 'validation', 'production'):
                         stage = value
+        stage = ModelLifecycle.catalog_stage(row.get('display_name', model), stage, registered,
+                                             archived=row.get('physically_archived', False))
         initial = properties.get('initial_training', {})
         training = [p for p in (initial, initial.get('latest_full_training', {}),
                                 properties.get('resume_training', {}))

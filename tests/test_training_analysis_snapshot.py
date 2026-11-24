@@ -168,33 +168,33 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
                 self.assertEqual(set(reader.meta["years"]), {"2025"})
                 self.assertEqual(reader.meta["years"]["2025"]["dates"], [20250102])
 
-    def test_weekly_orders_snapshot_before_models(self):
+    def test_weekly_extends_fit_after_snapshot(self):
         from types import SimpleNamespace
         import src.api.pkgs.update as module
 
         calls = []
         with (
-            patch.object(module, "MACHINE", SimpleNamespace(updatable=True)),
+            patch.object(module, "MACHINE", SimpleNamespace(updatable=True, cuda_server=True)),
             patch(
                 "src.res.model.util.data.training_analysis_snapshot.weekly_update",
                 side_effect=lambda: calls.append("snapshot") or {},
             ),
             patch.object(
                 module.ModelAPI,
-                "update_models",
-                side_effect=lambda: calls.append("models"),
+                "prepare_fit_data",
+                side_effect=lambda: calls.append("fit"),
             ),
             patch.object(module, "print_update_records"),
         ):
             module.UpdateAPI.weekly()
-        self.assertEqual(calls, ["snapshot", "models"])
+        self.assertEqual(calls, ["snapshot", "fit"])
         with (
-            patch.object(module, "MACHINE", SimpleNamespace(updatable=True)),
+            patch.object(module, "MACHINE", SimpleNamespace(updatable=True, cuda_server=True)),
             patch(
                 "src.res.model.util.data.training_analysis_snapshot.weekly_update",
                 side_effect=RuntimeError("unavailable"),
             ),
-            patch.object(module.ModelAPI, "update_models") as models,
+            patch.object(module.ModelAPI, "prepare_fit_data") as models,
             patch.object(module, "print_update_records"),
         ):
             module.UpdateAPI.weekly()
