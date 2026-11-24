@@ -50,14 +50,14 @@ class PatchDiagnosticsTest(unittest.TestCase):
             self.assertEqual(git_update.version_failure_mail_status('attempt'), 'SMTP accepted')
             self.assertTrue(git_update.deliver_update_emails(sender))
         self.assertEqual(sender.call_count, 2)
-        for call in sender.call_args_list:
-            self.assertIn('Different files', call.args[1])
-            self.assertIn('source: old', call.args[1])
-            self.assertEqual(call.kwargs['delivery_id'], 'git-update:version-attempt:with-log-v1')
-            self.assertEqual(call.kwargs['attachments'], [str(self.log)])
+        for delivery in sender.call_args_list:
+            self.assertIn('Different files', delivery.args[1])
+            self.assertIn('source: old', delivery.args[1])
+            self.assertEqual(delivery.kwargs['delivery_id'], 'git-update:version-attempt:with-log-v1')
+            self.assertEqual(delivery.kwargs['attachments'], [str(self.log)])
             from src.proj.util.web.emailer import Email
 
-            message = Email.message(*call.args, attachments=call.kwargs['attachments'],
+            message = Email.message(*delivery.args, attachments=delivery.kwargs['attachments'],
                                     recipient='test@example.invalid')
             attachments = [part for part in message.walk() if part.get_filename()]
             self.assertEqual([part.get_filename() for part in attachments], ['patch.log'])

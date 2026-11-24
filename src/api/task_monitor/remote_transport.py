@@ -9,23 +9,22 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.shared.file_ops import atomic_json
+
+__all__ = ['CHUNK_BYTES', 'ROUND_BYTES', 'RETENTION', 'task_key', 'Publisher']
+
 CHUNK_BYTES = 256 * 1024
 ROUND_BYTES = 4 * 1024 * 1024
-RETENTION = 86400
+RETENTION = 24 * 3600
 
 
-def key(value):
-    return hashlib.sha256(value.encode()).hexdigest()
-
-
-def save(path, value):
-    from .remote import atomic_json
-    atomic_json(path, value)
+def task_key(task_id: str) -> str:
+    return hashlib.sha256(task_id.encode()).hexdigest()
 
 
 class Publisher:
     def __init__(self, shared: Path, private: Path, host: str):
-        self.shared = shared / 'runtime' / key(host)
+        self.shared = shared / 'runtime' / task_key(host)
         self.private = private / 'remote_monitor'
         self.host = host
 
@@ -41,7 +40,7 @@ class Publisher:
             temporary = target.with_suffix('.tmp')
             shutil.copyfile(source, temporary)
             temporary.replace(target)
-        save(self.private / 'state.json', journal['state'])
+        atomic_json(self.private / 'state.json', journal['state'])
         for name in journal['delete']:
             path = self.shared / name
             if path.is_dir():
@@ -53,7 +52,7 @@ class Publisher:
         (self.private / 'journal.json').unlink()
         shutil.rmtree(self.private / 'staging', ignore_errors=True)
 
-    def tick(self, tasks, *, now=None, limits=None):
+    def tick(self, tasks, *, now=None, limits=None, hidden=()):
         now = time.time() if now is None else now
         limits = {} if limits is None else limits
         self.private.mkdir(parents=True, exist_ok=True)
@@ -83,8 +82,12 @@ class Publisher:
                 published[str(target)] = digest
 
         for task in tasks:
-            record = state['tasks'].setdefault(key(task['task_id']), {'offset': 0, 'generation': 0})
+            record = state['tasks'].setdefault(task_key(task['task_id']), {'offset': 0, 'generation': 0})
             record['task'] = task
+            record.pop('hidden_since', None)
+        for task_id in hidden:
+            if (record := state['tasks'].get(task_key(task_id))) is not None:
+                record.setdefault('hidden_since', now)
         summaries = []
         keys = sorted(state['tasks'])
         if keys:
@@ -96,10 +99,16 @@ class Publisher:
             record = state['tasks'][identity]
             task = record['task']
             directory = Path('tasks') / identity
-            if record.get('expires_at', float('inf')) <= now:
+            hidden_since = record.get('hidden_since')
+            if (record.get('expires_at', float('inf')) <= now
+                    or hidden_since is not None and hidden_since + RETENTION <= now):
                 deleted.append(str(directory))
                 pending_delete.extend([identity + '.md', identity + '.json'])
                 del state['tasks'][identity]
+                state.get('metadata', {}).pop(str(directory / 'manifest.json'), None)
+                continue
+            if hidden_since is not None:
+                # Retain its output briefly in case a distinct scheduler phase returns.
                 continue
             # Adopt v1 volumes as immutable historical ranges, including its partial last volume.
             if 'segments' not in record:
@@ -165,7 +174,7 @@ class Publisher:
         state['cursor'] += 1
         state['collected_at'] = now
         journal = dict(state=state, writes=writes, delete=deleted, pending_delete=pending_delete)
-        save(journal_path, journal)
+        atomic_json(journal_path, journal)
         self._finish(journal)
         return dict(version=2, host=self.host, sampled_at=now, tasks=summaries)
 

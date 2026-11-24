@@ -12,12 +12,15 @@ import shutil
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import cast
 from urllib.parse import parse_qsl, quote, urlsplit
 
 import psutil
 
 from src.api.learndl_monitor.restart_control import restart_link
 from src.api.task_monitor.web_api import TaskCenter
+
+__all__ = ['create_server', 'main']
 
 ASSETS = Path(__file__).parent
 MAX_HTML_PREVIEW_BYTES = 4 * 1024 * 1024
@@ -36,7 +39,7 @@ def create_server(port=8502, *, center=None):
 
         @property
         def authority(self):
-            return f'127.0.0.1:{self.server.server_port}'
+            return f'127.0.0.1:{cast(ThreadingHTTPServer, self.server).server_port}'
 
         def local(self):
             origin = f'http://{self.authority}'
@@ -68,11 +71,13 @@ def create_server(port=8502, *, center=None):
             url = urlsplit(self.path)
             if url.path in PAGES:
                 page = (ASSETS / 'dashboard.html').read_text(encoding='utf-8')
-                page = page.replace('__TOKEN__', token).replace('__RESTART_LINK__', restart_link('tasks', self.server.server_port))
+                restart = restart_link('tasks', cast(ThreadingHTTPServer, self.server).server_port)
+                page = page.replace('__TOKEN__', token).replace('__RESTART_LINK__', restart)
                 return self.reply(page.encode(), mime='text/html; charset=utf-8')
             if url.path in STATIC:
                 asset = ASSETS / STATIC[url.path]
-                return self.reply(asset.read_bytes(), mime=mimetypes.guess_type(asset)[0] + '; charset=utf-8')
+                mime = mimetypes.guess_type(asset)[0] or 'application/octet-stream'
+                return self.reply(asset.read_bytes(), mime=f'{mime}; charset=utf-8')
             if url.path == '/health':
                 return self.reply({'ok': True, 'service': 'tasks'})
             if not self.authorized():

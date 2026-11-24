@@ -10,7 +10,14 @@ from uuid import uuid4
 
 from .core import ArtifactSpec, Config, atomic_json, component, publish_artifacts, sandboxed
 
-__all__ = ['freeze_task_attachments', 'archive_message', 'publish_archive']
+__all__ = ['DEFAULT_TASKS', 'freeze_task_attachments', 'archive_message', 'publish_archive']
+
+# The published 0.7.2 patch uses this allowlist to recognize historical mail.
+DEFAULT_TASKS = {
+    'daily_update', 'weekly_update', 'tracking_update', 'rcquant_sec_backfill',
+    'train_model', 'train_schedule_model', 'resume_train', 'resume_training',
+    'update_models', 'resume_testing', 'test_model', 'test_linear',
+}
 
 
 def enabled(owner, override=None):

@@ -195,12 +195,14 @@ class PriorityTests(unittest.TestCase):
         self.enterContext(patch('src.automation.scheduling.autofix_store.state_dir', return_value=self.directory))
         self.enterContext(patch.object(priority, 'git_due', return_value=True))
         publish = self.enterContext(patch.object(auxiliary, 'publish'))
+        remote_publish = self.enterContext(patch('src.api.task_monitor.remote.publish_once'))
         sender = self.enterContext(patch('src.proj.util.web.emailer.Email.send'))
         calls = []
         for name in ('task_lifecycle', 'autofix', 'idle_worklist'):
             self.enterContext(patch.object(watchdog, '_run_' + name,
                 side_effect=lambda context, name=name: (calls.append(name), watchdog.JobResult())[1]))
-        for name in auxiliary.NAMES:
+        # Older helpers have legacy watchdog runners. Remote Monitor is timer-only.
+        for name in ('email_outbox', 'cli_recovery', 'task_monitor_cache'):
             self.enterContext(patch.object(watchdog, '_run_' + name, side_effect=AssertionError('helper ran synchronously')))
         for outcome in ({'status': 'up_to_date'}, {'status': 'error', 'reason': 'offline'},
                         {'status': 'updated', 'checkout_attempted': True}):
@@ -212,6 +214,7 @@ class PriorityTests(unittest.TestCase):
             self.assertEqual(calls[0], 'git')
             self.assertEqual(calls[1:], [] if outcome.get('checkout_attempted') else ['task_lifecycle', 'autofix', 'idle_worklist'])
         self.assertEqual(publish.call_count, 2)
+        remote_publish.assert_not_called()
         sender.assert_not_called()
 
     def test_installer_provisions_independent_bounded_helpers(self):

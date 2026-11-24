@@ -5,8 +5,21 @@ import codecs
 import json
 from collections import OrderedDict
 from pathlib import Path
+from typing import TYPE_CHECKING, TypedDict
 
 from .remote import CHUNK_BYTES, task_key
+
+if TYPE_CHECKING:
+    from .output import OutputStyle
+
+__all__ = ['RemoteCache']
+
+
+class _Segment(TypedDict):
+    generation: int
+    start: int
+    end: int
+    file: str
 
 
 class RemoteCache:
@@ -24,6 +37,8 @@ class RemoteCache:
             previous = self.documents.get(str(path))
             if previous is None or previous[0] != token:
                 value = json.loads(path.read_text())
+                if not isinstance(value, dict):
+                    raise ValueError('Invalid remote monitor document')
                 self.documents[str(path)] = (token, value)
             return self.documents[str(path)][1]
         except (OSError, ValueError):
@@ -39,7 +54,7 @@ class RemoteCache:
                 _, data = self.ranges.popitem(last=False)
                 self.total -= len(data)
 
-    def render(self, root, task, start, end, style='text', *, compact=False):
+    def render(self, root, task, start, end, style: OutputStyle = 'text', *, compact=False):
         identity = (str(root), task['task_id'], task['generation'], start, end, style, compact)
         if identity in self.rendered:
             self.rendered.move_to_end(identity)
@@ -48,6 +63,7 @@ class RemoteCache:
         if text is None:
             return None
         from .output import format_live_output, sanitize_inline_html
+
         text = format_live_output(text, style) if compact else sanitize_inline_html(text, style)
         self.rendered[identity] = text
         self.total += len(text.encode('utf-8'))
@@ -81,11 +97,11 @@ class RemoteCache:
         identity = (str(root), task['task_id'], task['generation'])
         position = start
         parts = []
-        segments = task.get('segments')
+        segments: list[_Segment] | None = task.get('segments')
         if segments is None:
-            segments = [dict(generation=task['generation'], start=offset,
-                             end=min(offset + CHUNK_BYTES, task['offset']),
-                             file=f"{task['generation']}-{offset // CHUNK_BYTES:08d}.bin")
+            segments = [_Segment(generation=task['generation'], start=offset,
+                                 end=min(offset + CHUNK_BYTES, task['offset']),
+                                 file=f"{task['generation']}-{offset // CHUNK_BYTES:08d}.bin")
                         for offset in range(0, task['offset'], CHUNK_BYTES)]
         while position < end:
             cached = next((key for key in self.ranges if key[:3] == identity and key[3] <= position < key[4]), None)

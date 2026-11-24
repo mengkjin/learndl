@@ -15,6 +15,8 @@ import portalocker
 
 from .core import Config, component, sandboxed
 
+__all__ = ['metadata', 'embed_metadata', 'publish_daily', 'publish_daily_safe', 'ReportCatalog']
+
 
 class _Metadata(HTMLParser):
     def __init__(self):
@@ -40,7 +42,7 @@ def metadata(content):
     parser = _Metadata()
     parser.feed(content)
     value = json.loads(''.join(parser.parts))
-    if value.get('version') != 1:
+    if not isinstance(value, dict) or value.get('version') != 1:
         raise ValueError('Unsupported storage report')
     for field in ('root', 'started', 'finished', 'report_id'):
         if not isinstance(value.get(field), str):

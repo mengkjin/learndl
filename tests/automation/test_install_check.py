@@ -4,9 +4,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import os
 from pathlib import Path
 import tempfile
+from typing import TypedDict
 import unittest
 from unittest.mock import Mock, patch
 
@@ -18,6 +18,28 @@ TIMER = ('[Unit]\nDescription=Daily\n[Timer]\nOnCalendar=Mon *-*-* 12:00:00 UTC\
 NAME = 'learndl-schedule-daily.timer'
 
 
+class _Schedule(TypedDict):
+    task: str
+    days: list[str]
+    times: list[str]
+
+
+class _Config(TypedDict):
+    host: str
+    timezone: str
+    tasks: dict[str, dict[str, bool | str | int]]
+    schedules: dict[str, _Schedule]
+
+
+class _Grant(TypedDict):
+    host: str
+    config_dir: str
+    tasks: list[str]
+    task_definitions: dict[str, dict[str, bool | str | int]]
+    timezone: str
+    timers: dict[str, dict[str, str]]
+
+
 class InstallationCheckTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -25,13 +47,14 @@ class InstallationCheckTest(unittest.TestCase):
         self.directory = Path(temp.name)
         self.enterContext(patch.object(check, 'runtime_dir', return_value=self.directory))
         self.enterContext(patch.object(git_update, 'runtime_dir', return_value=self.directory))
-        self.old = dict(host='host', timezone='UTC', tasks={'daily': dict(enabled=True)},
-                        schedules={'daily': dict(task='daily', days=['mon'], times=['12:00'])})
+        self.old = _Config(host='host', timezone='UTC', tasks={'daily': {'enabled': True}},
+                           schedules={'daily': {'task': 'daily', 'days': ['mon'], 'times': ['12:00']}})
         self.new = copy.deepcopy(self.old)
         self.new['schedules']['daily']['times'] = ['13:00', '15:00']
         self.location = dict(host='host', config_dir='/configuration')
-        self.grant = dict(self.location, tasks=['daily'], task_definitions=self.old['tasks'], timezone='UTC',
-                          timers={NAME: {'envelope': privileged.envelope(TIMER)}})
+        self.grant = _Grant(host=self.location['host'], config_dir=self.location['config_dir'], tasks=['daily'],
+                            task_definitions=self.old['tasks'], timezone='UTC',
+                            timers={NAME: {'envelope': privileged.envelope(TIMER)}})
         self.plan = dict(config=self.new, units={NAME: TIMER.replace('12:00', '13:00')},
                          conflicts={}, global_conflicts=[], impact={'mode': 'config', 'groups': []})
         self.manifest = dict(units={NAME: TIMER}, cron='')

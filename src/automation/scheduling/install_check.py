@@ -25,8 +25,9 @@ from .config import installed_config, load_config, runtime_dir, schedule_slots
 from .install_impact import sources
 from . import retiming_privileged as privileged
 
+__all__ = ['RETIMING', 'privileged_command', 'check', 'authorize']
 
-RETIMING = ContextVar("authorized_retiming", default=False)
+RETIMING: ContextVar[bool] = ContextVar('authorized_retiming', default=False)
 
 
 def permission_directory():

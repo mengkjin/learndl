@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from src.api.task_monitor.remote import Publisher, CHUNK_BYTES, RETENTION, read_volume, retain_log, task_key
+from tests.task_monitor.test_core import _create_database
 
 
 class RemotePublicationTest(unittest.TestCase):
@@ -31,7 +32,7 @@ class RemotePublicationTest(unittest.TestCase):
         task = self.tick(115)
         self.assertEqual(sealed.stat().st_mtime_ns, stamp)
         self.assertEqual(task['offset'], self.log.stat().st_size)
-        actual = read_volume(self.publisher.shared, task, 0) + read_volume(self.publisher.shared, task, 1)
+        actual = self.volume(task, 0) + self.volume(task, 1)
         self.assertEqual(actual.encode(), self.log.read_bytes())
 
     def test_short_task_handoff_and_cleanup_preserves_other_task(self):
@@ -51,6 +52,41 @@ class RemotePublicationTest(unittest.TestCase):
         self.assertFalse((self.publisher.shared / 'tasks' / task_key('run-1')).exists())
         self.assertFalse((self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')).exists())
 
+    def test_published_queue_entries_disappear_when_linked_or_deferred(self):
+        from src.api.task_monitor.core import TaskMonitorRepository
+        from src.api.task_monitor.remote import collect
+        from src.automation.scheduling.runtime import RunStore
+
+        runtime = self.root / 'runtime'
+        store = RunStore(runtime / 'scheduling' / 'runs.sqlite')
+        db = self.root / 'tasks.sqlite'
+        repository = TaskMonitorRepository(db, runtime)
+        linked = {'id': 'linked', 'phase': 'queued', 'task': 'model', 'queued_at': 100}
+        deferred = dict(linked, id='deferred')
+        queued = dict(linked, id='queued')
+        for run in (linked, deferred, queued):
+            store.put(run)
+        packet = self.publisher.tick(collect(repository, now=100), now=100)
+        known = {row['task_id'] for row in packet['tasks']}
+        self.assertEqual(len(known), 3)
+
+        _create_database(db, [('script', 'schedule.py', '', 111, 'running', 'bash',
+                              123, 111, None, None, None, None)])
+        store.put(dict(linked, phase='running', pid=123, started_at=110))
+        store.link('script', 'linked')
+        store.put(dict(deferred, phase='deferred'))
+        hidden = set()
+        tasks = collect(repository, now=115, pending_ids=known, hidden=hidden)
+        self.assertEqual(hidden, {'managed:scheduler:linked', 'managed:scheduler:deferred'})
+        self.publisher.tick(tasks, now=115, hidden=hidden)
+        index = json.loads((self.publisher.shared / 'index.json').read_text())
+        self.assertEqual({row['task_id'] for row in index['tasks']}, {'script', 'managed:scheduler:queued'})
+
+        packet = self.publisher.tick([], now=130)
+        self.assertEqual({row['task_id'] for row in packet['tasks']}, {'script', 'managed:scheduler:queued'})
+        self.publisher.tick([], now=115 + RETENTION)
+        self.assertFalse((self.publisher.shared / 'tasks' / task_key('managed:scheduler:linked')).exists())
+
     def test_replacement_retains_previous_history_and_missing_volume_waits(self):
         self.log.write_text('before\n')
         self.tick()
@@ -67,31 +103,40 @@ class RemotePublicationTest(unittest.TestCase):
         text = 'a' * (CHUNK_BYTES - 1) + '中文\n'
         self.log.write_text(text)
         task = self.tick()
-        actual = read_volume(self.publisher.shared, task, 0) + read_volume(self.publisher.shared, task, 1)
+        actual = self.volume(task, 0) + self.volume(task, 1)
         self.assertEqual(actual, text)
+
+    def volume(self, task, number):
+        content = read_volume(self.publisher.shared, task, number)
+        assert content is not None
+        return content
 
     def test_close_hands_off_once_even_when_both_deflectors_close(self):
         from types import SimpleNamespace
         from src.proj.util.catcher.crash_protector import CrashProtectorCatcher
         output = self.log.open('w')
         output.write('last output\n')
-        catcher = SimpleNamespace(markdown_file=output, filename=self.log, task_id='run-1', retain_file=False)
+        catcher = object.__new__(CrashProtectorCatcher)
+        catcher.markdown_file = output
+        catcher.filename = self.log
+        catcher.task_id = 'run-1'
+        catcher.retain_file = False
         with patch('src.api.task_monitor.remote.settings', return_value=(SimpleNamespace(state=self.root / 'private'), True)):
-            CrashProtectorCatcher.close(catcher)
-            CrashProtectorCatcher.close(catcher)
+            catcher.close()
+            catcher.close()
         self.assertFalse(catcher.retain_file)
         pending = self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')
         self.assertEqual(pending.read_text(), 'last output\n')
 
     def test_catchup_budget_and_retry_after_cursor_write_failure(self):
-        from src.api.task_monitor import remote
-        self.log.write_bytes(b'x' * (remote.ROUND_BYTES + 41))
-        original = remote.atomic_json
+        from src.api.task_monitor import remote_transport as transport
+        self.log.write_bytes(b'x' * (transport.ROUND_BYTES + 41))
+        original = transport.atomic_json
         def fail_cursor(path, value):
             if path.name == 'state.json':
                 raise OSError('interrupted before cursor commit')
             original(path, value)
-        with patch.object(remote, 'atomic_json', side_effect=fail_cursor):
+        with patch.object(transport, 'atomic_json', side_effect=fail_cursor):
             with self.assertRaises(OSError):
                 self.tick()
         task = self.tick(115)
@@ -99,14 +144,13 @@ class RemotePublicationTest(unittest.TestCase):
         self.assertTrue(task['complete'])
         task = self.tick(130)
         self.assertTrue(task['complete'])
-        chunks = (read_volume(self.publisher.shared, task, number)
+        chunks = (self.volume(task, number)
                   for number in range((task['offset'] + CHUNK_BYTES - 1) // CHUNK_BYTES))
         self.assertEqual(''.join(chunks).encode(), self.log.read_bytes())
 
     def test_old_pending_task_is_collected_after_long_outage(self):
         from src.api.task_monitor.remote import collect
         from src.api.task_monitor.core import TaskMonitorRepository
-        from test_core import _create_database
         database = self.root / 'tasks.sqlite'
         _create_database(database, [('run-1', 'train.py', 'python train.py', 1, 'complete',
                                      'bash', None, 1, 2, 0, None, None)])
@@ -229,7 +273,9 @@ class RemotePublicationTest(unittest.TestCase):
             self.assertEqual(cache.document(path), original)
         self.task['status'] = 'complete'
         self.tick(115)
-        self.assertEqual(cache.document(path)['tasks'][0]['status'], 'complete')
+        updated = cache.document(path)
+        assert updated is not None
+        self.assertEqual(updated['tasks'][0]['status'], 'complete')
 
     def test_idle_and_merge_payload_write_budget(self):
         self.log.write_bytes(b'')

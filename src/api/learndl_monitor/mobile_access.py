@@ -13,8 +13,10 @@ from urllib.parse import urlsplit
 
 import psutil
 
+from src.automation.console import logger
 from .services import SERVICES, STATE
 
+__all__ = ['main']
 
 MOBILE = STATE / 'mobile'
 CONFIG = MOBILE / 'httpd.conf'
@@ -34,7 +36,7 @@ def record_port(path):
             return None
         port = record.get('port') or urlsplit(record['url']).port
         return port if isinstance(port, int) and 1024 <= port <= 65535 else None
-    except (OSError, ValueError, KeyError, psutil.Error):
+    except (OSError, ValueError, KeyError, TypeError, psutil.Error):
         return None
 
 
@@ -165,7 +167,7 @@ def main():
                 elif updated != config_text:
                     worker.send_signal(signal.SIGUSR1)
                 last, config_text, next_publish = routes, updated, 0
-            if worker.poll() is not None:
+            if worker is not None and worker.poll() is not None:
                 raise RuntimeError(f'Private gateway exited with status {worker.returncode}')
             if time.monotonic() >= next_publish:
                 try:
@@ -177,7 +179,7 @@ def main():
                     else:
                         next_publish = time.monotonic() + 8
                 except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-                    print(exc, flush=True)
+                    logger.error('Could not reconcile private mobile access: %s', exc)
                     next_publish = time.monotonic() + 15
             time.sleep(2)
     finally:

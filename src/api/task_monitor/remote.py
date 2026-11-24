@@ -1,25 +1,17 @@
 """Bounded, restartable task log publication over the Syncthing share."""
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from pathlib import Path
 
-CHUNK_BYTES = 256 * 1024
-ROUND_BYTES = 4 * 1024 * 1024
-RETENTION = 24 * 3600
+from src.shared.file_ops import atomic_json
+from .remote_transport import CHUNK_BYTES, ROUND_BYTES, RETENTION, Publisher, task_key
 
-
-def atomic_json(path: Path, value) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix('.tmp')
-    temporary.write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
-    temporary.replace(path)
-
-
-def task_key(task_id: str) -> str:
-    return hashlib.sha256(task_id.encode()).hexdigest()
+__all__ = [
+    'CHUNK_BYTES', 'ROUND_BYTES', 'RETENTION', 'Publisher', 'task_key', 'retain_log',
+    'collect', 'publish_once', 'read_volume',
+]
 
 
 def settings():
@@ -44,10 +36,7 @@ def retain_log(path: Path, task_id: str) -> bool:
     return True
 
 
-from .remote_transport import Publisher
-
-
-def collect(repository, *, now: float, pending_ids=(), since=None) -> list[dict]:
+def collect(repository, *, now: float, pending_ids=(), since=None, hidden=None) -> list[dict]:
     """Read scripts changed within the retention window, plus all active scripts."""
     tasks = []
     since = now - RETENTION if since is None else since
@@ -72,11 +61,12 @@ def collect(repository, *, now: float, pending_ids=(), since=None) -> list[dict]
                 log = Path(output[0]) if output and Path(output[0]).suffix.lower() in {'.md', '.txt', '.log', '.html'} else None
             tasks.append(replace(task, crash_log=log))
     # Managed adapter applies the same deduplication rules as the local monitor.
-    tasks.extend(repository._managed_tasks(detail=True, since=since))
+    hidden = set() if hidden is None else hidden
+    tasks.extend(repository._managed_tasks(detail=True, since=since, hidden=hidden))
     found = {task.task_id for task in tasks}
-    for task_id in pending_ids:
-        if task_id.startswith('managed:') and task_id not in found:
-            tasks.extend(repository._managed_tasks(detail=True, task_id=task_id, since=0))
+    for task_id in set(pending_ids) - found - hidden:
+        if task_id.startswith('managed:'):
+            tasks.extend(repository._managed_tasks(detail=True, task_id=task_id, since=0, hidden=hidden))
     result = []
     for task in tasks:
         log = task.crash_log or (task.exit_files[0] if task.exit_files else None)
@@ -112,18 +102,21 @@ def publish_once() -> int:
             atomic_json(heartbeat, health)
             try:
                 sampled_at = time.time()
+                hidden = set()
+                collected_at = state.get('collected_at')
+                since = collected_at if isinstance(collected_at, (int, float)) else sampled_at - RETENTION
                 tasks = collect(repository, now=sampled_at, pending_ids=set(pending_ids),
-                                since=state.get('collected_at', sampled_at - RETENTION) - 60)
+                                since=since - 60, hidden=hidden)
                 limits = {}
                 deadline = time.monotonic() + 20
-                packet = publisher.tick(tasks, limits=limits)
+                packet = publisher.tick(tasks, limits=limits, hidden=hidden)
                 while any(task['offset'] < task['size'] for task in packet['tasks']):
                     from src.automation.scheduling.autofix_store import state_dir
                     from src.automation.scheduling.worker_bootstrap import wait_for_code
                     if time.monotonic() >= deadline or wait_for_code(state_dir(), 'remote_monitor'):
                         break
                     offsets = [(task['key'], task['generation'], task['offset']) for task in packet['tasks']]
-                    packet = publisher.tick(tasks, limits=limits)
+                    packet = publisher.tick(tasks, limits=limits, hidden=hidden)
                     if offsets == [(task['key'], task['generation'], task['offset']) for task in packet['tasks']]:
                         break
             except Exception as exc:

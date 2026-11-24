@@ -41,6 +41,7 @@ class DashboardTest(unittest.TestCase):
             int(bool(params['statuses'])), None, params['statuses'] == {'running'})
         repo.status_counts.return_value = {'complete': 1, 'error': 0, 'killed': 0}
         repo.watchdog_health.return_value = WatchdogHealth(None, False, {'disabled': True})
+        self.repository = repo
         self.center = TaskCenter(repo, self.root / 'shared')
         self.publisher = Publisher(self.root / 'shared', self.root / 'private', 'test server')
         self.remote_log = self.root / 'remote.log'
@@ -57,7 +58,9 @@ class DashboardTest(unittest.TestCase):
         self.addCleanup(server.shutdown)
         self.base = f'http://127.0.0.1:{server.server_port}'
         with urlopen(self.base) as response:
-            self.token = re.search('name="task-token" content="([^"]+)"', response.read().decode())[1]
+            token = re.search('name="task-token" content="([^"]+)"', response.read().decode())
+            assert token is not None
+            self.token = token[1]
 
     @staticmethod
     def snapshot(task_id, status, path):
@@ -175,6 +178,7 @@ class DashboardTest(unittest.TestCase):
             phone.goto(self.base)
             phone.locator('#settings summary').click()
             settings_panel = phone.locator('#settings .popover-panel').bounding_box()
+            assert settings_panel is not None
             self.assertGreaterEqual(settings_panel['x'], 0)
             self.assertLessEqual(settings_panel['x'] + settings_panel['width'], 375)
             expect(phone.locator('#terminal-size')).to_have_value('12')
@@ -222,7 +226,7 @@ class DashboardTest(unittest.TestCase):
                 page.screenshot(path=screenshot)
 
             older = self.snapshot('older', 'complete', self.report)
-            repository = self.center.repository
+            repository = self.repository
             repository.get_task.side_effect = {'old': self.finished, 'older': older}.get
 
             def finished_page(*, statuses, cursor, filters, **_):
@@ -233,7 +237,7 @@ class DashboardTest(unittest.TestCase):
                     return TaskPage(rows, len(rows), None, False)
                 if cursor:
                     return TaskPage((older,), 2, None, False)
-                return TaskPage((self.finished,), 2, (self.finished.start_time, 'old'), False)
+                return TaskPage((self.finished,), 2, (self.finished.effective_start, 'old'), False)
 
             repository.list_tasks.side_effect = finished_page
             page.locator('nav a[href="/finished"]').click()
@@ -244,6 +248,7 @@ class DashboardTest(unittest.TestCase):
             filters = page.locator('#finished-filters').bounding_box()
             sidebar = page.locator('#sidebar').bounding_box()
             detail = page.locator('.task-panel').bounding_box()
+            assert filters is not None and sidebar is not None and detail is not None
             self.assertLessEqual(filters['y'] + filters['height'], sidebar['y'])
             self.assertLessEqual(sidebar['x'] + sidebar['width'], detail['x'])
             page.locator('#report summary').click()

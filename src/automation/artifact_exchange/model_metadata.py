@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 import json
+import shutil
 from tempfile import TemporaryDirectory
 from pathlib import Path
 
@@ -27,7 +28,7 @@ INVENTORY = '.model-metadata/inventory.json'
 BACKFILL_TASK = 'model_metadata_backfill'
 
 
-def migrate_model_html(base):
+def migrate_model_html(base, *, backup_dir=None):
     """Move legacy source captures under logs; callers hold the model lifecycle lock."""
     old = real_tree(base / 'run_logs/html')
     if not old.is_dir():
@@ -37,6 +38,10 @@ def migrate_model_html(base):
         source = real_tree(source)
         if not source.is_file():
             continue
+        if backup_dir is not None:
+            backup = real_tree(backup_dir / source.name)
+            backup.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, backup)
         target.mkdir(parents=True, exist_ok=True)
         destination = real_tree(target / source.name)
         if destination.exists() and digest(destination) != digest(source):

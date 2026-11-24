@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
+from typing import Callable, cast
 from unittest import TestCase
 from unittest.mock import patch
 
@@ -85,6 +86,8 @@ class StorageInsightsExchangeTest(TestCase):
         with patch.object(Path, 'read_text', side_effect=AssertionError('Unchanged report read again')):
             self.assertEqual(catalog.refresh(), entries)
         self.assertEqual(metadata(catalog.entries['server']['content'])['root'], str(self.root.resolve()))
+        self.target.write_text('<script id="storage-metadata" type="application/json">[]</script></html>')
+        self.assertEqual(catalog.refresh(), entries)
 
     def test_receiver_and_autofix_skip(self):
         self.config.role = 'receiver'
@@ -136,16 +139,17 @@ class StorageInsightsExchangeTest(TestCase):
         function.decorator_list = []
         namespace = {'SharedSync': SimpleNamespace(sync=Mock())}
         exec(compile(ast.Module(body=[function], type_ignores=[]), '<daily-update-test>', 'exec'), namespace)
+        main = cast(Callable[[], None], namespace['main'])
         daily = Mock()
         updated = Mock(return_value=False)
         with patch.dict(sys.modules, {'src.api.pkgs.update': SimpleNamespace(UpdateAPI=SimpleNamespace(daily=daily)),
                                       'src.api.pkgs.data': SimpleNamespace(DataAPI=SimpleNamespace(is_updated=updated))}), \
              patch.object(src.proj, 'MACHINE', SimpleNamespace(updatable=True)), \
              patch('src.automation.artifact_exchange.storage_insights.publish_daily_safe') as publisher:
-            namespace['main']()
+            main()
             publisher.assert_not_called()
             updated.return_value = True
-            namespace['main']()
+            main()
             publisher.assert_called_once()
         from src.automation.artifact_exchange.storage_insights import publish_daily_safe
         with patch('src.automation.artifact_exchange.storage_insights.publish_daily', side_effect=OSError('failed')), \

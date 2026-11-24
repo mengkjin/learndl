@@ -15,6 +15,8 @@ from .remote import CHUNK_BYTES, task_key
 from .remote_reader import RemoteCache
 from .resources import sample_resources
 
+__all__ = ['TaskCenter']
+
 ACTIVE = {'starting', 'running'}
 TERMINAL = {'complete', 'error', 'killed'}
 WINDOWS = {'history', 'last_day', 'last_week', 'last_month'}

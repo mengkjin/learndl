@@ -173,6 +173,33 @@ class ExchangeTest(unittest.TestCase):
         target = Path(received[0]['target'])
         self.assertEqual(sorted(p.read_text() for p in target.rglob('*.html')), ['new', 'old', 'same'])
 
+    def test_release_migrates_active_model_html_and_backs_up_originals(self):
+        from runpy import run_path
+        from types import SimpleNamespace
+        from src.proj import PATH
+
+        migration = run_path(str(PATH.main / 'scripts/.version_patch/0.7.10/001_model_html_logs.py'))
+        root = self.source / 'models'
+        base = root / 'nn/gru@test'
+        old = base / 'run_logs/html'
+        old.mkdir(parents=True)
+        (old / 'run.html').write_text('legacy')
+        new = base / 'logs/html'
+        new.mkdir(parents=True)
+        (new / 'run.html').write_text('current')
+        archive = root / 'archive/gru@test/run_logs/html'
+        archive.mkdir(parents=True)
+        (archive / 'run.html').write_text('archived')
+        ctx = SimpleNamespace(backup_dir=self.source / 'backup')
+        with patch.object(PATH, 'model', root):
+            self.assertFalse(migration['verify'](ctx))
+            migration['apply'](ctx)
+            self.assertTrue(migration['verify'](ctx))
+            migration['apply'](ctx)
+        self.assertEqual(sorted(path.read_text() for path in new.glob('*.html')), ['current', 'legacy'])
+        self.assertEqual((ctx.backup_dir / 'models/nn/gru@test/run_logs/html/run.html').read_text(), 'legacy')
+        self.assertEqual((archive / 'run.html').read_text(), 'archived')
+
     def test_model_html_mail_requires_no_parent_report(self):
         from types import SimpleNamespace
         from src.automation.artifact_exchange.research import CURRENT_TASK, model_run
