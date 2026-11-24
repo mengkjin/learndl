@@ -62,6 +62,18 @@ class TaskOutputTest(unittest.TestCase):
             self.assertNotIn('23:12:01.123', content)
             self.assertIn('26-11-12 23:12:01 | epoch 1', content)
 
+    def test_terminal_renders_raw_scheduler_ansi_and_escapes_literal_markup(self):
+        path = self.root / 'scheduler.log'
+        path.write_text('\x1b[37m\x1b[104m\x1b[1mREMARK\x1b[0m: '
+                        '\x1b[94m<job> & ready\x1b[0m\n', encoding='utf-8')
+        plain = parse_live_output(path, 'text')
+        colored = parse_live_output(path, 'colored')
+        self.assertEqual(plain, 'REMARK: <job> & ready')
+        self.assertIn('background-color: #5555ff', colored)
+        self.assertIn('color: #5555ff', colored)
+        self.assertIn('&lt;job&gt; &amp; ready', colored)
+        self.assertNotIn('\x1b', colored)
+
     def test_terminal_formats_catcher_header_and_strips_stderr_record_time(self):
         path = self.root / 'raw.md'
         path.write_text(

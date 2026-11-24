@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from src.shared.file_ops import atomic_json
+from .managed import SCHEDULE_LOG_PREFIX_BYTES, duplicate_schedule_wrappers
 from .remote_transport import CHUNK_BYTES, ROUND_BYTES, RETENTION, Publisher, task_key
 
 __all__ = [
@@ -74,7 +75,26 @@ def collect(repository, *, now: float, pending_ids=(), since=None, hidden=None) 
                            status=task.status, pid_alive=task.pid_alive, start_time=task.effective_start,
                            end_time=task.end_time, log=str(log) if log else None,
                            phase=task.managed_phase))
-    return result
+    duplicates = duplicate_schedule_wrappers(result, schedule_log_prefix, script_log_available)
+    hidden.update(duplicates)
+    return [task for task in result if task['task_id'] not in duplicates]
+
+
+def schedule_log_prefix(task):
+    if not task.get('log'):
+        return b''
+    try:
+        with Path(task['log']).open('rb') as log:
+            return log.read(SCHEDULE_LOG_PREFIX_BYTES)
+    except OSError:
+        return b''
+
+
+def script_log_available(task):
+    try:
+        return bool(task.get('log') and Path(task['log']).stat().st_size)
+    except OSError:
+        return False
 
 
 def publish_once() -> int:

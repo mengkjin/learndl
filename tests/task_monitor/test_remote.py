@@ -21,6 +21,48 @@ class RemotePublicationTest(unittest.TestCase):
     def tick(self, now=100):
         return self.publisher.tick([self.task], now=now)['tasks'][0]
 
+    def test_idle_schedule_log_marker_deduplicates_without_a_database_link(self):
+        from src.api.task_monitor.core import TaskMonitorRepository
+        from src.api.task_monitor.remote import collect
+        from src.api.task_monitor.web_api import TaskCenter
+        from src.automation.scheduling.runtime import RunStore
+        from tests.task_monitor.test_core import _create_database
+
+        runtime = self.root / 'runtime'
+        database = self.root / 'task.sqlite'
+        store = RunStore(runtime / 'scheduling' / 'runs.sqlite')
+        script_id = '4_train/2_schedule_model.py@100'
+        wrapper_id = 'managed:scheduler:scheduled'
+        _create_database(database, [(script_id, '4_train/2_schedule_model.py', '', 100, 'running', 'bash',
+                                     None, 105, None, None, None, None)])
+        captures = runtime / 'crash_protector'
+        captures.mkdir()
+        capture = captures / '20261124.4_train_2_schedule_model.py@100.md'
+        capture.write_text('training output\n')
+        self.log.write_text(f'\x1b[94mCrashProtectorCatcher >> task_id="{script_id}", Capturing Start\x1b[0m\n')
+        run = dict(id='scheduled', task='factorseq_graph', owner='idle_worklist', phase='running',
+                   queued_at=100, started_at=103, log_path=str(self.log))
+        store.put(run)
+        repository = TaskMonitorRepository(database, runtime)
+        hidden = set()
+        tasks = collect(repository, now=110, hidden=hidden)
+        self.assertEqual(hidden, {wrapper_id})
+        self.assertEqual([task['task_id'] for task in tasks], [script_id])
+
+        # A client with a new viewer and an old server snapshot can also identify the wrapper.
+        wrapper = dict(task_id=wrapper_id, script='factorseq_graph', status='running',
+                       cmd='watchdog / idle_worklist / scheduler', log=str(self.log))
+        standalone = dict(wrapper, task_id='managed:scheduler:standalone', log=None)
+        self.publisher.tick([*tasks, wrapper, standalone], now=110)
+        center = TaskCenter(repository=repository, shared_root=self.root / 'shared')
+        remote = center.remote_list()[0]
+        self.assertEqual({task['task_id'] for task in remote['tasks']},
+                         {script_id, 'managed:scheduler:standalone'})
+        first_segment = next((self.publisher.shared / 'tasks' / task_key(script_id)).glob('*.bin'))
+        first_segment.unlink()
+        center.remote_cache.clear_task(self.publisher.shared, script_id)
+        self.assertIn(wrapper_id, {row['task_id'] for row in center.remote_list()[0]['tasks']})
+
     def test_sealed_volumes_are_immutable_and_restart_resumes(self):
         self.log.write_bytes(b'a' * (CHUNK_BYTES + 13))
         task = self.tick()

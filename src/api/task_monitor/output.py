@@ -34,6 +34,7 @@ _TERMINAL_PREFIX = re.compile(
 _CATCHER_TITLE = re.compile(r'# (.+ Initiated At \d{4}-\d{2}-\d{2} .+)', re.IGNORECASE)
 _CATCHER_SECTION = re.compile(r'## (Log (?:Start|Main|End))')
 _CATCHER_FIELD = re.compile(r'- \*((?:Machine|Python|Start at): .*?)\*')
+_ANSI_CSI = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]')
 _CONTROL_ONLY = re.compile(r'^\^+$')
 _SAFE_CSS_PROPERTIES = frozenset((
     'color', 'background-color', 'font-weight', 'font-style', 'text-decoration',
@@ -133,7 +134,12 @@ def _terminal_record(record: str) -> str:
     if field := _CATCHER_FIELD.fullmatch(stripped):
         return f'<span style="font-style: italic">{html.escape(field[1])}</span>'
     # stderr wraps the timestamp and the message together. Keep the underline.
-    return _TERMINAL_PREFIX.sub(r'\g<underline>', record, count=1)
+    record = _TERMINAL_PREFIX.sub(r'\g<underline>', record, count=1)
+    if '\x1b[' in record:
+        from src.proj.core import str_to_html
+
+        return _ANSI_CSI.sub('', str_to_html(record))
+    return record
 
 
 def _compact_records(records: Iterator[str], style: OutputStyle, *, terminal: bool = False) -> Iterator[str]:

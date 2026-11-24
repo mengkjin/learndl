@@ -7,6 +7,7 @@ __all__ = [
     'snapshots',
 ]
 import json
+import re
 import sqlite3
 from pathlib import Path
 import psutil
@@ -15,6 +16,31 @@ PHASES = {'queued':'starting', 'starting':'starting', 'running':'running',
           'terminating':'running', 'finalizing':'running', 'complete':'complete',
           'success':'complete', 'error':'error', 'failed':'error', 'timed_out':'error',
           'unknown':'error', 'killed':'killed', 'cancelled':'killed'}
+SCHEDULE_LOG_PREFIX_BYTES = 8192
+_SCHEDULE_SCRIPT = re.compile(r'4_train/2_schedule_model\.py@\d+')
+_SCHEDULE_CAPTURE = re.compile(
+    rb'CrashProtectorCatcher (?:>>|&gt;&gt;) task_id="(4_train/2_schedule_model\.py@\d+)", Capturing Start'
+)
+
+
+def duplicate_schedule_wrappers(tasks, read_prefix, has_script_output):
+    """Find ordinary worklist wrappers whose log explicitly names the recorded training script."""
+    scripts = {task['task_id']: task for task in tasks if _SCHEDULE_SCRIPT.fullmatch(task['task_id'])}
+    if not scripts:
+        return set()
+    duplicates = set()
+    for task in tasks:
+        if (not task['task_id'].startswith('managed:scheduler:')
+                or task.get('cmd') != 'watchdog / idle_worklist / scheduler'):
+            continue
+        matches = set(_SCHEDULE_CAPTURE.findall(read_prefix(task)))
+        if len(matches) != 1:
+            continue
+        script = scripts.get(next(iter(matches)).decode('ascii'))
+        if (script and script['status'] == task['status']
+                and script.get('pid_alive') is not False and has_script_output(script)):
+            duplicates.add(task['task_id'])
+    return duplicates
 
 
 def rows(path, query, parameters=(), *, strict=False):

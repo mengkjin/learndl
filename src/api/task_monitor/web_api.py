@@ -10,6 +10,7 @@ from dataclasses import asdict
 
 from .actions import kill_task, kill_unavailable_reason, prepare_kill
 from .core import TaskFilters, TaskMonitorRepository
+from .managed import SCHEDULE_LOG_PREFIX_BYTES, duplicate_schedule_wrappers
 from .output import OutputCache, format_live_output, parse_live_output
 from .remote import CHUNK_BYTES, task_key
 from .remote_reader import RemoteCache
@@ -141,11 +142,23 @@ class TaskCenter:
             for identity, (root, packet) in self.remote_hosts().items():
                 tasks = packet['tasks']
                 self.remote_cache.prune(root, {task['task_id'] for task in tasks})
+                def log_prefix(task, limit):
+                    if packet['version'] == 2:
+                        task = self.remote_cache.document(root / 'tasks' / task_key(task['task_id']) / 'manifest.json')
+                    if not task or not task.get('offset'):
+                        return b''
+                    return self.remote_cache.read(root, task, 0, min(limit, task['offset'])) or b''
+
+                # Older publishers may still send both rows for the same scheduled training.
+                duplicates = duplicate_schedule_wrappers(
+                    tasks, lambda task: log_prefix(task, SCHEDULE_LOG_PREFIX_BYTES),
+                    lambda task: bool(log_prefix(task, 1)),
+                )
                 heartbeat = self.remote_cache.document(root / 'heartbeat.json') if packet['version'] == 2 else packet
                 hosts.append(dict(id=identity, name=packet['host'], sampled_at=(heartbeat or {}).get('sampled_at'),
                                   tasks=[{name: value for name, value in task.items() if name in
                                           {'task_id', 'script', 'status', 'start_time', 'end_time', 'pid_alive', 'phase'}}
-                                         for task in tasks]))
+                                         for task in tasks if task['task_id'] not in duplicates]))
             return hosts
 
     def remote_task(self, host, task_id):
