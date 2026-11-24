@@ -659,6 +659,9 @@ class ModelLifecycle:
             except BaseException as exc:
                 self.save(status='failed', candidate_path=str(candidate.base), error=f'{type(exc).__name__}: {exc}')
                 raise
+            if request['stage'] == 'production':
+                from src.automation.artifact_exchange.production import publish_approved_model_safe
+                publish_approved_model_safe(candidate.base)
 
     @staticmethod
     def _validate_predictions(candidate, trainer, expected: list[tuple[int, int]]) -> None:

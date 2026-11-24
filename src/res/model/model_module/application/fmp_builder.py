@@ -9,6 +9,7 @@ from functools import cached_property
 from typing import Any  , Self
 from collections.abc import Generator
 
+from src.automation.artifact_exchange.production import batched
 from src.proj import CALENDAR , Base , Dates
 from src.res.factor.util import StockFactor , Benchmark , Portfolio , PortfolioAccountManager , AlphaModel
 from src.res.factor.fmp import PortfolioBuilder , parse_full_name , get_port_index
@@ -112,6 +113,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
             self.logger.skipping(f'Model portfolios for {self.pred_path.pred_name} is up to date')
             return Base.UpdateFlag.SKIPPED
     
+    @batched
     def build_fmps(self , dates : Base.intDates , deploy = True) -> None:
         for date in Dates(dates):
             self.fmp_tables[date] = self.build_day(date) 
@@ -143,6 +145,7 @@ class ModelPortfolioBuilder(Base.BoundLogger):
         default_date = self.pred_path.start
         return {name:last_dates.get(name , default_date) for name in self.iter_fmp_names(fmp_names)}
     
+    @batched
     def accounting(self , resume = True , deploy = True) -> Base.UpdateFlag:
         if resume:
             last_end_dates   = self.account_last_end_dates()

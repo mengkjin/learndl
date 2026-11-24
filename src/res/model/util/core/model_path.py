@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from src.shared.file_ops import real_tree
+from src.automation.artifact_exchange.production import saved as publish_saved
 from src.proj import PATH , DB , CALENDAR , Const , Logger , Base , Save , Load , Dates
 from src.proj.core import as_int_array
 from src.proj.bases import ModuleType
@@ -531,7 +532,10 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     def save_pred(self , df : pd.DataFrame , date : int , overwrite = False , reason : str = '') -> None:
         """save model pred"""
         df = df.rename(columns={self.model_clean_name:self.pred_name , self.model_name:self.pred_name})
-        DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite , indent = self.indent + 1 , vb_level = self.vb_level + 1 , reason = reason)
+        saved = DB.save(df , 'pred' , self.pred_name , date , overwrite = overwrite ,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 1 , reason = reason)
+        if saved and not self.is_short_test:
+            publish_saved(DB.path('pred' , self.pred_name , date))
 
     def load_pred(self , date : int , closest = False , **kwargs) -> pd.DataFrame:
         """load model pred"""
@@ -546,7 +550,10 @@ class PredictorPath(ModelPath , Base.BoundLogger):
     def save_fmp(self , df : pd.DataFrame , date : int , overwrite = False) -> None:
         """save model factor portfolios for a given date (multiple portfolios in one dataframe)"""
         path = PATH.fmp_port.joinpath(self.pred_name , f'{self.pred_name}.{date}.feather')
-        Save.df(df , path , overwrite = overwrite , prefix = f'Model FMP' , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        saved = Save.df(df , path , overwrite = overwrite , prefix = 'Model FMP' ,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 1)
+        if not self.is_short_test:
+            publish_saved(path , saved)
 
     def load_fmp(self , date : int , **kwargs) -> pd.DataFrame:
         """load model factor portfolios for a given date (multiple portfolios in one dataframe)"""

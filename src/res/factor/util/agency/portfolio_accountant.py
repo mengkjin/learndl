@@ -264,9 +264,11 @@ class PortfolioAccount:
                 'last_model_date' : self.max_model_date ,
                 'last_end_date' : self.max_end_date ,
             }
-            Save.dfs(
+            saved = Save.dfs(
                 account_dfs , path , async_save = async_save , meta = meta , 
                 prefix = 'Account' , indent = indent , vb_level = vb_level)
+            from src.automation.artifact_exchange.production import saved as publish_saved
+            publish_saved(path , saved)
         return self
 
     @classmethod

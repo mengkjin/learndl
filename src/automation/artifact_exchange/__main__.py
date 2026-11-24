@@ -39,6 +39,7 @@ def main(argv=None):
     rec.add_argument('--once', action='store_true', required=True)
     for name in ('retry', 'status', 'doctor'):
         commands.add_parser(name)
+    commands.add_parser('sync-production', help='Publish new versions of existing production files')
     m = commands.add_parser('migrate-results', help='Historical pre-0.7.4 report migration')
     m.add_argument('action', choices=['plan', 'apply', 'rollback'])
     s = commands.add_parser('service')
@@ -78,6 +79,9 @@ def main(argv=None):
             handler.close()
     elif args.command == 'retry':
         output = retry(config)
+    elif args.command == 'sync-production':
+        from .production import sync_current
+        output = sync_current(config)
     elif args.command == 'migrate-results':
         output = migration(args.action, config)
     elif args.command == 'service':

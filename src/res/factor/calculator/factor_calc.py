@@ -1109,56 +1109,27 @@ class SellsideFactor(AffiliateFactorCalculator):
     @classmethod
     def Loads(
         cls , dates : Base.intDates , normalize = False , closest = False,
-        fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' , *, max_age_months : int | None = None,
     ) -> pd.DataFrame:
-        """Load sellside values, carrying the last usable cross-section onto all-null days."""
+        """Load the newest usable cross-section on or before each requested date."""
         del normalize , fill_method
         dates = Dates(dates)
-        empty = pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         if dates.empty:
-            return empty
+            return pd.DataFrame(columns = ['secid' , 'date' , cls.factor_name])
         indexed = cls._valid_indexes()
         if not indexed:
             return super().Loads(dates , closest = closest)
-        from src.data.quality.valid_dates import asof_map , stamp_asof
-        remaining = np.unique(np.asarray(dates.dates , dtype = np.int64))
-        frames : list[pd.DataFrame] = []
-        for db , valid in indexed:
-            if len(remaining) == 0:
-                break
-            mapping = asof_map(remaining , valid)
-            if not mapping:
-                continue
-            src_dates = np.unique(np.fromiter(mapping.values() , dtype = np.int64 , count = len(mapping)))
-            loaded = cls.loads_from_db(**db , dates = src_dates , closest = False)
-            stamped = stamp_asof(loaded , mapping)
-            if stamped.empty:
-                continue
-            frames.append(stamped)
-            remaining = np.setdiff1d(remaining , stamped['date'].to_numpy(dtype = np.int64))
-        if not frames:
-            return empty
-        return pd.concat(frames).drop_duplicates(subset = ['secid' , 'date'] , keep = 'last').\
-            sort_values(['secid' , 'date']).reset_index(drop = True)
+        from src.data.quality.valid_dates import load_asof_cross_sections
+
+        def load(source : int , source_dates : np.ndarray) -> pd.DataFrame:
+            return cls.loads_from_db(**indexed[source][0] , dates = source_dates , closest = False)
+
+        return load_asof_cross_sections(dates.dates , [valid for _, valid in indexed] , load ,
+                                        cls.factor_name , max_age_months = max_age_months)
 
     def load_factor(self , date : int , closest = False) -> pd.DataFrame:
-        """Return the as-of cross-section using explicitly maintained validity stats."""
-        from src.data.quality.valid_dates import asof_map , load_valid_dates
-        indexed = False
-        for db in self.full_dbs():
-            valid = load_valid_dates(str(db['key']) , str(db['src']) , required = True)
-            if valid is None:
-                continue
-            indexed = True
-            src = asof_map(np.array([int(date)] , dtype = np.int64) , valid).get(int(date))
-            if src is None:
-                continue
-            df = self.load_from_db(**db , date = int(src) , closest = False)
-            if not df.empty:
-                return df
-        if not indexed:
-            return super().load_factor(date , closest = closest)
-        return pd.DataFrame(columns = ['secid' , self.factor_name])
+        """Return the same as-of cross-section as a one-day batch."""
+        return self.Loads(date , closest = closest).loc[:, ['secid' , self.factor_name]]
 
 class MarketEventFactor(MarketFactorCalculator):
     """Factor Calculator of meta_type: market , category0: market , category1: market_event"""
