@@ -5,6 +5,8 @@ alwaysApply: true
 
 # learndl — Project-specific rules
 
+For visualization reports, follow the single-file HTML convention in the repository root [AGENTS.md](../../AGENTS.md#可视化报告).
+
 ## Project overview
 Chinese A-share equity quantitative research system: data acquisition, factor research, NN/boost/GP model training, backtesting, and simulation trading.
 

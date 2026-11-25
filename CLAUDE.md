@@ -21,6 +21,8 @@ Full module documentation lives in `.context/`. See `.context/CLAUDE.md` for the
 When answering questions or writing code for this project, read the relevant doc in `.context/modules/` first.
 
 ## Key Rules
+For visualization reports, follow the single-file HTML convention in [AGENTS.md](AGENTS.md#可视化报告).
+
 1. **Never hardcode paths** — always use `PATH.xxx` from `src/proj/path.py`
 2. **Use the API layer** — import facades from `src.api.pkgs` (`DataAPI`, `FactorAPI`, `ModelAPI`, `TradingAPI`); don't reach into internals directly
 3. **Config-driven** — model architectures, factor params, portfolio specs all live in `configs/`; don't hardcode hyperparameters in code
