@@ -31,9 +31,10 @@ through the Watchdog Installer and verify it in `status` after installation.
 The original RCQuant missing-minute backfill is complete and
 `rcquant_sec_backfill` remains available for manual use. The server schedule
 `rcquant_sec_none` runs at 21:00 Asia/Shanghai and shares its execution lock.
-It resumes corporate-action downloads and migration of stock minutes dated
-2007-01-01 through 2026-11-24. Run `plan --diff`, `apply` and `status` from
-the deployed checkout to publish and verify the new timer.
+It prepares corporate actions and stock archives dated 2007-01-01 through
+2026-11-24 and rebuilds the minute DataBlocks after the archives are complete.
+Run `plan --diff`, `apply` and `status` from the deployed checkout
+to publish and verify the timer when adding it to an installation.
 
 From 2026-11-25, the server's `daily_update` archives the dated RQData stock
 universe and that day's `get_ex_factor` and `get_split` events before the
@@ -47,10 +48,26 @@ minute downloader share the dated RCQuant instrument cache.
 The migration stores progress in
 `data/Miscellaneous/Rcquant/.sec_none_migration/progress.sqlite`, daily
 factors in `data/Miscellaneous/exfactor` and recoverable original minutes in
-`Rcquant/secmin/.pre_backup`. Confirmed out-of-range native VWAP leaves the
-whole date pending review. Its evidence is in the migration's
-`vwap_failures` directory. Other dates continue. A quota interruption
-resumes on the next scheduled evening.
+`Rcquant/secmin/.pre_backup`. The evening task logs dates missing their raw
+`secmin/YYYYMMDD.feather` and attempts a native backfill. The backfilled archive
+is retained byte-for-byte when the six minute periods are built. It reports progress
+for completed and pending phases. The Polars repair checks that inverse split
+volumes round to whole shares, multiply back to the old four-decimal precision,
+and match Tushare daily volume. Stocks without a validated inverse use native
+minutes with matching stock-time keys. VWAP outliers are saved separately in
+`vwap_audit/YYYYMMDD.feather` and publication continues. Each successful date
+publishes `min`, `5min`, `10min`, `15min`, `30min` and `60min` with `num_trades`.
+
+The new repair uses checksum-verified source backups for dates written by the
+previous version. The log and `price_check` checkpoint compare `000001.XSHE`
+OHLC against Tushare and include the previous gate result when available.
+The archive format marker and file checksums govern the source used for repair.
+Interrupted publications resume from their staged files when
+using the same repair version. A quota interruption resumes on the next
+scheduled evening. Once all dates are published, the task rebuilds the `fit`
+and `predict` DataBlocks for `15m`, `15mraw`, `30m`, `30mcont` and `60m`. Each
+DataBlock has its own checkpoint and the fit processors refresh supported
+normalisation statistics.
 
 The old built-in `--config-dir runs/scheduling` resolves to this directory;
 custom config directories retain their original meaning. Old Python entrypoints

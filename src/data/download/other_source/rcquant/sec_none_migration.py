@@ -1,30 +1,33 @@
 """Resumable conversion of existing RCQuant stock bars to native price and volume."""
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import ExitStack, closing
 from datetime import date as calendar_date, datetime, timedelta
 from hashlib import file_digest, sha256
 from itertools import batched
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
 import sqlite3
+from uuid import uuid4
 
-import numpy as np
 import pandas as pd
+import polars as pl
 import portalocker
 import rqdatac
 
-from src.data.util import trade_min_reform
-from src.proj import CALENDAR, DB, Dates, Logger, MACHINE, PATH
+from src.proj import CALENDAR, DB, Dates, Logger, MACHINE, PATH, Save
 from src.proj.db.interface.db_path import DBPath
 
 from . import bar_min
 from .initializer import MinDataType, QuotaExceeded, RQInitializer
-from .migration_factors import (
-    EMPTY_EVENTS, PRICE, event_series, normalize_events, restore_stock_day, vwap_outside,
+from .migration_factors import normalize_events
+from .sec_history_polars import (
+    FactorHistory, ID, PRICE, QUOTE, STOCK_TIME, TOTALS, aggregate_bars, daily_reference,
+    daily_volume_mismatches, normalize_bars, restore_factors, vwap_audit,
 )
 from .storage import atomic_frame, date_lock
 
@@ -35,11 +38,13 @@ END = 20261124
 BEGIN_NONE = bar_min.SEC_NONE_START
 SEC = MinDataType.SEC
 KEYS = ['code', 'datetime']
-CHECK_COLUMNS = [*PRICE, 'volume', 'amount', 'num_trades']
 METHODS = ('get_ex_factor', 'get_split')
 BATCH_SIZE = 10
 DAILY_FACTOR_BATCH_SIZE = 1000
 MINUTE_BATCH_SIZE = 100
+REPAIR = 'polars_roundtrip_v2'
+MINUTE_DATABLOCKS = ('15m', '15mraw', '30m', '30mcont', '60m')
+PRICE_CHECK_ID = '000001.XSHE'
 
 
 class EveningEnded(Exception):
@@ -64,7 +69,9 @@ def sync_directory(path: Path) -> None:
 
 
 def write_frame(frame, path, *, empty_ok=False):
-    atomic_frame(frame.reset_index(drop=True), path, vb_level='never', empty_ok=empty_ok)
+    if isinstance(frame, pd.DataFrame):
+        frame = frame.reset_index(drop=True)
+    atomic_frame(frame, path, vb_level='never', empty_ok=empty_ok)
     sync_directory(path.parent)
 
 
@@ -98,28 +105,41 @@ def to_order_book_ids(codes: list[str], instruments: pd.DataFrame | None) -> dic
     return ids
 
 
-def valid_raw_day(frame: pd.DataFrame, date: int) -> None:
-    times = pd.to_datetime(frame['datetime'])
-    minute = times.dt.hour * 60 + times.dt.minute
-    session = minute.between(571, 690) | minute.between(781, 900)
-    if (frame.empty or frame[KEYS].isna().any().any() or frame.duplicated(KEYS).any()
-            or not times.dt.strftime('%Y%m%d').eq(str(date)).all()
-            or not times.eq(times.dt.floor('min')).all() or not session.all()):
+def valid_raw_day(frame: pl.DataFrame, date: int) -> None:
+    at = pl.col('datetime')
+    minute = at.dt.hour().cast(pl.Int64) * 60 + at.dt.minute()
+    session = minute.is_between(571, 690) | minute.is_between(781, 900)
+    session_date = pl.date(date // 10000, date // 100 % 100, date % 100)
+    keys_valid, codes_present, clock_matches = frame.select(
+        (at.is_not_null() & at.dt.date().eq(session_date) & at.eq(at.dt.truncate('1m'))
+         & session).all(),
+        pl.col('code').is_not_null().all(),
+        (at.dt.hour().cast(pl.Int64) * 100 + at.dt.minute())
+        .eq(pl.col('time').cast(pl.Int64, strict=False)).fill_null(False).all().alias('time_valid'),
+    ).row(0)
+    if not (len(frame) and keys_valid and codes_present and frame.select(KEYS).n_unique() == len(frame)):
         raise ValueError(f'{date}: invalid or duplicate RCQuant stock-minute keys')
-    if not times.dt.strftime('%H%M').eq(frame['time'].astype(str)).all():
+    if not clock_matches:
         raise ValueError(f'{date}: datetime and time disagree')
 
 
-def validate_values(frame: pd.DataFrame, date: int) -> None:
-    traded = frame['volume'].gt(0)
-    if (not np.isfinite(frame[CHECK_COLUMNS[-3:]]).all().all()
-            or frame[CHECK_COLUMNS[-3:]].lt(0).any().any()
-            or not np.isfinite(frame.loc[traded, PRICE]).all().all()
-            or not np.isclose(frame['volume'], np.rint(frame['volume']), rtol=0, atol=1e-5).all()
-            or not np.isclose(frame['num_trades'], np.rint(frame['num_trades']), rtol=0, atol=1e-5).all()
-            or frame.loc[traded, PRICE].le(0).any().any()
-            or frame.loc[traded, 'low'].gt(frame.loc[traded, ['open', 'close']].min(axis=1)).any()
-            or frame.loc[traded, 'high'].lt(frame.loc[traded, ['open', 'close']].max(axis=1)).any()):
+def valid_quote() -> pl.Expr:
+    valid_prices = (
+        pl.all_horizontal(pl.col(PRICE).is_finite() & pl.col(PRICE).gt(0))
+        & (pl.col('low') <= pl.min_horizontal('open', 'close'))
+        & (pl.col('high') >= pl.max_horizontal('open', 'close'))
+    )
+    total = pl.col(TOTALS)
+    counts = pl.col('num_trades', 'volume')
+    return (
+        pl.all_horizontal(total.is_finite() & total.ge(0))
+        & pl.all_horizontal((counts - counts.round(0)).abs().le(1e-5))
+        & (pl.col('volume').eq(0) | valid_prices)
+    ).fill_null(False)
+
+
+def validate_values(frame: pl.DataFrame, date: int) -> None:
+    if not frame.select(valid_quote().all()).item():
         raise ValueError(f'{date}: invalid unadjusted quote, share or trade-count values')
 
 
@@ -132,7 +152,6 @@ class Migration:
         self.started_at = started_at
         self.db.execute('CREATE TABLE IF NOT EXISTS checkpoints (stage TEXT, item TEXT, value TEXT,'
                         ' PRIMARY KEY (stage, item))')
-        self.updater = bar_min.RcquantMinBarDownloader()
 
     def read(self, stage: str, item: int | str):
         row = self.db.execute('SELECT value FROM checkpoints WHERE stage=? AND item=?',
@@ -144,11 +163,14 @@ class Migration:
             self.db.execute('INSERT OR REPLACE INTO checkpoints VALUES (?,?,?)',
                             (stage, str(item), json.dumps(value)))
 
-    def require_record(self, stage: str, date: int) -> dict:
-        record = self.read(stage, date)
+    def require_record(self, stage: str, item: int | str) -> dict:
+        record = self.read(stage, item)
         if not isinstance(record, dict):
-            raise RuntimeError(f'{date}: missing or invalid {stage} checkpoint')
+            raise RuntimeError(f'{item}: missing or invalid {stage} checkpoint')
         return record
+
+    def repair_stage(self, stage: str) -> str:
+        return f'{REPAIR}_{stage}'
 
     def guard(self):
         if self.started_at is not None and bar_min._backfill_deadline_hit(self.started_at):
@@ -163,6 +185,16 @@ class Migration:
     def minute_path(self, date: int) -> Path:
         return self.root / 'secmin' / f'{date}.feather'
 
+    def backup_path(self, date: int) -> Path:
+        raw = self.minute_path(date)
+        return raw.parent / '.pre_backup' / raw.name
+
+    def original_path(self, date: int, *, previously_written: bool) -> Path:
+        path = self.backup_path(date) if previously_written else self.minute_path(date)
+        if not file_matches(path, self.require_record('scan', date)['raw']):
+            raise ValueError(f'{date}: original RCQuant minutes unavailable or changed: {path}')
+        return path
+
     def scan(self, expected: list[int]) -> dict:
         previous = self.read('manifest', 'history')
         if not expected:
@@ -170,7 +202,7 @@ class Migration:
         dates, missing, codes, early = [], [], set(), set()
         errors = {}
         if previous is not None:
-            dates = previous['dates']
+            dates = [date for date in previous['dates'] if self.minute_path(date).is_file()]
             codes.update(previous['ids'])
             early.update(previous['early'])
             expected = sorted(set(expected).difference(dates) | set(previous['missing'])
@@ -187,11 +219,11 @@ class Migration:
                 source = self.read('scan', date)
                 if source is None:
                     with date_lock(self.root, SEC, date):
-                        raw_codes = pd.read_feather(raw, columns=['code'])['code']
-                        if raw_codes.isna().any() or raw_codes.empty:
+                        raw_codes = pl.read_ipc(raw, columns=['code'], memory_map=False)['code']
+                        if raw_codes.null_count() or raw_codes.is_empty():
                             raise ValueError('empty raw archive or missing stock code')
                         instruments = bar_min.load_list(date, SEC)
-                        mapping = to_order_book_ids(sorted(raw_codes.unique()), instruments)
+                        mapping = to_order_book_ids(raw_codes.unique().sort().to_list(), instruments)
                         # The pre-2007 event history is only relevant to stocks
                         # that could already have had an action at the start.
                         listed = {}
@@ -203,7 +235,7 @@ class Migration:
                                             if str(listed.get(code, '0000-00-00')) < '2007-01-01'),
                         }
                         self.mark('scan', date, source)
-            except ValueError as exc:
+            except (ValueError, pl.exceptions.PolarsError) as exc:
                 errors[date] = str(exc)
                 continue
             dates.append(date)
@@ -244,18 +276,26 @@ class Migration:
         for method in METHODS:
             path = self.state / 'events' / f'{method}-merged-{key}.feather'
             if path.is_file():
-                events[method] = event_series(method, pd.read_feather(path))
+                events[method] = pl.read_ipc(path, memory_map=False)
+                Logger.stdout(f'RCQuant [3/7] {method}: already consolidated, {len(events[method])} rows')
                 continue
-            frames = [self.factor_batch(method, ids, START, END)
-                      for ids in manifest['ids_batches']]
-            frames.extend(self.factor_batch(method, ids, None, 20061231)
-                          for ids in manifest['early_batches'])
-            frames = [part for part in frames if not part.empty]
-            frame = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=['order_book_id'])
-            events[method] = event_series(method, frame)
-            if frames:
-                write_frame(frame, path)
-        return events
+            Logger.stdout(f'RCQuant [3/7] {method}: collecting or reusing '
+                          f'{len(manifest["ids_batches"]) + len(manifest["early_batches"])} batches')
+            batches = [
+                *((ids, START, END) for ids in manifest['ids_batches']),
+                *((ids, None, 20061231) for ids in manifest['early_batches']),
+            ]
+            frames = []
+            for index, (ids, start, end) in enumerate(batches, 1):
+                frames.append(self.factor_batch(method, ids, start, end))
+                if index % 50 == 0 or index == len(batches):
+                    Logger.stdout(f'RCQuant [3/7] {method}: {index}/{len(batches)} batches ready')
+            parts = [pl.from_pandas(part) for part in frames if not part.empty]
+            frame = pl.concat(parts, how='diagonal_relaxed') if parts else pl.DataFrame()
+            events[method] = frame
+            write_frame(frame if parts else pl.DataFrame(schema={ID: pl.String}), path, empty_ok=True)
+            Logger.stdout(f'RCQuant [3/7] {method}: consolidated {len(frame)} rows')
+        return FactorHistory.from_events(events['get_ex_factor'], events['get_split'])
 
     def collect_daily_actions(self, date: int) -> bool:
         """Freeze the day's provider universe and archive both event responses."""
@@ -312,16 +352,16 @@ class Migration:
         path = self.factor_dir / f'{date}.feather'
         digest = self.read('factors', date)
         if digest and path.is_file():
-            return
-        codes = list(mapping)
-        ids = list(mapping.values())
-        frame = pd.DataFrame({
-            'date': date, 'order_book_id': ids, 'secid': DB.code2secid(pd.Series(codes)),
-            'ex_cum_factor': [events['get_ex_factor'].get(code, EMPTY_EVENTS).on(date) for code in ids],
-            'split_cum_factor': [events['get_split'].get(code, EMPTY_EVENTS).on(date) for code in ids],
-        })
-        write_frame(frame, path)
+            return False
+        write_frame(events.daily(date, self.stock_mapping(mapping)), path)
         self.mark('factors', date, fingerprint(path))
+        return True
+
+    @staticmethod
+    def stock_mapping(mapping: dict[str, str]) -> pl.DataFrame:
+        codes = list(mapping)
+        return pl.DataFrame({'code': codes, ID: list(mapping.values()),
+                             'secid': DB.code2secid(pd.Series(codes)).to_list()})
 
     def direct_none(self, date: int, ids: list[str]) -> pd.DataFrame:
         self.guard()
@@ -337,144 +377,248 @@ class Migration:
             raise ValueError(f'{date}: unexpected IDs in none response')
         return frame
 
-    def prepare_raw(self, date, raw, mapping, events):
-        restored = raw.copy()
-        if bar_min.is_none_min(raw):
-            return restored, {}, []
-        daily = DB.load('trade_ts', 'day', date, vb_level='never')
-        if not daily.empty:
-            daily = daily.set_index('secid')
-            if not daily.index.is_unique:
-                raise ValueError(f'{date}: duplicate secid in daily price reference')
-        reference = {} if daily.empty else daily[[*PRICE, 'volume']].T.to_dict('list')
-        secid = dict(zip(mapping, DB.code2secid(pd.Series(list(mapping)))))
-        needs_none = {}
-        counts = {'price_and_original_volume': 0, 'price_and_split_volume': 0,
-                  'direct_none': 0, 'revised_amount_or_trades': 0}
+    def backfill_missing_raw(self, dates: list[int]) -> list[int]:
+        """Backfill missing source days before rebuilding their minute tables."""
+        filled = []
+        for date in reversed(dates):
+            self.guard()
+            with date_lock(self.root, SEC, date):
+                path = self.minute_path(date)
+                if path.is_file():
+                    filled.append(date)
+                    continue
+                if self.read('scan', date) is not None or self.backup_path(date).exists():
+                    Logger.warning(f'RCQuant {date}: scanned raw source disappeared; original recovery required')
+                    continue
+                Logger.stdout(f'RCQuant {date}: attempting missing secmin source backfill (none)')
+                try:
+                    instruments = bar_min.rcquant_instrument_list(date, SEC, raise_on_quota=True)
+                    if instruments.empty:
+                        raise ValueError('empty stock universe')
+                    instruments = instruments.loc[instruments['is_active']]
+                    ids = sorted(instruments['code'].unique())
+                    if not ids:
+                        raise ValueError('no active stocks')
+                    native = self.direct_none(date, ids)
+                    bar_min.check_sec_backfill_quality(
+                        native.rename(columns={'order_book_id': 'code'}), instruments, date,
+                    )
+                    absent = set(ids) - set(native['order_book_id'])
+                    if absent:
+                        raise ValueError(f'none response omitted {len(absent)} requested stocks')
+                    frame = pl.from_pandas(
+                        bar_min.provider_min_frame(native.set_index([ID, 'datetime']), SEC),
+                        nan_to_null=False,
+                    ).with_columns(pl.col(QUOTE).cast(pl.Float64))
+                    valid_raw_day(frame, date)
+                    validate_values(frame, date)
+                    write_frame(frame.with_columns(pl.lit('none').alias(bar_min.ADJUST_COLUMN)), path)
+                    self.mark('raw_backfill', date, fingerprint(path))
+                except ValueError as exc:
+                    Logger.warning(f'RCQuant {date}: raw secmin still missing: {exc}')
+                    continue
+                filled.append(date)
+                Logger.stdout(f'RCQuant {date}: raw secmin backfilled for {frame["code"].n_unique()} stocks')
+        return filled
 
-        restored[[*PRICE, 'volume']] = restored[[*PRICE, 'volume']].astype(float)
-        groups = raw.groupby('code', sort=False).indices
-        for code, indexes in groups.items():
-            provider = mapping[code]
-            values = reference.get(secid[code])
-            if values is None:
-                needs_none[provider] = indexes
-                continue
-            ref = np.asarray(values, dtype=float)
-            ref[-1] *= 1000  # Tushare day stores thousands of shares.
-            part = raw.iloc[indexes]
-            recovered = restore_stock_day(
-                part[PRICE].to_numpy(float), part['volume'].to_numpy(float), ref, date,
-                events['get_ex_factor'].get(provider, EMPTY_EVENTS),
-                events['get_split'].get(provider, EMPTY_EVENTS),
+    def repair_cohorts(self, dates: list[int]) -> tuple[list[int], list[int]]:
+        """Find unchanged source days and dates touched by previous publication."""
+        completed = {int(row[0]) for row in self.db.execute("SELECT item FROM checkpoints WHERE stage='done'")}
+        published = {int(row[0].split('/', 1)[0]) for row in self.db.execute(
+            "SELECT item FROM checkpoints WHERE stage='published'"
+        )}
+        untouched, previously_written = [], []
+        for date in dates:
+            # A kill can land after raw replacement but before its receipt.
+            # The original hard link is created before the first replacement.
+            backup = self.backup_path(date)
+            if (date in completed or date in published or (
+                backup.is_file() and not file_matches(self.minute_path(date), self.require_record('scan', date)['raw'])
+            )):
+                previously_written.append(date)
+            else:
+                untouched.append(date)
+        return untouched, previously_written
+
+    def log_price_check(self, date: int, raw: pl.DataFrame, stocks: pl.DataFrame, refs: pl.DataFrame,
+                        *, from_backup: bool) -> None:
+        codes = stocks.filter(pl.col(ID) == PRICE_CHECK_ID)['code'].to_list()
+        if not codes:
+            return
+        reference = refs.filter(pl.col(ID) == PRICE_CHECK_ID).select(f'{name}_day' for name in PRICE)
+        expected = reference.row(0) if not reference.is_empty() else None
+
+        def ohlc(bars: pl.DataFrame):
+            if bars.is_empty():
+                return None
+            return bars.select(pl.col('open').first(), pl.col('high').max(),
+                               pl.col('low').min(), pl.col('close').last()).row(0)
+
+        def matches_reference(observed):
+            if observed is None or expected is None or None in (*observed, *expected):
+                return None
+            return all(math.isclose(actual, target, rel_tol=0., abs_tol=1e-5)
+                       for actual, target in zip(observed, expected))
+
+        input_ohlc = ohlc(raw.filter(pl.col('code').is_in(codes)))
+        record = {'source': 'backup' if from_backup else 'archive', 'input_ohlc': input_ohlc,
+                  'tushare_ohlc': expected, 'input_matches_tushare': matches_reference(input_ohlc),
+                  'previous_block': self.read('blocked', date)}
+        if from_backup and self.minute_path(date).is_file():
+            try:
+                current = (pl.scan_ipc(self.minute_path(date), memory_map=False)
+                           .filter(pl.col('code').is_in(codes)).sort('datetime').select(PRICE).collect())
+                record['archive_ohlc'] = ohlc(current)
+                record['archive_matches_tushare'] = matches_reference(record['archive_ohlc'])
+            except (OSError, pl.exceptions.PolarsError) as exc:
+                record['archive_read_error'] = str(exc)
+        self.mark(self.repair_stage('price_check'), date, record)
+        Logger.stdout(f'RCQuant {date} {PRICE_CHECK_ID} OHLC check: {record}')
+
+    def prepare_raw(self, date: int, raw: pl.DataFrame, stocks: pl.DataFrame, refs: pl.DataFrame,
+                    events: FactorHistory):
+        raw_columns = raw.columns
+        raw = raw.join(stocks.select('code', ID), on='code', validate='m:1', maintain_order='left')
+        if raw[ID].null_count():
+            raise ValueError(f'{date}: unmapped raw codes')
+
+        def audit_native_volume(native: pl.DataFrame) -> int:
+            # Native bars are the minute source of record; log vendor disagreement.
+            ids = daily_volume_mismatches(native, refs)
+            if ids:
+                Logger.warning(f'RCQuant {date}: native minute volume differs from Tushare for {ids}')
+            return len(ids)
+
+        if bar_min.ADJUST_COLUMN in raw:
+            native = raw[bar_min.ADJUST_COLUMN].eq('none').fill_null(False)
+            if native.all():
+                return raw.select(raw_columns), {'source_none': stocks.height,
+                                                 'direct_none_daily_volume_mismatch': audit_native_volume(raw)}, []
+            if native.any():
+                raise ValueError(f'{date}: archive mixes native and unverified adjustment states')
+        restored, split_count = restore_factors(raw, refs, events, date, stocks)
+        factor_count = restored[ID].n_unique()
+        missing = set(stocks[ID].to_list()).difference(restored[ID].unique().to_list())
+        counts = {'price_and_original_volume': factor_count - split_count,
+                  'price_and_split_volume': split_count, 'direct_none': 0,
+                  'revised_amount_or_trades': 0, 'direct_none_daily_volume_mismatch': 0}
+        records = [restored]
+        directory = self.state / 'none' / str(date)
+        expected = raw.select(*STOCK_TIME, 'amount', 'num_trades')
+
+        def reconcile(direct: pl.DataFrame) -> pl.DataFrame:
+            direct = direct.filter(pl.col(ID).is_in(sorted(missing))).select(
+                ID, pl.col('datetime').cast(raw.schema['datetime']), pl.col(QUOTE).cast(pl.Float64),
             )
-            if recovered is None:
-                needs_none[provider] = indexes
-                continue
-            prices, volume, scaled = recovered
-            candidate = part.assign(**dict(zip(PRICE, prices.T)), volume=volume)
-            if vwap_outside(candidate).any():
-                needs_none[provider] = indexes
-                continue
-            restored.loc[indexes, PRICE] = prices
-            restored.loc[indexes, 'volume'] = volume
-            counts['price_and_split_volume' if scaled else 'price_and_original_volume'] += 1
-
-        missing = set(needs_none)
-
-        def apply_direct(direct):
-            verified = []
-            for provider, part in direct.groupby('order_book_id', sort=False):
-                if provider not in missing or part['datetime'].duplicated().any():
-                    continue
-                indexes = needs_none[provider]
-                legacy = raw.iloc[indexes]
-                native = part.set_index('datetime')
-                if not legacy['datetime'].isin(native.index).all() or len(native) != len(legacy):
-                    continue
-                native = native.loc[legacy['datetime'], CHECK_COLUMNS].reset_index()
-                outside = vwap_outside(native)
-                if outside.any():
-                    audit = native.loc[outside].assign(order_book_id=provider)
-                    audit['vwap'] = audit['amount'] / audit['volume']
-                    write_frame(audit, self.state / 'vwap_failures' / f'{date}.feather')
-                    raise ValueError(f'{date}: {provider} has {outside.sum()} VWAP violations in direct none data')
-                changes = ~np.isclose(native[['amount', 'num_trades']].to_numpy(),
-                                      legacy[['amount', 'num_trades']].to_numpy(), rtol=0, atol=1e-8)
-                counts['revised_amount_or_trades'] += int(changes.any(axis=1).sum())
-                restored.loc[indexes, CHECK_COLUMNS] = native[CHECK_COLUMNS].to_numpy()
-                counts['direct_none'] += 1
-                missing.remove(provider)
-                verified.append(part)
-            return verified
+            coverage = direct.group_by(ID).agg(
+                pl.len().alias('returned'), pl.col('datetime').n_unique().alias('unique_returned'),
+                valid_quote().all().alias('valid_quotes'),
+            )
+            intersect = direct.join(expected, on=STOCK_TIME, suffix='_legacy')
+            verified = (
+                expected.filter(pl.col(ID).is_in(sorted(missing))).group_by(ID).len(name='expected')
+                .join(coverage, on=ID).join(intersect.group_by(ID).len(name='matched'), on=ID)
+                .filter((pl.col('expected') == pl.col('matched')) & (pl.col('returned') == pl.col('matched'))
+                        & (pl.col('returned') == pl.col('unique_returned')) & pl.col('valid_quotes'))
+                .select(ID)
+            )
+            confirmed = intersect.join(verified, on=ID)
+            counts['revised_amount_or_trades'] += confirmed.filter(pl.any_horizontal([
+                (pl.col(name) - pl.col(f'{name}_legacy')).abs().gt(1e-8) for name in ['amount', 'num_trades']
+            ])).height
+            counts['direct_none_daily_volume_mismatch'] += audit_native_volume(confirmed)
+            missing.difference_update(verified[ID].to_list())
+            counts['direct_none'] += verified.height
+            return confirmed.select(*STOCK_TIME, *QUOTE)
 
         if missing:
-            directory = self.state / 'none' / str(date)
             for path in sorted(directory.glob('*.feather')):
-                apply_direct(pd.read_feather(path))
+                if not missing:
+                    break
+                records.append(reconcile(pl.read_ipc(path, memory_map=False)))
             for batch in batched(sorted(missing), MINUTE_BATCH_SIZE):
                 direct = self.direct_none(date, list(batch))
-                verified = [] if direct.empty else apply_direct(direct)
-                if verified:
+                if direct.empty:
+                    continue
+                verified = reconcile(pl.from_pandas(direct, nan_to_null=False))
+                if not verified.is_empty():
                     key = sha256(','.join(batch).encode()).hexdigest()
-                    write_frame(pd.concat(verified, ignore_index=True), directory / f'{key}.feather')
-        restored[bar_min.ADJUST_COLUMN] = 'none'
-        return restored, counts, sorted(missing)
+                    write_frame(verified, directory / f'{key}.feather')
+                    records.append(verified)
 
-    def stage(self, date, restored, counts):
+        combined = pl.concat(records, how='vertical_relaxed')
+        rebuilt = (
+            raw.drop(QUOTE).join(combined, on=STOCK_TIME, validate='1:1', maintain_order='left')
+            .with_columns(pl.lit('none').alias(bar_min.ADJUST_COLUMN))
+            .select(list(dict.fromkeys([*raw_columns, bar_min.ADJUST_COLUMN])))
+        )
+        return rebuilt, counts, sorted(missing)
+
+    def stage(self, date, restored: pl.DataFrame, counts, *, preserve_raw: bool = False):
         valid_raw_day(restored, date)
         validate_values(restored, date)
-        outside = vwap_outside(restored)
-        if outside.any():
-            audit = restored.loc[outside, [*KEYS, *CHECK_COLUMNS]].copy()
-            audit['vwap'] = audit['amount'] / audit['volume']
-            write_frame(audit, self.state / 'vwap_failures' / f'{date}.feather')
-            raise ValueError(f'{date}: {outside.sum()} native one-minute VWAP violations')
-        minute = self.updater.rcquant_min_to_normal_min(restored, SEC)
-        if minute.duplicated(['secid', 'minute']).any():
-            raise ValueError(f'{date}: overlapping normalized stock-minute keys')
+        stocks = self.stock_mapping(self.require_record('scan', date)['mapping'])
+        minute = normalize_bars(restored, stocks)
+        if (minute['secid'].null_count() or minute.select('secid', 'minute').n_unique() != len(minute)):
+            raise ValueError(f'{date}: invalid or overlapping normalized stock-minute keys')
         if minute['minute'].max() != 239:
             raise ValueError(f'{date}: normalized stock bars are missing the last session minute')
-        outputs = [(self.minute_path(date), restored)]
+        outputs = [] if preserve_raw else [(self.minute_path(date), restored)]
+        reference = minute.select(pl.col(TOTALS).sum()).row(0)
+        evidence = []
+        counts = counts.copy()
+        counts['vwap_audit_1min'] = 0
+        counts['vwap_audit_xmin'] = 0
         for period in bar_min.SEC_PERIODS:
-            frame = minute if period == 1 else trade_min_reform(minute.copy(), period)
-            if frame.empty or vwap_outside(frame).any():
-                raise ValueError(f'{date}: invalid {period}-minute VWAP')
-            if period != 1 and not np.allclose(frame[['volume', 'amount', 'num_trades']].sum(),
-                                              minute[['volume', 'amount', 'num_trades']].sum(),
-                                              rtol=1e-12, atol=1e-6):
+            frame = minute if period == 1 else aggregate_bars(minute, period)
+            if any(not math.isclose(actual, base, rel_tol=1e-12, abs_tol=1e-6)
+                   for actual, base in zip(frame.select(pl.col(TOTALS).sum()).row(0), reference)):
                 raise ValueError(f'{date}: inconsistent {period}-minute totals')
+            audit = vwap_audit(frame, period)
+            if not audit.is_empty():
+                evidence.append(audit)
+                counts['vwap_audit_1min' if period == 1 else 'vwap_audit_xmin'] += audit.height
             outputs.append((DBPath('trade_ts', bar_min.src_key(SEC, period)).path_exact(date), frame))
+        audit_path = self.state / 'vwap_audit' / f'{date}.feather'
+        if evidence or audit_path.exists():
+            write_frame(pl.concat(evidence) if evidence else audit, audit_path, empty_ok=True)
+            Logger.stdout(f'RCQuant {date}: recorded {counts["vwap_audit_1min"]} one-minute and '
+                          f'{counts["vwap_audit_xmin"]} aggregated VWAP exceptions at {audit_path}')
 
         prepared = []
         required = {}
         for target, frame in outputs:
             target.parent.mkdir(parents=True, exist_ok=True)
             device = target.parent.stat().st_dev
-            size = target.stat().st_size if target.exists() else frame.memory_usage(deep=False).sum()
+            size = target.stat().st_size if target.exists() else frame.estimated_size()
             required[device] = (target.parent, required.get(device, (None, 0))[1] + int(size))
         for directory, size in required.values():
             if shutil.disk_usage(directory).free < size:
                 raise OSError(f'{date}: insufficient space to stage RCQuant bars on {directory}')
         for target, frame in outputs:
-            pending = target.parent / '.rcquant_none_stage' / target.name
+            pending = target.parent / f'.{REPAIR}_stage' / target.name
             write_frame(frame, pending)
             prepared.append({'target': str(target), 'staged': str(pending), 'digest': fingerprint(pending)})
-        self.mark('prepared', date, {'outputs': prepared, 'counts': counts})
+        self.mark(self.repair_stage('prepared'), date,
+                  {'outputs': prepared, 'counts': counts, 'preserve_raw': preserve_raw})
 
     def publish(self, date: int, prepared: dict):
         raw = self.minute_path(date)
-        backup = raw.parent / '.pre_backup' / raw.name
-        backup.parent.mkdir(exist_ok=True)
-        if not backup.exists():
-            expected = self.require_record('scan', date)['raw']
+        expected = self.require_record('scan', date)['raw']
+        if prepared.get('preserve_raw'):
             if not file_matches(raw, expected):
-                raise RuntimeError(f'{date}: original minute changed since inventory')
-            os.link(raw, backup)
-            sync_directory(backup.parent)
-            sync_directory(backup.parent.parent)
-        if not file_matches(backup, self.require_record('scan', date)['raw']):
-            raise RuntimeError(f'{date}: invalid pre-migration backup')
+                raise RuntimeError(f'{date}: native minute archive changed since inventory')
+        else:
+            backup = self.backup_path(date)
+            backup.parent.mkdir(exist_ok=True)
+            if not backup.exists():
+                if not file_matches(raw, expected):
+                    raise RuntimeError(f'{date}: original minute changed since inventory')
+                os.link(raw, backup)
+                sync_directory(backup.parent)
+                sync_directory(backup.parent.parent)
+            if not file_matches(backup, expected):
+                raise RuntimeError(f'{date}: invalid pre-migration backup')
 
         for item in prepared['outputs']:
             target, pending = Path(item['target']), Path(item['staged'])
@@ -487,78 +631,174 @@ class Migration:
                 sync_directory(pending.parent)
             elif not file_matches(target, digest):
                 raise RuntimeError(f'{date}: cannot reconcile interrupted publication: {target}')
-            self.mark('published', str(date) + '/' + target.name, digest)
+            self.mark(self.repair_stage('published'), str(date) + '/' + target.name, digest)
         for period in bar_min.SEC_PERIODS:
             DBPath('trade_ts', bar_min.src_key(SEC, period)).clear_date_cache()
-        self.mark('done', date, prepared['counts'])
-        Logger.stdout(f"RCQuant {date}: published unadjusted raw and six periods, {prepared['counts']}")
+        self.mark(self.repair_stage('done'), date, prepared['counts'])
+        outcome = ('kept native raw and published six periods' if prepared.get('preserve_raw')
+                   else 'published unadjusted raw and six periods')
+        Logger.stdout(f"RCQuant {date}: {outcome}, {prepared['counts']}")
 
-    def migrate_date(self, date: int, events):
-        if self.read('done', date) is not None or self.read('blocked', date) is not None:
-            return
-        raw_path = self.minute_path(date)
+    def migrate_date(self, date: int, events: FactorHistory, *, previously_written: bool = False) -> bool:
+        if self.read(self.repair_stage('done'), date) is not None:
+            return True
         with date_lock(self.root, SEC, date):
-            prepared = self.read('prepared', date)
+            prepared = self.read(self.repair_stage('prepared'), date)
             if prepared is None:
                 source = self.require_record('scan', date)
-                if not file_matches(raw_path, source['raw']):
-                    raise RuntimeError(f'{date}: raw minute changed since inventory')
-                raw = pd.read_feather(raw_path).sort_values(KEYS).reset_index(drop=True)
                 try:
+                    raw_path = self.original_path(date, previously_written=previously_written)
+                    Logger.stdout(f'RCQuant [5/7] {date}: restoring from '
+                                  f'{"original backup" if previously_written else "raw archive"}')
+                    raw = pl.read_ipc(raw_path, memory_map=False).sort(KEYS).with_columns(pl.col(QUOTE).cast(pl.Float64))
                     valid_raw_day(raw, date)
-                    restored, counts, missing = self.prepare_raw(date, raw, source['mapping'], events)
+                    stocks = self.stock_mapping(source['mapping'])
+                    refs = daily_reference(stocks, DB.load_pl('trade_ts', 'day', date, vb_level='never'))
+                    self.log_price_check(date, raw, stocks, refs, from_backup=previously_written)
+                    restored, counts, missing = self.prepare_raw(date, raw, stocks, refs, events)
+                    self.mark(self.repair_stage('pending_none'), date, missing)
                     if missing:
-                        self.mark('pending_none', date, missing)
-                        return
-                    self.stage(date, restored, counts)
-                except ValueError as exc:
-                    self.mark('blocked', date, str(exc))
-                    Logger.warning(f'RCQuant migration pending review: {exc}')
-                    return
-                prepared = self.require_record('prepared', date)
+                        Logger.warning(f'RCQuant {date}: {len(missing)} stocks still need matching native minute keys')
+                        return False
+                    self.stage(date, restored, counts,
+                               preserve_raw=not previously_written and 'source_none' in counts)
+                except (ValueError, pl.exceptions.PolarsError) as exc:
+                    self.mark(self.repair_stage('blocked'), date, str(exc))
+                    Logger.warning(f'RCQuant {date}: repair pending review: {exc}')
+                    return False
+                prepared = self.require_record(self.repair_stage('prepared'), date)
+            else:
+                Logger.stdout(f'RCQuant {date}: resuming staged {REPAIR} publication')
             self.publish(date, prepared)
+            return True
+
+    @staticmethod
+    def rebuild_minute_block(frame: str, key: str) -> dict:
+        from src.data.preprocess.processors import PrePros
+        from src.data.util import DataBlock
+        from src.proj.db.io.mmap import ArrayMemoryMap
+
+        processor = PrePros.get_processor(key, frame, vb_level=1)
+        if frame == 'fit':
+            processor.DateChunkYears = 1
+        canonical = DataBlock.path_preprocess(key, frame, find_if_not_exists=False)
+        interrupted = canonical.with_name(f'{canonical.name}.old')
+        if interrupted.is_dir() and not canonical.exists():
+            interrupted.rename(canonical)
+        original = DataBlock.path_preprocess(key, frame)
+        block = processor.load_with_extension(reconstruct=True)
+        if block.empty or block.last_meaningful_date < block.date[0]:
+            raise ValueError(f'RCQuant {frame}/{key}: empty minute DataBlock')
+
+        if original.exists():
+            backup = canonical.parent / f'.{REPAIR}_backup' / original.name
+            if not backup.exists():
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                if original.is_dir():
+                    staged = backup.with_name(f'.{backup.name}-{uuid4().hex}')
+                    shutil.copytree(original, staged, copy_function=os.link)
+                    staged.rename(backup)
+                else:
+                    os.link(original, backup)
+                sync_directory(backup.parent)
+        Save.mmap(block.values, canonical, index={'date': block.date, 'secid': block.secid,
+                                                 'feature': block.feature})
+        sync_directory(canonical.parent)
+        index = ArrayMemoryMap.load(canonical, values=False, index=True)['index']
+        if any(index[name].tolist() != getattr(block, name).tolist() for name in ('date', 'secid', 'feature')):
+            raise ValueError(f'RCQuant {frame}/{key}: DataBlock index differs after publishing')
+        processor.save_norm(block)
+        return {'path': str(canonical), 'dates': len(block.date), 'last': int(block.date[-1])}
+
+    def rebuild_datablocks(self, dates: list[int]) -> None:
+        from src.proj.util.script.script_lock import ScriptLockMultiple
+
+        version = sha256(','.join(map(str, dates)).encode()).hexdigest()
+        stage = self.repair_stage('datablocks')
+        remaining = []
+        for frame in ('fit', 'predict'):
+            for key in MINUTE_DATABLOCKS:
+                item = f'{version}/{frame}/{key}'
+                record = self.read(stage, item)
+                if isinstance(record, dict) and Path(record['path']).is_dir():
+                    Logger.stdout(f'RCQuant [7/7] {frame}/{key}: already rebuilt, {record["dates"]} dates')
+                else:
+                    remaining.append((frame, key, item))
+        if not remaining:
+            self.mark(self.repair_stage('complete'), 'history', {'dates': len(dates), 'datablocks': version})
+            return
+
+        Logger.stdout(f'RCQuant [7/7] Rebuilding {len(remaining)} minute DataBlocks')
+        with ExitStack() as locks:
+            try:
+                # The daily prediction and weekly fit builders write the same
+                # cache paths. Defer before computing if either job is active.
+                for group in ('daily_update', 'weekly_update'):
+                    locks.enter_context(ScriptLockMultiple(group, timeout=1, wait_time=2))
+            except (BlockingIOError, TimeoutError):
+                Logger.stdout('RCQuant [7/7] DataBlocks deferred while daily or weekly update is active')
+                return
+            for frame, key, item in remaining:
+                self.guard()
+                Logger.stdout(f'RCQuant [7/7] Rebuilding {frame}/{key}')
+                record = self.rebuild_minute_block(frame, key)
+                self.mark(stage, item, record)
+                Logger.stdout(f'RCQuant [7/7] {frame}/{key}: saved {record["dates"]} dates through {record["last"]}')
+        self.mark(self.repair_stage('complete'), 'history', {'dates': len(dates), 'datablocks': version})
+        Logger.stdout('RCQuant [7/7] Historical minute repair and DataBlocks complete')
 
     def run(self):
-        outstanding = self.db.execute(
-            "SELECT item FROM checkpoints WHERE stage='prepared' EXCEPT "
-            "SELECT item FROM checkpoints WHERE stage='done'"
-        ).fetchall()
-        for (date,) in outstanding:
-            self.guard()
-            self.migrate_date(int(date), None)
+        expected = list(map(int, Dates(START, END)))
+        Logger.stdout('RCQuant [1/7] Checking historical inventory and saved stock IDs')
+        manifest = self.scan(expected)
+        Logger.stdout(f"RCQuant [1/7] Inventory ready: {len(manifest['dates'])} archived dates, "
+                      f"{len(manifest['ids'])} stocks, {len(manifest['mapping_errors'])} mapping errors")
+        if manifest['mapping_errors']:
+            Logger.warning(f"RCQuant unmapped source dates: {manifest['mapping_errors']}")
+        if manifest['missing']:
+            Logger.warning(f"RCQuant [2/7] Missing raw secmin dates: {manifest['missing']}")
+            filled = self.backfill_missing_raw(manifest['missing'])
+            if filled:
+                Logger.stdout(f'RCQuant [2/7] Raw secmin now present for dates: {sorted(filled)}')
+                manifest = self.scan(expected)
+            Logger.stdout(f"RCQuant [2/7] Raw secmin dates still missing: {manifest['missing']}")
+        else:
+            Logger.stdout('RCQuant [2/7] Raw secmin coverage complete')
 
-        manifest = self.scan(list(map(int, Dates(START, END))))
-        completed = self.read('complete', 'history')
-        if (completed and completed['done'] == len(manifest['dates'])
-                and not manifest['missing'] and not manifest['mapping_errors']):
-            Logger.stdout('RCQuant minute migration already complete')
-            return
-        Logger.stdout(f"RCQuant source inventory: {len(manifest['dates'])} dates, {len(manifest['ids'])} stocks, "
-                      f"{len(manifest['missing'])} missing dates, {len(manifest['mapping_errors'])} mapping errors")
+        Logger.stdout('RCQuant [3/7] Loading equity price and split factors')
         events = self.get_events(manifest)
-        for date in manifest['dates']:
+        Logger.stdout('RCQuant [4/7] Checking daily factor files')
+        daily_saved = 0
+        for index, date in enumerate(manifest['dates'], 1):
             self.guard()
-            self.daily_factors(date, self.require_record('scan', date)['mapping'], events)
-        for date in reversed(manifest['dates']):
-            self.guard()
-            self.migrate_date(date, events)
+            daily_saved += self.daily_factors(date, self.require_record('scan', date)['mapping'], events)
+            if index % 500 == 0:
+                Logger.stdout(f'RCQuant [4/7] {index}/{len(manifest["dates"])} daily files ready')
+        Logger.stdout(f"RCQuant [4/7] Daily factors ready: {daily_saved} written, "
+                      f"{len(manifest['dates']) - daily_saved} already complete")
 
-        summary = {'done': 0, 'blocked': 0, 'awaiting_none': 0, 'price_and_original_volume': 0,
-                   'price_and_split_volume': 0, 'direct_none': 0, 'revised_amount_or_trades': 0}
-        for date in manifest['dates']:
-            counts = self.read('done', date)
-            if counts is not None:
-                summary['done'] += 1
-                for key, val in counts.items():
-                    summary[key] += val
-            elif self.read('blocked', date):
-                summary['blocked'] += 1
-            else:
-                summary['awaiting_none'] += 1
-        Logger.stdout(f'RCQuant historical migration: {summary}')
-        if (summary['done'] and summary['done'] == len(manifest['dates']) and not manifest['missing']
-                and not manifest['mapping_errors']):
-            self.mark('complete', 'history', summary)
+        done = {date for date in manifest['dates'] if self.read(self.repair_stage('done'), date) is not None}
+        unfinished = [date for date in manifest['dates'] if date not in done]
+        untouched, previously_written = self.repair_cohorts(unfinished)
+        Logger.stdout(f'RCQuant [5/7] Polars restoration: {len(done)} already complete, '
+                      f'{len(previously_written)} to restart from backups, {len(untouched)} original dates')
+        Logger.stdout('RCQuant [6/7] Publishing raw and six periods per validated date, with independent VWAP audit')
+        for dates, previous in ((previously_written, True), (untouched, False)):
+            for date in reversed(dates):
+                self.guard()
+                if previous and not self.backup_path(date).is_file():
+                    Logger.warning(f'RCQuant {date}: previous publication has no original backup')
+                    continue
+                if self.migrate_date(date, events, previously_written=previous):
+                    done.add(date)
+
+        pending = sorted(set(manifest['dates']) - done)
+        Logger.stdout(f'RCQuant [6/7] Published {len(done)} of {len(manifest["dates"])} archived dates, '
+                      f'{len(pending)} pending')
+        if not done or pending or manifest['missing'] or manifest['mapping_errors']:
+            Logger.stdout('RCQuant [7/7] Minute DataBlocks waiting for historical publication to finish')
+            return
+        self.rebuild_datablocks(sorted(done))
 
 
 def collect_daily_actions_through(through: int) -> bool:

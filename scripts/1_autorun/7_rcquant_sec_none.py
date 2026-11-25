@@ -1,6 +1,6 @@
 #!/usr/bin/env python
-# description: Restore historical unadjusted RCQuant equity minute bars
-# content: 北京时间每日21:00按检查点恢复截至2026-11-24的历史分钟线及衍生周期。
+# description: Repair historical RCQuant minute bars and rebuild their DataBlocks
+# content: 北京时间每日21:00检查缺档和逐日因子，续做历史分钟价量还原，独立记录VWAP越界，并在发布后重算分钟DataBlock。
 # blacklist:
 #   machine: ['Mathews-Mac']
 # email: False

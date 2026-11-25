@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
+import polars as pl
 
 from src.data.download.other_source.rcquant import bar_min
 from src.data.download.other_source.rcquant import sec_none_migration as migration
@@ -17,6 +18,7 @@ from src.data.download.other_source.rcquant.initializer import QuotaExceeded
 from src.data.download.other_source.rcquant.migration_factors import (
     EMPTY_EVENTS, PRICE, Events, event_series, inverted_prices, restore_stock_day, round_half_up,
 )
+from src.data.download.other_source.rcquant.sec_history_polars import FactorHistory, _round, vwap_audit, with_vwap
 
 
 def minute_frame(date, *, price=10., volume=100.):
@@ -68,8 +70,18 @@ class FactorsTest(unittest.TestCase):
 
     def test_cent_half_up_and_ambiguous_legacy_inverse(self):
         np.testing.assert_array_equal(round_half_up(np.array([1.005, 2.675]), 100), [1.01, 2.68])
+        actual = pl.DataFrame({'price': [1.005, 2.675]}).select(_round(pl.col('price'), 2)).to_series()
+        self.assertEqual(actual.to_list(), [1.01, 2.68])
         self.assertIsNone(inverted_prices(np.array([0.01005]), 200.))
         np.testing.assert_array_equal(inverted_prices(np.array([8.]), 1.25), [10.])
+
+    def test_vwap_audit_records_signed_gaps_and_excludes_zero_volume(self):
+        frame = pl.DataFrame({'secid': [1, 1, 1], 'minute': [0, 1, 2],
+                              **{name: [10.] * 3 for name in PRICE}, 'volume': [100., 100., 0.],
+                              'amount': [1000.4, 996., 0.], 'num_trades': [1, 1, 0]})
+        rows = vwap_audit(with_vwap(frame, 'open'), 1)
+        self.assertEqual(rows['minute'].to_list(), [0, 1])
+        np.testing.assert_allclose(rows['gap_yuan'].to_list(), [.004, -.04])
 
 
 class CutoverTest(unittest.TestCase):
@@ -107,7 +119,7 @@ class MigrationTest(unittest.TestCase):
         db = self.enterContext(closing(sqlite3.connect(self.path / 'progress.sqlite')))
         self.job = migration.Migration(self.path, self.path / 'exfactor', db, datetime(2026, 11, 25, 21))
         self.job.guard = Mock()
-        self.events = {method: {} for method in migration.METHODS}
+        self.events = FactorHistory.from_events(pl.DataFrame(), pl.DataFrame())
         self.db_path = self.enterContext(patch.object(migration, 'DBPath'))
         self.db_path.side_effect = lambda _, key: SimpleNamespace(
             path_exact=lambda date: self.path / key / f'{key}.{date}.feather',
@@ -128,15 +140,28 @@ class MigrationTest(unittest.TestCase):
         self.assertEqual(manifest['dates'], [self.date])
         self.assertEqual(manifest['missing'], [later])
 
-    def test_completed_inventory_reopens_when_calendar_gains_a_date(self):
+    def test_inventory_reports_a_previously_scanned_archive_that_disappeared(self):
+        source = self.job.require_record('scan', self.date)
+        self.raw_path.unlink()
+        manifest = self.job.scan([self.date])
+        self.assertEqual(manifest['dates'], [])
+        self.assertEqual(manifest['missing'], [self.date])
+        self.job.direct_none = Mock()
+        self.assertEqual(self.job.backfill_missing_raw(manifest['missing']), [])
+        self.job.direct_none.assert_not_called()
+        self.assertEqual(self.job.require_record('scan', self.date), source)
+
+    def test_old_completion_does_not_skip_repair_and_missing_date_defers_datablocks(self):
         self.job.mark('complete', 'history', {'done': 1})
-        with patch.object(migration, 'Dates', return_value=[self.date]), patch.object(self.job, 'get_events') as fetch:
-            self.job.run()
-            fetch.assert_not_called()
         with patch.object(migration, 'Dates', return_value=[self.date, self.date + 1]), \
-                patch.object(self.job, 'get_events', side_effect=migration.EveningEnded), \
-                self.assertRaises(migration.EveningEnded):
+                patch.object(self.job, 'backfill_missing_raw', return_value=[]), \
+                patch.object(self.job, 'get_events', return_value=self.events) as fetch, \
+                patch.object(self.job, 'migrate_date', return_value=True) as migrate, \
+                patch.object(self.job, 'rebuild_datablocks') as rebuild:
             self.job.run()
+        fetch.assert_called_once()
+        migrate.assert_called_once_with(self.date, self.events, previously_written=False)
+        rebuild.assert_not_called()
 
     def test_quota_batch_then_resume_and_skip_completed_batch(self):
         ids = ['000001.XSHE']
@@ -193,61 +218,220 @@ class MigrationTest(unittest.TestCase):
         self.assertEqual(stored['code'].tolist(), ['000001.XSHE'])
         self.assertTrue(stored['is_active'].all())
 
-    def test_split_vwap_failure_keeps_entire_legacy_date_and_records_evidence(self):
+    def test_native_vwap_outlier_is_audited_and_does_not_block_publication(self):
         native = minute_frame(self.date)
         native['order_book_id'] = '000001.XSHE'
         native.loc[0, 'amount'] = 1040.
         self.job.direct_none = Mock(return_value=native)
-        with patch.object(migration.DB, 'load', return_value=pd.DataFrame()):
-            self.job.migrate_date(self.date, self.events)
-            self.job.migrate_date(self.date, self.events)
+        self.job.mark('blocked', self.date, 'old VWAP gate')
+        with patch.object(migration.DB, 'load_pl', return_value=pl.DataFrame()):
+            self.assertTrue(self.job.migrate_date(self.date, self.events))
+            self.assertTrue(self.job.migrate_date(self.date, self.events))
         self.job.direct_none.assert_called_once()
-        self.assertIn('VWAP violations', str(self.job.read('blocked', self.date)))
-        audit = pd.read_feather(self.job.state / 'vwap_failures' / f'{self.date}.feather')
-        self.assertEqual(audit.iloc[0]['vwap'], 10.4)
-        pd.testing.assert_frame_equal(pd.read_feather(self.raw_path), self.legacy)
+        done = self.job.require_record(self.job.repair_stage('done'), self.date)
+        self.assertEqual(done['vwap_audit_1min'], 1)
+        self.assertGreater(done['vwap_audit_xmin'], 0)
+        audit = pl.read_ipc(self.job.state / 'vwap_audit' / f'{self.date}.feather', memory_map=False)
+        self.assertEqual(audit.filter(pl.col('period') == 1)['vwap'].item(), 10.4)
+        price_check = self.job.require_record(self.job.repair_stage('price_check'), self.date)
+        self.assertEqual(price_check['previous_block'], 'old VWAP gate')
+        self.assertEqual(price_check['input_ohlc'], [8.] * 4)
+        self.assertTrue(bar_min.is_none_min(pd.read_feather(self.raw_path)))
+        pd.testing.assert_frame_equal(pd.read_feather(self.job.backup_path(self.date)), self.legacy)
+
+    def test_invalid_native_reply_does_not_poison_the_retry_cache(self):
+        native = minute_frame(self.date).assign(order_book_id='000001.XSHE')
+        invalid = native.copy()
+        invalid.loc[0, 'low'] = 20.
+        self.job.direct_none = Mock(side_effect=[invalid, native])
+        with patch.object(migration.DB, 'load_pl', return_value=pl.DataFrame()):
+            self.assertFalse(self.job.migrate_date(self.date, self.events))
+            self.assertTrue(self.job.migrate_date(self.date, self.events))
+        self.assertEqual(self.job.direct_none.call_count, 2)
+
+    def test_missing_date_backfills_native_raw_and_builds_periods_without_rewriting_it(self):
+        date = 20250423
+        ids = [f'{i:06}.XSHE' for i in range(1, 6)] + [f'{i}.XSHG' for i in range(600001, 600006)]
+        instruments = pd.DataFrame({'code': ids, 'is_active': True})
+        provider = (pd.concat([minute_frame(date).assign(order_book_id=code) for code in ids],
+                              ignore_index=True).drop(columns=['code', 'time', 'date']))
+        self.job.direct_none = Mock(return_value=provider)
+        migrate = self.job.migrate_date
+
+        def publish_backfill_only(day, events, **kwargs):
+            return day == date and migrate(day, events, **kwargs)
+
+        with patch.object(migration, 'Dates', return_value=[self.date, date]), \
+                patch.object(bar_min, 'rcquant_instrument_list', return_value=instruments), \
+                patch.object(bar_min, 'load_list', return_value=None), \
+                patch.object(self.job, 'get_events', return_value=self.events), \
+                patch.object(migration.DB, 'load_pl', return_value=pl.DataFrame()), \
+                patch.object(self.job, 'migrate_date', side_effect=publish_backfill_only), \
+                patch.object(self.job, 'rebuild_datablocks') as rebuild:
+            self.job.run()
+            self.job.run()
+        self.job.direct_none.assert_called_once_with(date, ids)
+        self.assertTrue(bar_min.is_none_min(pd.read_feather(self.job.minute_path(date))))
+        self.assertEqual(migration.fingerprint(self.job.minute_path(date)), self.job.read('raw_backfill', date))
+        self.assertFalse(self.job.backup_path(date).exists())
+        prepared = self.job.require_record(self.job.repair_stage('prepared'), date)
+        self.assertTrue(prepared['preserve_raw'])
+        self.assertEqual(len(prepared['outputs']), 6)
+        for output in prepared['outputs']:
+            self.assertTrue(Path(output['target']).is_file())
+        self.assertTrue((self.job.factor_dir / f'{date}.feather').is_file())
+        self.assertEqual(self.job.read('manifest', 'history')['missing'], [])
+        rebuild.assert_not_called()
 
     def test_factor_path_publishes_without_a_minute_download(self):
-        self.events['get_ex_factor']['000001.XSHE'] = Events(
-            np.array([20250423]), np.array([1.25]),
-        )
-        daily = pd.DataFrame({'secid': [1], **{col: [10.] for col in PRICE}, 'volume': [24.]})
-        with patch.object(migration.DB, 'load', return_value=daily), \
+        events = FactorHistory.from_events(pl.DataFrame({
+            'order_book_id': ['000001.XSHE'], 'ex_date': [datetime(2025, 4, 23)],
+            'ex_factor': [1.25], 'ex_cum_factor': [1.25],
+        }), pl.DataFrame())
+        daily = pl.DataFrame({'secid': [1], **{col: [10.] for col in PRICE}, 'volume': [24.]})
+        with patch.object(migration.DB, 'load_pl', return_value=daily), \
                 patch.object(self.job, 'direct_none') as direct_none:
-            self.job.migrate_date(self.date, self.events)
-            self.job.migrate_date(self.date, self.events)
+            self.job.migrate_date(self.date, events)
+            self.job.migrate_date(self.date, events)
         direct_none.assert_not_called()
-        self.assertEqual(self.job.require_record('done', self.date)['price_and_original_volume'], 1)
+        self.assertEqual(self.job.require_record(self.job.repair_stage('done'), self.date)
+                         ['price_and_original_volume'], 1)
         minute = pd.read_feather(self.raw_path)
         self.assertTrue(minute['close'].eq(10.).all())
         self.assertTrue(minute['volume'].eq(100.).all())
         np.testing.assert_array_equal(minute['num_trades'], self.legacy['num_trades'])
 
+    def test_mixed_adjustment_markers_prevent_a_second_adjustment(self):
+        mixed = self.legacy.assign(_adjust_type='pre')
+        mixed.loc[0, '_adjust_type'] = 'none'
+        mixed.to_feather(self.raw_path)
+        source = self.job.require_record('scan', self.date)
+        source['raw'] = migration.fingerprint(self.raw_path)
+        self.job.mark('scan', self.date, source)
+        with patch.object(migration.DB, 'load_pl', return_value=pl.DataFrame()), \
+                patch.object(self.job, 'direct_none') as download:
+            self.assertFalse(self.job.migrate_date(self.date, self.events))
+        download.assert_not_called()
+        self.assertEqual(migration.fingerprint(self.raw_path), source['raw'])
+        self.assertIn('mixes native', self.job.read(self.job.repair_stage('blocked'), self.date))
+
+    def test_split_volume_roundtrip_requires_bar_precision_and_daily_total(self):
+        from src.data.download.other_source.rcquant.sec_history_polars import daily_reference, restore_factors
+
+        split = 1.3992772
+        shares = 35300
+        events = FactorHistory.from_events(pl.DataFrame(), pl.DataFrame({
+            'order_book_id': ['000001.XSHE'],
+            'ex_dividend_date': [datetime(2025, 4, 23)], 'book_closure_date': [datetime(2025, 4, 22)],
+            'split_coefficient_from': [10.], 'split_coefficient_to': [10 * split],
+        }))
+        raw = pl.from_pandas(minute_frame(self.date, volume=round(shares * split, 4)))
+        stocks = self.job.stock_mapping({'000001.SZ': '000001.XSHE'})
+        raw = raw.join(stocks.select('code', 'order_book_id'), on='code', maintain_order='left')
+        daily = pl.DataFrame({'secid': [1], **{col: [10.] for col in PRICE}, 'volume': [shares * 240 / 1000]})
+        restored, scaled = restore_factors(raw, daily_reference(stocks, daily), events, self.date, stocks)
+        self.assertEqual(scaled, 1)
+        self.assertEqual(restored['volume'].unique().to_list(), [shares])
+        bad_daily = daily.with_columns(pl.col('volume') + .001)
+        bad_archive = raw.with_columns(pl.col('volume') + .0001)
+        for bars, day in ((raw, bad_daily), (bad_archive, daily)):
+            restored, _ = restore_factors(bars, daily_reference(stocks, day), events, self.date, stocks)
+            self.assertTrue(restored.is_empty())
+
     def test_interrupted_publish_keeps_pre_backup_and_does_not_adjust_twice(self):
         native = minute_frame(self.date)
-        self.job.stage(self.date, native.assign(_adjust_type='none'), {'direct_none': 1})
-        prepared = self.job.require_record('prepared', self.date)
+        self.job.stage(self.date, pl.from_pandas(native.assign(_adjust_type='none')), {'direct_none': 1})
+        prepared = self.job.require_record(self.job.repair_stage('prepared'), self.date)
         rename = migration.os.replace
 
         def interrupted(source, target):
-            if Path(target).parent.name == 'min':
-                raise OSError('interrupted after raw publish')
             rename(source, target)
+            if Path(target) == self.raw_path:
+                raise OSError('interrupted before recording raw publication')
 
         with patch.object(migration.os, 'replace', side_effect=interrupted), self.assertRaises(OSError):
             self.job.migrate_date(self.date, self.events)
         self.assertTrue(bar_min.is_none_min(pd.read_feather(self.raw_path)))
+        self.assertIsNone(self.job.read(self.job.repair_stage('published'), f'{self.date}/{self.raw_path.name}'))
         original = self.raw_path.parent / '.pre_backup' / self.raw_path.name
         pd.testing.assert_frame_equal(pd.read_feather(original), self.legacy)
-        self.job.migrate_date(self.date, self.events)
-        self.assertEqual(self.job.read('done', self.date), {'direct_none': 1})
-        self.assertEqual(self.job.read('prepared', self.date), prepared)
+        self.assertEqual(self.job.repair_cohorts([self.date]), ([], [self.date]))
+        self.assertEqual(self.job.original_path(self.date, previously_written=True), original)
+        with patch.object(migration, 'Dates', return_value=[self.date]), \
+                patch.object(self.job, 'get_events', return_value=self.events), \
+                patch.object(self.job, 'prepare_raw') as restore, \
+                patch.object(self.job, 'rebuild_datablocks') as rebuild:
+            self.job.run()
+        restore.assert_not_called()
+        rebuild.assert_called_once_with([self.date])
+        self.assertEqual(self.job.read(self.job.repair_stage('done'), self.date), prepared['counts'])
         totals = sum(native['num_trades'])
         for item in prepared['outputs'][1:]:
             self.assertEqual(pd.read_feather(item['target'])['num_trades'].sum(), totals)
         with patch.object(self.job, 'publish') as publish:
             self.job.migrate_date(self.date, self.events)
             publish.assert_not_called()
+
+    def test_previous_version_is_repaired_again_from_verified_original(self):
+        self.job.backup_path(self.date).parent.mkdir()
+        self.raw_path.rename(self.job.backup_path(self.date))
+        minute_frame(self.date).assign(_adjust_type='none').to_feather(self.raw_path)
+        self.job.mark('done', self.date, {'direct_none': 1})
+        self.job.mark('prepared', self.date, {'outputs': []})
+        self.assertEqual(self.job.repair_cohorts([self.date]), ([], [self.date]))
+        events = FactorHistory.from_events(pl.DataFrame({
+            'order_book_id': ['000001.XSHE'], 'ex_date': [datetime(2025, 4, 23)],
+            'ex_factor': [1.25], 'ex_cum_factor': [1.25],
+        }), pl.DataFrame())
+        daily = pl.DataFrame({'secid': [1], **{col: [10.] for col in PRICE}, 'volume': [24.]})
+        with patch.object(migration.DB, 'load_pl', return_value=daily), \
+                patch.object(self.job, 'direct_none') as native:
+            self.assertTrue(self.job.migrate_date(self.date, events, previously_written=True))
+        native.assert_not_called()
+        price_check = self.job.require_record(self.job.repair_stage('price_check'), self.date)
+        self.assertEqual(price_check['source'], 'backup')
+        self.assertEqual(price_check['input_ohlc'], [8.] * 4)
+        self.assertFalse(price_check['input_matches_tushare'])
+        self.assertEqual(price_check['archive_ohlc'], [10.] * 4)
+        self.assertTrue(price_check['archive_matches_tushare'])
+        self.assertEqual(pd.read_feather(self.raw_path)['close'].unique().tolist(), [10.])
+        pd.testing.assert_frame_equal(pd.read_feather(self.job.backup_path(self.date)), self.legacy)
+
+    def test_datablock_rebuild_continues_from_completed_fit_and_predict_keys(self):
+        def build(frame, key):
+            path = self.path / frame / f'{key}.mmap'
+            path.mkdir(parents=True)
+            return {'path': str(path), 'dates': 1, 'last': self.date}
+
+        with patch('src.proj.util.script.script_lock.ScriptLockMultiple'), \
+                patch.object(self.job, 'rebuild_minute_block', side_effect=build) as rebuild:
+            self.job.rebuild_datablocks([self.date])
+            self.job.rebuild_datablocks([self.date])
+        self.assertEqual([call.args for call in rebuild.call_args_list], [
+            (frame, key) for frame in ('fit', 'predict') for key in migration.MINUTE_DATABLOCKS
+        ])
+        self.assertEqual(self.job.require_record(self.job.repair_stage('complete'), 'history')['dates'], 1)
+
+    def test_datablock_rebuild_publishes_mmap_and_preserves_previous_values(self):
+        from src.data.preprocess.processors import PrePros
+        from src.data.util import DataBlock
+        from src.proj.db.io.mmap import ArrayMemoryMap
+
+        canonical = self.path / 'fit' / 'X_15m.mmap'
+        index = {'secid': np.array([1]), 'date': np.array([self.date]), 'feature': np.array(['close'])}
+        original = np.full((1, 1, 1, 1), 8., dtype=np.float32)
+        migration.Save.mmap(original, canonical, index=index)
+        new = SimpleNamespace(**index, empty=False, last_meaningful_date=self.date, values=original + 2)
+        processor = Mock()
+        processor.load_with_extension.return_value = new
+        with patch.object(PrePros, 'get_processor', return_value=processor), \
+                patch.object(DataBlock, 'path_preprocess', return_value=canonical):
+            self.assertEqual(self.job.rebuild_minute_block('fit', '15m')['dates'], 1)
+        processor.load_with_extension.assert_called_once_with(reconstruct=True)
+        processor.save_norm.assert_called_once_with(new)
+        np.testing.assert_array_equal(ArrayMemoryMap.load(canonical)['values'], new.values)
+        backup = canonical.parent / f'.{migration.REPAIR}_backup' / canonical.name
+        np.testing.assert_array_equal(ArrayMemoryMap.load(backup)['values'], original)
 
 
 if __name__ == '__main__':
