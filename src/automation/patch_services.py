@@ -167,7 +167,7 @@ class PatchServices:
                 'errors': self.state_data.get('errors', {}), 'cli_note': self.state_data.get('cli_note', '')}
 
     def reconcile_needed(self):
-        return self.state_data.get('phase') == 'migrating'
+        return self.state_data.get('phase') in {'migrating', 'ready'}
 
     def _monitor(self):
         from src.api.learndl_monitor.services import Manager

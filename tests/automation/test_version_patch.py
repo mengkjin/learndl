@@ -770,6 +770,49 @@ sys.stdin.buffer.read()
         self.assertEqual(sender.call_count, 2)
         self.assertIn('retry 0.7.2/001', sender.call_args.args[1])
 
+    def test_ready_interface_recovery_defers_without_poisoning_next_patch(self):
+        from src.automation.patch_services import PatchServices
+
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_apply', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        services = PatchServices(self.root, self.runtime)
+        services.journal.parent.mkdir(parents=True, exist_ok=True)
+        services.journal.write_text('{}')
+        services.state_data = {'phase': 'ready', 'services': {}, 'experiments': [], 'restored': [], 'mappings': {}}
+        with (patch.object(version, 'ROOT', self.root),
+              patch('src.automation.patch_services.PatchServices', return_value=services),
+              patch.object(services, 'pause') as pause,
+              patch.object(services, 'collect_paths'),
+              patch.object(services, 'restore', return_value={'errors': {'cli': 'recovering'}}) as restore):
+            self.assertTrue(services.reconcile_needed())
+            first = self.apply()
+            self.assertEqual(first['status'], 'deferred')
+            pause.assert_not_called()
+            self.notify.assert_not_called()
+            state = version.status(self.root, self.runtime)
+            self.assertIsNone(state['failed'])
+            self.assertEqual(state['records'], [])
+            self.assertEqual(services.state_data['phase'], 'ready')
+
+            restore.side_effect = OSError('temporary startup error')
+            self.assertEqual(self.apply()['status'], 'deferred')
+            self.assertIsNone(version.status(self.root, self.runtime)['failed'])
+
+            def recovered(*, ready):
+                self.assertTrue(ready)
+                services.journal.unlink()
+                return {}
+
+            restore.side_effect = recovered
+            result = self.apply()
+            self.assertEqual(result['status'], 'ready')
+            pause.assert_called_once()
+            state = version.status(self.root, self.runtime)
+            self.assertIsNone(state['failed'])
+            self.assertEqual(len(state['records']), 1)
+            self.assertEqual(state['records'][0]['attempt'], 1)
+
     def test_interface_pause_failure_has_an_attached_traceback(self):
         self.release('0.7.2')
         self.patch_file('0.7.2', '001_apply', 'def apply(ctx): pass\ndef verify(ctx): return True\n')

@@ -243,6 +243,18 @@ class InterfaceLifecycleTest(unittest.TestCase):
         self.instances.start_for_maintenance.assert_called_once()
         self.assertFalse(self.services.journal.exists())
 
+    def test_ready_journal_reconciliation_retries_transient_recovery(self):
+        self.source.touch()
+        self.services.pause()
+        self.console.side_effect = [RuntimeError('port is busy'), None]
+        self.services.restore(ready=True)
+        self.assertTrue(self.services.reconcile_needed())
+        restarted = patch_services.PatchServices(self.root, self.root / 'runtime')
+        self.assertTrue(restarted.reconcile_needed())
+        self.services.restore(ready=True)
+        self.assertFalse(self.services.journal.exists())
+        self.assertFalse(patch_services.PatchServices(self.root, self.root / 'runtime').reconcile_needed())
+
     def test_desktop_recovery_does_not_restart_cli_during_migration(self):
         self.services.pause()
         path = self.services.cli_path

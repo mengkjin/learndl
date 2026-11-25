@@ -173,8 +173,13 @@ using their original ports and migrated sources. The desktop CLI returns to
 its menu through its registered desktop recovery session. If a port is busy,
 a source cannot be resolved, or the desktop session is unavailable, the
 migration remains applied and the interface recovery report lists the problem.
-Use `python -m src.automation.version_patch restore-services` to retry
-interface recovery after fixing the reported condition.
+The automatic Git maintenance worker retries residual `ready` interface recovery
+under the maintenance and code leases, even when no data patches are pending.
+Before a subsequent migration, incomplete recovery defers execution without
+creating a failed patch attempt. Once recovery succeeds, pending patches proceed
+normally. Actual patch failures still require the existing retry workflow.
+Use `python -m src.automation.version_patch restore-services` for an immediate
+manual recovery attempt after fixing the reported condition.
 
 ### Migration checks for upgrades through 0.7.9
 

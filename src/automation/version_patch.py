@@ -606,6 +606,15 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
     from src.automation.patch_services import PatchServices
 
     services = PatchServices(root, runtime) if root.resolve() == ROOT else None
+    # Recovery is preflight work, not a failed attempt at the next data patch.
+    # Do not downgrade a ready journal to blocked while a CLI is registering.
+    if services and services.state_data.get('phase') == 'ready':
+        try:
+            recovery = services.restore(ready=True)
+        except Exception as exc:
+            return {'status': 'deferred', 'reason': f'Interface recovery pending: {exc}'}
+        if services.journal.exists():
+            return {'status': 'deferred', 'reason': 'Interface recovery pending', 'interfaces': recovery}
     try:
         result = _apply_pending(root, runtime, pass_fds=pass_fds, notify=notify, retry=retry,
                                 baseline=baseline, services=services)
