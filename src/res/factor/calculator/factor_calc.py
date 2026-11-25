@@ -485,11 +485,20 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
               fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
-        df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , vb_level = 'max')
+        def load_batch():
+            return DB.loads(cls.db_src, cls.db_key, dates, override_existing_key=True,
+                            closest=closest, vb_level='max')
+
+        df = load_batch()
         if df.empty or cls.meta_type != 'stock' or not normalize:
             return df
 
         name = cls.factor_name
+        if 'level_0' in df:
+            from .snapshot_repair import repair_level_zero
+            for date in df['date'].unique():
+                repair_level_zero(cls.target_path(int(date)), name)
+            df = load_batch()
         signal_columns = ['secid', 'date', name]
         unexpected = [col for col in df if col not in signal_columns and not str(col).startswith(name + '__source_')]
         if unexpected:

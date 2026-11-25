@@ -114,7 +114,7 @@ class StoredStockFactorPatchTest(TestCase):
 
     def test_normalized_load_rejects_unknown_columns_and_text_signals(self):
         date = self.dates[-1]
-        self.write_source(self.calc, date, [1., 2., 3.], level_0='turn_fr')
+        self.write_source(self.calc, date, [1., 2., 3.], level_0=['a', 'b', 'b'])
         with self.assertRaisesRegex(ValueError, 'turn_1m.*level_0'):
             self.calc.Loads([date], normalize=True)
         for text in ('2.0', 'unparsed'):
@@ -124,6 +124,29 @@ class StoredStockFactorPatchTest(TestCase):
             self.assertEqual(self.calc.Loads([date], normalize=False)['turn_1m'].iloc[1], text)
         self.write_source(self.calc, date, [1., 2., 3.], turn_1m__source_key='archive')
         self.assertNotIn('turn_1m__source_key', self.calc.Loads([date], normalize=True))
+
+    def test_only_normalization_repairs_a_legacy_factor_and_preserves_daily_files(self):
+        calc = FactorCalculator.get('turn_3m')
+        clean, legacy = self.dates
+        self.write_source(calc, clean, [4., 2., 6.])
+        self.write_source(calc, legacy, [3., None, 1.], turn_3m__source_key='archive')
+        expected = calc.Loads(self.dates, normalize=True)
+        path = calc.target_path(legacy)
+        clean_inode = calc.target_path(clean).stat().st_ino
+        original = pd.read_feather(path)
+        original.assign(level_0=['some_field', None, 'some_field']).to_feather(path)
+        damaged = path.read_bytes()
+        self.assertIn('level_0', calc.Load(legacy))
+        self.assertIn('level_0', calc.Loads(self.dates))
+        self.assertEqual(path.read_bytes(), damaged)
+        pd.testing.assert_frame_equal(calc.Loads(self.dates, normalize=True), expected)
+        pd.testing.assert_frame_equal(pd.read_feather(path), original, check_exact=True)
+        self.assertEqual(calc.target_path(clean).stat().st_ino, clean_inode)
+        inode = path.stat().st_ino
+        calc.Loads(self.dates, normalize=True)
+        self.assertEqual(path.stat().st_ino, inode)
+        backup, = path.parent.glob('*.level_0.bak')
+        self.assertEqual(backup.read_bytes(), damaged)
 
     def test_snapshot_repair_preserves_rows_on_retry_and_rejects_unknown_layout(self):
         ctx = SimpleNamespace(backup_dir=self.root / 'backup')
@@ -180,7 +203,9 @@ class StoredStockFactorPatchTest(TestCase):
 
         seed_history()
         first = attempt('first')
-        with patch.object(repair, 'apply'), self.assertRaisesRegex(ValueError, 'level_0'):
+        with (patch.object(repair, 'apply'),
+              patch('src.res.factor.calculator.snapshot_repair.repair_level_zero'),
+              self.assertRaisesRegex(ValueError, 'level_0')):
             migration.apply(first)
         saved = {path.name for path in (first.backup_dir / 'fit').iterdir()}
         self.assertEqual(len(saved), 15)
