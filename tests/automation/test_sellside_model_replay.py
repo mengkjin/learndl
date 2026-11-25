@@ -56,6 +56,28 @@ class SellsideModelReplayTest(unittest.TestCase):
         self.assertEqual(next(repair.PATH.model.rglob('original/results/detailed_alpha_data.xlsx')).read_bytes(), b'original')
         self.assertEqual((self.base/'results/detailed_alpha_data.xlsx').read_bytes(), b'new')
 
+    def test_legacy_holdings_and_account_require_both_current_files(self):
+        relative = Path('snapshot/detailed_alpha/t50_fmp_test')
+        files = ['portfolio/top.best.univ.top_50.lag0.feather', 'account/top.best.univ.top_50.lag0.tar']
+        for name in files:
+            path = self.base / relative / name
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b'old')
+        def run(*, base_path, **kwargs):
+            self.outputs(base_path, [20251231, 20260105], b'new')
+            for name in rebuilt:
+                path = base_path / relative / repair.FMP_RESUME_VERSION / name
+                path.parent.mkdir(parents=True)
+                path.write_bytes(b'rebuilt')
+        with patch.object(repair, 'run_staged_test', side_effect=run):
+            rebuilt = files[:1]
+            with self.assertRaisesRegex(ValueError, 'missing rebuilt analysis.*account'):
+                repair.apply(self.ctx)
+            rebuilt = files
+            repair.apply(self.ctx)
+        self.assertTrue(repair.verify(self.ctx))
+        self.assertFalse((self.base / relative / files[0]).exists())
+
     def test_incomplete_replay_preserves_original_output_and_no_receipt(self):
         def run(*, base_path, **kwargs):
             self.outputs(base_path, [20260105], b'incomplete')
