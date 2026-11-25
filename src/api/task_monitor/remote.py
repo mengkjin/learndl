@@ -11,15 +11,17 @@ from .remote_transport import CHUNK_BYTES, ROUND_BYTES, RETENTION, Publisher, ta
 
 __all__ = [
     'CHUNK_BYTES', 'ROUND_BYTES', 'RETENTION', 'Publisher', 'task_key', 'retain_log',
-    'collect', 'publish_once', 'read_volume',
+    'collect', 'publish_once', 'read_volume', 'settings',
 ]
 
 
-def settings():
+def settings(runtime=None):
     from src.automation.artifact_exchange.core import Config, sandboxed
     config = Config.load()
-    from src.proj import PATH
-    installed = PATH.runtime / 'scheduling' / 'installed.json'
+    if runtime is None:
+        from src.proj import PATH
+        runtime = PATH.runtime
+    installed = runtime / 'scheduling' / 'installed.json'
     jobs = json.loads(installed.read_text()).get('watchdog', {}).get('jobs', {}) if installed.exists() else {}
     return config, (config.enabled and config.role == 'publisher' and not sandboxed()
                     and jobs.get('remote_monitor', {}).get('enabled', False))
@@ -99,7 +101,9 @@ def script_log_available(task):
 
 def publish_once() -> int:
     import portalocker
+    from src.automation.paths import ROOT
     from .core import TaskMonitorRepository
+    from .patch_progress import publish
     config, enabled = settings()
     if not enabled:
         return 0
@@ -122,6 +126,7 @@ def publish_once() -> int:
             atomic_json(heartbeat, health)
             try:
                 sampled_at = time.time()
+                publish(ROOT, repository.runtime_dir, config)
                 hidden = set()
                 collected_at = state.get('collected_at')
                 since = collected_at if isinstance(collected_at, (int, float)) else sampled_at - RETENTION

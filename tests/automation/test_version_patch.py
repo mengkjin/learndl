@@ -190,6 +190,53 @@ def verify(ctx):
         self.assertEqual(enqueue.call_args_list[0], enqueue.call_args_list[1])
         self.assertEqual(json.loads(enqueue.call_args.args[1])['patches'], ['0.7.2/002'])
 
+    def test_monitor_publishes_while_exclusive_then_reports_failure_and_retry(self):
+        from src.api.task_monitor import patch_progress
+        from src.api.task_monitor.remote import task_key
+        from src.shared.file_ops import atomic_json
+
+        self.release('0.7.2')
+        script = self.patch_file('0.7.2', '001_wait', """
+import time
+def apply(ctx):
+    while not (ctx.backup_dir / 'heartbeat-seen').exists():
+        time.sleep(.01)
+def verify(ctx): return False
+""")
+        self.write(f'{version.PATCH_DIRECTORY}/0.7.2/timeouts.json', json.dumps({script.name: 5}))
+        self.commit()
+        shared = self.root.parent / 'shared'
+        config = self.root.parent / 'exchange.json'
+        atomic_json(config, dict(enabled=True, role='publisher', source_host='test host', shared_root=str(shared)))
+        atomic_json(self.scheduling / 'installed.json', {'watchdog': {'jobs': {'remote_monitor': {'enabled': True}}}})
+        path = shared / 'runtime' / task_key('test host') / patch_progress.FILENAME
+        pulses = []
+
+        def write(destination, packet):
+            atomic_json(destination, packet)
+            if packet['status'] == 'running':
+                pulses.append(json.loads(path.read_text()))
+                if len(pulses) == 2:
+                    attempt_dir, = (version.ledger_path(self.runtime).parent / 'attempts').iterdir()
+                    (attempt_dir / 'backup' / 'heartbeat-seen').touch()
+
+        with patch.dict(os.environ, LEARNDL_ARTIFACT_CONFIG=str(config)), \
+             patch.object(version, 'MONITOR_INTERVAL', .1), patch.object(patch_progress, 'atomic_json', side_effect=write):
+            self.assertEqual(self.apply()['status'], 'blocked')
+            self.assertGreaterEqual(len(pulses), 2)
+            self.assertGreater(pulses[1]['sampled_at'], pulses[0]['sampled_at'])
+            self.assertEqual((pulses[0]['applied'], pulses[0]['target'], pulses[0]['patch'], pulses[0]['remaining']),
+                             ('0.7.1', '0.7.2', '0.7.2/001', 1))
+            failure = json.loads(path.read_text())
+            self.assertEqual(failure['status'], 'failed')
+            self.assertIn('verification did not return True', failure['error'])
+            script.write_text('def apply(ctx): pass\ndef verify(ctx): return True\n')
+            self.commit()
+            self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
+            self.assertEqual(pulses[-1]['attempt'], 2)
+            final = json.loads(path.read_text())
+            self.assertEqual((final['status'], final['applied'], final['remaining']), ('ready', '0.7.2', 0))
+
     def test_failed_verification_blocks_until_retry_and_keeps_attempts(self):
         self.release('0.7.2')
         source = """
@@ -370,8 +417,11 @@ with (patch.object(maintenance_gate, 'ROOT', root), patch.object(maintenance_gat
         self.assertIn('exceeded its 1s', self.apply()['reason'])
         with closing(version.connect(self.runtime)) as db, db:
             db.execute("UPDATE attempts SET status='running', error=NULL, finished=NULL")
+        from src.api.task_monitor.patch_progress import snapshot
+        self.assertEqual(snapshot(self.root, self.runtime)['status'], 'unconfirmed')
         self.assertIn('manual retry', self.apply()['reason'])
         self.assertEqual(self.notify.call_args.args[0]['status'], 'interrupted')
+        self.assertEqual(snapshot(self.root, self.runtime)['status'], 'interrupted')
 
     def test_version_local_support_is_verified_and_is_not_an_entrypoint(self):
         self.release('0.7.2')

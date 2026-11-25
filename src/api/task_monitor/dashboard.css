@@ -34,6 +34,8 @@ input { accent-color: var(--accent); }
   min-width: 0;
 }
 .strip { margin-bottom: 12px; }
+.patch-line { margin: 3px 0 0; overflow-wrap: anywhere; }
+.patch-line:empty { display: none; }
 .workspace { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 3fr); gap: 14px; align-items: start; }
 #cards { margin-top: 10px; max-height: min(62dvh, 540px); overflow: auto; display: grid; gap: 7px; }
 .card {

@@ -8,10 +8,12 @@ import threading
 import time
 from dataclasses import asdict
 
+from src.automation.paths import ROOT
 from .actions import kill_task, kill_unavailable_reason, prepare_kill
 from .core import TaskFilters, TaskMonitorRepository
 from .managed import SCHEDULE_LOG_PREFIX_BYTES, duplicate_schedule_wrappers
 from .output import OutputCache, format_live_output, parse_live_output
+from . import patch_progress
 from .remote import CHUNK_BYTES, task_key
 from .remote_reader import RemoteCache
 from .resources import sample_resources
@@ -85,7 +87,8 @@ class TaskCenter:
                 tasks.extend(task_summary(task) for task in page.tasks)
                 cursor = page.next_cursor
                 if not cursor:
-                    return dict(tasks=tasks, health=self.health())
+                    return dict(tasks=tasks, health=self.health(),
+                                version_patch=patch_progress.snapshot(ROOT, self.repository.runtime_dir))
         statuses = set(filter(None, params.get('statuses', 'complete,error,killed').split(',')))
         window = params.get('window', 'history')
         if not statuses <= TERMINAL or window not in WINDOWS:
@@ -136,10 +139,16 @@ class TaskCenter:
             from src.automation.artifact_exchange.core import Config
             self.shared_root = Config.load().shared_root
         hosts = {}
-        for path in sorted((self.shared_root / 'runtime').glob('*/index.json')):
-            packet = self.remote_cache.document(path)
+        directories = self.shared_root / 'runtime'
+        for root in sorted({path.parent for name in ('index.json', patch_progress.FILENAME)
+                            for path in directories.glob('*/' + name)}):
+            packet = self.remote_cache.document(root / 'index.json')
             if isinstance(packet, dict) and packet.get('version') in (1, 2):
-                hosts[path.parent.name] = (path.parent, packet)
+                hosts[root.name] = (root, packet)
+            else:
+                progress = self.remote_cache.document(root / patch_progress.FILENAME)
+                if progress and isinstance(progress.get('host'), str):
+                    hosts[root.name] = (root, dict(version=2, host=progress['host'], tasks=[]))
         return hosts
 
     def remote_list(self):
@@ -169,8 +178,10 @@ class TaskCenter:
                     summary['status'] = remote_task_status(task)
                     summaries.append(summary)
                 heartbeat = self.remote_cache.document(root / 'heartbeat.json') if packet['version'] == 2 else packet
+                path = root / patch_progress.FILENAME
+                progress = self.remote_cache.document(path) if path.is_file() else None
                 hosts.append(dict(id=identity, name=packet['host'], sampled_at=(heartbeat or {}).get('sampled_at'),
-                                  tasks=summaries))
+                                  tasks=summaries, version_patch=progress))
             return hosts
 
     def remote_task(self, host, task_id):

@@ -55,6 +55,19 @@ const words = {
   watchdogHealthy: ['Watchdog 正常', 'Watchdog healthy'],
   disabled: ['已停用', 'Disabled'],
   heartbeatMissing: ['心跳过期或缺失', 'Heartbeat missing or stale'],
+  versionPatch: ['版本升级与补丁', 'Version upgrade and patches'],
+  patch_running: ['正在执行补丁，新任务等待', 'Applying patch · new tasks are waiting'],
+  patch_ready: ['版本已就绪', 'Version ready'],
+  patch_pending: ['等待升级', 'Upgrade pending'],
+  patch_partial: ['升级尚未完成', 'Upgrade incomplete'],
+  patch_failed: ['补丁失败，等待恢复', 'Patch failed · recovery required'],
+  patch_interrupted: ['补丁已中断，等待恢复', 'Patch interrupted · recovery required'],
+  patch_uninitialized: ['等待初始化', 'Awaiting initialization'],
+  patch_unavailable: ['无法读取补丁状态', 'Patch status unavailable'],
+  patchLastRunning: ['上次记录为执行中，等待更新', 'Last reported running · awaiting update'],
+  patch_unconfirmed: ['执行已停止，等待核对补丁记录', 'Execution stopped · awaiting reconciliation'],
+  dataVersion: ['数据版本', 'Data version'], targetVersion: ['目标版本', 'Target version'],
+  patchRemaining: ['待验证补丁', 'Patches remaining'], attempt: ['尝试次数', 'Attempt'],
   terminateGroup: ['整个进程组将被终止，自动恢复也将停用。', 'The entire process group will stop and automatic recovery will be disabled.'],
   terminateProcess: ['将终止选中的脚本进程。', 'The selected script process will stop.'],
 };
@@ -153,6 +166,33 @@ function duration(row) {
   const seconds = Math.max(0, Math.floor((row.end_time || Date.now() / 1000) - row.start_time));
   return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
     .map(n => String(n).padStart(2, '0')).join(':');
+}
+
+function renderPatch(progress) {
+  $('patch-status').hidden = !progress;
+  if (!progress) return;
+  const stale = remote && Date.now() / 1000 - progress.sampled_at > 60;
+  const phase = $('patch-phase');
+  phase.textContent = t(stale && progress.status === 'running' ? 'patchLastRunning' : 'patch_' + progress.status);
+  phase.className = ['failed', 'interrupted', 'unavailable'].includes(progress.status) ? 'error'
+    : stale || progress.status !== 'ready' ? 'warning' : '';
+  const detail = remote && progress.host ? [t('server') + ' ' + progress.host] : [];
+  if (progress.applied) detail.push(t('dataVersion') + ' ' + progress.applied);
+  if (progress.target) detail.push(t('targetVersion') + ' ' + progress.target);
+  if (progress.patch) detail.push(progress.patch + ' · ' + progress.script);
+  if (progress.remaining) detail.push(t('patchRemaining') + ' ' + progress.remaining);
+  if (progress.attempt) detail.push(t('attempt') + ' ' + progress.attempt);
+  $('patch-detail').textContent = detail.join(' · ');
+  const timing = [];
+  if (progress.started) {
+    timing.push(t('startTime') + ' ' + date(progress.started));
+    if (progress.status !== 'unconfirmed') timing.push(t('duration') + ' ' + duration({
+      start_time: progress.started, end_time: progress.finished || progress.sampled_at}));
+  }
+  timing.push(t('sampled') + ' ' + date(progress.sampled_at));
+  if (stale) timing.push(t('expired'));
+  $('patch-timing').textContent = timing.join(' · ');
+  $('patch-error').textContent = progress.error || '';
 }
 
 function setOptions(select, values, value) {
@@ -388,6 +428,7 @@ async function refresh() {
       if (!hosts.some(entry => entry.id === host)) host = hosts[0]?.id || '';
       setOptions($('host'), hosts.map(entry => [entry.id, entry.name]), host);
       const server = hosts.find(entry => entry.id === host);
+      renderPatch(server?.version_patch);
       const expired = server && (!server.sampled_at || Date.now() / 1000 - server.sampled_at > 60);
       $('sample').textContent = server ? t('sampled') + ' ' + date(server.sampled_at) + (expired ? ' · ' + t('expired') : '') : t('noHosts');
       $('sample').classList.toggle('warning', Boolean(expired));
@@ -397,6 +438,7 @@ async function refresh() {
       const packet = await request(finished ? '/api/finished' : '/api/running', {query});
       if (version !== revision) return;
       rows = packet.tasks;
+      renderPatch(packet.version_patch);
       if (finished) renderFinishedSummary(packet);
       renderHealth(packet.health);
     }

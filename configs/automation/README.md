@@ -833,6 +833,12 @@ Running 和 Remote Running 共用输出样式设置。
 采样超过 60 秒标记过期，错误记录在 `scheduling/auxiliary/remote_monitor.json`。
 两端离线超过完成后保留窗口可能错过远程日志。
 
+任务中心的「运行中」页读取本机补丁账本。「远程运行」页在所选服务器的任务列表上方
+显示「版本升级与补丁」，可查看数据版本、目标版本、当前脚本、待验证补丁数和尝试次数。
+补丁持有独占代码锁期间，由执行器每 15 秒更新同一共享主机目录的 `version-patch.json`。
+补丁和业务任务分别显示采样时间。补丁快照超过 60 秒未更新时，页面标明上次记录的状态。
+失败或中断后保留原因，重试和验证完成后自动刷新。该功能沿用现有 `remote_monitor` 发布配置。
+
 ## Installation checks and authorized business retiming
 
 The independent Git maintenance service checks installation drift on each tick,

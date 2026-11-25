@@ -35,6 +35,7 @@ class DashboardTest(unittest.TestCase):
         self.running = self.snapshot('run', 'running', self.log)
         self.finished = self.snapshot('old', 'complete', self.report)
         repo = Mock()
+        repo.runtime_dir = self.root / 'runtime'
         repo.get_task.side_effect = {'run': self.running, 'old': self.finished}.get
         repo.list_tasks.side_effect = lambda **params: TaskPage(
             (self.running,) if params['statuses'] == {'running'} else (self.finished,) if params['statuses'] else (),
@@ -125,6 +126,20 @@ class DashboardTest(unittest.TestCase):
         self.assertGreater(self.center.remote_cache.total, 0)
         self.get_json('/api/remote/reload', body={'host': self.host, 'task': 'run'})
         self.assertEqual(self.center.remote_cache.total, 0)
+
+    def test_patch_snapshot_can_arrive_before_the_task_index(self):
+        from src.api.task_monitor.patch_progress import FILENAME
+        from src.shared.file_ops import atomic_json
+
+        path = self.publisher.shared.parent / 'upgrading' / FILENAME
+        progress = dict(host='Upgrading server', status='running', sampled_at=time.time())
+        atomic_json(path, progress)
+        hosts = {row['id']: row for row in self.get_json('/api/remote')}
+        self.assertEqual(hosts['upgrading']['version_patch'], progress)
+        self.assertEqual(hosts['upgrading']['tasks'], [])
+        self.assertIsNone(hosts['upgrading']['sampled_at'])
+        self.assertIsNone(hosts[self.host]['version_patch'])
+        self.assertIsNone(self.get_json('/api/running')['version_patch'])
 
     def test_remote_v1_host_with_same_task_id_loads_its_own_output(self):
         legacy = self.root / 'shared' / 'runtime' / 'legacy'
@@ -226,6 +241,24 @@ class DashboardTest(unittest.TestCase):
             page.locator('nav a[href="/remote"]').click()
             expect(page.locator('#style')).to_have_value('text')
             expect(page.locator('#queue-title')).to_have_text('Running (1) · Queued (1)')
+            from src.api.task_monitor.patch_progress import FILENAME
+            from src.shared.file_ops import atomic_json
+
+            progress = dict(host='test server', status='running', applied='0.7.1', target='0.7.2',
+                            patch='0.7.2/001', script='001_update.py', remaining=2, attempt=1,
+                            started=time.time() - 180, sampled_at=time.time())
+            path = self.publisher.shared / FILENAME
+            atomic_json(path, progress)
+            page.locator('#refresh-page').click()
+            expect(page.locator('#patch-phase')).to_contain_text('Applying patch')
+            expect(page.locator('#patch-detail')).to_contain_text('Patches remaining 2')
+            atomic_json(path, dict(progress, sampled_at=time.time() - 90))
+            page.locator('#refresh-page').click()
+            expect(page.locator('#patch-phase')).to_contain_text('Last reported running')
+            atomic_json(path, dict(host='test server', status='ready', applied='0.7.2', target='0.7.2',
+                                   remaining=0, sampled_at=time.time()))
+            page.locator('#refresh-page').click()
+            expect(page.locator('#patch-phase')).to_have_text('Version ready')
             expect(page.locator('.card[data-task-id="queued"]')).to_contain_text('Queued')
             expect(page.locator('.output')).to_contain_text('Remote output')
             viewport = page.locator('.live-output')

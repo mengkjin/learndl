@@ -54,6 +54,7 @@ VERSION_FILE = 'src/__version__.py'
 PATCH_DIRECTORY = 'scripts/.version_patch'
 _LEGACY_PATCH_DIRECTORY = 'scripts/.version_autofix'
 DEFAULT_TIMEOUT = 1800
+MONITOR_INTERVAL = 15
 VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)')
 FILENAME = re.compile(r'([0-9]{3,})_([a-z][a-z0-9_]*)\.py')
 
@@ -558,7 +559,8 @@ def check_committed(root: Path, commit: str, patch: Patch) -> None:
             raise MigrationError(f'Patch input differs from committed source: {name}')
 
 
-def run_patch(root: Path, patch: Patch, context: Context, pass_fds: tuple[int, ...]) -> None:
+def run_patch(root: Path, patch: Patch, context: Context, pass_fds: tuple[int, ...],
+              report: Callable[[], None] | None = None) -> None:
     payload = json.dumps({key: str(value) for key, value in asdict(context).items()})
     args = [sys.executable, '-m', 'src.automation.version_patch', '_patch',
             str(root / patch.relative_path), patch.digest, str(patch.timeout), payload]
@@ -566,7 +568,16 @@ def run_patch(root: Path, patch: Patch, context: Context, pass_fds: tuple[int, .
         child = subprocess.Popen(args, cwd=ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                  start_new_session=True, pass_fds=pass_fds)
         try:
-            exit_code = child.wait(timeout=patch.timeout)
+            deadline = time.monotonic() + patch.timeout
+            while True:
+                remaining = max(0, deadline - time.monotonic())
+                try:
+                    exit_code = child.wait(timeout=min(MONITOR_INTERVAL, remaining) if report else remaining)
+                    break
+                except subprocess.TimeoutExpired:
+                    if not report or time.monotonic() >= deadline:
+                        raise
+                    report()
             if exit_code:
                 raise MigrationError(f'Patch process exited with status {exit_code}')
             try:
@@ -631,6 +642,7 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
                   baseline: str | None = None) -> dict:
     """Caller holds both exclusive leases for the entire transition."""
     from src.automation.patch_services import PatchServices
+    from src.api.task_monitor.patch_progress import publisher
 
     services = PatchServices(root, runtime) if root.resolve() == ROOT else None
     # Recovery is preflight work, not a failed attempt at the next data patch.
@@ -642,9 +654,10 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
             return {'status': 'deferred', 'reason': f'Interface recovery pending: {exc}'}
         if services.journal.exists():
             return {'status': 'deferred', 'reason': 'Interface recovery pending', 'interfaces': recovery}
+    report = publisher(root, runtime)
     try:
         result = _apply_pending(root, runtime, pass_fds=pass_fds, notify=notify, retry=retry,
-                                baseline=baseline, services=services)
+                                baseline=baseline, services=services, report=report)
     except BaseException:
         if services and services.journal.exists():
             try:
@@ -652,6 +665,8 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
             except Exception as exc:
                 logger.error('Could not recover diagnostic interfaces: %s', exc)
         raise
+    if report:
+        report()
     if services and result['status'] in {'ready', 'blocked'} and services.journal.exists():
         try:
             result['interfaces'] = services.restore(ready=result['status'] == 'ready')
@@ -660,7 +675,7 @@ def apply_pending(root: Path, runtime: Path, *, pass_fds: tuple[int, ...],
     return result
 
 
-def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services):
+def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services, report):
     with closing(connect(runtime)) as db:
         stored_baseline, _ = read_state(db)
         if baseline is not None:
@@ -730,7 +745,9 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
                     for old in db.execute('SELECT log_path FROM attempts WHERE patch=? AND id!=?',
                                           (patch.id, key)):
                         services.collect_paths(Path(old['log_path']).parent / 'backup')
-                run_patch(root, patch, context, pass_fds)
+                if report:
+                    report()
+                run_patch(root, patch, context, pass_fds, report)
                 if patch.id == '0.7.2/001' and services is not None:
                     services.collect_paths(backups)
                 if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
