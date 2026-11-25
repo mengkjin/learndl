@@ -8,6 +8,7 @@ from pathlib import Path
 from .core import ModelPath
 from .lifecycle import ModelLifecycle, _digest, _read, _target_digest, _write
 
+__all__ = ['registration', 'plan', 'execute']
 
 def registration(name, options):
     if not isinstance(options, Mapping) or set(options) - {'stage', 'start', 'end', 'rerun_mark'}:

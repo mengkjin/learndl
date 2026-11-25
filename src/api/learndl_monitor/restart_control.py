@@ -28,7 +28,7 @@ def restart_link(service: str, port: int, *, state=STATE, fixed=False, browser_u
             origin = f'https://{browser.hostname}:{console_port}'
     query = '?' + urlencode({'lang': language}) if language in ('zh', 'en') else ''
     address = escape(f'{origin}/{query}#{fragment}', quote=True)
-    caption = {'en': 'Restart service', 'zh': '重启服务'}.get(language, '重启服务 / Restart service')
+    caption = {'en': 'Restart service', 'zh': '重启服务'}.get(language or '', '重启服务 / Restart service')
     position = 'position:fixed;right:.8rem;top:3.5rem;z-index:999;' if fixed else ''
     return (f'<a class="service-restart" href="{address}" target="_self" '
             f'title="{caption}" aria-label="{caption}" '

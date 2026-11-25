@@ -398,7 +398,7 @@ class ModelLifecycle:
         if not manager.state:
             return
         from src.proj import Save
-        Save.async_wait_all(caller_name='ModelLifecycle.record_node')
+        Save.async_wait_all(raise_first_error=True, caller_name='ModelLifecycle.record_node')
         config = trainer.config
         manifest = _read(manager.manifest_file)
         for submodel in config.submodels:

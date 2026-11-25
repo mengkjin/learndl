@@ -157,6 +157,13 @@ Ask the human before any new external scrape or introducing a new data provider.
 Do not suggest committing paths under `.local_resources/` or `.secret/` to git.
 
 ## Post-edit checks (substantive code changes)
+
+Starting with v0.7.11, every version bump must ship a release entry at the top
+of the repository's `CHANGELOG.md` in the same release change. Use a
+`## v<version>` heading matching `src/__version__.py` and describe the actual
+changes since the preceding release, including migrations and operator actions
+when applicable. Retain prior entries. Release review runs
+`python -m unittest tests.automation.test_version_patch.ReleaseNotesTest`.
 ```bash
 .venv/bin/ruff check src scripts
 .venv/bin/pyright --pythonpath .venv/bin/python src scripts

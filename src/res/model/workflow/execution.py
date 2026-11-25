@@ -106,7 +106,18 @@ class ScheduleWorklist:
         from src.res.model.util.training_history import collect_training_runs
         from src.automation.scheduling.training_maintenance import TrainingPaused, continuation, worklist_entry
 
-        worklist, _, errors = load_worklists(automatic=bool(self.kwargs.get('automatic')))
+        automatic = bool(self.kwargs.get('automatic'))
+        ticket = self.kwargs.get('maintenance_ticket')
+        automatic_source = automatic
+        if ticket:
+            paused = ticket['worklist']
+            if 'automatic_source' in paused:
+                automatic_source = paused['automatic_source']
+            else:
+                # Legacy idle jobs selected a single tracked item. A resumed manual batch also has a parent.
+                automatic_source = bool(ticket.get('managed_parent') and not paused['remaining']
+                                        and paused['revisions']['worklist'].get('git_commit'))
+        worklist, _, errors = load_worklists(automatic=automatic_source)
         for error in errors:
             Logger.warning(error)
         entries = WorklistState.entries(worklist)
@@ -124,15 +135,13 @@ class ScheduleWorklist:
                     raise AutomaticDeferred(f'Schedule [{only_schedule}] is no longer eligible')
                 raise ValueError(f'Schedule [{only_schedule}] is no longer in worklist')
             schedules = [only_schedule]
-        if not MACHINE.platform_server:
-            schedules = schedules[:self.max_test_schedules]
-        ticket = self.kwargs.get('maintenance_ticket')
         if ticket:
             paused = ticket['worklist']
-            eligible = [name for name in schedules if name in paused['remaining']]
-            schedules = ([paused['name']] if paused['name'] in schedules else []) + eligible
+            schedules = [name for name in [paused['name'], *paused['remaining']] if name in schedules]
             if not schedules:
                 raise AutomaticDeferred('Paused worklist entries were removed')
+        elif not MACHINE.platform_server:
+            schedules = schedules[:self.max_test_schedules]
         Logger.critical(f'Training schedule model list {", ".join(schedules)} started')
         failed = []
         with as_script_main(self.SCHEDULE_SCRIPT):
@@ -152,7 +161,6 @@ class ScheduleWorklist:
                 try:
                     previous = state.read()
                     revisions = state.revisions(schedule_name, worklist=worklist)
-                    automatic = bool(self.kwargs.get('automatic', False))
                     resume_ticket = ticket if ticket and ticket['worklist']['name'] == schedule_name else None
                     if resume_ticket and (resume_ticket['worklist']['revisions'] != revisions or
                                           (previous or {}).get('maintenance_resume_id') != resume_ticket['id']):
@@ -172,7 +180,7 @@ class ScheduleWorklist:
                     effective_force = force and not (automatic and previous and previous.get('status') == 'success' and previous.get('revisions') == revisions)
                     reason, effective_resume = state.decision(previous, revisions, force=effective_force, resume=resume)
                     if reason == 'completed':
-                        if automatic:
+                        if automatic and not ticket:
                             raise AutomaticDeferred('Already completed')
                         Logger.note(f'Skip [{schedule_name}]: successful training already recorded')
                         continue
@@ -206,6 +214,7 @@ class ScheduleWorklist:
                     with collect_training_runs(on_update=record_progress) as runs:
                         try:
                             metadata = {'name': schedule_name, 'revisions': revisions, 'remaining': schedules[index + 1:],
+                                        'automatic_source': automatic_source,
                                         'reference': reference_for(worklist, schedule_name)}
                             with worklist_entry(metadata), continuation(resume_ticket):
                                 task = self._train_one_schedule(

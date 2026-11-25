@@ -15,10 +15,18 @@ from tempfile import TemporaryDirectory
 from .core import (ArtifactSpec, Config, _copy, atomic_json, digest, fsync_dir, locked,
                    publish_artifacts, real_tree, retry, safe_path, sandboxed)
 
+__all__ = [
+    'CATEGORY', 'PAYLOAD', 'WEIGHTS', 'relative_path', 'members', 'finished_report',
+    'install', 'publisher', 'publish', 'batched', 'saved', 'model_files',
+    'publish_approved_model_safe', 'sync_current', 'sync_current_safe',
+]
+
 CATEGORY = 'production'
 PAYLOAD = 'production'
 WEIGHTS = {'state_dict.pt', 'boost_dict.pt', 'boost_head.pt'}
-_SAVES = ContextVar('production_artifact_saves', default=None)
+_SaveResult = bool | Future[bool]
+_SAVES: ContextVar[tuple[tuple[Config, Path], list[tuple[Path, _SaveResult]]] | None] = ContextVar(
+    'production_artifact_saves', default=None)
 
 
 def relative_path(name: str):
@@ -246,7 +254,7 @@ def batched(function):
     return wrapped
 
 
-def saved(path, result=True):
+def saved(path: Path, result: _SaveResult = True):
     """Record a known successful save or a future for a known production output."""
     if result is False:
         return

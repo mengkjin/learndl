@@ -17,7 +17,7 @@ from src.automation.console import logger
 from src.data.quality.valid_dates import load_valid_dates
 from src.proj import CALENDAR, DB, MACHINE, PATH, Save
 from src.res.factor.util import Portfolio, Universe
-from src.res.trading.trading_port import BacktestPort, TrackingPort
+from src.res.trading.trading_port import BacktestPort, TrackingPort, TradingPort
 from src.shared.file_ops import atomic_json, fsync_dir, real_tree
 
 FIRST_AFFECTED_DATE = 20260101
@@ -49,8 +49,11 @@ class ReplayUniverse(Universe):
         return super().get_universe_df(date, rebuild=rebuild, write_cache=False)
 
 
-class StagedPaths:
+class StagedPaths(TradingPort):
     """Use the normal trading writers with their outputs redirected to staging."""
+
+    stage: Path
+    root: Path
 
     def stage_path(self, path):
         return self.stage / path.relative_to(self.root)
@@ -69,6 +72,8 @@ class StagedTrackingPort(StagedPaths, TrackingPort):
 
 
 class StagedBacktestPort(StagedPaths, BacktestPort):
+    first_replay_date: int
+
     def end_date(self):
         return max(self.first_replay_date - 1, super().end_date())
 

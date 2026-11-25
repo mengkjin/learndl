@@ -292,6 +292,9 @@ class PredRecorder(TrainerPipeline):
         prev_models = valid_models.query('model_date < @closest_model_date')
         resumed_models = prev_models.query('max_pred_date <= @max_pred_date')[['model_date' , 'model_num']].reset_index(drop=True)
         self.resumed_models = resumed_models
+        if self.retrained_models:
+            # Later unaffected archives can extend beyond a hole left by refitting an earlier node.
+            max_pred_date = min(max_pred_date, min(date for date, _ in self.retrained_models))
         if Const.Model.resume_test_start == 'last_model_date':
             if not prev_models.empty:
                 max_pred_date = min(max_pred_date , prev_models['max_pred_date'].max())
@@ -425,14 +428,12 @@ class PredRecorder(TrainerPipeline):
     def on_fit_model_end(self):
         self.append_retrained_model()
 
-    def on_fit_end(self):
-        self.purge_retrained_model_preds()
-
     def on_test_start(self):
         if self.config.module_type == 'linear':
             return  # Prepared in data stage, before reading final inputs.
+        self.purge_retrained_model_preds()
         self.purge_outdated_model_preds()
-        if self.has_purged_preds:
+        if self.has_purged_preds or self.retrained_models:
             self.setup_resuming_status()
             self.has_purged_preds = False
         if self.resume_info:

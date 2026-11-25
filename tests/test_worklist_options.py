@@ -126,6 +126,7 @@ class WorklistExecutionTest(TestCase):
     def test_manual_batch_continues_active_item_then_remaining_items(self):
         from src.automation.scheduling import training_maintenance as maintenance
 
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time', return_value=None))
         def pause_first(**kwargs):
             paused = maintenance._worklist.get()
             raise maintenance.TrainingPaused({
@@ -137,15 +138,34 @@ class WorklistExecutionTest(TestCase):
             paused = CarryOutScheduleWorkList().run()
         enqueue.assert_called_once_with(paused)
         self.assertEqual(self.main.call_count, 1)
-        self.assertEqual(WorklistState('one').read()['status'], 'paused')
+        self.assertEqual((WorklistState('one').read() or {}).get('status'), 'paused')
         self.assertEqual(paused.ticket['worklist']['remaining'], ['two'])
+        self.assertFalse(paused.ticket['worklist']['automatic_source'])
 
         self.main.side_effect = self.train
+        (self.worklist.parent / 'extra.yaml').write_text('fit: [three]\n')
+        CarryOutScheduleWorkList(automatic=True).run()
+        self.assertEqual(self.main.call_count, 1)
         CarryOutScheduleWorkList(automatic=True, maintenance_ticket=paused.ticket).run()
         self.assertEqual([call.kwargs['schedule_name'] for call in self.main.call_args_list], ['one', 'one', 'two'])
         self.assertTrue(self.main.call_args_list[1].kwargs['resume'])
-        self.assertEqual(WorklistState('one').read()['status'], 'success')
-        self.assertEqual(WorklistState('two').read()['status'], 'success')
+        self.assertEqual(self.main.call_args_list[1].kwargs['resume_selection'], 'latest')
+        for name in ('one', 'two'):
+            self.assertEqual((WorklistState(name).read() or {}).get('status'), 'success')
+
+    def test_legacy_manual_batch_keeps_order_and_skips_completed_items(self):
+        extra = self.worklist.parent / 'remaining.yaml'
+        extra.write_text('fit: [three, four, new]\n')
+        self.enterContext(patch('src.res.model.workflow.worklists.git_time',
+                                side_effect=lambda path: None if path == extra else 1))
+        with patch('src.res.model.util.training_history.git', return_value='tracked'):
+            revisions = WorklistState.revisions('one')
+            WorklistState('one').save(status='paused', revisions=revisions, maintenance_resume_id='pause')
+            WorklistState('two').save(status='success', revisions=WorklistState.revisions('two'))
+            ticket = {'id': 'pause', 'managed_parent': 'previous-worker',
+                      'worklist': {'name': 'one', 'remaining': ['four', 'two', 'three'], 'revisions': revisions}}
+            CarryOutScheduleWorkList(automatic=True, maintenance_ticket=ticket).run()
+        self.assertEqual([call.kwargs['schedule_name'] for call in self.main.call_args_list], ['one', 'four', 'three'])
 
     def test_superseded_paused_request_does_not_open_old_model(self):
         ticket = {'id': 'test-run', 'worklist': {'name': 'one', 'remaining': [], 'revisions': WorklistState.revisions('one')}}

@@ -1,4 +1,10 @@
 """Operator permissions shared by the loopback services and phone gateway."""
+from __future__ import annotations
+
+__all__ = [
+    'ROLE_HEADER', 'FORWARDED_HEADERS', 'GUEST_SERVICES', 'ADMIN_REQUIRED',
+    'is_guest', 'role_page', 'permits_guest_action',
+]
 
 ROLE_HEADER = 'X-LearnDL-Role'
 FORWARDED_HEADERS = ('X-Forwarded-For', 'X-Forwarded-Host', 'X-Forwarded-Proto')

@@ -240,7 +240,7 @@ def load_asof_cross_sections(
     if max_age_months is not None:
         requested_days = pd.to_datetime(remaining.astype(str), format='%Y%m%d')
         cutoff = requested_days - pd.DateOffset(months=max_age_months)
-        earliest = dict(zip(remaining, cutoff.strftime('%Y%m%d').astype(int)))
+        earliest = dict(zip(map(int, remaining), map(int, cutoff.strftime('%Y%m%d'))))
 
     valid_dates = list(valid_dates)
     frames: list[pd.DataFrame] = []

@@ -313,7 +313,7 @@ class BaseTrainer(BasePipeline):
         from src.res.model.util.lifecycle import ModelLifecycle
         from src.automation.scheduling.training_maintenance import validate_active_checkpoint
         with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
-            validate_active_checkpoint()
+            self.record.retrained_models.extend(validate_active_checkpoint())
             self.data.memory_tracker = self.memory_tracker
             self.memory_tracker.mark('trainer_setup_complete')
 
@@ -420,6 +420,7 @@ class BaseTrainer(BasePipeline):
                     if self.status.model_num == self.config.model_num_list[-1]:
                         self.on_fit_model_date_end()
                     checkpoint(self)
+                self.record.purge_retrained_model_preds()
                 self.on_fit_end()
                 self.on_fit_end_after()
                 self.config.log_operation('fit' , 'end')

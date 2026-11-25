@@ -25,6 +25,19 @@ from src.automation.scheduling.runtime import RunStore
 __all__ = ['VersionPatchTest']
 
 
+class ReleaseNotesTest(unittest.TestCase):
+    def test_current_release_has_a_changelog_entry(self):
+        root = Path(__file__).resolve().parents[2]
+        current = version.code_version(root)
+        changelog = (root / 'CHANGELOG.md').read_text(encoding='utf-8')
+        entries = changelog.split('\n## ')
+        self.assertGreater(len(entries), 1, 'Add the current release to CHANGELOG.md')
+        heading, _, body = entries[1].partition('\n')
+        self.assertEqual(heading, f'v{current}')
+        self.assertTrue(any(line.startswith('- ') and line[2:].strip() for line in body.splitlines()),
+                        'Describe at least one release change')
+
+
 class VersionPatchTest(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()

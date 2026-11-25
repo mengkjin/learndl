@@ -1,9 +1,23 @@
 """Language selection shared by the Streamlit services opened from the console."""
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import overload
+
 import streamlit as st
 
+__all__ = ['text', 'page_toolbar']
 
 def text(zh, en):
     return zh if st.session_state.get('monitor_language') == 'zh' else en
+
+
+@overload
+def page_toolbar[T](*, default: str = 'zh', render_settings: Callable[[], T]) -> tuple[bool, T]: ...
+
+
+@overload
+def page_toolbar(*, default: str = 'zh', render_settings: None = None) -> tuple[bool, None]: ...
 
 
 def page_toolbar(*, default='zh', render_settings=None):
@@ -43,7 +57,7 @@ def page_toolbar(*, default='zh', render_settings=None):
         with st.popover(settings_label, icon=':material/settings:', help=settings_label,
                         key='monitor-page-settings'):
             with st.container(key='monitor-settings-fields'):
-                st.selectbox(text('页面语言', 'Page language'), list(names), format_func=names.get,
+                st.selectbox(text('页面语言', 'Page language'), list(names), format_func=names.__getitem__,
                              key='monitor_language_choice')
                 settings = render_settings() if render_settings else None
         refresh_label = text('刷新', 'Refresh')

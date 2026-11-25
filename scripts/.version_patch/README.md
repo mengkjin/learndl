@@ -4,6 +4,10 @@ Use a version patch when a release changes the format or layout of local files s
 `models/` and `data/`. Commit the patch and the new `src/__version__.py` together.
 The existing Autofix queue is for individual operational repair requests.
 
+Every release starting with v0.7.11 requires an entry in the root
+[CHANGELOG.md](../../CHANGELOG.md). Record the effects of each migration and
+any deployment or verification steps operators need.
+
 On each server, publish the updated scheduler and bootstrap with
 `bash runs/install_schedules.sh plan --host <host> --diff` and the corresponding
 `apply --host <host>` in an idle maintenance window. The Git maintenance timer

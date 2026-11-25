@@ -164,11 +164,12 @@ class Manager:
         with self._restart_lock:
             if self._restart_batch and self._restart_batch['active']:
                 raise ValueError('A service restart batch is already running')
-            self._restart_batch = {'active': True, 'services': {key: {'state': 'pending'} for key in confirmed}}
+            batch = {'active': True, 'services': {key: {'state': 'pending'} for key in confirmed}}
+            self._restart_batch = batch
 
         def record(key, state, error=''):
             with self._restart_lock:
-                self._restart_batch['services'][key] = {'state': state, 'error': error}
+                batch['services'][key] = {'state': state, 'error': error}
 
         def run():
             # Interface operations share a lock with version patches. Wait for
@@ -192,10 +193,11 @@ class Manager:
                         record(key, 'failed', str(exc))
             finally:
                 with self._restart_lock:
-                    self._restart_batch['active'] = False
+                    batch['active'] = False
 
         threading.Thread(target=run, daemon=True).start()
-        return self.restart_status()
+        with self._restart_lock:
+            return {'active': batch['active'], 'services': batch['services'].copy()}
 
     def submit(self, key, action, identity, created=None):
         if not isinstance(key, str) or not isinstance(action, str):

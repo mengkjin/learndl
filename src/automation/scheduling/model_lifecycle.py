@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from .recovery import record, recovery_plan
 
+__all__ = ['TASK', 'candidate', 'execute']
+
 TASK = 'model_promotion'
 
 

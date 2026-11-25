@@ -102,7 +102,8 @@ class ModelTrainer(BaseTrainer):
                 raise
             if not requests:
                 if failures:
-                    production_notice('finished', 'Production model scan failed:\n' + '\n'.join(scan_errors))
+                    if production_notice is not None:
+                        production_notice('finished', 'Production model scan failed:\n' + '\n'.join(scan_errors))
                     raise ExceptionGroup('Production model scan failed', failures)
                 cls.logger.info('No production models are due for training.')
                 return
@@ -113,7 +114,7 @@ class ModelTrainer(BaseTrainer):
                 nonlocal reported_wait
                 message = f'Waiting for training lock ({elapsed:.0f}s elapsed). Due models: {names}'
                 cls.logger.info(message)
-                if not reported_wait:
+                if not reported_wait and production_notice is not None:
                     production_notice('waiting', message)
                     reported_wait = True
 

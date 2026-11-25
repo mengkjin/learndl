@@ -16,6 +16,8 @@ This directory is the single editable source for non-training automation setting
 and `autofix.yaml` declares one-shot repairs. See [autofix operations](AUTOFIX.md).
 Model/worklist/RL configurations and `.secret` machine settings stay in place.
 
+## Overnight production training
+
 The `production_model_update` task checks registered production models daily at
 00:10 Asia/Shanghai. It shares the `daily_update` execution lock with both daily
 update modes. Requests queue when the lock is occupied. Production training waits
@@ -23,6 +25,8 @@ for current data and reserves fit priority for the entire batch once due models
 are found. It sends batch mail on training-lock contention, acquisition and
 completion. A check with no due models only writes a log. Publish the new timer
 through the Watchdog Installer and verify it in `status` after installation.
+
+## Installation and maintenance
 
 Historical RCQuant minute-bar backfill is complete. `backfills.yaml` now has no
 calendar schedules, and daily update no longer invokes backfill. The registered
@@ -721,11 +725,9 @@ A confirmed Git fast-forward that raises the project version, an applicable
 version patch or an authorized background installation can request the pause.
 Ordinary Git changes wait for the existing code locks to become free.
 
-`production_model_update` owns production model continuation. It requests
-priority after verifying data readiness and finding due production models.
-The overnight task takes the fit lock for that production batch. Worklist and CLI fits
-already running yield at their next saved node, and queued research waits until
-the production batch exits. The lock is released when the batch exits.
+When the [overnight production batch](#overnight-production-training) requests the fit
+lock, checkpoint-aware worklist and CLI fits yield after saving their current node
+and invalidating its stale predictions. Queued research waits until the batch releases the lock.
 
 The idle worker also runs explicit [model upgrades](../strategy/MODEL_LIFECYCLE.md#one-shot-upgrades)
 in isolated candidates. See the [next-version scheduler design and trial](TRAINING_SCHEDULER_NEXT_VERSION.md)
@@ -735,7 +737,9 @@ The independent training worker continues paused research from the same model
 directory after the production batch or maintenance releases admission.
 It verifies the saved checkpoint before fitting any more nodes. Removed worklist
 entries are skipped, and changed versions are evaluated by the normal worklist
-rules. A paused manual batch retains the items it still needs to visit.
+rules. A paused manual batch retains its original remaining items and their order,
+including entries from worklists without Git history. Before testing, the recorder
+checks predictions for the refitted nodes recorded on the continuation ticket.
 
 The pause log includes a resume ID. Cancel a continuation that is still waiting
 with `python -m src.automation.scheduling.idle_worklist cancel-resume RESUME_ID`.

@@ -332,6 +332,33 @@ class SellsidePortfolioFreshnessTest(unittest.TestCase):
         self.enterContext(patch.object(AlphaComponent, '_cache_normalized', {}))
         self.enterContext(patch.object(AlphaComponent, '_cache_unnormalized', {}))
 
+    def test_signed_components_extend_independent_caches(self):
+        from src.res.factor.util.classes.alpha_model import AlphaComponent
+
+        dates = [20240228, 20240229]
+        for date in dates:
+            DB.save(pd.DataFrame({'secid': [1, 2, 3], 'score': [1., 4., 8.], 'second': [2., 3., 5.]}),
+                    'sellside', 'scores', date, vb_level='never')
+        expression = 'sellside@scores@score'
+        for normalize in (False, True):
+            pos = AlphaComponent(expression, normalize=normalize)
+            neg = AlphaComponent('-' + expression, normalize=normalize)
+            for query in (dates[:1], dates, dates):
+                negative = neg.get_alpha_model(query)
+                positive = pos.get_alpha_model(query)
+                self.assertEqual(neg.name, '-sellside@scores')
+                self.assertEqual(negative.name, neg.name)
+                for date in query:
+                    values = positive.get(date).alpha_of([1, 2, 3])
+                    self.assertTrue(np.isfinite(values).all())
+                    np.testing.assert_allclose(negative.get(date).alpha_of([1, 2, 3]), -values)
+                    if normalize:
+                        self.assertFalse(np.allclose(values, [1., 4., 8.]))
+                    else:
+                        np.testing.assert_allclose(values, [1., 4., 8.])
+        other = AlphaComponent('-sellside@scores@second', normalize=False).get_alpha_model(dates)
+        np.testing.assert_array_equal(other.get(dates[-1]).alpha_of([1, 2, 3]), [-2., -3., -5.])
+
     def test_factor_alias_masks_expired_dates_even_after_a_fresh_read(self):
         from src.res.factor.calculator import StockFactorHierarchy
         from src.res.factor.defs.affiliate.level0.external.sellside import df_scores_v3

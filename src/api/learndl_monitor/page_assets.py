@@ -1,6 +1,9 @@
 """Shared browser assets for the native monitor pages."""
+from __future__ import annotations
+
 from pathlib import Path
 
+__all__ = ['PAGE_ASSETS', 'serve_page_asset']
 
 PAGE_ASSETS = {
     '/monitor-navigation.js': ('navigation.js', 'text/javascript'),

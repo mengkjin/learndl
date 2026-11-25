@@ -1,6 +1,7 @@
 """Maintenance requests and durable continuations for checkpoint-aware training."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
@@ -13,11 +14,18 @@ import time
 from src.shared.file_ops import atomic_json
 from .config import installed_config, runtime_dir
 
+__all__ = [
+    'TASK', 'ENTRIES', 'TrainingPaused', 'available', 'publish_request', 'maintenance_request',
+    'worklist_entry', 'continuation', 'checkpointed_script', 'checkpoint_group', 'checkpoint',
+    'enqueue', 'candidate', 'cancel', 'record_pause', 'configure_resume', 'validate_checkpoint',
+    'validate_active_checkpoint', 'previous_training_run', 'validate_remaining_nodes', 'execute',
+]
+
 TASK = 'maintenance_resume'
 ENTRIES = {'model': '1_train_model.py', 'schedule': '2_schedule_model.py'}
-_entry = ContextVar('maintenance_training_entry', default=None)
-_worklist = ContextVar('maintenance_training_worklist', default=None)
-_resume = ContextVar('maintenance_training_resume', default=None)
+_entry: ContextVar[str | None] = ContextVar('maintenance_training_entry', default=None)
+_worklist: ContextVar[dict | None] = ContextVar('maintenance_training_worklist', default=None)
+_resume: ContextVar[dict | None] = ContextVar('maintenance_training_resume', default=None)
 
 
 class TrainingPaused(BaseException):
@@ -90,9 +98,9 @@ def continuation(ticket):
 
 def checkpointed_script(kind):
     """Register only standard training entry points. A batch owns its own exit."""
-    def decorate(func):
+    def decorate[**P, R](func: Callable[P, R]) -> Callable[P, R | TrainingPaused]:
         @wraps(func)
-        def wrapped(*args, **kwargs):
+        def wrapped(*args: P.args, **kwargs: P.kwargs) -> R | TrainingPaused:
             token = _entry.set(kind)
             try:
                 return func(*args, **kwargs)
@@ -133,7 +141,7 @@ def checkpoint(trainer):
     request = maintenance_request(group)
     if request is None:
         return
-    Save.async_wait_all(caller_name='maintenance checkpoint')
+    Save.async_wait_all(raise_first_error=True, caller_name='maintenance checkpoint')
     date, number = int(trainer.model_date), int(trainer.model_num)
     manager = ModelLifecycle(config.base_path.base)
     files = {}
@@ -151,10 +159,12 @@ def checkpoint(trainer):
                 files.update({f'archive/{fitted_number}/{fitted_date}/{submodel}/{name}': digest
                               for name, digest in weights.items()})
     run = trainer.training_run
+    trainer.record.purge_retrained_model_preds()
     ticket = {
         'id': run.run_id, 'entry': kind, 'managed_parent': managed, 'worklist': worklist,
         'maintenance': request, 'model_path': str(manager.base.absolute()), 'weights': files,
         'node': [date, number], 'completed': completed, 'created_at': time.time(),
+        'retrained': [[int(d), int(n)] for d, n in trainer.record.retrained_models],
         'config_files': {str(path.relative_to(manager.base)): _checksum(path)
                          for path in config.base_path.conf().glob('*.yaml')},
         'start': config.beg_date, 'end': config.end_date,
@@ -263,9 +273,12 @@ def validate_checkpoint(ticket, field='weights'):
             raise ValueError(f'Maintenance resume checkpoint is missing or changed: {path}')
 
 
-def validate_active_checkpoint():
+def validate_active_checkpoint() -> list[tuple[int, int]]:
     if ticket := _resume.get():
         validate_checkpoint(ticket)
+        # Older tickets only recorded the completed prefix, including reused weights.
+        return [(int(d), int(n)) for d, n in ticket.get('retrained', ticket['completed'])]
+    return []
 
 
 def previous_training_run():

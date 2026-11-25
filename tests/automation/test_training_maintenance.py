@@ -33,7 +33,9 @@ class TrainingMaintenanceTest(TestCase):
     def test_verified_request_and_scoped_authorized_install(self):
         self.assertIsNone(maintenance.maintenance_request('research'))
         maintenance.publish_request('git', 'new-head')
-        self.assertEqual(maintenance.maintenance_request('research')['id'], 'new-head')
+        request = maintenance.maintenance_request('research')
+        assert request is not None
+        self.assertEqual(request['id'], 'new-head')
         maintenance.publish_request('git')
         self.installation.return_value = {
             'id': 'install-1', 'phase': 'waiting', 'groups': ['manual'],
@@ -42,7 +44,9 @@ class TrainingMaintenanceTest(TestCase):
         }
         with patch('src.automation.scheduling.runtime.boot_id', return_value='boot'):
             self.assertIsNone(maintenance.maintenance_request('research'))
-            self.assertEqual(maintenance.maintenance_request('manual')['id'], 'install-1')
+            request = maintenance.maintenance_request('manual')
+            assert request is not None
+            self.assertEqual(request['id'], 'install-1')
             self.installation.return_value['phase'] = 'cancelled'
             self.assertIsNone(maintenance.maintenance_request('manual'))
 
@@ -61,7 +65,8 @@ class TrainingMaintenanceTest(TestCase):
             beg_date=20240102, end_date=20240103, queue_of_stages=['fit', 'test'],
             model_config=SimpleNamespace(schedule_name=None),
         )
-        trainer = SimpleNamespace(config=config, model_date=20240102, model_num=1,
+        recorder = Mock(retrained_models=[(20240102, 1)])
+        trainer = SimpleNamespace(config=config, record=recorder, model_date=20240102, model_num=1,
                                   data=SimpleNamespace(model_date_list=[20240102, 20240103]),
                                   training_run=SimpleNamespace(run_id='a' * 32), logger=Mock())
         maintenance.publish_request('git', 'new-head')
@@ -73,12 +78,25 @@ class TrainingMaintenanceTest(TestCase):
                     maintenance.checkpoint(trainer)
                 finally:
                     self.assertIsNone(maintenance.candidate(self.store))
+            with patch.object(recorder, 'purge_retrained_model_preds', side_effect=OSError('cleanup failed')):
+                with self.assertRaisesRegex(OSError, 'cleanup failed'):
+                    train()
+            self.assertFalse((self.root / 'maintenance-resumes').exists())
+            sync.reset_mock()
             pause = train()
-        sync.assert_called_once()
+        sync.assert_called_once_with(raise_first_error=True, caller_name='maintenance checkpoint')
+        recorder.purge_retrained_model_preds.assert_called_once_with()
+        assert isinstance(pause, maintenance.TrainingPaused)
         self.assertEqual(pause.ticket['completed'], [[20240102, 0], [20240102, 1]])
+        self.assertEqual(pause.ticket['retrained'], [[20240102, 1]])
         request = maintenance.candidate(self.store)
+        assert request is not None
         self.assertEqual(request['id'], pause.ticket['id'])
         with maintenance.continuation(pause.ticket):
+            self.assertEqual(maintenance.validate_active_checkpoint(), [(20240102, 1)])
+            legacy = {k: v for k, v in pause.ticket.items() if k != 'retrained'}
+            with maintenance.continuation(legacy):
+                self.assertEqual(maintenance.validate_active_checkpoint(), [(20240102, 0), (20240102, 1)])
             args, kwargs = {}, {}
             maintenance.configure_resume(args, kwargs)
             self.assertEqual(args['base_path'], base)
@@ -122,8 +140,10 @@ class TrainingMaintenanceTest(TestCase):
                     deadline = time.monotonic() + 3
                     while not FitLock.production_requested() and time.monotonic() < deadline:
                         time.sleep(.01)
-                    self.assertEqual(maintenance.maintenance_request('research')['kind'], 'production_model_update')
-                    self.assertEqual(maintenance.maintenance_request('manual')['kind'], 'production_model_update')
+                    for group in ('research', 'manual'):
+                        request = maintenance.maintenance_request(group)
+                        assert request is not None
+                        self.assertEqual(request['kind'], 'production_model_update')
                     self.assertFalse(production_started.is_set())
                 self.assertTrue(production_started.wait(3))
                 self.assertFalse(research_started.is_set())
@@ -207,7 +227,9 @@ with guard:
         self.store.put(dict(parent, phase='error'))  # Parent could not persist its return code before reboot.
         maintenance.record_pause(self.store, parent['id'])
         self.assertFalse(idle_exit_needs_email(self.store, self.store.get(parent['id'])))
-        self.assertEqual(maintenance.candidate(self.store)['id'], ticket['id'])
+        request = maintenance.candidate(self.store)
+        assert request is not None
+        self.assertEqual(request['id'], ticket['id'])
 
     def test_script_cleanup_does_not_deliver_pause_as_a_result(self):
         from src.proj.util.script.autorun import AutoRunTask

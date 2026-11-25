@@ -249,6 +249,104 @@ class ModelLifecycleTest(unittest.TestCase):
             self.assertEqual(untouched.read_bytes(), b'untouched')
             self.assertEqual(pd.read_feather(trimmed)['date'].tolist(), [20210105, 20220104])
 
+    def test_predictions_match_after_last_node_pause_and_repeated_pauses(self):
+        from contextlib import nullcontext
+        from unittest.mock import Mock, PropertyMock
+
+        import pandas as pd
+        from src.automation.scheduling import training_maintenance as maintenance
+        from src.res.model.util.trainer.base_trainer import BaseTrainer
+        from src.res.model.util.trainer.pred_recorder import PredRecorder
+
+        dates = [20240102, 20240103]
+        config = self.config()
+        ModelLifecycle.configured(config)
+        trainer = Mock(config=config, base_path=config.base_path, queue_of_stages=['fit', 'test'])
+        trainer.status = SimpleNamespace(epoch=1, phase=1, attempt=1)
+        trainer.prev_model_date = 0
+        trainer.logger.paragraph.return_value = trainer.model_phase_log.return_value = nullcontext()
+        trainer.data.model_date_list = trainer.data.datas.date = dates
+        trainer.data.d0, trainer.data.d1 = 0, 1
+        self.enterContext(patch.object(type(config), 'model_num_list', new_callable=PropertyMock, return_value=[0]))
+        self.enterContext(patch('src.res.model.util.model_properties.track_phase', return_value=nullcontext()))
+        self.enterContext(patch('src.automation.artifact_exchange.research.model_run', return_value=nullcontext()))
+        training_run = self.enterContext(patch('src.res.model.util.training_history.TrainingRun'))
+        training_run.return_value.data = {}
+        self.enterContext(patch.object(maintenance, 'runtime_dir', return_value=self.root))
+        self.enterContext(patch.object(maintenance, 'checkpoint_group', return_value='manual'))
+
+        def frame(date, prediction):
+            return pd.DataFrame({'model_date': [date], 'model_num': [0], 'submodel': ['best'],
+                                 'secid': [1], 'date': [date + 1], 'pred': [prediction], 'label': [0.]})
+
+        def fit_node():
+            trainer.model_date, trainer.model_num = trainer.status.model_date, trainer.status.model_num
+            for submodel in config.submodels:
+                folder = config.base_path.full_path(0, trainer.model_date, submodel)
+                folder.mkdir(parents=True, exist_ok=True)
+                torch.save(torch.tensor(dates.index(trainer.model_date) + 1.), folder / 'state_dict.pt')
+
+        trainer.fit_current_model.side_effect = fit_node
+        trainer.on_fit_model_end.side_effect = lambda: trainer.record.retrained_models.append((trainer.model_date, 0))
+        trainer.stage_fit.side_effect = lambda: BaseTrainer.stage_fit(trainer)
+        for pauses in ([], dates[-1:], dates):
+            with self.subTest(pauses=pauses):
+                recorder = PredRecorder(config)
+                for date in dates:
+                    recorder.save_preds(frame(date, -99.), date, 0)
+                    recorder.save_avg_preds(date)
+                ticket = None
+                remaining = dates.copy()
+                for pause_date in [*pauses, None]:
+                    recorder = PredRecorder(config)
+                    trainer.record = recorder
+                    trainer.iter_model_num_date.return_value = [(d, 0) for d in remaining]
+                    training_run.return_value.run_id = 'a' * 31 + str(len(remaining))
+                    with (maintenance.continuation(ticket), patch.object(
+                            maintenance, 'maintenance_request',
+                            side_effect=lambda _: {'kind': 'git'} if trainer.model_date == pause_date else None)):
+                        if pause_date is None:
+                            BaseTrainer.main_process(trainer)
+                        else:
+                            with self.assertRaises(maintenance.TrainingPaused) as paused:
+                                BaseTrainer.main_process(trainer)
+                            ticket = paused.exception.ticket
+                            remaining = [d for d in dates if d > pause_date]
+                            self.assertEqual(ticket['retrained'], [[d, 0] for d in dates if d <= pause_date])
+                    for records in (recorder.pred_records(), recorder.avg_pred_records()):
+                        self.assertEqual(sorted(records.model_date.tolist()), remaining if pause_date else [])
+                # Reintroduce a stale average to exercise the defensive cleanup at test start.
+                frame(dates[0], -99.).to_feather(recorder.folder_avg_preds / '20240102.20240103.20240103.feather')
+                recorder.on_test_start()
+                self.assertTrue(recorder.avg_pred_records().empty)
+                for date in dates:
+                    weight = torch.load(config.base_path.full_path(0, date, 'best') / 'state_dict.pt', weights_only=True)
+                    recorder.save_preds(frame(date, (weight * 3).item()), date, 0)
+                    recorder.save_avg_preds(date)
+                for records in (recorder.pred_records(), recorder.avg_pred_records()):
+                    predictions = [pd.read_feather(path).pred.item() for path in records.sort_values('model_date').path]
+                    self.assertEqual(predictions, [3., 6.])
+
+    def test_earlier_refit_reopens_test_dates_with_later_cache_intact(self):
+        from unittest.mock import PropertyMock
+        from src.proj import Const
+        from src.res.model.util.trainer.pred_recorder import PredRecorder
+
+        recorder = PredRecorder(self.config())
+        recorder.config.is_resuming = True
+        self.enterContext(patch.object(type(Const.Model), 'resume_test', new_callable=PropertyMock, return_value=True))
+        self.enterContext(patch.object(PredRecorder, 'min_test_date', new_callable=PropertyMock, return_value=20240103))
+        self.enterContext(patch.object(PredRecorder, 'max_test_date', new_callable=PropertyMock, return_value=20240111))
+        for date in (20240102, 20240104, 20240108, 20240110):
+            (recorder.folder_preds / f'0.{date}.{date + 1}.{date + 1}.feather').touch()
+        recorder.retrained_models.append((20240104, 0))
+        for mode in ('last_model_date', 'last_pred_date'):
+            with self.subTest(mode=mode), patch.object(type(Const.Model), 'resume_test_start',
+                                                       new_callable=PropertyMock, return_value=mode):
+                recorder.on_test_start()
+                self.assertEqual(recorder.config.resumed_max_pred_date, 20240104)
+                self.assertEqual(set(recorder.resumed_models.model_date), {20240102, 20240108})
+
     def test_daily_repair_and_trainer_share_lock_only_on_owning_thread(self):
         from concurrent.futures import ThreadPoolExecutor
         import portalocker
@@ -465,6 +563,7 @@ class ModelLifecycleTest(unittest.TestCase):
         attempts = []
 
         def train(**kwargs):
+            assert request is not None
             kwargs.pop('title')
             kwargs.pop('operation')
             path = kwargs['base_path']

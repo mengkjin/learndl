@@ -374,13 +374,14 @@ class AlphaComponent:
             else:
                 raise Exception(f'{input} is not a valid alpha')
 
-            self.name = f'{src}@{key}'
+            source_name = f'{src}@{key}'
+            self.name = f'-{source_name}' if direction < 0 else source_name
             if src in ['sellside' , 'pred']:
                 alpha = (src , key , col)
-                self.loads = self.db_loads(alpha , name = self.name , normalize = normalize , direction = direction)
+                self.loads = self.db_loads(alpha , name = source_name , normalize = normalize , direction = direction)
             elif src == 'factor':
                 alpha = key
-                self.loads = self.factor_loads(alpha , name = self.name , normalize = normalize , direction = direction)
+                self.loads = self.factor_loads(alpha , name = source_name , normalize = normalize , direction = direction)
             else:
                 raise Exception(f'{src} is not a valid alpha type')
 
