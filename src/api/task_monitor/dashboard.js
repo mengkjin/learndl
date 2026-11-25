@@ -18,6 +18,7 @@ const words = {
   remoteFilters: ['服务器与任务状态', 'Server and task status'], taskList: ['任务列表', 'Task list'],
   complete: ['完成', 'Complete'], failed: ['错误', 'Error'], killed: ['已终止', 'Killed'],
   starting: ['启动中', 'Starting'], queued: ['排队中', 'Queued'], stale: ['状态过期', 'Stale'],
+  exited: ['进程已退出', 'Process exited'],
   startTime: ['开始时间', 'Started'], ended: ['结束时间', 'Ended'],
   scriptName: ['脚本名', 'Script name'], startDate: ['开始日期', 'Start date'],
   endDate: ['结束日期', 'End date'], dateFrom: ['从', 'From'], dateTo: ['到', 'Through'],
@@ -82,7 +83,10 @@ const pinned = new Map();
 
 const t = key => words[key]?.[lang === 'en' ? 1 : 0] || key;
 const labelStatus = status => t(status === 'error' ? 'failed' : status);
-const taskStatus = row => labelStatus(row.phase === 'queued' ? 'queued' : row.status);
+const taskStatus = row => {
+  if (remote && row.status === 'stale') return t('exited');
+  return labelStatus(row.phase === 'queued' ? 'queued' : row.status);
+};
 const nameOf = path => path.split(/[\\/]/).at(-1);
 const date = value => value ? new Date(value * 1000).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US') : '—';
 const terminal = $('terminal');
@@ -145,7 +149,7 @@ function applyTerminalSize() {
 }
 
 function duration(row) {
-  if (!row.start_time) return '—';
+  if (!row.start_time || (remote && row.status === 'stale' && !row.end_time)) return '—';
   const seconds = Math.max(0, Math.floor((row.end_time || Date.now() / 1000) - row.start_time));
   return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
     .map(n => String(n).padStart(2, '0')).join(':');

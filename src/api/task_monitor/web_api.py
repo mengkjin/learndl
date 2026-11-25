@@ -30,6 +30,12 @@ def task_summary(task):
                 source=task.source, background=task.is_background, phase=task.managed_phase)
 
 
+def remote_task_status(task):
+    status = task['status']
+    # The publisher can observe an exited PID before the lifecycle record is finalized.
+    return 'stale' if status in ACTIVE and task.get('pid_alive') is False else status
+
+
 def output_sources(task):
     files = list(task.exit_files)
     if task.crash_log is not None and task.crash_log not in files:
@@ -154,11 +160,17 @@ class TaskCenter:
                     tasks, lambda task: log_prefix(task, SCHEDULE_LOG_PREFIX_BYTES),
                     lambda task: bool(log_prefix(task, 1)),
                 )
+                summaries = []
+                for task in tasks:
+                    if task['task_id'] in duplicates:
+                        continue
+                    summary = {name: value for name, value in task.items() if name in
+                               {'task_id', 'script', 'start_time', 'end_time', 'pid_alive', 'phase'}}
+                    summary['status'] = remote_task_status(task)
+                    summaries.append(summary)
                 heartbeat = self.remote_cache.document(root / 'heartbeat.json') if packet['version'] == 2 else packet
                 hosts.append(dict(id=identity, name=packet['host'], sampled_at=(heartbeat or {}).get('sampled_at'),
-                                  tasks=[{name: value for name, value in task.items() if name in
-                                          {'task_id', 'script', 'status', 'start_time', 'end_time', 'pid_alive', 'phase'}}
-                                         for task in tasks if task['task_id'] not in duplicates]))
+                                  tasks=summaries))
             return hosts
 
     def remote_task(self, host, task_id):
@@ -180,7 +192,7 @@ class TaskCenter:
         with self.remote_lock:
             _, task, syncing = self.remote_task(params['host'], params['task'])
             return {**{name: value for name, value in task.items() if name not in {'segments', 'log', 'preview'}},
-                    'syncing': syncing}
+                    'status': remote_task_status(task), 'syncing': syncing}
 
     def remote_output(self, params, style):
         with self.remote_lock:

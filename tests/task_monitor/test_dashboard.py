@@ -142,6 +142,18 @@ class DashboardTest(unittest.TestCase):
         query['host'] = 'legacy'
         self.assertEqual(self.get_json('/api/remote/output', query=query)['content'], 'legacy output')
 
+    def test_remote_exited_process_can_still_be_inspected_before_final_status(self):
+        self.publisher.tick([dict(self.remote_task, pid_alive=False),
+                             dict(task_id='queued', script='queued.py', status='starting', phase='queued')])
+        tasks = self.get_json('/api/remote')[0]['tasks']
+        self.assertEqual({task['task_id']: task['status'] for task in tasks}, {'run': 'stale', 'queued': 'starting'})
+        query = {'host': self.host, 'task': 'run', 'style': 'text'}
+        self.assertEqual(self.get_json('/api/remote/task', query=query)['status'], 'stale')
+        self.assertIn('Remote output', self.get_json('/api/remote/output', query=query)['content'])
+
+        self.publisher.tick([dict(self.remote_task, status='killed', end_time=time.time())])
+        self.assertEqual(self.get_json('/api/remote/task', query=query)['status'], 'killed')
+
     def test_termination_is_confirmed_once_on_same_origin(self):
         target = KillTarget('run', 123, 100, 'run.py', 100)
         with patch('src.api.task_monitor.web_api.prepare_kill', return_value=target), \
@@ -239,6 +251,14 @@ class DashboardTest(unittest.TestCase):
             page.locator('#settings summary').click()
             page.locator('#style').select_option('colored')
             expect(page.locator('.output span')).to_have_text('Remote output')
+            self.publisher.tick([dict(self.remote_task, pid_alive=False)])
+            page.locator('#refresh-page').click()
+            expect(page.locator('.card[data-task-id="run"]')).to_have_count(0)
+            page.locator('#remote-tools summary').click()
+            page.locator('#recent').check()
+            expect(page.locator('.card[data-task-id="run"]')).to_contain_text('Process exited')
+            expect(page.locator('.output')).to_contain_text('Remote output')
+            page.locator('#settings summary').click()
             page.locator('#language').select_option('zh')
             expect(page.locator('h1')).to_have_text('任务中心')
             screenshot = os.environ.get('LEARNDL_TEST_SCREENSHOT')
