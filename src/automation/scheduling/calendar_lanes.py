@@ -62,6 +62,10 @@ def register(task_id):
             return 0
         current = active(task)
         observation(store, key, enqueued_at=time.time(), channel=task['channel'])
+        if task.get('overlap') == 'wait':
+            if current:
+                observation(store, key, status='waiting', reason='execution lock occupied', blocked_by=current['id'])
+            return 0
         if current:
             store.schedule_state(key, 'skipped_overlap')
             observation(store, key, status='skipped_overlap', blocked_by=current['id'])
@@ -91,6 +95,10 @@ def eligibility(task_id, key, config, now=None):
         from src.data.download.other_source.rcquant.bar_min import daily_update_succeeded_today
         if not daily_update_succeeded_today():
             return 'waiting', 'daily_update has not succeeded today'
+    if task_id == 'production_model_update':
+        from src.proj import CALENDAR
+        if CALENDAR.updated() < CALENDAR.td(CALENDAR.update_to()):
+            return 'waiting', 'production training data is not up to date'
     return 'ready', ''
 
 
@@ -127,6 +135,9 @@ def worker(task_id):
                     continue
                 config = queued_config(store, key, current_config)
                 task = config['tasks'][task_id]
+                # The current admission policy also protects requests frozen
+                # before the production lane was installed.
+                wait_for_overlap = current_config['tasks'][task_id].get('overlap') == 'wait'
                 status, reason = eligibility(task_id, key, config)
                 if status != 'ready':
                     if status == 'expired':
@@ -143,8 +154,11 @@ def worker(task_id):
                     break
                 current = active(task)
                 if current:
-                    store.schedule_state(key, 'skipped_overlap')
-                    observation(store, key, status='skipped_overlap', blocked_by=current['id'])
+                    if wait_for_overlap:
+                        observation(store, key, status='waiting', reason='execution lock occupied', blocked_by=current['id'])
+                    else:
+                        store.schedule_state(key, 'skipped_overlap')
+                        observation(store, key, status='skipped_overlap', blocked_by=current['id'])
                     continue
                 try:
                     with permit(blocking=False, task_class=task['channel']):
@@ -162,6 +176,11 @@ def worker(task_id):
                             store.schedule_state(key, 'unknown')
                             observation(store, key, status='unknown', reason='launcher outcome requires reconciliation')
                             raise
+                        if code == 75 or (code == 76 and wait_for_overlap):
+                            store.schedule_state(key, 'queued')
+                            observation(store, key, status='waiting',
+                                        reason='readiness changed before launch' if code == 75 else 'execution lock occupied')
+                            break
                         status = 'skipped_overlap' if code == 76 else 'finished' if code == 0 else 'failed'
                         store.schedule_state(key, status)
                         observation(store, key, status=status, returncode=code, finished_at=time.time())

@@ -66,7 +66,7 @@ def maintenance_request(group):
             continue
     from src.proj.util.script.fit_lock import FitLock
     if FitLock.production_requested():
-        return {'kind': 'daily_update', 'id': 'production-fit'}
+        return {'kind': 'production_model_update', 'id': 'production-fit'}
     return None
 
 

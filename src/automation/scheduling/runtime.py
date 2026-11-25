@@ -353,6 +353,14 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
                                (f'{run["id"]}:finished',))
 
 
+def _finish_production_event(store: RunStore, run: dict, detail: str) -> None:
+    if (run.get('task') == 'production_model_update' and not run.get('operator_stop')
+            and run.get('returncode') not in (0, 75)):
+        # The script writes the same event for a completed batch, even on a
+        # model error. INSERT OR IGNORE preserves that report if it exists.
+        store.event(run, 'production_finished', detail)
+
+
 def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None) -> dict:
     store = store or RunStore()
     now = time.time() if now is None else now
@@ -363,6 +371,7 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
             # crashed launcher before that point cannot be safely signalled.
             if now - run['started_at'] > 60:
                 run.update(phase='error', finished_at=now)
+                _finish_production_event(store, run, 'Launcher exited before registering a child.')
                 store.put(run)
                 finish_idle_event(store, run, 'Launcher exited before registering a child.')
             continue
@@ -381,6 +390,9 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                         pass
                 timed_out = 'term_at' in run
                 run.update(phase='finalizing' if timed_out else ('error' if run.get('returncode', 1) else 'complete'), finished_at=run.get('finished_at', now))
+                detail = timeout_message(run) if timed_out else (
+                    f'Process exited without a batch summary. Return code: {run.get("returncode", "unavailable")}.')
+                _finish_production_event(store, run, detail)
                 store.put(run)
                 if timed_out:
                     from src.api.util.backend.task import TaskDatabase
@@ -403,7 +415,7 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                     if run.get('operator_stop'):
                         run['operator_crash_logs'] = operator_logs
                         store.event(run, OPERATOR_STOP_EVENT, timeout_message(run))
-                    elif run.get('owner') != 'idle_worklist':
+                    elif run.get('owner') != 'idle_worklist' and run.get('task') != 'production_model_update':
                         store.event(run, 'terminated', timeout_message(run)+'; verified session processes have exited.')
                     store.put(run)
                 finish_idle_event(store, run, f'Process finished: {run["phase"]}; returncode={run.get("returncode", "unavailable (abnormal exit)")}.')
@@ -522,12 +534,15 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             if task:
                 attachments.extend(Path(path) for path in task.exit_files or [] if Path(path).is_file())
                 attachments.extend(Path(path) for path in task.get_crash_protector() if Path(path).is_file())
+        production_batch = event['kind'].startswith('production_')
         label = 'Idle Worklist' if run.get('owner') == 'idle_worklist' else 'Timeout'
         message = (f'Task: {run["task"]}\nRun: {run["id"]}\nStarted: {run["started_at"]}\n'
                    f'Limit: {run["timeout_seconds"]} seconds\nElapsed: {time.time() - run["started_at"]:.0f} seconds\n'
                    f'Phase: {run["phase"]}\n{event["detail"]}\n'
                    f'Log: {run.get("log_path", "")}\nVersion: {run.get("version", "")}\n'
                    f'Progress timeout: {run.get("progress_timeout_seconds", "")} seconds')
+        if production_batch:
+            message = f'Run: {run["id"]}\n{event["detail"]}'
         if reference := run.get('schedule_reference'):
             message += f'\nSchedule reference: {reference}'
         if run.get('owner') == 'idle_worklist':
@@ -557,8 +572,11 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             with store.connect() as connection:
                 connection.execute('UPDATE events SET body=? WHERE id=?', (json.dumps(event), event_id))
         message = event['delivery_message']
-        if sender(f'Watchdog {label} - {run["task"]} - {event["kind"]}', message,
-                  attachments=list(dict.fromkeys(attachments)), confirmation_message='Learndl timeout alert',
+        title = (f'Production Model Update - {event["kind"].removeprefix("production_")}'
+                 if production_batch else f'Watchdog {label} - {run["task"]} - {event["kind"]}')
+        if sender(title, message,
+                  attachments=list(dict.fromkeys(attachments)),
+                  confirmation_message='Learndl production training' if production_batch else 'Learndl timeout alert',
                   queue_on_failure=False, delivery_id=f'watchdog-event:{event_id}', **mail_options):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
@@ -588,5 +606,7 @@ def timeout_task_ids() -> set[str]:
     with store.connect() as connection:
         rows = connection.execute('SELECT task_id,data FROM task_links JOIN runs ON runs.id=task_links.run_id').fetchall()
     return operator_task_stop_ids(store) | {
-        task_id for task_id, data in rows if 'term_at' in json.loads(data) or json.loads(data).get('owner') == 'idle_worklist'
+        task_id for task_id, data in rows
+        if ('term_at' in (run := json.loads(data)) or run.get('owner') == 'idle_worklist'
+            or run.get('task') == 'production_model_update')
     }

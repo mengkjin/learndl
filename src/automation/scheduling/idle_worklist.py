@@ -193,7 +193,7 @@ def _candidate(store: RunStore, worklist: dict, schedules: dict, *, only: str | 
 
 def _defer_retired_requests(store: RunStore) -> None:
     retired = {'nn_metrics_ab': 'NN metrics A/B workflow retired',
-               'model_lifecycle': 'Production training moved to daily_update'}
+               'model_lifecycle': 'Production training runs in production_model_update'}
     for run in store.owned(OWNER):
         if run['phase'] == 'queued' and run.get('task_kind') in retired:
             run.update(phase='deferred', blocked_by=retired[run['task_kind']])

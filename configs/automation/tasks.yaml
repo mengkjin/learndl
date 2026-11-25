@@ -3,14 +3,19 @@ tasks:
     entrypoint: daily_update
     args: []
     lock_group: daily_update
-    overlap: skip
+    overlap: wait
     timeout: 12h
   daily_update_force:
     entrypoint: daily_update
     args: [--forfeit_if_done, 'False']
     lock_group: daily_update
-    overlap: skip
-    wait_timeout_seconds: 1800
+    overlap: wait
+    timeout: 12h
+  production_model_update:
+    entrypoint: production_model_update
+    args: []
+    lock_group: daily_update
+    overlap: wait
     timeout: 12h
   weekly_update:
     entrypoint: weekly_update

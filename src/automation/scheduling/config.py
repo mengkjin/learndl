@@ -28,6 +28,7 @@ from src.automation.paths import config_directory
 
 ENTRYPOINTS = {
     'daily_update': 'scripts/1_autorun/0_daily_update.py',
+    'production_model_update': 'scripts/1_autorun/6_production_model_update.py',
     'weekly_update': 'scripts/1_autorun/1_weekly_update.py',
     'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
 }

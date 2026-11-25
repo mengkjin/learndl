@@ -452,7 +452,7 @@ class ModelLifecycle:
         return 'exploration' if saved == 'production' else saved
 
     @classmethod
-    def inspect_registered(cls, *, force_check: bool = False) -> list[dict[str, Any]]:
+    def inspect_registered(cls, *, force_check: bool = False, on_error=None) -> list[dict[str, Any]]:
         """Reconcile the prediction registry against the calendar and accepted weights."""
         from src.proj import CALENDAR, Logger
         from src.res.model.util.config import ModelConfig
@@ -460,10 +460,10 @@ class ModelLifecycle:
         requests = []
         for registration in cls.registrations():
             manager = cls(Path(registration['base']))
-            active = ModelPath(registration['name'])
-            if not active.requires_fit:
-                continue
             try:
+                active = ModelPath(registration['name'])
+                if not active.requires_fit:
+                    continue
                 if not active.conf_file('model').is_file():
                     raise FileNotFoundError(f'Model configuration missing: {manager.base}')
                 with manager.lock():
@@ -542,6 +542,8 @@ class ModelLifecycle:
                     requests.append(request)
             except Exception as exc:
                 Logger.warning(f'Lifecycle check failed for {registration["name"]}: {exc}')
+                if on_error is not None:
+                    on_error(registration['name'], exc)
         return requests
 
     def portable_files(self) -> list[Path]:

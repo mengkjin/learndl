@@ -7,6 +7,10 @@ schedules:
     task: daily_update_force
     days: daily
     times: ['08:00']
+  production_model_update:
+    task: production_model_update
+    days: daily
+    times: ['00:10']
   weekly_update:
     task: weekly_update
     days: [sat]

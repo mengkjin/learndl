@@ -122,9 +122,12 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
     task = config['tasks'][task_id]
     if not task['enabled']:
         raise ValueError('Task is disabled')
+    # Calendar workers wait in the durable queue without retaining code or
+    # maintenance leases while another process holds the script lock.
+    wait_in_runner = task['overlap'] == 'wait' and request_id is None
     lock = ScriptLockMultiple(task['lock_group'], 1,
-                              timeout=task['wait_timeout_seconds'] if task['overlap'] == 'wait' else 1,
-                              wait_time=1 if task['overlap'] == 'wait' else 2)
+                              timeout=task['wait_timeout_seconds'] if wait_in_runner else 1,
+                              wait_time=1 if wait_in_runner else 2)
     try:
         lock.__enter__()
     except (BlockingIOError, TimeoutError):
@@ -140,7 +143,7 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
             if older.get('lock_group') != task['lock_group'] or older['phase'] == 'starting':
                 continue
             while members(older):
-                if task['overlap'] == 'skip' or time.monotonic() - wait_started >= task['wait_timeout_seconds']:
+                if not wait_in_runner or time.monotonic() - wait_started >= task['wait_timeout_seconds']:
                     logger.info(f'SCHEDULER SKIPPED: {task_id}: previous supervised session remains active')
                     return 76 if request_id else 75 if retry_busy else 0
                 time.sleep(1)

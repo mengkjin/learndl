@@ -69,6 +69,10 @@ def catch_up(directory, config, units, start, end, cron=''):
                 continue
             busy = next((run for run in runs if run.get('lock_group') == task_config['lock_group'] and
                          (run['phase'] == 'starting' or members(run))), None)
+            if task_config.get('overlap') == 'wait':
+                if busy:
+                    observation(store, key, status='waiting', reason='execution lock occupied', blocked_by=busy['id'])
+                continue
             if busy:
                 store.schedule_state(key, 'skipped_overlap')
                 observation(store, key, status='skipped_overlap', blocked_by=busy['id'])

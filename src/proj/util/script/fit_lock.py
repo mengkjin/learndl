@@ -94,16 +94,27 @@ class FitLock:
 
     @classmethod
     @contextmanager
-    def production_guard(cls):
+    def production_guard(cls, *, on_wait=None):
         """Announce priority, then wait for existing fits and hold the batch slot."""
         path = cls.production_lock_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('a+') as priority, cls.lock_path().open('a+') as fit:
             portalocker.lock(priority, portalocker.LOCK_EX)
-            portalocker.lock(fit, portalocker.LOCK_EX)
+            started = time.monotonic()
+            next_report = started
+            while True:
+                try:
+                    portalocker.lock(fit, portalocker.LOCK_EX | portalocker.LOCK_NB)
+                    break
+                except portalocker.AlreadyLocked:
+                    now = time.monotonic()
+                    if on_wait is not None and now >= next_report:
+                        on_wait(now - started)
+                        next_report = now + 300
+                    time.sleep(.25)
             token = cls._production.set(True)
             try:
-                yield
+                yield time.monotonic() - started
             finally:
                 cls._production.reset(token)
                 portalocker.unlock(fit)

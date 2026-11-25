@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import Mock, patch
 import os
+import subprocess
+import sys
 import time
 
 from src.automation.scheduling import idle_worklist, training_maintenance as maintenance
@@ -120,8 +122,8 @@ class TrainingMaintenanceTest(TestCase):
                     deadline = time.monotonic() + 3
                     while not FitLock.production_requested() and time.monotonic() < deadline:
                         time.sleep(.01)
-                    self.assertEqual(maintenance.maintenance_request('research')['kind'], 'daily_update')
-                    self.assertEqual(maintenance.maintenance_request('manual')['kind'], 'daily_update')
+                    self.assertEqual(maintenance.maintenance_request('research')['kind'], 'production_model_update')
+                    self.assertEqual(maintenance.maintenance_request('manual')['kind'], 'production_model_update')
                     self.assertFalse(production_started.is_set())
                 self.assertTrue(production_started.wait(3))
                 self.assertFalse(research_started.is_set())
@@ -131,6 +133,64 @@ class TrainingMaintenanceTest(TestCase):
             second.result(timeout=3)
         self.assertTrue(research_started.is_set())
         self.assertIsNone(maintenance.maintenance_request('research'))
+
+    def test_batch_priority_survives_model_switch_and_releases_after_process_loss(self):
+        script = '''
+import sys, time
+from pathlib import Path
+from src.proj.util.script.fit_lock import FitLock
+
+root, role = Path(sys.argv[1]), sys.argv[2]
+FitLock.LOCK_DIR = root
+guard = (FitLock.production_guard(on_wait=lambda _: (root / 'blocked').touch())
+         if role == 'production' else FitLock.guard(respect_production=True))
+if role == 'second_research':
+    (root / 'second_attempt').touch()
+with guard:
+    (root / role).touch()
+    while not (root / f'{role}-finish').exists():
+        time.sleep(.02)
+'''
+
+        def spawn(role):
+            child = subprocess.Popen([sys.executable, '-c', script, str(self.root), role],
+                                     stdout=subprocess.DEVNULL)
+
+            def cleanup():
+                if child.poll() is None:
+                    child.kill()
+                child.wait(timeout=5)
+
+            self.addCleanup(cleanup)
+            return child
+
+        def wait_for(marker):
+            cutoff = time.monotonic() + 30
+            while not (self.root / marker).exists() and time.monotonic() < cutoff:
+                time.sleep(.02)
+            self.assertTrue((self.root / marker).exists(), marker)
+
+        first = spawn('first_research')
+        wait_for('first_research')
+        production = spawn('production')
+        wait_for('blocked')
+        self.assertTrue(FitLock.production_requested())
+        self.assertFalse((self.root / 'production').exists())
+        (self.root / 'first_research-finish').touch()
+        first.wait(timeout=5)
+        wait_for('production')
+
+        # This marker is set while production owns the batch slot, between fits.
+        second = spawn('second_research')
+        wait_for('second_attempt')
+        self.assertTrue(FitLock.production_requested())
+        self.assertFalse((self.root / 'second_research').exists())
+        production.kill()
+        production.wait(timeout=5)
+        wait_for('second_research')
+        self.assertFalse(FitLock.production_requested())
+        (self.root / 'second_research-finish').touch()
+        second.wait(timeout=5)
 
     def test_managed_pause_waits_for_exit_and_respects_stop(self):
         ticket = {'id': 'b' * 32, 'entry': 'model', 'managed_parent': 'original',

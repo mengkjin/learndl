@@ -5,6 +5,8 @@ from __future__ import annotations
 from src.res.model.util.schedule_output import linear_model_available
 from contextlib import nullcontext
 from pathlib import Path
+from time import monotonic
+from collections.abc import Callable
 from typing import Literal , TypeAlias
 
 from src.proj import MACHINE , Proj , PATH , Base
@@ -74,27 +76,78 @@ class ModelTrainer(BaseTrainer):
         return trainer
 
     @classmethod
-    def update_models(cls , force_update : bool = False, *, daily_priority: bool = False):
+    def update_models(cls, force_update: bool = False, *,
+                      production_notice: Callable[[str, str], None] | None = None):
         if not MACHINE.cuda_server:
             cls.logger.alert1(f'{MACHINE.name} is not a server, will not update models!')
         else:
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             from src.res.model.util.lifecycle import ModelLifecycle
             from src.proj.util.script.fit_lock import FitLock
-            requests = ModelLifecycle.inspect_registered(force_check=force_update)
-            if not requests:
-                return
-            if daily_priority:
-                cls.logger.note(f'Daily update requesting fit priority for {len(requests)} production model(s)')
+            successes = []
             failures = []
-            with FitLock.production_guard() if daily_priority else nullcontext():
+            scan_errors = []
+
+            def scan_error(name, exc):
+                exc.add_note(f'Inspecting production model {name}')
+                failures.append(exc)
+                scan_errors.append(f'{name}: {type(exc).__name__}: {exc}')
+
+            try:
+                requests = ModelLifecycle.inspect_registered(
+                    force_check=force_update, on_error=scan_error if production_notice else None)
+            except Exception as exc:
+                if production_notice:
+                    production_notice('finished', f'Production model scan failed: {type(exc).__name__}: {exc}')
+                raise
+            if not requests:
+                if failures:
+                    production_notice('finished', 'Production model scan failed:\n' + '\n'.join(scan_errors))
+                    raise ExceptionGroup('Production model scan failed', failures)
+                cls.logger.info('No production models are due for training.')
+                return
+            names = ', '.join(request['name'] for request in requests)
+            reported_wait = False
+
+            def on_wait(elapsed):
+                nonlocal reported_wait
+                message = f'Waiting for training lock ({elapsed:.0f}s elapsed). Due models: {names}'
+                cls.logger.info(message)
+                if not reported_wait:
+                    production_notice('waiting', message)
+                    reported_wait = True
+
+            guard = FitLock.production_guard(on_wait=on_wait) if production_notice else nullcontext(0.)
+            with guard as wait_seconds:
+                batch_started = monotonic()
+                if production_notice:
+                    message = f'Acquired training lock after {wait_seconds:.1f}s. Due models: {names}'
+                    cls.logger.info(message)
+                    production_notice('training', message)
+                repair_errors = []
                 for request in requests:
+                    name = request['name']
+                    started = monotonic()
+                    cls.logger.info(f'Starting production model {name}')
                     try:
                         ModelLifecycle(Path(request['base'])).repair(request, cls.GO)
                     except Exception as exc:
-                        exc.add_note(f"Production model {request['name']}")
-                        cls.logger.error(f"Update failed for {request['name']}: {exc}")
+                        exc.add_note(f'Production model {name}')
+                        cls.logger.error(f'Update failed for {name}: {exc}')
+                        repair_errors.append(f'{name}: {type(exc).__name__}: {exc}')
                         failures.append(exc)
+                    else:
+                        successes.append(name)
+                    finally:
+                        cls.logger.info(f'Finished production model {name} in {monotonic() - started:.1f}s')
+            if production_notice:
+                production_notice('finished', '\n'.join([
+                    f'Wait for training lock: {wait_seconds:.1f}s',
+                    f'Batch execution: {monotonic() - batch_started:.1f}s',
+                    'Successful models: ' + (', '.join(successes) or 'none'),
+                    'Failed models: ' + ('\n'.join(repair_errors) or 'none'),
+                    'Scan errors: ' + ('\n'.join(scan_errors) or 'none'),
+                ]))
             if failures:
                 raise ExceptionGroup('Production model updates failed', failures)
 

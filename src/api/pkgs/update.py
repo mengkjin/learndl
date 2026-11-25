@@ -54,7 +54,7 @@ class UpdateAPI:
         FactorAPI.update_market_factors(missing_since=factor_start)
         FactorAPI.update_stock_factors(timeout = 3, missing_since=factor_start)
         FactorAPI.update_affiliate_factors(missing_since=factor_start)
-        ModelAPI.update(update_due_models=True)
+        ModelAPI.update()
         FactorAPI.update_pooling_factors(timeout = 3, missing_since=factor_start)
         FactorAPI.update_factor_stats(missing_since=factor_start)
         FactorAPI.export_factor_table()

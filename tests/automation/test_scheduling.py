@@ -50,6 +50,16 @@ class ScheduleConfigTest(unittest.TestCase):
         self.assertEqual([job.name for job in default_jobs(old)], ['email_outbox', 'task_lifecycle', 'cli_recovery'])
         self.assertEqual(default_jobs({'jobs': {'cli_recovery': {'enabled': False}, 'email_outbox': {'enabled': False}}}), ())
 
+    def test_production_update_is_installed_at_midnight_plus_ten(self):
+        plan = build_plan(self.config, '', ROOT, Path(sys.executable), 'Asia/Shanghai')
+        task = 'production_model_update'
+        timer = plan['units'][f'learndl-schedule-{task}.timer']
+        self.assertEqual(timer.count('00:10:00 Asia/Shanghai'), 7)
+        self.assertIn(f'learndl-lane-{task}.service', plan['units'])
+        for name in ('daily_update', 'daily_update_force', task):
+            self.assertEqual(self.config['tasks'][name]['lock_group'], 'daily_update')
+            self.assertEqual(self.config['tasks'][name]['overlap'], 'wait')
+
     def test_backfill_is_manual_only(self):
         self.assertEqual(self.config['tasks']['rcquant_sec_backfill']['args'], ['--max_days', 'none'])
         self.assertTrue(self.config['tasks']['rcquant_sec_backfill']['enabled'])
@@ -193,6 +203,26 @@ class TimeoutTest(unittest.TestCase):
         self.assertEqual(self.store.get('run1')['phase'], 'error')
         with self.store.connect() as connection:
             self.assertEqual(connection.execute('SELECT count(*) FROM events').fetchone()[0], 0)
+
+    def test_production_exit_notice_keeps_script_summary_and_falls_back_once(self):
+        from src.automation.scheduling.runtime import deliver_timeout_events
+
+        run = dict(self.run_record, task='production_model_update', returncode=1)
+        self.store.put(run)
+        self.store.event(run, 'production_finished', 'A model failed validation.')
+        self.store.put(dict(run, id='lost', returncode=-9))
+        self.store.put(dict(run, id='no_models', returncode=0))
+        self.store.put(dict(run, id='data_wait', returncode=75))
+        send = MagicMock(return_value=True)
+        with (patch('src.automation.scheduling.runtime.members', return_value=[]),
+              patch('src.api.util.backend.task.TaskDatabase')):
+            for _ in range(2):
+                inspect_timeouts(self.store, now=105)
+                deliver_timeout_events(send, self.store)
+        self.assertEqual(send.call_count, 2)
+        self.assertIn('A model failed validation.', send.call_args_list[0].args[1])
+        self.assertIn('Return code: -9', send.call_args_list[1].args[1])
+        self.assertEqual(len({call.kwargs['delivery_id'] for call in send.call_args_list}), 2)
 
     def test_live_process_timeout_and_retry_email(self):
         # A real isolated process ignores TERM, exercising escalation without
@@ -440,6 +470,7 @@ class RunnerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             config = load_config(ROOT / 'configs/automation', 'mengkjin-server')
+            config['tasks']['daily_update']['overlap'] = 'skip'
             with self.scheduling_runtime(root), \
                  patch('src.automation.scheduling.runner.installed_config', return_value=config), \
                  patch.object(ScriptLockMultiple, 'LOCK_DIR', root / 'locks'), \

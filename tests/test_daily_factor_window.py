@@ -22,41 +22,77 @@ class DailyFactorWindowTest(unittest.TestCase):
 
                 api = stack.enter_context(patch.object(update, 'FactorAPI'))
                 update.UpdateAPI.daily()
-                models.update.assert_called_once_with(update_due_models=True)
+                models.update.assert_called_once_with()
                 for name in ('market_factors', 'stock_factors', 'affiliate_factors', 'pooling_factors', 'factor_stats'):
                     self.assertEqual(getattr(api, 'update_' + name).call_args.kwargs['missing_since'], expected)
 
-    def test_daily_checks_and_runs_due_models_before_predictions(self):
+    def test_daily_predictions_do_not_scan_or_fit_production_models(self):
         import src.api.pkgs.model as api
+
+        with (
+            patch.object(api, 'wrap_update', side_effect=lambda fn, title: fn()),
+            patch.object(api.ModelAPI, 'prepare_predict_data') as prepare,
+            patch.object(api.ArchivedPredictorModel, 'update') as predict,
+            patch.object(api.ModelPortfolioBuilder, 'update') as portfolio,
+            patch.object(api.ModelTrainer, 'update_models') as fit,
+        ):
+            api.ModelAPI.update()
+        prepare.assert_called_once()
+        predict.assert_called_once()
+        portfolio.assert_called_once()
+        fit.assert_not_called()
+
+    def test_production_batch_scans_once_and_continues_after_model_failure(self):
         from src.res.model.model_module.application import trainer
         from src.res.model.util.lifecycle import ModelLifecycle
         from src.proj.util.script.fit_lock import FitLock
-        from contextlib import nullcontext
+        from contextlib import contextmanager
 
         events = []
+
+        @contextmanager
+        def wait_for_fit(*, on_wait):
+            on_wait(0.)
+            on_wait(300.)
+            yield 305.
+
         with (
-            patch.object(api, 'MACHINE', SimpleNamespace(cuda_server=True)),
             patch.object(trainer, 'MACHINE', SimpleNamespace(cuda_server=True)),
             patch.object(trainer, 'Proj'),
-            patch.object(api, 'wrap_update', side_effect=lambda fn, title, **kwargs: fn(**kwargs)),
-            patch.object(api.ModelAPI, 'prepare_predict_data', side_effect=lambda: events.append('data')),
-            patch.object(api.ArchivedPredictorModel, 'update', side_effect=lambda: events.append('predict')),
-            patch.object(api.ModelPortfolioBuilder, 'update', side_effect=lambda: events.append('portfolio')),
-            patch.object(ModelLifecycle, 'inspect_registered',
-                         side_effect=lambda **kwargs: events.append('check') or [{'base': '/tmp/day'}]) as inspect,
-            patch.object(ModelLifecycle, 'repair', autospec=True, side_effect=lambda *args: events.append('fit')) as resume,
-            patch.object(FitLock, 'production_guard', return_value=nullcontext()) as priority_fit,
+            patch.object(ModelLifecycle, 'inspect_registered', return_value=[
+                {'base': '/tmp/day', 'name': 'day'},
+                {'base': '/tmp/week', 'name': 'week'},
+            ]) as inspect,
+            patch.object(ModelLifecycle, 'repair', autospec=True, side_effect=[ValueError('bad weights'), None]) as resume,
+            patch.object(FitLock, 'production_guard', side_effect=wait_for_fit) as priority_fit,
         ):
-            api.ModelAPI.update(update_due_models=True)
-            self.assertEqual(events, ['data', 'check', 'fit', 'predict', 'portfolio'])
-            manager, request, run = resume.call_args.args
-            self.assertEqual(str(manager.base), request['base'])
-            self.assertEqual(run, trainer.ModelTrainer.GO)
+            def notify(kind, message):
+                events.append((kind, message))
+
+            with self.assertRaises(ExceptionGroup):
+                trainer.ModelTrainer.update_models(production_notice=notify)
+            inspect.assert_called_once()
+            self.assertEqual([call.args[1]['name'] for call in resume.call_args_list], ['day', 'week'])
+            self.assertEqual([kind for kind, _ in events], ['waiting', 'training', 'finished'])
+            self.assertIn('305.0s', events[1][1])
+            self.assertIn('Successful models: week', events[-1][1])
+            self.assertIn('day: ValueError: bad weights', events[-1][1])
             priority_fit.assert_called_once()
             events.clear()
-            inspect.side_effect = lambda **kwargs: events.append('check') or []
-            api.ModelAPI.update(update_due_models=True)
-            self.assertEqual(events, ['data', 'check', 'predict', 'portfolio'])
+            inspect.return_value = []
+            trainer.ModelTrainer.update_models(production_notice=notify)
+            self.assertEqual(events, [])
+            priority_fit.assert_called_once()
+
+            def scan_error(**kwargs):
+                kwargs['on_error']('bad-model', ValueError('invalid config'))
+                return []
+
+            inspect.side_effect = scan_error
+            with self.assertRaises(ExceptionGroup):
+                trainer.ModelTrainer.update_models(production_notice=notify)
+            self.assertEqual([kind for kind, _ in events], ['finished'])
+            self.assertIn('bad-model: ValueError: invalid config', events[0][1])
             priority_fit.assert_called_once()
 
     def test_factor_apis_forward_window(self):

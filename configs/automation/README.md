@@ -16,6 +16,14 @@ This directory is the single editable source for non-training automation setting
 and `autofix.yaml` declares one-shot repairs. See [autofix operations](AUTOFIX.md).
 Model/worklist/RL configurations and `.secret` machine settings stay in place.
 
+The `production_model_update` task checks registered production models daily at
+00:10 Asia/Shanghai. It shares the `daily_update` execution lock with both daily
+update modes. Requests queue when the lock is occupied. Production training waits
+for current data and reserves fit priority for the entire batch once due models
+are found. It sends batch mail on training-lock contention, acquisition and
+completion. A check with no due models only writes a log. Publish the new timer
+through the Watchdog Installer and verify it in `status` after installation.
+
 Historical RCQuant minute-bar backfill is complete. `backfills.yaml` now has no
 calendar schedules, and daily update no longer invokes backfill. The registered
 `rcquant_sec_backfill` task, script and downloader remain available for manual use.

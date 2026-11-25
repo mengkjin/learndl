@@ -188,6 +188,54 @@ class ChannelsTest(unittest.TestCase):
             calendar_lanes.worker('weekly_update')
         run.assert_called_once_with('weekly_update', code_fd=ANY, request_id='weekly_update:101', config_snapshot=self.config)
 
+    def test_production_and_daily_preserve_requests_on_each_side_of_overlap(self):
+        tasks = self.config['tasks']
+        tasks['daily_update']['overlap'] = 'wait'
+        tasks['production_model_update'] = dict(tasks['daily_update'])
+        tasks['daily_update_force'] = dict(tasks['daily_update'])
+        self.runs.put({'id': 'daily', 'task': 'daily_update', 'phase': 'starting', 'lock_group': 'daily_update'})
+        with patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '10'}):
+            calendar_lanes.register('production_model_update')
+
+        with (patch.object(calendar_lanes, 'eligibility', return_value=('ready', '')),
+              patch.object(calendar_lanes, 'runtime_dir', return_value=self.base),
+              patch.object(runner.version_patch, 'admission_reason', return_value=None),
+              patch.object(maintenance_gate, 'state_dir', return_value=self.control),
+              patch.object(runner, '_run', side_effect=[76, 0, 0]) as run):
+            calendar_lanes.worker('production_model_update')
+            run.assert_not_called()
+            self.assertEqual(self.store.scheduled(), [('production_model_update:10', 'production_model_update')])
+
+            self.runs.put(dict(self.runs.get('daily'), phase='complete'))
+            calendar_lanes.worker('production_model_update')  # Late lock conflict, still queued.
+            self.assertEqual(self.store.scheduled(), [('production_model_update:10', 'production_model_update')])
+            calendar_lanes.worker('production_model_update')
+            self.assertEqual(self.store.scheduled(), [])
+
+            self.runs.put({'id': 'production', 'task': 'production_model_update',
+                           'phase': 'starting', 'lock_group': 'daily_update'})
+            with patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': '230'}):
+                calendar_lanes.register('daily_update_force')
+            calendar_lanes.worker('daily_update_force')
+            self.assertEqual(run.call_count, 2)
+            self.assertEqual(self.store.scheduled(), [('daily_update_force:230', 'daily_update_force')])
+            self.runs.put(dict(self.runs.get('production'), phase='complete'))
+            calendar_lanes.worker('daily_update_force')
+            self.assertEqual(run.call_count, 3)
+            self.assertEqual(self.store.scheduled(), [])
+
+    def test_production_waits_for_current_trade_data(self):
+        from src.proj import CALENDAR
+        self.config['tasks']['production_model_update'] = dict(self.config['tasks']['daily_update'])
+        with (patch.object(CALENDAR, 'update_to', return_value=20261124),
+              patch.object(CALENDAR, 'td', return_value=20261124),
+              patch.object(CALENDAR, 'updated', return_value=20261123) as updated):
+            self.assertEqual(calendar_lanes.eligibility('production_model_update', 'production_model_update:10',
+                                                       self.config)[0], 'waiting')
+            updated.return_value = 20261124
+            self.assertEqual(calendar_lanes.eligibility('production_model_update', 'production_model_update:10',
+                                                       self.config)[0], 'ready')
+
     def test_rcquant_window_dependency_and_expiry(self):
         def stamp(date: str) -> float:
             return datetime.fromisoformat(date).replace(tzinfo=ZoneInfo('Asia/Shanghai')).timestamp()

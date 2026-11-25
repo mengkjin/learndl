@@ -17,9 +17,9 @@ __all__ = ['ModelAPI']
 class ModelAPI:
     """API for model operations of this project."""
     @classmethod
-    def update(cls, *, update_due_models: bool = False):
+    def update(cls):
         """
-        Refresh prediction data, optionally resume due production models, and compute forecasts.
+        Refresh prediction data and compute forecasts.
 
         [API Interaction]:
           expose: true
@@ -32,8 +32,6 @@ class ModelAPI:
           memory_usage: medium
         """
         wrap_update(cls.prepare_predict_data , 'prepare predict data')
-        if update_due_models and MACHINE.cuda_server:
-            wrap_update(ModelTrainer.update_models, 'continue due production models', daily_priority=True)
         wrap_update(ArchivedPredictorModel.update , 'update predictors')
         wrap_update(ModelPortfolioBuilder.update , 'update predictor portfolios')
     
