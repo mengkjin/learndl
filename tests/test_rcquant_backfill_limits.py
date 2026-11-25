@@ -1,11 +1,11 @@
 """Backfill limits must support CLI null values without disabling stop guards."""
 import unittest
 from types import MethodType
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pandas as pd
 
-from src.data.download.other_source.rcquant import bar_min
+from src.data.download.other_source.rcquant import bar_min, sec_none_migration
 
 
 class DailyUpdateTest(unittest.TestCase):
@@ -21,6 +21,30 @@ class DailyUpdateTest(unittest.TestCase):
         self.assertEqual(result, bar_min.Base.UpdateFlag.SUCCESS)
         self.assertEqual(updater.rcquant_bar_min.call_count, len(bar_min.MinDataType))
         updater._backfill_sec_min.assert_not_called()
+
+    def test_stock_actions_run_before_rcquant_minutes(self):
+        date = bar_min.SEC_NONE_START
+        updater = MagicMock()
+        updater.download.return_value = bar_min.Base.UpdateFlag.SKIPPED
+        with patch.object(bar_min.MACHINE, 'platform_server', True), \
+                patch.object(sec_none_migration, 'collect_daily_actions_through', return_value=True) as collect:
+            updater.attach_mock(collect, 'collect_actions')
+            result = bar_min.RcquantMinBarDownloader.download_since_last_data(updater, date, date)
+        self.assertEqual(result, bar_min.Base.UpdateFlag.SUCCESS)
+        self.assertEqual(updater.mock_calls, [
+            call.collect_actions(date),
+            *[call.download(date, date, kind, -1, overwrite=False) for kind in bar_min.MinDataType],
+        ])
+
+    def test_stock_action_quota_stops_rcquant_requests(self):
+        date = bar_min.SEC_NONE_START
+        updater = MagicMock()
+        with patch.object(bar_min.MACHINE, 'platform_server', True), \
+                patch.object(sec_none_migration, 'collect_daily_actions_through',
+                             side_effect=bar_min.QuotaExceeded('quota exceeded')):
+            result = bar_min.RcquantMinBarDownloader.download_since_last_data(updater, date, date)
+        self.assertEqual(result, bar_min.Base.UpdateFlag.FAILED)
+        updater.download.assert_not_called()
 
 
 class BackfillLimitTest(unittest.TestCase):

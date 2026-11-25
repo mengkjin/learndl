@@ -24,6 +24,7 @@ import numpy as np
 import warnings
 
 from datetime import datetime
+import os
 from typing import Any , Literal , TypeAlias
 from collections.abc import Sequence
 
@@ -33,7 +34,7 @@ from src.data.util import secid_adjust , trade_min_reform
 
 from .initializer import RQInitializer , MinDataType , RQ_PATH , QuotaExceeded , is_quota_exceeded
 
-from .storage import locked_day, atomic_frame, sample_size
+from .storage import locked_day, date_lock, atomic_frame, sample_size
 
 __all__ = ['RcquantMinBarDownloader']
 
@@ -41,6 +42,9 @@ RcquantFileType : TypeAlias = Literal['secdf' , 'min']
 SEC_BACKFILL_FLOOR = 20070101
 SEC_BACKFILL_MAX_DAYS_DEFAULT = 5
 SEC_BACKFILL_MIN_STOCKS = 5
+SEC_NONE_START = 20261125
+SEC_PERIODS = (1, 5, 10, 15, 30, 60)
+ADJUST_COLUMN = '_adjust_type'
 
 
 class SecBackfillQualityError(ValueError):
@@ -103,18 +107,40 @@ def write_list(df : pd.DataFrame , date : int , data_type : MinDataType) -> None
     path.parent.mkdir(exist_ok=True , parents=True)
     Save.df(df , path , vb_level = 'max' , prefix = f'RcQuant {data_type} list {date}')
 
-def load_min(date : int , data_type : MinDataType) -> pd.DataFrame | None:
+def raw_min_path(date: int, data_type: MinDataType):
     root = RQ_PATH if sample_size.get() <= 0 else RQ_PATH / '.samples' / str(sample_size.get())
-    path = root.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+    return root / f'{data_type}min' / f'{date}.feather'
+
+def load_min(date : int , data_type : MinDataType) -> pd.DataFrame | None:
+    path = raw_min_path(date, data_type)
     if path.exists(): 
         return Load.df(path)
     return None
 
 def write_min(df : pd.DataFrame , date : int , data_type : MinDataType) -> None:
-    root = RQ_PATH if sample_size.get() <= 0 else RQ_PATH / '.samples' / str(sample_size.get())
-    path = root.joinpath(f'{data_type}min').joinpath(f'{date}.feather')
+    path = raw_min_path(date, data_type)
     path.parent.mkdir(exist_ok=True , parents=True)
     atomic_frame(df, path, vb_level='max', prefix=f'RcQuant {data_type} min {date}')
+
+def is_none_min(frame: pd.DataFrame | None) -> bool:
+    return frame is not None and not frame.empty and ADJUST_COLUMN in frame and bool(
+        frame[ADJUST_COLUMN].eq('none').all()
+    )
+
+def _sec_receipt(date: int):
+    return raw_min_path(date, MinDataType.SEC).parent / '.none_published' / f'{date}.feather'
+
+def _raw_identity(date: int) -> dict:
+    info = raw_min_path(date, MinDataType.SEC).stat()
+    return {'size': info.st_size, 'mtime_ns': info.st_mtime_ns, 'inode': info.st_ino}
+
+def sec_none_published(date: int) -> bool:
+    receipt = _sec_receipt(date)
+    raw = raw_min_path(date, MinDataType.SEC)
+    return (receipt.is_file() and raw.is_file()
+            and pd.read_feather(receipt).to_dict('records') == [_raw_identity(date)]
+            and not x_mins_to_update(date, MinDataType.SEC)
+            and DB.path('trade_ts', 'min', date).is_file())
 
 def _save_bar(df, db_src, db_key, date=None, **kwargs):
     from src.proj.db.interface.db_path import DBPath
@@ -153,7 +179,11 @@ def target_dates(
     start , end = CALENDAR.update_schedule(start , end , key = 'rcquant_min')
     dates = Dates(start , end)
     if not overwrite:
-        dates = dates.diff(stored_dates(data_type , 1))
+        stored = stored_dates(data_type, 1)
+        dates = dates.diff(stored)
+        if data_type == MinDataType.SEC and end >= SEC_NONE_START:
+            dates += Dates([int(dt) for dt in stored.slice(max(start, SEC_NONE_START), end)
+                            if not sec_none_published(int(dt))])
     return dates
 
 def x_mins_target_dates(
@@ -227,25 +257,15 @@ def _handle_quota(text : str | BaseException , * , raise_on_quota : bool) -> Non
     if raise_on_quota:
         raise QuotaExceeded(str(text))
 
-def rq_get_price(code_list : np.ndarray , date : int , * , raise_on_quota : bool = False) -> Any:
-    """``rqdatac.get_price`` for one session.
-
-    Daily path (``raise_on_quota=False``): quota is a warning, return whatever
-    payload we got (possibly ``None``). Backfill raises ``QuotaExceeded``.
-
-    Stdout/stderr stay visible to HtmlCatcher (``keep_original=True``). Warnings
-    are re-emitted after recording so a raise does not hide the quota signal.
-    """
+def rq_call(method, *args, raise_on_quota: bool = False, **kwargs) -> Any:
+    """Detect quota failures reported as exceptions, warnings or provider output."""
     catcher = IOCatcher()
     catcher.keep_original = True
     with warnings.catch_warnings(record = True) as caught:
         warnings.simplefilter('always')
         try:
             with catcher:
-                data = rqdatac.get_price(
-                    code_list , start_date = str(date) , end_date = str(date) ,
-                    frequency = '1m' , expect_df = True ,
-                )
+                data = method(*args, **kwargs)
         except QuotaExceeded as e:
             _handle_quota(e , raise_on_quota = raise_on_quota)
             return None
@@ -265,13 +285,36 @@ def rq_get_price(code_list : np.ndarray , date : int , * , raise_on_quota : bool
         _handle_quota(blob , raise_on_quota = raise_on_quota)
     return data
 
-def rcquant_instrument_list(date : int , data_type : MinDataType) -> pd.DataFrame:
+def rq_get_price(code_list, date: int, *, raise_on_quota: bool = False, adjust_type=None) -> Any:
+    options = {} if adjust_type is None else {'adjust_type': adjust_type}
+    return rq_call(
+        rqdatac.get_price, code_list, start_date=str(date), end_date=str(date),
+        frequency='1m', expect_df=True, raise_on_quota=raise_on_quota, **options,
+    )
+
+def provider_min_frame(data: pd.DataFrame, data_type: MinDataType) -> pd.DataFrame:
+    frame = data.reset_index().rename(columns={'total_turnover': 'amount', 'order_book_id': 'code'})
+    if data_type == MinDataType.SEC:
+        frame['code'] = frame['code'].str.replace('.XSHE', '.SZ', regex=False).str.replace(
+            '.XSHG', '.SH', regex=False,
+        )
+    frame['datetime'] = pd.to_datetime(frame['datetime'])
+    frame['time'] = frame['datetime'].dt.strftime('%H%M')
+    frame['date'] = frame['datetime'].dt.strftime('%Y%m%d')
+    return frame
+
+def rcquant_instrument_list(
+    date: int, data_type: MinDataType, *, raise_on_quota: bool = False,
+) -> pd.DataFrame:
     secdf = load_list(date , data_type)
     if secdf is not None: 
         return secdf
-    if not RQInitializer.init(): 
+    if not RQInitializer.init(raise_on_quota=raise_on_quota):
         return pd.DataFrame()
-    secdf = rqdatac.all_instruments(type=data_type.instrument, date=str(date))
+    secdf = rq_call(rqdatac.all_instruments, type=data_type.instrument, date=str(date),
+                    raise_on_quota=raise_on_quota)
+    if not isinstance(secdf, pd.DataFrame) or secdf.empty:
+        return pd.DataFrame()
     secdf = secdf.rename(columns = {'order_book_id':'code'})
     if 'status' in secdf.columns:
         secdf['is_active'] = secdf['status'] == 'Active'
@@ -314,6 +357,19 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
     ) -> Base.UpdateFlag:
         flags = Base.UpdateFlagList()
         selected = list(MinDataType) if data_types is None else [MinDataType(dt) for dt in data_types]
+        if (MACHINE.platform_server and MinDataType.SEC in selected
+                and first_n <= 0 and end >= SEC_NONE_START):
+            from .sec_none_migration import collect_daily_actions_through
+
+            try:
+                if collect_daily_actions_through(end):
+                    flags += Base.UpdateFlag.SUCCESS
+            except QuotaExceeded:
+                self.logger.warning('RcQuant quota reached during stock corporate-action collection')
+                return Base.UpdateFlag.FAILED
+            except Exception as exc:
+                self.logger.error(f'RcQuant stock corporate-action collection failed: {exc}')
+                flags += Base.UpdateFlag.FAILED
         for data_type in selected:
             try:
                 flags += self.download(start , end , data_type , first_n , overwrite = overwrite)
@@ -354,11 +410,12 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             flags += Base.UpdateFlag.SKIPPED
         else:
             for dt in dates:
-                for x_min in x_mins_to_update(dt , data_type = data_type):
-                    min_df = DB.load('trade_ts' , src_key(data_type) , dt)
-                    assert data_type == 'sec' , f'only sec support {x_min}min : {data_type}'
-                    x_min_df = trade_min_reform(min_df , x_min , 1)
-                    _save_bar(x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+                with date_lock(RQ_PATH, data_type, dt):
+                    for x_min in x_mins_to_update(dt, data_type):
+                        min_df = DB.load('trade_ts', src_key(data_type), dt)
+                        x_min_df = trade_min_reform(min_df, x_min, 1)
+                        _save_bar(x_min_df, 'trade_ts', src_key(data_type, x_min), dt,
+                                  indent=self.indent + 1, vb_level=self.vb_level + 1)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
@@ -368,51 +425,70 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         self , date : int , data_type : MinDataType , first_n : int = -1 ,
         * , raise_on_quota : bool = False , check_sec_quality : bool = False ,
     ) -> bool:    
-        def code_map(x : str):
-            if data_type != 'sec': 
-                return x
-            x = x.split('.')[0]
-            if x[:1] in ['3', '0']:
-                y = x+'.SZ'
-            elif x[:1] in ['6']:
-                y = x+'.SH'
-            else:
-                y = x
-            return y
-
-        if (sec_min := load_min(date , data_type)) is not None: 
+        sec_min = load_min(date, data_type)
+        equity = data_type == MinDataType.SEC
+        cutover = equity and date >= SEC_NONE_START
+        if sec_min is not None and (not cutover or is_none_min(sec_min)):
             if check_sec_quality and data_type == MinDataType.SEC:
-                check_sec_backfill_quality(sec_min, rcquant_instrument_list(date, data_type), date)
-            df = self.rcquant_min_to_normal_min(sec_min , data_type)
-            _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1, vb_level = self.vb_level + 1)
+                instruments = rcquant_instrument_list(date, data_type, raise_on_quota=raise_on_quota)
+                check_sec_backfill_quality(sec_min, instruments, date)
+            RcquantMinBarDownloader._publish_downloaded_min(
+                self, sec_min, date, data_type, cutover and first_n <= 0,
+            )
             return True
 
         if not RQInitializer.init(raise_on_quota = raise_on_quota): 
             return False
 
-        instrument_list = rcquant_instrument_list(date , data_type = data_type)
+        instrument_list = rcquant_instrument_list(date, data_type, raise_on_quota=raise_on_quota)
+        if instrument_list.empty:
+            if check_sec_quality and data_type == MinDataType.SEC:
+                check_sec_backfill_quality(None, instrument_list, date)
+            return False
         instrument_list = instrument_list.loc[instrument_list['is_active']]
         if first_n > 0: 
             instrument_list = instrument_list.iloc[:first_n]
         code_list = instrument_list['code'].to_numpy(str)
-        data = rq_get_price(code_list , date , raise_on_quota = raise_on_quota)
+        data = rq_get_price(code_list, date, raise_on_quota=raise_on_quota,
+                            adjust_type='none' if equity else None)
         if isinstance(data , pd.DataFrame) and not data.empty:
-            data = data.reset_index().rename(columns = {'total_turnover':'amount', 'order_book_id':'code'}).assign(date = date)
+            data = provider_min_frame(data, data_type)
             if check_sec_quality and data_type == MinDataType.SEC:
                 check_sec_backfill_quality(data, instrument_list, date)
-            data['code'] = data['code'].map(code_map)
-            data['time'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%H%M%S')).str.slice(0,4)
-            data['date'] = data['datetime'].map(lambda x: getattr(x, 'strftime')('%Y%m%d'))
+            if equity:
+                data[ADJUST_COLUMN] = 'none'
+            if cutover and sec_min is not None:
+                keys = ['code', 'datetime']
+                old_keys = pd.MultiIndex.from_frame(sec_min[keys])
+                new_keys = pd.MultiIndex.from_frame(data[keys])
+                if not new_keys.is_unique or not old_keys.isin(new_keys).all():
+                    raise ValueError(f'{date}: none response is missing stock-minute keys from the old cache')
+                raw_path = raw_min_path(date, data_type)
+                backup = raw_path.parent / '.pre_backup' / raw_path.name
+                backup.parent.mkdir(exist_ok=True)
+                if not backup.exists():
+                    os.link(raw_path, backup)
 
             write_min(data , date , data_type)
 
-            df = self.rcquant_min_to_normal_min(data , data_type)
-            _save_bar(df , 'trade_ts' , src_key(data_type) , date = date , indent = self.indent + 1 , vb_level = self.vb_level + 1)
+            RcquantMinBarDownloader._publish_downloaded_min(
+                self, data, date, data_type, cutover and first_n <= 0,
+            )
             return True
         else:
             if check_sec_quality and data_type == MinDataType.SEC:
                 check_sec_backfill_quality(None, instrument_list, date)
             return False
+
+    def _publish_downloaded_min(self, data, date, data_type, rebuild_all):
+        minute = self.rcquant_min_to_normal_min(data, data_type)
+        kwargs = {'indent': self.indent + 1, 'vb_level': self.vb_level + 1}
+        _save_bar(minute, 'trade_ts', src_key(data_type), date, **kwargs)
+        if rebuild_all:
+            for period in SEC_PERIODS[1:]:
+                _save_bar(trade_min_reform(minute.copy(), period), 'trade_ts',
+                          src_key(data_type, period), date, **kwargs)
+            atomic_frame(pd.DataFrame([_raw_identity(date)]), _sec_receipt(date), vb_level='never')
 
     def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : MinDataType) -> pd.DataFrame:
         if data_type != 'sec': 
@@ -530,13 +606,14 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
             if first_n > 0:
                 filled.append(dt)
                 continue
-            for x_min in x_mins_to_update(dt , data_type = data_type):
-                min_df = DB.load('trade_ts' , src_key(data_type) , dt)
-                x_min_df = trade_min_reform(min_df , x_min , 1)
-                _save_bar(
-                    x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt ,
-                    indent = self.indent + 1 , vb_level = self.vb_level + 1 ,
-                )
+            with date_lock(RQ_PATH, data_type, dt):
+                for x_min in x_mins_to_update(dt , data_type = data_type):
+                    min_df = DB.load('trade_ts' , src_key(data_type) , dt)
+                    x_min_df = trade_min_reform(min_df , x_min , 1)
+                    _save_bar(
+                        x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt ,
+                        indent = self.indent + 1 , vb_level = self.vb_level + 1 ,
+                    )
             filled.append(dt)
             self.logger.success(
                 f'Backfill RcQuant sec bar min {dt} ({len(filled)}/{len(dates)} this run)'

@@ -28,12 +28,29 @@ through the Watchdog Installer and verify it in `status` after installation.
 
 ## Installation and maintenance
 
-Historical RCQuant minute-bar backfill is complete. `backfills.yaml` now has no
-calendar schedules, and daily update no longer invokes backfill. The registered
-`rcquant_sec_backfill` task, script and downloader remain available for manual use.
-After deploying this change, run `plan --diff`, `apply` and `status` on the server
-to remove the installed backfill calendar/lane timers. Any independently added
-legacy backfill cron lines must also be removed; the installer preserves external cron.
+The original RCQuant missing-minute backfill is complete and
+`rcquant_sec_backfill` remains available for manual use. The server schedule
+`rcquant_sec_none` runs at 21:00 Asia/Shanghai and shares its execution lock.
+It resumes corporate-action downloads and migration of stock minutes dated
+2007-01-01 through 2026-11-24. Run `plan --diff`, `apply` and `status` from
+the deployed checkout to publish and verify the new timer.
+
+From 2026-11-25, the server's `daily_update` archives the dated RQData stock
+universe and that day's `get_ex_factor` and `get_split` events before the
+RCQuant minute download. It publishes the three files in
+`data/Miscellaneous/exfactor/daily/YYYYMMDD/`. It sends up to 1,000 IDs per
+request and saves empty event tables on days without events. The split query
+is keyed by book-closure date, and its output retains the ex-date. Missed
+calendar days resume from their completed batches. The collector and stock
+minute downloader share the dated RCQuant instrument cache.
+
+The migration stores progress in
+`data/Miscellaneous/Rcquant/.sec_none_migration/progress.sqlite`, daily
+factors in `data/Miscellaneous/exfactor` and recoverable original minutes in
+`Rcquant/secmin/.pre_backup`. Confirmed out-of-range native VWAP leaves the
+whole date pending review. Its evidence is in the migration's
+`vwap_failures` directory. Other dates continue. A quota interruption
+resumes on the next scheduled evening.
 
 The old built-in `--config-dir runs/scheduling` resolves to this directory;
 custom config directories retain their original meaning. Old Python entrypoints

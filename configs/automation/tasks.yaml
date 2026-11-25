@@ -31,3 +31,10 @@ tasks:
     window: rcquant_evening
     overlap: skip
     timeout: null
+  rcquant_sec_none:
+    entrypoint: rcquant_sec_none
+    args: []
+    lock_group: rcquant_sec_backfill
+    channel: independent
+    overlap: skip
+    timeout: 3h

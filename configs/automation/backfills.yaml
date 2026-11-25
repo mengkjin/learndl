@@ -1,2 +1,5 @@
-# Historical minute-bar backfill is complete; retain the task for manual use.
-schedules: {}
+schedules:
+  rcquant_sec_none:
+    task: rcquant_sec_none
+    days: daily
+    times: ['21:00']

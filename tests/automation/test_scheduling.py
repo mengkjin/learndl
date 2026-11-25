@@ -50,6 +50,13 @@ class ScheduleConfigTest(unittest.TestCase):
         self.assertEqual([job.name for job in default_jobs(old)], ['email_outbox', 'task_lifecycle', 'cli_recovery'])
         self.assertEqual(default_jobs({'jobs': {'cli_recovery': {'enabled': False}, 'email_outbox': {'enabled': False}}}), ())
 
+    def test_rcquant_none_migration_has_an_independent_nine_pm_timer(self):
+        plan = build_plan(self.config, '', ROOT, Path(sys.executable), 'Asia/Shanghai')
+        task = 'rcquant_sec_none'
+        self.assertEqual(plan['units'][f'learndl-schedule-{task}.timer'].count('21:00:00 Asia/Shanghai'), 7)
+        self.assertEqual(self.config['tasks'][task]['channel'], 'independent')
+        self.assertEqual(self.config['tasks'][task]['lock_group'], 'rcquant_sec_backfill')
+
     def test_production_update_is_installed_at_midnight_plus_ten(self):
         plan = build_plan(self.config, '', ROOT, Path(sys.executable), 'Asia/Shanghai')
         task = 'production_model_update'
