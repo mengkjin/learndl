@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from src.proj import CALENDAR, DB
+from src.proj import CALENDAR, DB, Logger
 from src.proj.util.script import ScriptTool
 from src.res.factor.calculator import FactorCalculator
 from src.res.factor.util.classes.stock_factor import StockFactor
@@ -27,7 +27,7 @@ def check(start, end):
     if start > end:
         raise ValueError('start must be on or before end')
     dates = CALENDAR.range(start, end, 'td')
-    print(f'Legacy liquidity read: {start}..{end}, {len(dates)} trading dates', flush=True)
+    Logger.stdout(f'Legacy liquidity read: {start}..{end}, {len(dates)} trading dates', flush=True)
     failed, passed, empty = [], 0, 0
     for calc in FactorCalculator.iter(category0='behavior', category1='liquidity'):
         name = calc.factor_name
@@ -35,11 +35,11 @@ def check(start, end):
             raw = DB.loads(calc.db_src, calc.db_key, dates, override_existing_key=True,
                            closest=False, vb_level='max')
         except Exception as exc:
-            print(f'FAIL {name} DB.loads: {type(exc).__name__}: {exc}', flush=True)
+            Logger.stdout(f'FAIL {name} DB.loads: {type(exc).__name__}: {exc}', flush=True)
             failed.append(name)
             continue
         if raw.empty:
-            print(f'EMPTY {name}')
+            Logger.stdout(f'EMPTY {name}')
             empty += 1
             continue
         try:
@@ -47,8 +47,8 @@ def check(start, end):
             StockFactor.normalize_df(raw, fill_method='drop')
         except Exception as exc:
             failed.append(name)
-            print(f'FAIL {name} normalize: {type(exc).__name__}: {exc}', flush=True)
-            print(f'  rows={len(raw)} columns={raw.dtypes.astype(str).to_dict()}')
+            Logger.stdout(f'FAIL {name} normalize: {type(exc).__name__}: {exc}', flush=True)
+            Logger.stdout(f'  rows={len(raw)} columns={raw.dtypes.astype(str).to_dict()}')
             for col in raw.columns.difference(['secid', 'date']):
                 series = raw[col]
                 if series.dtype.kind in 'iufb':
@@ -57,12 +57,12 @@ def check(start, end):
                 if text_rows.any():
                     row = raw.loc[text_rows, ['date', 'secid', col]].iloc[0]
                     day = int(row['date'])
-                    print(f'  column={col!r} date={day} secid={row["secid"]} value={row[col]!r} '
+                    Logger.stdout(f'  column={col!r} date={day} secid={row["secid"]} value={row[col]!r} '
                           f'text_rows={int(text_rows.sum())} file={calc.target_path(day)}')
             continue
-        print(f'OK {name} rows={len(raw)}')
+        Logger.stdout(f'OK {name} rows={len(raw)}')
         passed += 1
-    print(f'Summary: ok={passed} empty={empty} failed={len(failed)} factors={failed}', flush=True)
+    Logger.stdout(f'Summary: ok={passed} empty={empty} failed={len(failed)} factors={failed}', flush=True)
     return 1 if failed else (0 if passed else 2)
 
 

@@ -81,7 +81,7 @@ class DirectCallHub(DirectCall):
 
         return [
             ('Watchdog / Schedule Management', ManageTaskSchedules,
-             'Choose preview, status, install/update, or rollback; defaults to preview.'),
+             'Manage watchdog installation, pending requests and rollback.'),
             ('Training Scheduler Mode', ManageTrainingScheduler,
              'Inspect training requests or switch training priority policy on this host.'),
             ('Test Code', TestCode,
@@ -227,11 +227,10 @@ class DirectCallHub(DirectCall):
             from src.proj.util.cli import AskFor
 
             actions = {
-                'Preview Changes (default)': 'plan',
+                'Deferred Install / Update': 'defer',
+                'Preview Changes': 'plan',
                 'View Installation Status': 'status',
                 'Manual Install / Update': 'apply',
-                'Deferred Install / Update': 'defer',
-                'Force Install / Stop Approved Tasks': 'force',
                 'Pending Installation Status': 'pending',
                 'Cancel Pending Installation': 'cancel',
                 'Roll Back Last Installation': 'rollback',
@@ -240,15 +239,14 @@ class DirectCallHub(DirectCall):
                 list(actions), confirm=False, multiple=False, use_checkbox=True,
                 title='Watchdog / Schedule Management — choose an operation',
                 help_description=(
-                    'Preview is selected first. Installation also manages project schedules and may request sudo. '
+                    'Installation also manages project schedules and may request sudo. '
                     'Select Back to return without running anything.'
                 ),
                 option_help={
-                    'Preview Changes (default)': 'Read-only preview with detailed cron and systemd differences.',
+                    'Deferred Install / Update': 'Install now when idle or queue a request valid for 24 hours when busy.',
+                    'Preview Changes': 'Read-only preview with detailed cron and systemd differences.',
                     'View Installation Status': 'Inspect installed schedules and timer status.',
                     'Manual Install / Update': 'Preview, confirm and authenticate; install now or exit if busy.',
-                    'Deferred Install / Update': 'Same immediate installation when idle; if busy, register a background request valid for 24 hours and return.',
-                    'Force Install / Stop Approved Tasks': 'Preview managed process scopes; stop only approved scopes, then install. No automatic task retry.',
                     'Pending Installation Status': 'Show background installation status and reason.',
                     'Cancel Pending Installation': 'Cancel a waiting installation and reopen task admission.',
                     'Roll Back Last Installation': 'Restore the previous installation; running business work is not undone.',
@@ -265,7 +263,7 @@ class DirectCallHub(DirectCall):
                 help_description=(
                     'Each choice spawns a DirectCall in a split pane. '
                     'Select « Back (q) » in the menu to return to the hub. '
-                    'Watchdog management opens an operation menu with preview selected first.'
+                    'Watchdog management opens an operation menu with deferred installation first.'
                 ),
             )
             if selected_cls is not None:
@@ -321,7 +319,7 @@ class DirectCallHub(DirectCall):
                     help_description=(
                         'Git Pull runs here and restarts the hub on success. Train Schedule Model opens a split pane; '
                         'Learndl Monitor opens the background console without a new pane. '
-                        'The remaining entries open submenus. Watchdog management defaults to preview. '
+                        'The remaining entries open submenus. '
                         'Submenus offer « Back (q) » to return here; use /quit to exit the hub.'
                     ),
                     option_help=self._top_level_help(),

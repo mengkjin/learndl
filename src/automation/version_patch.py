@@ -699,17 +699,12 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
             logger.info('[%d/%d] Applying version patch %s (log: %s)',
                         index + 1, len(pending), patch.id, log, extra=progress)
             try:
-                if index == 0 and services is not None:
-                    try:
-                        services.pause()
-                    except Exception as exc:
-                        raise MigrationError(f'Could not pause project interfaces: {exc}') from exc
                 if patch.id == '0.7.2/001' and services is not None:
                     for old in db.execute('SELECT log_path FROM attempts WHERE patch=? AND id!=?',
                                           (patch.id, key)):
                         services.collect_paths(Path(old['log_path']).parent / 'backup')
                 run_patch(root, patch, context, pass_fds)
-                if services is not None:
+                if patch.id == '0.7.2/001' and services is not None:
                     services.collect_paths(backups)
                 if git(root, 'rev-parse', 'HEAD').decode().strip() != commit:
                     raise MigrationError('Checkout changed during patch execution')
@@ -717,7 +712,7 @@ def _apply_pending(root, runtime, *, pass_fds, notify, retry, baseline, services
             except Exception as exc:
                 reason = str(exc)
                 if not log.exists():
-                    # Interface suspension can fail before the patch subprocess opens its log.
+                    # Setup can fail before the patch subprocess opens its log.
                     try:
                         log.write_text(traceback.format_exc())
                     except OSError as log_error:

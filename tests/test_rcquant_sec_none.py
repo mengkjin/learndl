@@ -25,6 +25,7 @@ def minute_frame(date, *, price=10., volume=100.):
     times = pd.date_range(day + pd.Timedelta(hours=9, minutes=31), periods=120, freq='min').append(
         pd.date_range(day + pd.Timedelta(hours=13, minutes=1), periods=120, freq='min')
     )
+    times = pd.DatetimeIndex(times)
     return pd.DataFrame({
         'code': '000001.SZ', 'datetime': times, 'time': times.strftime('%H%M'),
         'date': str(date), 'open': price, 'high': price, 'low': price, 'close': price,
@@ -59,7 +60,7 @@ class FactorsTest(unittest.TestCase):
         ]:
             with self.subTest(volume=input_volume, scaled=expected_scaled):
                 actual = restore_stock_day(prices, input_volume, day, 20200103, event, splits)
-                self.assertIsNotNone(actual)
+                assert actual is not None
                 price, shares, scaled = actual
                 np.testing.assert_array_equal(price, raw_prices)
                 np.testing.assert_array_equal(shares, [100., 100.])
@@ -118,6 +119,24 @@ class MigrationTest(unittest.TestCase):
         self.legacy.to_feather(self.raw_path)
         with patch.object(bar_min, 'load_list', return_value=None):
             self.job.scan([self.date])
+
+    def test_inventory_rechecks_calendar_after_an_empty_or_partial_scan(self):
+        with self.assertRaisesRegex(ValueError, 'empty trading calendar'):
+            self.job.scan([])
+        later = self.date + 1
+        manifest = self.job.scan([self.date, later])
+        self.assertEqual(manifest['dates'], [self.date])
+        self.assertEqual(manifest['missing'], [later])
+
+    def test_completed_inventory_reopens_when_calendar_gains_a_date(self):
+        self.job.mark('complete', 'history', {'done': 1})
+        with patch.object(migration, 'Dates', return_value=[self.date]), patch.object(self.job, 'get_events') as fetch:
+            self.job.run()
+            fetch.assert_not_called()
+        with patch.object(migration, 'Dates', return_value=[self.date, self.date + 1]), \
+                patch.object(self.job, 'get_events', side_effect=migration.EveningEnded), \
+                self.assertRaises(migration.EveningEnded):
+            self.job.run()
 
     def test_quota_batch_then_resume_and_skip_completed_batch(self):
         ids = ['000001.XSHE']
@@ -183,7 +202,7 @@ class MigrationTest(unittest.TestCase):
             self.job.migrate_date(self.date, self.events)
             self.job.migrate_date(self.date, self.events)
         self.job.direct_none.assert_called_once()
-        self.assertIn('VWAP violations', self.job.read('blocked', self.date))
+        self.assertIn('VWAP violations', str(self.job.read('blocked', self.date)))
         audit = pd.read_feather(self.job.state / 'vwap_failures' / f'{self.date}.feather')
         self.assertEqual(audit.iloc[0]['vwap'], 10.4)
         pd.testing.assert_frame_equal(pd.read_feather(self.raw_path), self.legacy)
@@ -198,7 +217,7 @@ class MigrationTest(unittest.TestCase):
             self.job.migrate_date(self.date, self.events)
             self.job.migrate_date(self.date, self.events)
         direct_none.assert_not_called()
-        self.assertEqual(self.job.read('done', self.date)['price_and_original_volume'], 1)
+        self.assertEqual(self.job.require_record('done', self.date)['price_and_original_volume'], 1)
         minute = pd.read_feather(self.raw_path)
         self.assertTrue(minute['close'].eq(10.).all())
         self.assertTrue(minute['volume'].eq(100.).all())
@@ -207,7 +226,7 @@ class MigrationTest(unittest.TestCase):
     def test_interrupted_publish_keeps_pre_backup_and_does_not_adjust_twice(self):
         native = minute_frame(self.date)
         self.job.stage(self.date, native.assign(_adjust_type='none'), {'direct_none': 1})
-        prepared = self.job.read('prepared', self.date)
+        prepared = self.job.require_record('prepared', self.date)
         rename = migration.os.replace
 
         def interrupted(source, target):

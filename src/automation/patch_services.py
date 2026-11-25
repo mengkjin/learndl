@@ -1,11 +1,10 @@
-"""Pause and restore registered project interfaces during version migrations."""
+"""Restore interfaces stopped by older version patch runners."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager
 from functools import partial
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
@@ -83,7 +82,7 @@ def _interface_lock(state):
 
 @contextmanager
 def interface_operation(state, *, key=None):
-    """Serialize operator actions with the snapshot and stop transition."""
+    """Serialize operator actions with interface recovery and path updates."""
     lock = _interface_lock(state)
     try:
         lock.acquire()
@@ -97,59 +96,8 @@ def interface_operation(state, *, key=None):
         lock.release()
 
 
-def live_process(record):
-    if not record:
-        return None
-    try:
-        process = psutil.Process(record['pid'])
-        if process.create_time() == record['created'] and process.status() != psutil.STATUS_ZOMBIE:
-            return process
-    except psutil.NoSuchProcess:
-        pass
-    return None
-
-
-def _wait_for_stop(targets, timeout):
-    _, remaining = psutil.wait_procs(targets, timeout=timeout)
-    alive = []
-    for process in remaining:
-        try:
-            # A non-child can remain visible as a zombie until its parent reaps it.
-            if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
-                alive.append(process)
-        except psutil.NoSuchProcess:
-            pass
-    return alive
-
-
-def stop_process(record, *, descendants=True):
-    process = live_process(record)
-    if process is None:
-        return
-    if process.pid in {os.getpid(), *(parent.pid for parent in psutil.Process().parents())}:
-        raise RuntimeError(f'Maintenance cannot stop its own terminal or parent process ({process.pid})')
-    targets = process.children(recursive=True) if descendants else []
-    targets = [*reversed(targets), process]
-    for target in targets:
-        try:
-            target.terminate()  # psutil verifies process creation time before signalling.
-        except psutil.NoSuchProcess:
-            continue
-    alive = _wait_for_stop(targets, timeout=8)
-    if not alive:
-        return
-    for target in alive:
-        try:
-            target.kill()  # Reuse the original psutil identity for escalation.
-        except psutil.NoSuchProcess:
-            pass
-    remaining = _wait_for_stop(alive, timeout=3)
-    if remaining:
-        raise RuntimeError(f'Processes did not stop after SIGTERM and SIGKILL: {[proc.pid for proc in remaining]}')
-
-
 class PatchServices:
-    """Journal the original interfaces before stopping them, across attempts."""
+    """Recover previously journaled interfaces and track migrated dashboard paths."""
 
     def __init__(self, root, runtime):
         self.root = root
@@ -199,98 +147,27 @@ class PatchServices:
         except (psutil.NoSuchProcess, FileNotFoundError):
             return None
 
-    def _snapshot(self) -> Journal:
-        from src.api.learndl_monitor.services import SERVICES
-
-        manager, instances = self._monitor()
-        services: dict[str, ServiceIdentity] = {}
-        for key in SERVICES:
-            record = read_record(self.state / f'{key}.json')
-            if not record:
-                continue
-            for process in manager.discover(key):
-                if process.pid == record.get('pid') and process.create_time() == record.get('created'):
-                    services[key] = {'pid': process.pid, 'created': record['created'],
-                                     'port': record.get('port') or urlsplit(record.get('url', '')).port}
-                    break
-        if console := self._console():
-            services['console'] = console
-        experiments = [cast(Dashboard, row) for row in instances.discover() if row['origin'] == 'managed'] if any(
-            instances.state.glob('[0-9]*.json')) else []
-        return {'services': services, 'experiments': experiments, 'restored': [], 'mappings': {}, 'phase': 'migrating'}
-
-    def pause(self):
-        from src.automation import cli_recovery
-
-        with _interface_lock(self.state):
-            existing = cast(Journal, read_record(self.journal))
-            if existing and existing.get('phase') == 'ready':
-                raise RuntimeError('Finish interface recovery with version_patch restore-services before starting another migration')
-            self.state_data = existing or self._snapshot()
-            if sys.platform == 'linux' and self.cli_path.exists():
-                with cli_recovery.lock(self.cli_path):
-                    self._pause_cli(cli_recovery)
-            else:
-                self._save_migrating()
-            for item in self.state_data['experiments']:
-                stop_process(item)
-            manager, _ = self._monitor()
-            services = self.state_data['services']
-            stop_order = [key for key in reversed(services) if key != 'console']
-            if 'console' in services:
-                stop_order.append('console')
-            for key in stop_order:
-                if key == 'console':
-                    replacement = self._console()
-                else:
-                    current = read_record(self.state / f'{key}.json')
-                    replacement = next((current for proc in manager.discover(key) if
-                                        proc.pid == current.get('pid') and proc.create_time() == current.get('created')), {})
-                stop_process(replacement or services[key], descendants=False)
-                if key in self.state_data['restored']:
-                    self.state_data['restored'].remove(key)
-                    atomic_json(self.journal, self.state_data)
-
-    def _save_migrating(self):
-        self.state_data['phase'] = 'migrating'
-        atomic_json(self.journal, self.state_data)
-
-    def _pause_cli(self, recovery):
-        state = recovery.load(self.cli_path)
-        process = state.get('process', {})
-        same_project = state.get('root') == str(self.root.resolve())
-        if same_project and recovery.hub_alive(state) and not self.state_data.get('cli'):
-            if not state.get('menu_idle') or not state.get('desired') or state.get('paused') or state.get('failure_paused'):
-                # The existing CLI can stay open. Patches still check their files.
-                self.state_data['cli_note'] = 'Registered CLI did not report an idle menu and was left running'
-            elif live_process(process) is not None:
-                protected = {os.getpid(), *(parent.pid for parent in psutil.Process().parents())}
-                if process['pid'] not in protected:
-                    self.state_data['cli'] = process
-        self._save_migrating()
-        if item := self.state_data.get('cli'):
-            stop_process(item, descendants=False)
-
     def collect_paths(self, backup):
         """Record moves performed by the older experiment layout patch."""
         report = read_record(backup / 'experiment-results.json')
-        for row in report.get('moves', []):
-            if row.get('state') in ('migrated', 'already-migrated'):
-                self.state_data['mappings'][row['source']] = row['target']
-        if report:
-            from src.automation.artifact_exchange.archive_paths import remap
+        mappings = {Path(row['source']): Path(row['target']) for row in report.get('moves', [])
+                    if row.get('state') in ('migrated', 'already-migrated')}
+        if not mappings:
+            return
+        from src.automation.artifact_exchange.archive_paths import remap
 
-            atomic_json(self.journal, self.state_data)
-            mappings = {Path(src): Path(dst) for src, dst in self.state_data['mappings'].items()}
-            for row in self.state_data['experiments']:
-                path = self.state / 'experiments' / f'{row["pid"]}.json'
+        with _interface_lock(self.state):
+            if self.state_data:
+                self.state_data['mappings'].update({str(src): str(dst) for src, dst in mappings.items()})
+                atomic_json(self.journal, self.state_data)
+            for path in (self.state / 'experiments').glob('[0-9]*.json'):
                 record = read_record(path)
-                if (record.get('created'), record.get('kind')) != (row['created'], row['kind']):
-                    continue
+                updated = dict(record)
                 for key in ('archive_source', 'source'):
                     if record.get(key):
-                        record[key] = str(remap(Path(record[key]), mappings))
-                atomic_json(path, record)
+                        updated[key] = str(remap(Path(record[key]), mappings))
+                if updated != record:
+                    atomic_json(path, updated)
 
     def _start_console(self, port):
         origin = f'http://127.0.0.1:{port}'

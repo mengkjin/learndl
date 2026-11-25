@@ -28,6 +28,8 @@ from .migration_factors import (
 )
 from .storage import atomic_frame, date_lock
 
+__all__ = ['collect_daily_actions_through', 'run']
+
 START = 20070101
 END = 20261124
 BEGIN_NONE = bar_min.SEC_NONE_START
@@ -137,10 +139,16 @@ class Migration:
                               (stage, str(item))).fetchone()
         return json.loads(row[0]) if row else None
 
-    def mark(self, stage: str, item: int | str, value=True) -> None:
+    def mark(self, stage: str, item: int | str, value: bool | str | list | dict = True) -> None:
         with self.db:
             self.db.execute('INSERT OR REPLACE INTO checkpoints VALUES (?,?,?)',
                             (stage, str(item), json.dumps(value)))
+
+    def require_record(self, stage: str, date: int) -> dict:
+        record = self.read(stage, date)
+        if not isinstance(record, dict):
+            raise RuntimeError(f'{date}: missing or invalid {stage} checkpoint')
+        return record
 
     def guard(self):
         if self.started_at is not None and bar_min._backfill_deadline_hit(self.started_at):
@@ -157,15 +165,18 @@ class Migration:
 
     def scan(self, expected: list[int]) -> dict:
         previous = self.read('manifest', 'history')
-        if previous is not None and not previous['missing'] and not previous['mapping_errors']:
-            return previous
+        if not expected:
+            raise ValueError('Cannot inventory RCQuant history with an empty trading calendar')
         dates, missing, codes, early = [], [], set(), set()
         errors = {}
         if previous is not None:
             dates = previous['dates']
             codes.update(previous['ids'])
             early.update(previous['early'])
-            expected = sorted({*previous['missing'], *map(int, previous['mapping_errors'])})
+            expected = sorted(set(expected).difference(dates) | set(previous['missing'])
+                              | set(map(int, previous['mapping_errors'])))
+            if not expected:
+                return previous
         for date in expected:
             self.guard()
             raw = self.minute_path(date)
@@ -332,7 +343,9 @@ class Migration:
             return restored, {}, []
         daily = DB.load('trade_ts', 'day', date, vb_level='never')
         if not daily.empty:
-            daily = daily.set_index('secid', verify_integrity=True)
+            daily = daily.set_index('secid')
+            if not daily.index.is_unique:
+                raise ValueError(f'{date}: duplicate secid in daily price reference')
         reference = {} if daily.empty else daily[[*PRICE, 'volume']].T.to_dict('list')
         secid = dict(zip(mapping, DB.code2secid(pd.Series(list(mapping)))))
         needs_none = {}
@@ -454,13 +467,13 @@ class Migration:
         backup = raw.parent / '.pre_backup' / raw.name
         backup.parent.mkdir(exist_ok=True)
         if not backup.exists():
-            expected = self.read('scan', date)['raw']
+            expected = self.require_record('scan', date)['raw']
             if not file_matches(raw, expected):
                 raise RuntimeError(f'{date}: original minute changed since inventory')
             os.link(raw, backup)
             sync_directory(backup.parent)
             sync_directory(backup.parent.parent)
-        if not file_matches(backup, self.read('scan', date)['raw']):
+        if not file_matches(backup, self.require_record('scan', date)['raw']):
             raise RuntimeError(f'{date}: invalid pre-migration backup')
 
         for item in prepared['outputs']:
@@ -487,7 +500,7 @@ class Migration:
         with date_lock(self.root, SEC, date):
             prepared = self.read('prepared', date)
             if prepared is None:
-                source = self.read('scan', date)
+                source = self.require_record('scan', date)
                 if not file_matches(raw_path, source['raw']):
                     raise RuntimeError(f'{date}: raw minute changed since inventory')
                 raw = pd.read_feather(raw_path).sort_values(KEYS).reset_index(drop=True)
@@ -502,7 +515,7 @@ class Migration:
                     self.mark('blocked', date, str(exc))
                     Logger.warning(f'RCQuant migration pending review: {exc}')
                     return
-                prepared = self.read('prepared', date)
+                prepared = self.require_record('prepared', date)
             self.publish(date, prepared)
 
     def run(self):
@@ -515,12 +528,17 @@ class Migration:
             self.migrate_date(int(date), None)
 
         manifest = self.scan(list(map(int, Dates(START, END))))
+        completed = self.read('complete', 'history')
+        if (completed and completed['done'] == len(manifest['dates'])
+                and not manifest['missing'] and not manifest['mapping_errors']):
+            Logger.stdout('RCQuant minute migration already complete')
+            return
         Logger.stdout(f"RCQuant source inventory: {len(manifest['dates'])} dates, {len(manifest['ids'])} stocks, "
                       f"{len(manifest['missing'])} missing dates, {len(manifest['mapping_errors'])} mapping errors")
         events = self.get_events(manifest)
         for date in manifest['dates']:
             self.guard()
-            self.daily_factors(date, self.read('scan', date)['mapping'], events)
+            self.daily_factors(date, self.require_record('scan', date)['mapping'], events)
         for date in reversed(manifest['dates']):
             self.guard()
             self.migrate_date(date, events)
@@ -568,9 +586,6 @@ def run():
     state.mkdir(parents=True, exist_ok=True)
     with portalocker.Lock(state / 'migration.lock', timeout=0), closing(sqlite3.connect(state / 'progress.sqlite')) as db:
         migration = Migration(root, PATH.miscel / 'exfactor', db, started)
-        if migration.read('complete', 'history') is not None:
-            Logger.stdout('RCQuant minute migration already complete')
-            return
         today = started.strftime('%Y%m%d')
         if migration.read('quota_exhausted', today):
             Logger.stdout('RCQuant migration already reached its quota this evening')

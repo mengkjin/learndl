@@ -8,9 +8,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from typing import cast
-from unittest.mock import Mock, call, patch
-
-import psutil
+from unittest.mock import Mock, patch
 
 from src.automation import cli_recovery, patch_diagnostics, patch_services
 from src.automation.scheduling import git_update
@@ -139,46 +137,6 @@ class PatchDiagnosticsTest(unittest.TestCase):
         self.assertFalse(_matches_success(Patch('0.7.7/001', '0.7.7', 1, name, 'changed', 10), name, known))
 
 
-class InterfaceStopTest(unittest.TestCase):
-    def setUp(self):
-        self.service = Mock(pid=40)
-        self.record = dict(pid=40, created=2)
-        self.enterContext(patch.object(patch_services, 'live_process', return_value=self.service))
-        current = self.enterContext(patch.object(psutil, 'Process'))
-        current.return_value.parents.return_value = []
-        self.wait = self.enterContext(patch.object(psutil, 'wait_procs'))
-
-    def test_escalates_only_for_live_members_of_the_original_tree(self):
-        zombie, reused, stubborn = Mock(pid=41), Mock(pid=42), Mock(pid=43)
-        self.service.children.return_value = [zombie, reused, stubborn]
-        zombie.status.return_value = psutil.STATUS_ZOMBIE
-        reused.is_running.return_value = False
-        stubborn.status.return_value = psutil.STATUS_SLEEPING
-        self.wait.side_effect = [([self.service], [zombie, reused, stubborn]), ([stubborn], [])]
-
-        patch_services.stop_process(self.record)
-
-        self.assertEqual(self.wait.call_args_list, [
-            call([stubborn, reused, zombie, self.service], timeout=8), call([stubborn], timeout=3)])
-        for target in [self.service, zombie, reused, stubborn]:
-            target.terminate.assert_called_once_with()
-        for target in [self.service, zombie, reused]:
-            target.kill.assert_not_called()
-        stubborn.kill.assert_called_once_with()
-
-    def test_exit_during_escalation_is_success(self):
-        self.wait.side_effect = [([], [self.service]), ([self.service], [])]
-        self.service.kill.side_effect = psutil.NoSuchProcess(self.service.pid)
-        patch_services.stop_process(self.record, descendants=False)
-        self.service.children.assert_not_called()
-
-    def test_live_survivor_still_blocks_migration(self):
-        self.wait.return_value = ([], [self.service])
-        with self.assertRaisesRegex(RuntimeError, r'SIGKILL: \[40\]'):
-            patch_services.stop_process(self.record, descendants=False)
-        self.assertEqual(self.wait.call_count, 2)
-
-
 class InterfaceLifecycleTest(unittest.TestCase):
     def setUp(self):
         temp = TemporaryDirectory()
@@ -200,19 +158,11 @@ class InterfaceLifecycleTest(unittest.TestCase):
                              services={key: dict(pid=pid, created=1, port=port)
                                        for key, pid, port in [('tasks', 11, 8502), ('experiments', 12, 8505), ('console', 13, 8500)]},
                              experiments=[dashboard])
-        self.scan = self.enterContext(patch.object(self.services, '_snapshot', return_value=self.snapshot))
-        self.stop = self.enterContext(patch.object(patch_services, 'stop_process'))
+        atomic_json(self.services.journal, self.snapshot)
         self.console = self.enterContext(patch.object(self.services, '_start_console'))
         self.patch_console = self.enterContext(patch.object(self.services, '_console', return_value={}))
 
     def test_failure_diagnostics_and_restart_from_original_journal(self):
-        def check_saved(record, **kwargs):
-            self.assertTrue(self.services.journal.exists())
-            self.assertTrue(patch_services.interfaces_paused(self.root, 'tasks'))
-
-        self.stop.side_effect = check_saved
-        self.services.pause()
-        self.assertEqual([call.args[0]['pid'] for call in self.stop.call_args_list], [40, 12, 11, 13])
         with self.assertRaisesRegex(ValueError, 'paused'):
             with patch_services.interface_operation(self.services.state, key='experiments'):
                 self.fail('launch should be paused')
@@ -220,8 +170,6 @@ class InterfaceLifecycleTest(unittest.TestCase):
         self.assertEqual(blocked.get('restored'), ['console', 'tasks'])
         self.assertFalse(patch_services.interfaces_paused(self.root, 'tasks'))
         self.assertTrue(patch_services.interfaces_paused(self.root, 'experiments'))
-        self.services.pause()
-        self.assertEqual(self.scan.call_count, 1)
         backup = self.root / 'backup'
         atomic_json(backup / 'experiment-results.json', {'moves': [
             dict(state='migrated', source=str(self.source), target=str(self.target)),
@@ -232,9 +180,24 @@ class InterfaceLifecycleTest(unittest.TestCase):
         self.instances.start_for_maintenance.assert_called_once_with('optuna', str(self.target), port=8081)
         self.assertFalse(self.services.journal.exists())
 
+    def test_live_dashboard_path_update_without_a_recovery_journal(self):
+        self.services.journal.unlink()
+        record_path = self.instances.state / '40.json'
+        original = self.snapshot['experiments'][0]
+        assert isinstance(original, dict)
+        atomic_json(record_path, original)
+        backup = self.root / 'backup'
+        atomic_json(backup / 'experiment-results.json', {'moves': [
+            dict(state='migrated', source=str(self.source), target=str(self.target)),
+        ]})
+
+        services = patch_services.PatchServices(self.root, self.root / 'runtime')
+        services.collect_paths(backup)
+        self.assertEqual(json.loads(record_path.read_text()), dict(original, archive_source=str(self.target)))
+        self.assertFalse(services.journal.exists())
+
     def test_service_start_failure_is_retryable_without_another_migration(self):
         self.source.touch()
-        self.services.pause()
         self.console.side_effect = [RuntimeError('port is busy'), None]
         failed = self.services.restore(ready=True)
         self.assertIn('port is busy', failed.get('errors', {}).get('console', ''))
@@ -245,7 +208,6 @@ class InterfaceLifecycleTest(unittest.TestCase):
 
     def test_ready_journal_reconciliation_retries_transient_recovery(self):
         self.source.touch()
-        self.services.pause()
         self.console.side_effect = [RuntimeError('port is busy'), None]
         self.services.restore(ready=True)
         self.assertTrue(self.services.reconcile_needed())
@@ -256,7 +218,6 @@ class InterfaceLifecycleTest(unittest.TestCase):
         self.assertFalse(patch_services.PatchServices(self.root, self.root / 'runtime').reconcile_needed())
 
     def test_desktop_recovery_does_not_restart_cli_during_migration(self):
-        self.services.pause()
         path = self.services.cli_path
         atomic_json(path, {'root': str(self.root), 'desired': True})
         with patch.object(cli_recovery.sys, 'platform', 'linux'), patch.object(cli_recovery, 'dispatch') as dispatch:

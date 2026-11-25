@@ -16,6 +16,11 @@ from src.automation.console import logger
 from src.shared.file_ops import atomic_json
 from .config import installed_config, runtime_dir
 
+__all__ = [
+    'MODES', 'PRIORITY', 'available', 'policy', 'bind', 'current', 'active_idle_runs',
+    'automatic_kind', 'admit', 'managed_context', 'pause_request', 'discover_promotion', 'status', 'main',
+]
+
 MODES = ('legacy', 'observe', 'unified')
 PRIORITY = {'production': 0, 'manual': 1, 'promotion': 2, 'idle': 3}
 _current: ContextVar[dict | None] = ContextVar('training_admission', default=None)

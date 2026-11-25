@@ -164,26 +164,16 @@ Run from the project checkout with the project's Python environment.
 Manual runs and the automatic maintenance worker share the code and maintenance
 locks. Keep the watchdog available for failure notices and CLI recovery.
 
-Before applying patches, the runner records the running managed console,
-managed panels and dashboard instances, and any registered desktop CLI
-reporting an idle menu. It stops those processes by recorded identity. Existing
-CLI sessions from older code may need a manual exit because their idle state
-is unavailable. A service or external process that still holds a file can
-appear in the patch diagnostic.
+The CLI Hub, main console, panels and experiment dashboards stay running during
+manual and automatic patches, including after a failure and during retry. New
+business work still waits while a patch runs or a failed migration awaits
+verification. If an individual patch detects an open file, its diagnostic
+identifies the conflict for the operator.
 
-After a failure, the original console and Task Center are restored for
-diagnostics. After success, the remaining recorded interfaces are restored
-using their original ports and migrated sources. The desktop CLI returns to
-its menu through its registered desktop recovery session. If a port is busy,
-a source cannot be resolved, or the desktop session is unavailable, the
-migration remains applied and the interface recovery report lists the problem.
-The automatic Git maintenance worker retries residual `ready` interface recovery
-under the maintenance and code leases, even when no data patches are pending.
-Before a subsequent migration, incomplete recovery defers execution without
-creating a failed patch attempt. Once recovery succeeds, pending patches proceed
-normally. Actual patch failures still require the existing retry workflow.
-Use `python -m src.automation.version_patch restore-services` for an immediate
-manual recovery attempt after fixing the reported condition.
+Hosts with an interface recovery journal from an older runner can still restore
+previously stopped services. The automatic Git maintenance worker retries a
+`ready` journal under the maintenance and code leases. Use
+`python -m src.automation.version_patch restore-services` for a manual attempt.
 
 ### Migration checks for upgrades through 0.7.9
 

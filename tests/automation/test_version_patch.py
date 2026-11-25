@@ -795,13 +795,11 @@ sys.stdin.buffer.read()
         services.state_data = {'phase': 'ready', 'services': {}, 'experiments': [], 'restored': [], 'mappings': {}}
         with (patch.object(version, 'ROOT', self.root),
               patch('src.automation.patch_services.PatchServices', return_value=services),
-              patch.object(services, 'pause') as pause,
               patch.object(services, 'collect_paths'),
               patch.object(services, 'restore', return_value={'errors': {'cli': 'recovering'}}) as restore):
             self.assertTrue(services.reconcile_needed())
             first = self.apply()
             self.assertEqual(first['status'], 'deferred')
-            pause.assert_not_called()
             self.notify.assert_not_called()
             state = version.status(self.root, self.runtime)
             self.assertIsNone(state['failed'])
@@ -820,31 +818,32 @@ sys.stdin.buffer.read()
             restore.side_effect = recovered
             result = self.apply()
             self.assertEqual(result['status'], 'ready')
-            pause.assert_called_once()
             state = version.status(self.root, self.runtime)
             self.assertIsNone(state['failed'])
             self.assertEqual(len(state['records']), 1)
             self.assertEqual(state['records'][0]['attempt'], 1)
 
-    def test_interface_pause_failure_has_an_attached_traceback(self):
+    def test_interfaces_stay_available_during_patch_failure_and_retry(self):
+        from src.automation.patch_services import PatchServices, interface_operation
+
         self.release('0.7.2')
         self.patch_file('0.7.2', '001_apply', 'def apply(ctx): pass\ndef verify(ctx): return True\n')
         self.commit()
-        services = Mock()
-        services.pause.side_effect = RuntimeError('Processes did not stop after SIGTERM: [40]')
-        with (patch.object(git_update, 'runtime_dir', return_value=self.scheduling),
-              patch.object(version, 'ROOT', self.root),
-              patch('src.automation.patch_services.PatchServices', return_value=services)):
-            self.notify.side_effect = git_update.queue_version_failure
-            result = self.apply()
-            self.assertEqual(result['status'], 'blocked')
-            log = Path(result['log'])
-            self.assertIn('Could not pause project interfaces', log.read_text())
-            self.assertIn('Traceback', log.read_text())
-            self.assertEqual(result['failure']['step'], 'suspend interfaces')
-            sender = Mock(return_value=True)
-            self.assertTrue(git_update.deliver_update_emails(sender))
-            self.assertEqual(sender.call_args.kwargs['attachments'], [str(log)])
+        services = PatchServices(self.root, self.runtime)
+        attempts = []
+
+        def run(*args):
+            with interface_operation(services.state, key='experiments'):
+                self.assertFalse(services.journal.exists())
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise RuntimeError('temporary patch failure')
+
+        with patch.object(version, 'ROOT', self.root), patch.object(version, 'run_patch', side_effect=run):
+            self.assertEqual(self.apply()['status'], 'blocked')
+            self.assertFalse(services.journal.exists())
+            self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
+            self.assertFalse(services.journal.exists())
 
     def test_retry_can_adopt_corrected_commit_after_timer_sees_head_change(self):
         store = self.control()

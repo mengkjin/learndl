@@ -14,16 +14,18 @@ from src.api.util.direct_call import ProcessReload
 
 
 class SchedulingMenuTest(unittest.TestCase):
-    def test_menu_starts_with_preview_and_cancel_does_nothing(self):
+    def test_menu_starts_with_deferred_install_and_cancel_does_nothing(self):
         with patch('src.proj.util.cli.AskFor.Options', return_value=MagicMock(valid=False)) as prompt, \
              patch.object(ManageTaskSchedules, 'spawn_in_pane') as spawn:
             DirectCallHub()._dispatch_top_level('Watchdog / Schedule Management')
-        self.assertEqual(prompt.call_args.args[0][0], 'Preview Changes (default)')
+        options = prompt.call_args.args[0]
+        self.assertEqual(options[0], 'Deferred Install / Update')
+        self.assertNotIn('Force Install / Stop Approved Tasks', options)
         self.assertTrue(prompt.call_args.kwargs['use_checkbox'])
         spawn.assert_not_called()
 
     def test_explicit_selection_dispatches_only_selected_action(self):
-        for label, action in [('Preview Changes (default)', 'plan'), ('Manual Install / Update', 'apply'),
+        for label, action in [('Preview Changes', 'plan'), ('Manual Install / Update', 'apply'),
                               ('Deferred Install / Update', 'defer'), ('Pending Installation Status', 'pending'),
                               ('Cancel Pending Installation', 'cancel'),
                               ('View Installation Status', 'status'), ('Roll Back Last Installation', 'rollback')]:

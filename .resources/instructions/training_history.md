@@ -70,8 +70,8 @@ watchdog 轮询重试，重启不会丢失。其他有效 schedule 仍可按闲�
 cron 后端也可按退出结果恢复；systemd 额外提供启动器一起丢失时的退出信号和 OOM 诊断。
 
 服务器 CLI 的 `Non-Research Operations` → `Watchdog / Schedule Management` →
-`Install / Update Schedules` 会调用同一安装器，同时更新配置快照、训练服务退出取证入口和计时器。
-默认的 `Preview Changes` 只预览，不安装。也可在服务器项目目录执行
+`Deferred Install / Update` 会调用同一安装器，同时更新配置快照、训练服务退出取证入口和计时器。
+菜单首项是延迟安装。选择 `Preview Changes` 可单独预览变更。也可在服务器项目目录执行
 `.venv/bin/python -m src.automation.scheduling.installer apply --host mengkjin-server`，
 更新配置快照及 `learndl-idle-worklist.service` 的固定 `ExecStopPost` 取证入口。
 仅 Git Pull 不能安装该入口。此机制用于有限恢复，不保证修复导致 OOM 的内存峰值或泄漏。
