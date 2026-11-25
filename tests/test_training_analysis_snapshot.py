@@ -59,8 +59,9 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
     def test_increment_revision_publication_and_scope(self):
         revision = {2024: 1, 2025: 1}
 
-        def source(ds):
-            return {"version": revision[ds[0] // 10000]}
+        def source(ds, *, universe_files=None):
+            file = "/db/history/day." + str(ds[0]) + ".feather"
+            return {file: [file, 10, revision[ds[0] // 10000], 1]}
 
         def table(ds):
             return pd.DataFrame(
@@ -98,6 +99,8 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             first = build_snapshot([20240102], root)
             second = build_snapshot([20250102], root)
             self.assertEqual(second["rewritten_years"], [2025])
+            self.assertEqual(second["reused_years"], [2024])
+            self.assertIn("此前没有", second["rebuild_reasons"][2025][0])
             old = root / "generations" / first["generation"] / "2024/market.feather"
             new = root / "generations" / second["generation"] / "2024/market.feather"
             self.assertEqual(old.stat().st_ino, new.stat().st_ino)
@@ -128,7 +131,10 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
                 TrainingAnalysisSnapshot(root)
             repaired = build_snapshot([20240102], root)
             self.assertEqual(repaired["rewritten_years"], [2024])
+            self.assertIn("mtime 变化", repaired["rebuild_reasons"][2024][0])
+            self.assertIn("day.20240102.feather", repaired["rebuild_reasons"][2024][0])
             third = build_snapshot([20250103], root)
+            self.assertIn("新增覆盖日期（20250103）", third["rebuild_reasons"][2025])
             removed = prune_generations(root)
             self.assertNotIn(second["generation"], removed)
             pinned.close()
@@ -162,11 +168,71 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             self.assertFalse(list(root.glob(".*.json")))
             unchanged = build_snapshot([20250102], root)
             self.assertEqual(unchanged["rewritten_years"], [])
+            self.assertEqual(unchanged["reused_years"], [2024, 2025])
+            self.assertEqual(unchanged["rebuild_reasons"], {})
             rebuilt = build_snapshot([20250102], root, resume=False)
             self.assertEqual(rebuilt["rewritten_years"], [2025])
             with TrainingAnalysisSnapshot(root).activate() as reader:
                 self.assertEqual(set(reader.meta["years"]), {"2025"})
                 self.assertEqual(reader.meta["years"]["2025"]["dates"], [20250102])
+
+    def test_plan_explains_historical_rebuilds_before_computing(self):
+        import json
+        from src.res.model.util.data import training_analysis_snapshot as snap
+
+        dates = [20240102, 20250102]
+        revision = 1
+        def source(ds, *, universe_files=None):
+            if universe_files is not None:
+                universe_files["/db/description.feather"] = [5, revision, 10]
+            return {"universe_dependencies": {str(d): str(revision) for d in ds}}
+
+        messages = []
+        def market(ds):
+            messages.append(f"compute {ds[0]}")
+            return pd.DataFrame({"date": ds})
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(snap, "source_state", side_effect=source),
+            patch.object(snap, "market_frame", side_effect=market),
+            patch.object(snap, "evaluation_frame", side_effect=lambda ds: pd.DataFrame({"date": ds})),
+            patch.object(snap, "membership_frame", side_effect=lambda ds: pd.DataFrame({"date": ds})),
+            patch.object(snap.DATAVENDOR, "clear_all"),
+            patch.object(snap.Logger, "info", side_effect=messages.append),
+        ):
+            root = Path(tmp)
+            first = build_snapshot(dates, root)
+            manifest = root / "generations" / first["generation"] / "manifest.json"
+            old = json.loads(manifest.read_text())
+            old["years"]["2024"].pop("universe_files")  # Previous manifest format.
+            old["schema"] -= 1
+            old["contract"]["price_semantics"] = "previous"
+            old["years"]["2024"]["maturity_cutoff"] = 20240102
+            manifest.write_text(json.dumps(old))
+            revision += 1
+            messages.clear()
+            result = build_snapshot(dates, root)
+            first_compute = messages.index("compute 20240102")
+            reasons = result["rebuild_reasons"]
+            self.assertIn("计划重算年度 [2024, 2025]，复用年度 []", messages[:first_compute])
+            for year, entries in reasons.items():
+                self.assertTrue(any("快照格式版本" in s for s in entries))
+                self.assertTrue(any("price_semantics" in s and "previous" in s for s in entries))
+                for reason in entries:
+                    self.assertIn(f"{year} 年重算 · {reason}", messages[:first_compute])
+            self.assertTrue(any("成熟截止日" in s for s in reasons[2024]))
+            self.assertTrue(any("旧版股票池" in s for s in reasons[2024]))
+            self.assertTrue(any("20240102" in s and "股票池依赖指纹" in s for s in reasons[2024]))
+            self.assertTrue(any("description.feather" in s and "mtime" in s for s in reasons[2025]))
+
+            folder = root / "generations" / result["generation"]
+            (folder / "2024/market.feather").write_bytes(b"corrupt")
+            (folder / "2025/membership.feather").unlink()
+            result = build_snapshot(dates, root)
+            self.assertEqual(result["rebuild_reasons"], {
+                2024: ["年度文件校验失败 market.feather"], 2025: ["年度文件缺失 membership.feather"],
+            })
 
     def test_weekly_extends_fit_after_snapshot(self):
         from types import SimpleNamespace
@@ -177,8 +243,13 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             patch.object(module, "MACHINE", SimpleNamespace(updatable=True, cuda_server=True)),
             patch(
                 "src.res.model.util.data.training_analysis_snapshot.weekly_update",
-                side_effect=lambda: calls.append("snapshot") or {},
+                side_effect=lambda: calls.append("snapshot") or {
+                    "rewritten_years": [2025], "reused_years": [2024], "compute_seconds": 2,
+                    "save_seconds": 1, "total_seconds": 4, "generation": "test",
+                },
             ),
+            patch.object(module.Logger, "Paragraph", wraps=module.Logger.Paragraph) as paragraph,
+            patch.object(module.Logger, "warning") as warning,
             patch.object(
                 module.ModelAPI,
                 "prepare_fit_data",
@@ -187,6 +258,8 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             patch.object(module, "print_update_records"),
         ):
             module.UpdateAPI.weekly()
+            paragraph.assert_any_call("Training Analysis Snapshot", 3)
+            warning.assert_not_called()
         self.assertEqual(calls, ["snapshot", "fit"])
         with (
             patch.object(module, "MACHINE", SimpleNamespace(updatable=True, cuda_server=True)),

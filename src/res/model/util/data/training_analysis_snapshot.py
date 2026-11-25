@@ -23,7 +23,7 @@ import json
 import os
 import shutil
 import uuid
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 from pathlib import Path
 from typing import NotRequired, TypedDict
 from time import perf_counter
@@ -54,6 +54,8 @@ class SnapshotBuildReport(TypedDict):
     save_seconds: float
     total_seconds: float
     rewritten_years: list[int]
+    reused_years: list[int]
+    rebuild_reasons: dict[int, list[str]]
     generation: str
     bytes: NotRequired[int]
     removed_generations: NotRequired[list[str]]
@@ -63,7 +65,7 @@ def root_path():
     return PATH.interim / "training_analysis_snapshot"
 
 
-def source_state(dates):
+def source_state(dates, *, universe_files=None):
     dates = sorted(set(map(int, dates)))
     paths: dict[str, object] = dict(fingerprints(dates))
     calendar = DB.path("information_ts", "calendar")
@@ -78,7 +80,7 @@ def source_state(dates):
             p = DB.path(src, key, int(d))
             paths[str(p)] = PreparedUniverse.fingerprint(p)
     universe = PreparedUniverse(root_path() / "unused", "top-1000")
-    paths["universe_dependencies"] = universe.dependencies(dates)
+    paths["universe_dependencies"] = universe.dependencies(dates, file_fingerprints=universe_files)
     paths["universe_sources"] = universe.sources(dates)
     return paths
 
@@ -178,12 +180,111 @@ def build_snapshot(
             CURRENT.reset(token)
 
 
+def _date_summary(dates):
+    ordered = sorted(dates)
+    if len(ordered) <= 3:
+        return ", ".join(map(str, ordered))
+    return f"{len(ordered)} 个交易日，首日 {ordered[0]}，末日 {ordered[-1]}"
+
+
+def _file_changes(old, new):
+    groups = defaultdict(list)
+    for key in sorted(old.keys() | new.keys()):
+        if old.get(key) == new.get(key):
+            continue
+        path = Path(key)
+        before, after = old.get(key), new.get(key)
+        if before is None or after is None:
+            reason = "新增依赖" if before is None else "移出依赖"
+        elif before == [None] or after == [None]:
+            reason = "文件出现" if before == [None] else "文件缺失"
+        else:
+            fields = [name for name, a, b in zip(("大小", "mtime", "ctime"), before, after) if a != b]
+            reason = "/".join(fields) + " 变化"
+        groups[path.name.split(".")[0], reason].append(key)
+    return [f"{name} {reason}（{len(files)} 个，例如 {files[0]}）"
+            for (name, reason), files in groups.items()]
+
+
+def _source_changes(prior, sources, dates, universe_files):
+    old = prior["sources"]
+    reasons = []
+    # Absolute source keys store [path, size, mtime, ctime] or [path, None].
+    def files(state):
+        return {key: value[1:] for key, value in state.items() if Path(key).is_absolute()}
+
+    reasons.extend(_file_changes(files(old), files(sources)))
+    for key, label in (("next_dates", "下一交易日"), ("label_ends", "标签结束日"),
+                       ("universe_sources", "股票池成分文件"), ("universe_dependencies", "股票池依赖指纹")):
+        if old.get(key) == sources.get(key):
+            continue
+        before, after = old.get(key, {}), sources.get(key, {})
+        if key in ("next_dates", "label_ends"):
+            before = dict(zip(prior["dates"], before))
+            after = dict(zip(dates, after))
+        changed = [date for date in before.keys() & after.keys() if before[date] != after[date]]
+        if changed:
+            reasons.append(f"{label}变化（{_date_summary(changed)}）")
+            if key == "universe_sources":
+                reasons.extend(_file_changes({before[d][0]: before[d][1:] for d in changed},
+                                             {after[d][0]: after[d][1:] for d in changed}))
+            if key == "universe_dependencies":
+                if "universe_files" in prior:
+                    reasons.extend(_file_changes(prior["universe_files"], universe_files))
+                else:
+                    reasons.append("旧版股票池依赖仅记录每日摘要，可定位到上述日期")
+    return reasons
+
+
+def _contract_changes(before, after, prefix=""):
+    for key in sorted(before.keys() | after.keys()):
+        a, b = before.get(key), after.get(key)
+        if a == b:
+            continue
+        field = f"{prefix}{key}"
+        if isinstance(a, dict) and isinstance(b, dict):
+            yield from _contract_changes(a, b, field + ".")
+        else:
+            yield f"组合计算设置 {field} 从 {a} 改为 {b}"
+
+
+def _year_reasons(old, manifest, year, dates, sources, universe_files, old_folder, global_reasons):
+    reasons = global_reasons.copy()
+    prior = old["years"].get(str(year))
+    if not prior:
+        return reasons or ["此前没有该年度分区"]
+    for key, label in (("schema", "快照格式版本"), ("label", "收益标签参数")):
+        if old.get(key) != manifest[key]:
+            reasons.append(f"{label} {old.get(key)} → {manifest[key]}")
+    reasons.extend(_contract_changes(old.get("contract") or {}, manifest["contract"]))
+    if prior["dates"] != dates:
+        added = set(dates).difference(prior["dates"])
+        reasons.append(f"新增覆盖日期（{_date_summary(added)}）" if added else "交易日期列表变化")
+    if prior.get("sources") != sources:
+        changes = _source_changes(prior, sources, dates, universe_files) if prior.get("sources") else []
+        reasons.extend(changes or ["数据源指纹变化"])
+    cutoff = min(int(CALENDAR.updated()), int(CALENDAR.td(dates[-1], 11)))
+    if "maturity_cutoff" not in prior:
+        reasons.append("缺少旧版标签成熟截止日")
+    elif prior["maturity_cutoff"] < cutoff:
+        reasons.append(f"标签成熟截止日从 {prior['maturity_cutoff']} 推进到 {cutoff}")
+    if not reasons:
+        for kind, checksum in prior["hashes"].items():
+            path = old_folder / str(year) / f"{kind}.feather"
+            if not path.is_file():
+                reasons.append(f"年度文件缺失 {path.name}")
+            elif hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
+                reasons.append(f"年度文件校验失败 {path.name}")
+    return reasons
+
+
 def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
     start = perf_counter()
     compute = save = 0.0
     pointer = root / "current.json"
     previous = None
     old = {"years": {}}
+    global_reasons = []
     try:
         if pointer.exists():
             previous = json.loads(pointer.read_text())
@@ -200,6 +301,11 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
         )
         previous = None
         old = {"years": {}}
+        global_reasons.append(f"上一版快照无法读取（{error}）")
+    if force:
+        global_reasons.append("请求强制重建" if resume else "本次关闭了增量复用")
+    if not previous and not global_reasons:
+        global_reasons.append("首次构建，尚无已发布快照")
     old_folder = root / "generations" / previous["generation"] if previous else None
     dates = sorted(
         set(map(int, dates))
@@ -217,38 +323,38 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
         "contract": default_contract(),
         "years": {},
     }
-    rewritten = []
+    annual_dates = defaultdict(list)
+    for date in dates:
+        annual_dates[date // 10000].append(date)
+    rebuild_reasons = {}
+    rebuild_inputs = {}
+    reused = []
     try:
-        for year in sorted({d // 10000 for d in dates}):
-            ds = [d for d in dates if d // 10000 == year]
-            before = source_state(ds)
+        Logger.info(f"检查快照覆盖的 {len(annual_dates)} 个年度（{dates[0]} 至 {dates[-1]}）")
+        for year, ds in annual_dates.items():
+            universe_files = {}
+            before = source_state(ds, universe_files=universe_files)
+            reasons = _year_reasons(old, manifest, year, ds, before, universe_files, old_folder, global_reasons)
+            if reasons:
+                rebuild_reasons[year] = reasons
+                rebuild_inputs[year] = (before, universe_files)
+            else:
+                reused.append(year)
+        Logger.info(f"计划重算年度 {list(rebuild_reasons)}，复用年度 {reused}")
+        for year, reasons in rebuild_reasons.items():
+            for reason in reasons:
+                Logger.info(f"{year} 年重算 · {reason}")
+        for year, ds in annual_dates.items():
             target = folder / str(year)
             target.mkdir()
-            prior = old["years"].get(str(year))
-            if (
-                not force
-                and old_folder is not None
-                and old.get("schema") == SCHEMA
-                and old.get("label") == list(LABEL)
-                and old.get("contract") == manifest["contract"]
-                and prior
-                and prior["dates"] == ds
-                and prior["sources"] == before
-                and prior["maturity_cutoff"]
-                >= min(int(CALENDAR.updated()), int(CALENDAR.td(ds[-1], 11)))
-                and all(
-                    (old_folder / str(year) / f"{kind}.feather").is_file()
-                    and hashlib.sha256(
-                        (old_folder / str(year) / f"{kind}.feather").read_bytes()
-                    ).hexdigest()
-                    == checksum
-                    for kind, checksum in prior["hashes"].items()
-                )
-            ):
+            if year not in rebuild_inputs:
+                assert old_folder is not None
                 for p in (old_folder / str(year)).glob("*.feather"):
                     os.link(p, target / p.name)
-                manifest["years"][str(year)] = prior
+                manifest["years"][str(year)] = old["years"][str(year)]
                 continue
+            before, universe_files = rebuild_inputs.pop(year)
+            Logger.info(f"开始重算 {year} 年，共 {len(ds)} 个交易日")
             at = perf_counter()
             DATAVENDOR.clear_all()
             market = market_frame(ds)
@@ -267,10 +373,11 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
                 checksums[name] = hashlib.sha256(path.read_bytes()).hexdigest()
             save += perf_counter() - at
             if before != source_state(ds):
-                raise RuntimeError("sources changed during snapshot build")
+                raise RuntimeError(f"{year}: sources changed during snapshot build")
             manifest["years"][str(year)] = {
                 "dates": ds,
                 "sources": before,
+                "universe_files": universe_files,
                 "hashes": checksums,
                 "maturity_cutoff": int(CALENDAR.updated()),
                 "columns": {
@@ -282,14 +389,15 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
                     ]
                 },
             }
-            rewritten.append(year)
-        if not rewritten and previous:
+        if not rebuild_reasons and previous:
             shutil.rmtree(folder)
             return {
                 "compute_seconds": compute,
                 "save_seconds": save,
                 "total_seconds": perf_counter() - start,
                 "rewritten_years": [],
+                "reused_years": reused,
+                "rebuild_reasons": {},
                 "generation": previous["generation"],
             }
         at = perf_counter()
@@ -313,7 +421,9 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
         "compute_seconds": compute,
         "save_seconds": save,
         "total_seconds": perf_counter() - start,
-        "rewritten_years": rewritten,
+        "rewritten_years": list(rebuild_reasons),
+        "reused_years": reused,
+        "rebuild_reasons": rebuild_reasons,
         "generation": generation,
         "bytes": sum(p.stat().st_size for p in folder.rglob("*.feather")),
     }

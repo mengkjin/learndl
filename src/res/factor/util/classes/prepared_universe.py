@@ -60,7 +60,7 @@ class PreparedUniverse:
         return {str(d): self.fingerprint(DB.path('universe', self.name, d))
                 for d in sorted(set(map(int, dates)))}
 
-    def dependencies(self, dates):
+    def dependencies(self, dates, *, file_fingerprints=None):
         """Track absent files too, so late-arriving records invalidate old packs.
 
         Conservative for information tables; precise 90-calendar-day windows for
@@ -96,6 +96,9 @@ class PreparedUniverse:
                 day = current.year*10000 + current.month*100 + current.day
                 paths.extend(dbpath('crawler', f'announcement_{ex}', day) for ex in ('sse','szse','bse'))
             result[str(date)] = hashlib.sha256(json.dumps([token(p) for p in paths]).encode()).hexdigest()
+        if file_fingerprints is not None:
+            # Reuse the stat results, including missing inputs, to explain future revisions.
+            file_fingerprints.update({key: value[1:] for key, value in memo.items()})
         return result
 
     def current(self):

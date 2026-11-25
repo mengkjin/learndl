@@ -120,12 +120,14 @@ class UpdateAPI:
             Logger.conclude(f'{MACHINE.name} is not updatable, skip rollback update' , level = 'error')
             return
         from src.res.model.util.data.training_analysis_snapshot import weekly_update
-        try:
-            with Logger.Timer('TrainingAnalysisSnapshot.weekly'):
+        with Logger.Paragraph('Training Analysis Snapshot', 3):
+            try:
                 report = weekly_update()
-                Logger.info(f'Training analysis snapshot: {report}')
-        except Exception as error:
-            Logger.warning(f'Training analysis snapshot maintenance failed: {error}')
+                Logger.info(f"重算 {len(report['rewritten_years'])} 年，复用 {len(report['reused_years'])} 年。"
+                            f"计算 {report['compute_seconds']:.1f} 秒，保存 {report['save_seconds']:.1f} 秒，"
+                            f"构建总计 {report['total_seconds']:.1f} 秒。快照版本 {report['generation']}")
+            except Exception as error:
+                Logger.warning(f'Training analysis snapshot maintenance failed: {error}')
         if MACHINE.cuda_server:
             wrap_update(ModelAPI.prepare_fit_data, 'prepare fit data')
         print_update_records()

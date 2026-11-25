@@ -122,7 +122,12 @@ class PreparedUniverseTest(unittest.TestCase):
                 dates = [20240102, 20240502]
                 before = store.dependencies(dates)
                 path("crawler", "announcement_sse", 20240101).write_text("late arrival")
-                after = store.dependencies(dates)
+                files = {}
+                after = store.dependencies(dates, file_fingerprints=files)
+                late = path("crawler", "announcement_sse", 20240101)
+                self.assertEqual(files[str(late)], store.fingerprint(late)[1:])
+                self.assertEqual(files[str(path("information_ts", "description"))], [None])
+                self.assertEqual(store.dependencies(dates), after)
                 self.assertNotEqual(before["20240102"], after["20240102"])
                 self.assertEqual(before["20240502"], after["20240502"])
                 path("information_ts", "description").write_text("revised info")

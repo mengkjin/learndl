@@ -38,23 +38,30 @@ and existing generator fallback rules still apply.
 
 ## Maintenance
 
-`UpdateAPI.weekly` calls snapshot maintenance **before** model updates on updatable
-machines. It covers available daily data from 2017-01-03, preserves existing history,
+`UpdateAPI.weekly` runs the **Training Analysis Snapshot** paragraph before the
+CUDA server refreshes fit data. It covers available daily data from 2017-01-03, preserves existing history,
 checks source revisions and rebuilds affected annual partitions. New dates and
 newly available future returns trigger rebuilds; unchanged files are hard-linked.
 Calendar files and next/label-end mappings
 are dependencies too. Source fingerprints use path/size/mtime/ctime; source files
 must be updated normally, not altered while preserving all metadata.
 
+Before computing any tables, the paragraph lists years to rebuild and reuse,
+then gives each affected year's reasons. File changes are grouped by dataset and
+fingerprint field with a count and an example path. New annual manifests retain
+the file fingerprints behind daily universe dependency hashes. Older manifests
+can identify affected universe dates but may lack the underlying file detail.
+Build reports also return `reused_years` and `rebuild_reasons`.
+
 Publication and garbage collection share a writer lock. Readers pin generations
 with leases under that lock. Publication occurs only after all files are written
 and source fingerprints rechecked. Failed builds leave the current pointer intact.
 GC retains current, previous and all leased generations; unchanged annual files
 share disk blocks. Weekly maintenance logs snapshot failures and continues to
-model updates. A missing or unreadable partition in auto mode uses the original
+the fit data refresh. A missing or unreadable partition in auto mode uses the original
 data path for requests that need it.
 
-Schema 3 covers the current calculation semantics. Changes to label algorithms,
+Schema 4 covers the current calculation semantics. Changes to label algorithms,
 risk definitions or stored field meaning require a schema bump and rebuild.
 The manifest must never be manually edited to bypass invalidation.
 
