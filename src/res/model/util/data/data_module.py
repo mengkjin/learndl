@@ -792,6 +792,22 @@ class DataModule(Base.BoundLogger):
     def storage(self):
         return TorchFileStorage(self.config.mem_storage)
 
+    def clear_disk_batches(self, stage=None):
+        storage = self.__dict__.get('storage')
+        if storage is None or storage.is_mem:
+            return
+        try:
+            if stage is None:
+                storage.close_disk()
+            else:
+                storage.del_group(stage)
+        except OSError as exc:
+            self.logger.warning(f'Unable to clear {stage} batches: {exc}')
+        finally:
+            # A reused DataModule must regenerate a loader whose files are gone.
+            if stage is None or self.stage == stage:
+                self.__dict__.pop('loader_param', None)
+
     @cached_property
     def buffer(self):
         return DynamicDataBuffer(self.config.device)

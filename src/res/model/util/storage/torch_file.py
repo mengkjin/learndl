@@ -3,6 +3,13 @@ Torch file storage for trainer
 """
 from __future__ import annotations
 
+import os
+import shutil
+from pathlib import Path
+from uuid import uuid4
+from weakref import finalize
+
+import portalocker
 import torch
 import numpy as np
 import pandas as pd
@@ -10,7 +17,7 @@ import pandas as pd
 from typing import Any , Literal , TypeVar , TypeAlias 
 from collections.abc import Sequence
 
-from src.proj import PATH , Load
+from src.proj import PATH , Load , Logger
 from src.proj.util.functional.device import Device
 
 __all__ = ['TorchFileStorage' , 'StoredTorchFileLoader']
@@ -19,6 +26,55 @@ T = TypeVar('T')
 ShuffleTime : TypeAlias = Literal['init' , 'epoch']
 ShuffleOption : TypeAlias = Literal['static' , 'init' , 'epoch']
 
+
+def _remove_workspace(path, lease, owner_pid):
+    if os.getpid() != owner_pid:
+        return
+    try:
+        shutil.rmtree(path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        Logger.warning(f'Unable to remove batch cache {path}: {exc}')
+    finally:
+        lease.close()
+
+
+def _create_workspace():
+    root = PATH.minibatch / 'runs'
+    root.mkdir(parents=True, exist_ok=True)
+    # Serialize publication with orphan discovery, so a new workspace cannot
+    # be removed in the gap between mkdir and acquiring its lifetime lock.
+    with portalocker.Lock(root / '.registry.lock', timeout=60):
+        for path in root.iterdir():
+            if not path.name.startswith('batch-') or path.is_symlink() or not path.is_dir():
+                continue
+            try:
+                try:
+                    lease = (path / '.owner.lock').open('r+')
+                except FileNotFoundError:
+                    # The creator died before publishing its owner lock, or
+                    # cleanup already removed the marker. No writer is using it.
+                    shutil.rmtree(path)
+                else:
+                    with lease:
+                        portalocker.lock(lease, portalocker.LOCK_EX | portalocker.LOCK_NB)
+                        shutil.rmtree(path)
+            except (FileNotFoundError, portalocker.AlreadyLocked):
+                continue
+            except OSError as exc:
+                Logger.warning(f'Unable to reclaim batch cache {path}: {exc}')
+        path = root / f'batch-{uuid4().hex}'
+        path.mkdir(mode=0o700)
+        lease = (path / '.owner.lock').open('w+')
+        try:
+            portalocker.lock(lease, portalocker.LOCK_EX)
+        except BaseException:
+            _remove_workspace(path, lease, os.getpid())
+            raise
+    return path, lease
+
+
 class TorchFileStorage:
     """Interface of mem or disk storage, methods"""
     def __init__(self , mem_storage : bool = False):
@@ -26,6 +82,8 @@ class TorchFileStorage:
         self.memdisk : dict[str,Any] = {}
         self._records : dict[str, dict[str, str]] = {}
         self._groups : dict[str, dict[str, None]] = {}
+        self._directory: Path | None = None
+        self._finalize: finalize | None = None
 
     @property
     def records(self) -> pd.DataFrame:
@@ -54,8 +112,13 @@ class TorchFileStorage:
     def to_disk(self):
         return self.is_mem
 
-    def real_path(self , key : str): 
-        return PATH.minibatch.joinpath(f'{key}.pt')
+    def real_path(self , key : str):
+        if not key or Path(key).name != key or key in ('.', '..'):
+            raise ValueError(f'Invalid batch key: {key!r}')
+        if self._directory is None:
+            self._directory, lease = _create_workspace()
+            self._finalize = finalize(self, _remove_workspace, self._directory, lease, os.getpid())
+        return self._directory / f'{key}.pt'
     
     def exists(self , key : str):
         if self.is_mem:
@@ -97,6 +160,16 @@ class TorchFileStorage:
     def del_all(self):
         for key in list(self._records):
             self.del_one(key)
+
+    def close_disk(self):
+        """Release this instance's disk cache, including incomplete writes."""
+        if self._finalize is not None:
+            self._finalize()
+            self._finalize = None
+            self._directory = None
+            self.memdisk.clear()
+            self._records.clear()
+            self._groups.clear()
 
 class StoredTorchFileLoader(Sequence):
     """'retrieve batch_input from a Storage"""

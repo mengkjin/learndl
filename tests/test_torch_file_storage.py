@@ -1,13 +1,20 @@
 """Production batch-cache contract; all disk operations stay in temporary roots."""
 
+from contextlib import nullcontext
+from inspect import unwrap
+import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pandas as pd
 import torch
 
+from src.proj import PATH
 from src.res.model.util.storage.torch_file import (
     TorchFileStorage,
     StoredTorchFileLoader,
@@ -24,6 +31,89 @@ class TemporaryStorage(TorchFileStorage):
 
 
 class TorchFileStorageTests(TestCase):
+    def test_live_disk_stores_with_identical_keys_are_isolated(self):
+        with tempfile.TemporaryDirectory() as root, patch.object(PATH, 'minibatch', Path(root)):
+            first, second = TorchFileStorage(), TorchFileStorage()
+            self.addCleanup(first.close_disk)
+            self.addCleanup(second.close_disk)
+            first.save(torch.tensor([1]), 'train.0', 'fit')
+            second.save(torch.tensor([2]), 'train.0', 'fit')
+            first_path = first.real_path('train.0')
+            second_path = second.real_path('train.0')
+            self.assertNotEqual(first_path.parent, second_path.parent)
+            first.del_group('fit')
+            first.close_disk()
+            self.assertFalse(first_path.parent.exists())
+            torch.testing.assert_close(second.load('train.0'), torch.tensor([2]))
+
+    def test_restart_reaps_killed_process_cache_only(self):
+        script = """
+import sys
+from pathlib import Path
+from src.proj import PATH
+from src.res.model.util.storage.torch_file import TorchFileStorage
+
+PATH.minibatch = Path(sys.argv[1])
+storage = TorchFileStorage()
+storage.real_path('train.0').write_bytes(b'partial data')
+sys.stdin.read()
+"""
+        with tempfile.TemporaryDirectory() as root, patch.object(PATH, 'minibatch', Path(root)):
+            live = TorchFileStorage()
+            self.addCleanup(live.close_disk)
+            live_path = live.real_path('train.0')
+            legacy_path = Path(root) / 'train.0.pt'
+            legacy_path.touch()
+            child = subprocess.Popen([sys.executable, '-c', script, root], stdin=subprocess.PIPE)
+            try:
+                deadline = time.monotonic() + 20
+                paths = []
+                while time.monotonic() < deadline and child.poll() is None:
+                    paths = [path for path in (Path(root) / 'runs').glob('batch-*/train.0.pt')
+                             if path != live_path]
+                    if paths:
+                        break
+                    time.sleep(.05)
+                self.assertEqual(len(paths), 1)
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                child.communicate(timeout=10)
+            restarted = TorchFileStorage()
+            self.addCleanup(restarted.close_disk)
+            restarted.real_path('train.0')
+            self.assertFalse(paths[0].parent.exists())
+            self.assertTrue(live_path.parent.exists())
+            self.assertTrue(legacy_path.exists())
+
+    def test_trainer_releases_fit_batches_before_test_and_cleans_interruption(self):
+        from src.res.model.util.data.data_module import DataModule
+        from src.res.model.util.trainer.base_trainer import BaseTrainer
+
+        with (tempfile.TemporaryDirectory() as root, patch.object(PATH, 'minibatch', Path(root)),
+              patch('src.proj.util.memory_tracker.ProcessMemoryTracker', return_value=nullcontext(Mock())),
+              patch('src.automation.artifact_exchange.research.model_run', return_value=nullcontext())):
+            config = SimpleNamespace(mem_storage=False, model_name='test')
+            data = DataModule(config)  # type: ignore[arg-type]
+            trainer = Mock(data=data, config=config, base_path=SimpleNamespace(base=Path(root) / 'model'),
+                           queue_of_stages=['fit', 'test'])
+            trainer.model_phase_log.side_effect = lambda _: nullcontext()
+            directory = data.storage.real_path('train.0').parent
+
+            def fit():
+                data.storage.save(torch.tensor([1]), 'train.0', 'fit')
+
+            def evaluate():
+                self.assertFalse((directory / 'train.0.pt').exists())
+                data.storage.save(torch.tensor([2]), 'test.0', 'test')
+                raise KeyboardInterrupt()
+
+            trainer.stage_fit.side_effect = fit
+            trainer.stage_test.side_effect = evaluate
+            with self.assertRaises(KeyboardInterrupt):
+                unwrap(BaseTrainer.main_process)(trainer)
+            self.assertFalse(directory.exists())
+
     def test_overwrite_move_groups_and_delete(self):
         for memory in (True, False):
             with self.subTest(memory=memory), tempfile.TemporaryDirectory() as root:

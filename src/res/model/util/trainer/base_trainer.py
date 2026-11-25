@@ -305,32 +305,37 @@ class BaseTrainer(BasePipeline):
     @record_training
     def main_process(self):
         """Main stage of data & fit & test"""
+        from contextlib import ExitStack
+
         self.stage_setup()
+        with ExitStack() as leases:
+            leases.callback(self.data.clear_disk_batches)
+            from src.proj.util.memory_tracker import ProcessMemoryTracker
+            from src.automation.artifact_exchange.research import model_run
+            tracker_label = self.config.model_name or self.config.full_module_name
+            from src.res.model.util.lifecycle import ModelLifecycle
+            from src.automation.scheduling.training_maintenance import validate_active_checkpoint
+            with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
+                self.record.retrained_models.extend(validate_active_checkpoint())
+                self.data.memory_tracker = self.memory_tracker
+                self.memory_tracker.mark('trainer_setup_complete')
 
-        from src.proj.util.memory_tracker import ProcessMemoryTracker
-        from src.automation.artifact_exchange.research import model_run
-        tracker_label = self.config.model_name or self.config.full_module_name
-        from src.res.model.util.lifecycle import ModelLifecycle
-        from src.automation.scheduling.training_maintenance import validate_active_checkpoint
-        with ModelLifecycle(self.base_path.base).lock(), ProcessMemoryTracker(f'model_training.{tracker_label}') as self.memory_tracker, model_run(self):
-            self.record.retrained_models.extend(validate_active_checkpoint())
-            self.data.memory_tracker = self.memory_tracker
-            self.memory_tracker.mark('trainer_setup_complete')
+                if 'data' in self.queue_of_stages:
+                    self.stage_data()
 
-            if 'data' in self.queue_of_stages:
-                self.stage_data()
+                if 'fit' in self.queue_of_stages:
+                    with self.model_phase_log('train'):
+                        self.stage_fit()
+                    self.data.clear_disk_batches('fit')
 
-            if 'fit' in self.queue_of_stages:
-                with self.model_phase_log('train'):
-                    self.stage_fit()
+                if 'test' in self.queue_of_stages:
+                    with self.model_phase_log('test'):
+                        self.stage_test()
+                    self.data.clear_disk_batches('test')
 
-            if 'test' in self.queue_of_stages:
-                with self.model_phase_log('test'):
-                    self.stage_test()
+                self.stage_summary()
 
-            self.stage_summary()
-
-        return self
+            return self
 
     def go(self, *, resume: int | None = None):
         """Run; an explicit resume overrides the initialization option."""
