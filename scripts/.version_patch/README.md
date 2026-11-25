@@ -210,8 +210,9 @@ previously stopped services. The automatic Git maintenance worker retries a
 ### Turnover snapshot repair in 0.7.13
 
 `0.7.13/001` checks the local `turn_1m.20260622.feather`. For the known
-legacy schema it removes the redundant `level_0` column after checking every
-label equals `turn_fr`. The attempt backup contains the original Feather
+legacy schema it removes the redundant `level_0` column after checking that at least one
+label is `turn_fr` and every other row either carries that label or has both
+a missing label and a missing signal (padding from the legacy universe reindex). The attempt backup contains the original Feather
 under `turn_1m/`. Verification compares every remaining value and its dtype
 with that backup. A missing local snapshot or an already valid file needs no
 rewrite. Unexpected layouts fail the patch.

@@ -130,7 +130,7 @@ class StoredStockFactorPatchTest(TestCase):
         path = self.calc.target_path(repair.DATE)
         repair.apply(ctx)
         self.assertTrue(repair.verify(ctx))
-        self.write_source(self.calc, repair.DATE, [3., None, 1.], level_0='turn_fr')
+        self.write_source(self.calc, repair.DATE, [3., None, 1.], level_0=['turn_fr', None, 'turn_fr'])
         original = path.read_bytes()
         repair.apply(ctx)
         self.assertTrue(repair.verify(ctx))
@@ -138,11 +138,17 @@ class StoredStockFactorPatchTest(TestCase):
         repair.apply(ctx)
         self.assertEqual(path.read_bytes(), repaired)
         self.assertEqual((ctx.backup_dir / 'turn_1m' / path.name).read_bytes(), original)
-        self.write_source(self.calc, repair.DATE, [3., None, 1.], level_0=['turn_fr', None, 'other'])
-        invalid = path.read_bytes()
-        with self.assertRaisesRegex(ValueError, 'unexpected level_0'):
-            repair.apply(ctx)
-        self.assertEqual(path.read_bytes(), invalid)
+        for labels, values, message in (
+            (['turn_fr', None, 'other'], [3., None, None], 'unexpected level_0.*other'),
+            (['turn_fr', None, 'turn_fr'], [3., 2., 1.], "unexpected level_0.*'secid': 2"),
+            ([None] * 3, [float('nan')] * 3, 'no turn_fr labels'),
+        ):
+            with self.subTest(labels=labels):
+                self.write_source(self.calc, repair.DATE, values, level_0=labels)
+                invalid = path.read_bytes()
+                with self.assertRaisesRegex(ValueError, message):
+                    repair.apply(ctx)
+                self.assertEqual(path.read_bytes(), invalid)
 
     def test_retry_after_fifteen_fit_blocks_matches_uninterrupted_rebuild(self):
         self.enterContext(patch.object(CALENDAR, 'updated', return_value=self.dates[-1]))

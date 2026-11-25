@@ -25,8 +25,16 @@ def _signal(frame, path):
             or not pd.api.types.is_numeric_dtype(frame[NAME])):
         raise ValueError(f'{path}: invalid turnover snapshot keys or signal dtype')
     if 'level_0' in frame:
-        if not frame['level_0'].isin(['turn_fr']).all():
-            raise ValueError(f'{path}: unexpected level_0 value')
+        labels = frame['level_0']
+        tagged = labels.isin(['turn_fr'])
+        # The legacy writer reindexed to the day's universe after resetting the MultiIndex.
+        padded = labels.isna() & frame[NAME].isna()
+        invalid = ~(tagged | padded)
+        if invalid.any():
+            samples = frame.loc[invalid, ['secid', 'level_0', NAME]].head(3).to_dict('records')
+            raise ValueError(f'{path}: unexpected level_0 in {invalid.sum()} rows, examples={samples!r}')
+        if not tagged.any():
+            raise ValueError(f'{path}: no turn_fr labels to identify the legacy snapshot')
         return frame.drop(columns='level_0')
     return frame
 
