@@ -1024,6 +1024,7 @@ class ModelConfig(BaseModelConfig):
     ):
         self.set_vb(vb_level , indent)
         self.lifecycle_repair = bool(kwargs.pop("lifecycle_repair", False))
+        self.lifecycle_promotion = kwargs.pop('lifecycle_promotion', None)
         from src.res.model.util.lifecycle import ModelLifecycle
         self.lifecycle_options = ModelLifecycle.training_options(
             kwargs.pop('training_mode', None), kwargs.pop('lifecycle_options', None))

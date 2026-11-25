@@ -400,7 +400,8 @@ class BaseTrainer(BasePipeline):
         from src.res.model.util.model_properties import track_phase
         from src.automation.scheduling.training_maintenance import checkpoint, checkpoint_group
 
-        with (FitLock.trainer_guard(try_cuda=self.config.try_cuda, respect_production=checkpoint_group() is not None),
+        with (FitLock.trainer_guard(try_cuda=self.config.try_cuda,
+                                    respect_production=bool(self.config.lifecycle_promotion) or checkpoint_group() is not None),
               track_phase(self, 'initial_training')):
             with self.logger.paragraph('Stage [Fit]' , 2):
                 self.config.log_operation('fit' , 'start')

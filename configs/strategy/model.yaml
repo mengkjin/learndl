@@ -32,6 +32,8 @@ hidden_extraction:
     nums: NULL
 
 # Optional training date bounds for identities already listed in prediction.
+# An entry with stage: validation or stage: production requests a one-shot
+# upgrade of an exploration model in a new indexed directory.
 # lifecycle:
 #   gru@gru_day:
 #     start: 20170103

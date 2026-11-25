@@ -209,6 +209,7 @@ def dispatch(options: dict, store: RunStore | None = None) -> dict:
 
 
 def _dispatch(options: dict, store: RunStore) -> dict:
+    from . import model_lifecycle
     from . import rl_experiment as rl
     from . import training_maintenance as maintenance
     with queue_lock():
@@ -242,7 +243,8 @@ def _dispatch(options: dict, store: RunStore) -> dict:
                    else model_request)
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
-        request = resume or request
+        upgrade = model_lifecycle.candidate(store, options) if options.get('enabled') and resume is None else None
+        request = resume or upgrade or request
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         _queue(request, store, options)
@@ -263,7 +265,7 @@ def _launch(request: dict, store: RunStore, code_fd: int) -> int:
     log = runtime_dir() / 'idle_worklist' / f'{request["id"]}.log'
     log.parent.mkdir(parents=True, exist_ok=True)
     request.update(phase='starting', started_at=time.time(), uid=os.getuid(), log_path=str(log),
-                   script_email_enabled=not request.get('no_email', False),
+                   script_email_enabled=request.get('script_email_enabled', not request.get('no_email', False)),
                    invocation_id=os.environ.get('INVOCATION_ID'),
                    runner_pid=os.getpid(), runner_created=psutil.Process().create_time(), boot_id=boot_id())
     store.put(request)
@@ -312,6 +314,7 @@ def worker() -> int:
     from src.proj.util.script.script_lock import ScriptLock
     from .maintenance_gate import MaintenanceBusy, permit
     from . import training_maintenance as maintenance
+    from . import model_lifecycle
     try:
         with (version_patch.business_lease(runtime_dir()) as code_fd,
               ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases):
@@ -340,6 +343,8 @@ def worker() -> int:
                 elif request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
+                elif request.get('task_kind') == model_lifecycle.TASK:
+                    next_candidate = model_lifecycle.candidate(store, options) if options.get('enabled') else None
                 elif request.get('task_kind') == 'rl_experiment':
                     from .rl_experiment import observe
                     next_candidate = observe(store)
@@ -399,6 +404,9 @@ def child(run_id: str) -> int:
         return 0
     if request.get('task_kind') in ('model_lifecycle', 'nn_metrics_ab'):
         return DEFERRED
+    from . import model_lifecycle
+    if request.get('task_kind') == model_lifecycle.TASK:
+        return model_lifecycle.execute(request, store)
     if request.get('task_kind') == 'factor_sequence':
         from .factor_sequence import execute
         from .recovery import record

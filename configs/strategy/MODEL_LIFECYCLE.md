@@ -4,7 +4,7 @@ This manager owns NN/boost training lifecycles; non-fitting linear/factor models
 retain their existing lifecycle implementations.
 
 The policy and public Python interface live in `src/res/model/util/lifecycle.py`.
-The CUDA server's daily update calls this module to resume due production models.
+The CUDA server uses this module for production continuation and isolated upgrades.
 
 ## Exploration
 
@@ -46,7 +46,7 @@ The schedule script exposes `training_mode` (`auto`, `quick`, `sparse`, `full`),
 form. The same settings are accepted by `ModelAPI.schedule_model` as
 `training_mode=...` and `lifecycle_options={...}`.
 
-`configs/schedule/worklist.yaml` accepts mixed strings and mappings:
+Each YAML file in `configs/schedule/worklists/` accepts mixed strings and mappings:
 
 ```yaml
 resume: true
@@ -90,7 +90,7 @@ Worklist settings remain in revision checks, so changed
 options invalidate completion and stale queued configurations are not executed.
 Abnormal-exit recovery may force resume, as before, to retain completed work.
 
-## Production registration and daily updates
+## Production registration and overnight continuation
 
 The `prediction` section of `configs/strategy/model.yaml` selects production
 directories by exact identity, including an index only when the name specifies
@@ -99,10 +99,10 @@ Each directory gets one update check. Hidden extraction and exploration schedule
 serve their own purposes and do not register production models. The optional
 `lifecycle` mapping can supply `start` and `end` bounds for a listed identity.
 
-On the CUDA server, daily_update prepares prediction data, checks registered
-models and resumes due training before it computes predictions and portfolios.
-The weekly job extends historical fit dumps. The idle research worker leaves
-production training to daily_update.
+On the CUDA server, `production_model_update` checks registered models every
+day at 00:10 Asia/Shanghai. Daily update prepares prediction data and computes
+predictions and portfolios. The two tasks share an execution lock. The weekly
+job extends historical fit dumps.
 
 Model dates follow the saved calendar anchor and interval. A rolling fit uses
 samples through the trading day at offset `-1 - skip_horizon` from its model date.
@@ -121,11 +121,45 @@ Acceptance checks every requested date, model number and submodel. For dates wit
 observable out-of-sample trading days it also checks prediction coverage and finite
 values. The update writes `snapshot/evaluation_manifest.json` and releases the
 model for production use after acceptance. An interrupted in-place update stays
-pending for the next daily check. Per-node training evidence is stored in
+pending for the next overnight check. Per-node training evidence is stored in
 `snapshot/model_manifest.json` and transitions in `logs/lifecycle.jsonl`.
 
 `manager.update_target(full_snapshot, retrain=True)` explicitly replaces the
 resolved target and invalidates existing weights. The next update archives the
 previous saved schedule before applying the replacement.
 
-Deployment follows the existing project release workflow.
+## One-shot upgrades
+
+Declare an exploration model by its exact existing identity. Include its index
+when the source is an indexed model.
+
+```yaml
+lifecycle:
+  gru@research_model:
+    stage: production
+    start: 20170103
+    rerun_mark: 1
+```
+
+- The supervised idle worker runs explicit upgrades when the CUDA server is
+  idle. Pending maintenance continuations take precedence, followed by
+  upgrades and other idle research. A higher-priority production batch can
+  wait for an upgrade already in its fit phase. Cooperative preemption of
+  upgrade fits is next-version work.
+- Each declaration version builds or resumes a separate indexed candidate
+  from the source's saved full target. Compatible independent weights are
+  copied. Missing and incompatible nodes are fitted, followed by
+  out-of-sample evaluation. For transfer training, the candidate fits its
+  own chain.
+- The result email names the exact candidate. A `validation` candidate can
+  be inspected as a research result. For a candidate accepted with
+  `stage: production`, edit `prediction` in Git to deploy that exact
+  model identity. The existing prediction registration stays active until
+  the configuration is deployed.
+- Successful declarations run once. Change `rerun_mark` to request another
+  candidate. Ordinary errors, explicit stops and watchdog timeouts remain
+  terminal for that request. Eligible abnormal exits reuse the same
+  candidate within the idle worker's existing retry limit.
+
+See [next-version training scheduling](../automation/TRAINING_SCHEDULER_NEXT_VERSION.md)
+for the priority scheduler design and trial scope.

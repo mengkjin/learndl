@@ -721,11 +721,15 @@ A confirmed Git fast-forward that raises the project version, an applicable
 version patch or an authorized background installation can request the pause.
 Ordinary Git changes wait for the existing code locks to become free.
 
-`daily_update` owns production model training. It requests priority only after
-its data preparation succeeds and it finds due production models. The daily
-process takes the fit lock for that production batch. Worklist and CLI fits
+`production_model_update` owns production model continuation. It requests
+priority after verifying data readiness and finding due production models.
+The overnight task takes the fit lock for that production batch. Worklist and CLI fits
 already running yield at their next saved node, and queued research waits until
-the production batch exits. The lock is released when the daily process exits.
+the production batch exits. The lock is released when the batch exits.
+
+The idle worker also runs explicit [model upgrades](../strategy/MODEL_LIFECYCLE.md#one-shot-upgrades)
+in isolated candidates. See the [next-version scheduler design and trial](TRAINING_SCHEDULER_NEXT_VERSION.md)
+for unified admission and cooperative preemption across training classes.
 
 The independent training worker continues paused research from the same model
 directory after the production batch or maintenance releases admission.

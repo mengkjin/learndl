@@ -129,11 +129,20 @@ class ModelLifecycle:
     @classmethod
     def validate_entry(cls, config) -> None:
         manager = cls(config.base_path.base)
-        if config.lifecycle_repair:
+        if config.lifecycle_promotion:
+            state = manager.state
+            if not (config.lifecycle_repair and config.is_resuming and not manager.is_registered()
+                    and state.get('status') == 'upgrading'
+                    and state.get('promotion_version') == config.lifecycle_promotion):
+                raise ValueError('Lifecycle promotion requires its active, isolated candidate')
+        elif config.lifecycle_repair:
             if not (config.is_resuming and manager.is_registered() and manager.state.get('status') == 'updating'):
                 raise ValueError('Production resume requires an active registered model update')
-        elif 'fit' in config.queue_of_stages and manager.is_registered():
-            raise ValueError('Use the production update to continue a registered model')
+        elif 'fit' in config.queue_of_stages:
+            if manager.is_registered():
+                raise ValueError('Use the production update to continue a registered model')
+            if manager.state.get('promotion_version'):
+                raise ValueError('Use a lifecycle promotion request to modify its isolated candidate')
 
     @classmethod
     def dump_training_config(cls, config, kwargs: dict) -> None:
@@ -451,6 +460,37 @@ class ModelLifecycle:
             return 'production'
         return 'exploration' if saved == 'production' else saved
 
+    def repair_plan(self, registration, state):
+        from src.proj import CALENDAR
+        from src.res.model.util.config import ModelConfig
+        from src.res.model.util.core import ModelPath
+
+        target = _read(self.target_file)
+        model = target['model']
+        start = int(registration.get('start', model['model.beg_date']))
+        end = min(int(registration.get('end', model['model.end_date'])), int(CALENDAR.update_to()))
+        target_version = _target_digest(target)
+        dependency_config = ModelConfig(ModelPath(self.base), stage=2, resume=1, selection=0,
+                                        override=model, short_test=False, vb_level='never')
+        dependencies = self.dependencies(dependency_config, production=True)
+        # Calendar cutoff changes only when a new training node becomes due.
+        kind = ModelPath(self.base).module_type
+        interval = int(model.get('model.interval') or model[f'model.interval.{kind}'])
+        grid = [int(d) for d in CALENDAR.range(int(model['model.beg_date']), end, 'td')[::interval]] if end >= start else []
+        folds = model.get('train.factor_sequence.folds', [])
+        if folds:
+            end = min(end, max(int(d) for fold in folds for d in fold['test']))
+            grid = [int(fold['model_date']) for fold in folds if int(fold['model_date']) <= end]
+        preceding = [d for d in grid if d <= start]
+        training_start = preceding[-1] if preceding else start
+        grid = [d for d in grid if d >= training_start]
+        request = registration | {'registration_version': _digest(registration), 'target_version': target_version, 'dependencies': dependencies, 'start': start,
+                                  'repair_generation': int(state.get('repair_generation', 0)),
+                                  'end': end, 'training_start': training_start, 'nodes': grid}
+        request['version'] = _digest({k: v for k, v in request.items() if k != 'end'})
+        check_data_cutoff = not folds and not model.get('input.factor_sequence.dataset')
+        return request, dependency_config, check_data_cutoff
+
     @classmethod
     def inspect_registered(cls, *, force_check: bool = False, on_error=None) -> list[dict[str, Any]]:
         """Reconcile the prediction registry against the calendar and accepted weights."""
@@ -471,6 +511,10 @@ class ModelLifecycle:
                         config = ModelConfig(active, stage=2, resume=1, selection=0, short_test=False)
                         cls.prepare(config)
                     state = manager.state
+                    if state.get('promotion_version') and (
+                            state.get('promotion_stage') != 'production'
+                            or state.get('status') in {'upgrading', 'upgrade_failed'}):
+                        raise ValueError(f'Promotion has not passed production acceptance: {active.full_name}')
                     # Previous versions could point a prediction registration at another directory.
                     redirected = (state.get('approved_model') not in (None, active.full_name)
                                   if state.get('approved_model') else
@@ -482,29 +526,8 @@ class ModelLifecycle:
                     if state.get('stage') != 'production' or redirected:
                         manager.save(stage='production', target_stage='production', status='needs_training')
                     state = manager.state
-                    target = _read(manager.target_file)
-                    model = target['model']
-                    start = int(registration.get('start', model['model.beg_date']))
-                    end = min(int(registration.get('end', model['model.end_date'])), int(CALENDAR.update_to()))
-                    target_version = _target_digest(target)
-                    dependency_config = ModelConfig(ModelPath(manager.base), stage=2, resume=1, selection=0,
-                                                    override=model, short_test=False, vb_level='never')
-                    dependencies = cls.dependencies(dependency_config, production=True)
-                    # Calendar cutoff changes only when a new training node becomes due.
-                    kind = ModelPath(manager.base).module_type
-                    interval = int(model.get('model.interval') or model[f'model.interval.{kind}'])
-                    grid = [int(d) for d in CALENDAR.range(int(model['model.beg_date']), end, 'td')[::interval]] if end >= start else []
-                    folds = model.get('train.factor_sequence.folds', [])
-                    if folds:
-                        end = min(end, max(int(d) for fold in folds for d in fold['test']))
-                        grid = [int(fold['model_date']) for fold in folds if int(fold['model_date']) <= end]
-                    preceding = [d for d in grid if d <= start]
-                    training_start = preceding[-1] if preceding else start
-                    grid = [d for d in grid if d >= training_start]
-                    request = registration | {'registration_version': _digest(registration), 'target_version': target_version, 'dependencies': dependencies, 'start': start,
-                                              'repair_generation': int(state.get('repair_generation', 0)),
-                                              'end': end, 'training_start': training_start, 'nodes': grid}
-                    request['version'] = _digest({k: v for k, v in request.items() if k != 'end'})
+                    request, dependency_config, check_data_cutoff = manager.repair_plan(registration, state)
+                    grid = request['nodes']
                     if not grid:
                         continue
                     accepted = state.get('accepted_request') == request['version']
@@ -535,7 +558,7 @@ class ModelLifecycle:
                         manager.save(accepted_request=None, status='needs_training',
                                      repair_generation=request['repair_generation'])
                         request['version'] = _digest({k: v for k, v in request.items() if k not in ('version', 'end')})
-                    if not folds and not model.get('input.factor_sequence.dataset'):
+                    if check_data_cutoff:
                         cutoff = cls.fit_sample_cutoff(dependency_config, grid[-1])
                         if CALENDAR.updated() < cutoff:
                             continue  # The both loader extends the historical dump through this date.
@@ -643,24 +666,8 @@ class ModelLifecycle:
                         head = target['model']['model.module.nn.boost_head.boost']
                         _write(model.conf_file(f'algo.{head}'), target['boost_head'])
                 self.save(legacy=False, force_retrain=False, target_changed=False)
-                trainer = run(base_path=model, stage=0, resume=1, selection=0, short_test=False, use_data='both',
-                              start=request.get('training_start', request['start']), end=request['end'],
-                              title=f'Updating {model.full_name}', log_operation='update_models', lifecycle_repair=True)
-                from src.proj import Save
-                Save.async_wait_all(caller_name='ModelLifecycle.repair')
-                requested_dates = set(map(int, request['nodes']))
-                missing = requested_dates.difference(trainer.data.model_date_list)
-                if missing:
-                    raise ValueError(f'Trainer omitted requested model dates: {sorted(missing)}')
-                expected = [(d, int(n)) for d in sorted(requested_dates) for n in trainer.config.model_num_list]
-                if not expected or any(not self.compatible(trainer.config, n, d) for d, n in expected):
-                    raise ValueError('Production artifact coverage is incomplete')
-                try:
-                    self._validate_predictions(model, trainer, expected)
-                except ValueError:
-                    # A partial saved evaluation can otherwise be skipped on every resume.
-                    self.invalidate_evaluation()
-                    raise
+                trainer = self.fit_and_validate(
+                    request, run, title=f'Updating {model.full_name}', log_operation='update_models')
                 if _target_digest(_read(self.target_file)) != request['target_version']:
                     raise ValueError('Target changed during repair')
                 if self.dependencies(trainer.config, production=True) != request.get('dependencies', {}):
@@ -676,6 +683,30 @@ class ModelLifecycle:
                 raise
             from src.automation.artifact_exchange.production import publish_approved_model_safe
             publish_approved_model_safe(self.base)
+
+    def fit_and_validate(self, request, run, *, title, **kwargs):
+        from src.proj import Save
+        from .core import ModelPath
+
+        model = ModelPath(self.base)
+        trainer = run(base_path=model, stage=0, resume=1, selection=0, short_test=False, use_data='both',
+                      start=request.get('training_start', request['start']), end=request['end'],
+                      title=title, lifecycle_repair=True, **kwargs)
+        Save.async_wait_all(raise_first_error=True, caller_name='ModelLifecycle.fit_and_validate')
+        requested_dates = set(map(int, request['nodes']))
+        missing = requested_dates.difference(trainer.data.model_date_list)
+        if missing:
+            raise ValueError(f'Trainer omitted requested model dates: {sorted(missing)}')
+        expected = [(d, int(n)) for d in sorted(requested_dates) for n in trainer.config.model_num_list]
+        if not expected or any(not self.compatible(trainer.config, n, d) for d, n in expected):
+            raise ValueError('Production artifact coverage is incomplete')
+        try:
+            self._validate_predictions(model, trainer, expected)
+        except ValueError:
+            # A partial saved evaluation can otherwise be skipped on every resume.
+            self.invalidate_evaluation()
+            raise
+        return trainer
 
     @staticmethod
     def _validate_predictions(candidate, trainer, expected: list[tuple[int, int]]) -> None:

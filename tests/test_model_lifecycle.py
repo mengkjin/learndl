@@ -444,6 +444,68 @@ class ModelLifecycleTest(unittest.TestCase):
                 manager.repair(request, run)
         self.assertEqual(manager.state['status'], 'ready')
 
+    def test_explicit_upgrade_fills_an_isolated_candidate_and_requires_registration(self):
+        from src.proj import CALENDAR, Const
+        from src.res.model.util import lifecycle_promotion
+        from unittest.mock import PropertyMock
+
+        source = self.config(training_mode='sparse', override={
+            'train.max_epoch': 10, 'model.window': 600, 'model.beg_date': 20200102,
+            'model.end_date': 20200106, 'model.interval': 1,
+        })
+        model = source.base_path
+        name = model.full_name
+        source_manager = ModelLifecycle(model.base)
+        self.artifact(source, 20200102)
+        old_manifest = source_manager.manifest_file.read_bytes()
+        old_config = model.conf_file('model').read_bytes()
+        serving = model.copy().with_new_index(model.find_new_index(folder_not_exist=True))
+        declaration = {'stage': 'production'}
+        strategy = {'lifecycle': {name: declaration}, 'prediction': {'live': {'name': serving.full_name}}}
+        attempts = []
+
+        def train(**kwargs):
+            kwargs.pop('title')
+            kwargs.pop('operation')
+            path = kwargs['base_path']
+            self.assertNotEqual(path.base, model.base)
+            self.assertNotEqual(path.base, serving.base)
+            config = ModelConfig(**kwargs, vb_level='never').start_model()
+            ModelLifecycle.configured(config)
+            self.assertEqual(ModelLifecycle.selected_nodes(config, request['nodes']), request['nodes'])
+            self.assertTrue(ModelLifecycle(path.base).compatible(config, 0, 20200102))
+            attempts.append(path)
+            for date in request['nodes'][1:]:
+                self.artifact(config, date)
+            return SimpleNamespace(config=config, data=SimpleNamespace(
+                model_date_list=request['nodes'], test_full_dates=[20200103]))
+
+        with (patch.object(type(Const.Model), 'strategies', new_callable=PropertyMock, return_value=strategy),
+              patch.object(CALENDAR, 'update_to', return_value=20200106),
+              patch.object(CALENDAR, 'updated', return_value=20200106),
+              patch.object(ModelLifecycle, '_validate_predictions', side_effect=[ValueError('bad prediction'), None])):
+            request = lifecycle_promotion.plan(name, declaration)
+            self.assertIsNotNone(request)
+            assert request is not None
+            self.assertGreater(len(request['nodes']), 1)
+            self.assertEqual(ModelLifecycle.registrations()[0]['name'], serving.full_name)
+            with self.assertRaisesRegex(ValueError, 'bad prediction'):
+                lifecycle_promotion.execute(request, train)
+            self.assertEqual(source_manager.state['upgrade_status'], 'failed')
+            self.assertEqual(ModelLifecycle(attempts[0].base).state['status'], 'upgrade_failed')
+            candidate_name = lifecycle_promotion.execute(request, train)
+            self.assertEqual(len(attempts), 2)
+            self.assertEqual(attempts[0].base, attempts[1].base)
+            self.assertEqual(candidate_name, attempts[0].full_name)
+            self.assertIsNone(lifecycle_promotion.plan(name, declaration))
+            self.assertEqual(model.conf_file('model').read_bytes(), old_config)
+            self.assertEqual(source_manager.manifest_file.read_bytes(), old_manifest)
+            candidate = attempts[0]
+            with self.assertRaisesRegex(ValueError, 'not registered'):
+                ModelLifecycle.approved_path(candidate, registered=True)
+            strategy['prediction']['live']['name'] = candidate_name
+            self.assertEqual(ModelLifecycle.approved_path(candidate, registered=True).base, candidate.base)
+
     def test_daily_plan_stops_after_acceptance_and_exports_registered_model(self):
         config = self.config(override={'model.beg_date': 20200102, 'model.end_date': 20200103})
         manager = ModelLifecycle(config.base_path.base)

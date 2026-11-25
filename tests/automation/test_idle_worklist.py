@@ -75,6 +75,35 @@ class IdleTest(unittest.TestCase):
         self.assertIn('retired', records[0]['blocked_by'])
         store.put.assert_called_once_with(records[0])
 
+    def test_promotion_in_idle_lane_precedes_worklist_and_reports_accepted_identity(self):
+        from src.automation.scheduling import model_lifecycle
+        from src.proj import Const
+        from src.res.model.util import lifecycle_promotion
+        from unittest.mock import PropertyMock
+
+        name = 'gru@research'
+        plan = {'version': 'owned-upgrade', 'stage': 'production', 'name': name}
+        config = {'lifecycle': {name: {'stage': 'production'}, 'gru@live': {'start': 20200102}}}
+        with (patch.object(type(Const.Model), 'strategies', new_callable=PropertyMock, return_value=config),
+              patch.object(lifecycle_promotion, 'plan', return_value=plan) as inspect,
+              patch.object(lifecycle_promotion, 'execute', return_value='gru@research@2')):
+            self.assertEqual(idle.dispatch(self.options, self.store)['queued'], f'promotion:{name}')
+            request, = self.store.owned(idle.OWNER)
+            self.assertEqual(request['task_kind'], model_lifecycle.TASK)
+            inspect.assert_called_once_with(name, {'stage': 'production'})
+            self.assertEqual(model_lifecycle.execute(request, self.store), 0)
+            request.update(phase='complete', returncode=0, started_at=1)
+            self.store.put(request)
+            runtime.finish_idle_event(self.store, request, 'Process finished.')
+            runtime.finish_idle_event(self.store, request, 'Duplicate finish.')
+            sender = Mock(return_value=True)
+            with patch('src.api.util.backend.task.TaskDatabase'), patch.object(idle, 'settings', return_value={}):
+                self.assertTrue(runtime.deliver_timeout_events(sender, self.store))
+            sender.assert_called_once()
+            self.assertIn('Model Lifecycle', sender.call_args.args[0])
+            self.assertIn('Accepted candidate: gru@research@2', sender.call_args.args[1])
+            self.assertIsNone(model_lifecycle.candidate(self.store, self.options))
+
     def save_success(self, name='first'):
         WorklistState(name).save(status='success', revisions=WorklistState.revisions(name), model_path=str(self.folder))
 

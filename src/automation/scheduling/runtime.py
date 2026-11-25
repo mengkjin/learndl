@@ -339,7 +339,9 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
         from src.res.model.workflow.worklist_state import WorklistState
-        state = WorklistState(run['task']).read() if run.get('task_kind') not in {'rl_experiment', 'nn_metrics_ab', 'factor_sequence'} else None
+        state = WorklistState(run['task']).read() if run.get('task_kind') not in {
+            'rl_experiment', 'nn_metrics_ab', 'factor_sequence', 'model_promotion'
+        } else None
         if state and state.get('revisions') == run.get('revisions'):
             run['completion'] = state
     except (OSError, ValueError):
@@ -486,6 +488,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     for event_id, body in rows:
         event = json.loads(body)
         run = event['run']
+        promotion = run.get('task_kind') == 'model_promotion'
         mail_options = ({'recipient': run.get('recipient') or run.get('config', {}).get('recipient')}
                         if run.get('task_kind') == 'rl_experiment' else {})
         if run.get('no_email'):
@@ -506,8 +509,9 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
         if run.get('owner') == 'idle_worklist' and event['kind'] == 'configuration_error':
             # Missing schedules have no process/task record or result email.
             try:
-                sent = sender('Watchdog Idle Worklist - configuration error', event['detail'],
-                              confirmation_message='Learndl worklist configuration alert', queue_on_failure=False,
+                label = 'Model Lifecycle' if promotion else 'Idle Worklist'
+                sent = sender(f'Watchdog {label} - configuration error', event['detail'],
+                              confirmation_message='Learndl scheduler configuration alert', queue_on_failure=False,
                               delivery_id=f'watchdog-event:{event_id}',
                               **mail_options)
             except Exception:
@@ -536,6 +540,8 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
                 attachments.extend(Path(path) for path in task.get_crash_protector() if Path(path).is_file())
         production_batch = event['kind'].startswith('production_')
         label = 'Idle Worklist' if run.get('owner') == 'idle_worklist' else 'Timeout'
+        if promotion:
+            label = 'Model Lifecycle'
         message = (f'Task: {run["task"]}\nRun: {run["id"]}\nStarted: {run["started_at"]}\n'
                    f'Limit: {run["timeout_seconds"]} seconds\nElapsed: {time.time() - run["started_at"]:.0f} seconds\n'
                    f'Phase: {run["phase"]}\n{event["detail"]}\n'
@@ -549,6 +555,12 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
             from .recovery import evidence, recovery_plan
             from .idle_worklist import settings
             current = store.get(run['id']) or run
+            if promotion:
+                details = evidence(store, run['id'])
+                if details.get('promotion_candidate'):
+                    message += f'\nAccepted candidate: {details["promotion_candidate"]}'
+                    if details.get('promotion_stage') == 'production':
+                        message += '\nDeploy by explicitly registering this exact model in prediction.'
             if current.get('phase') not in {'queued', 'starting', 'running', 'deferred'}:
                 message += '\nRecovery: ' + json.dumps(recovery_plan(store, current, settings()), ensure_ascii=False) + '\n'
                 message += 'Exit evidence: ' + json.dumps(evidence(store, run['id']), ensure_ascii=False) + '\n'
