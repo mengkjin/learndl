@@ -1,3 +1,4 @@
 {
-  "001_replay_sellside_portfolios.py": 7200
+  "001_replay_sellside_portfolios.py": 7200,
+  "002_rebuild_factor_datablocks.py": 14400
 }

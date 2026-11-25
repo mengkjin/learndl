@@ -116,13 +116,14 @@ class FactorLoader(BlockLoader):
         normalize = False , 
         fill_method : Base.lit.FactorFillNanMethod = 'drop' , * ,
         indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1 ,
-        **kwargs
+        notice_empty : bool = True , **factor_filters
     ):
         super().__init__('factor' , indent = indent , vb_level = vb_level)
         self.names = Base.ensure_name_list(names , [])
         self.normalize = normalize
         self.fill_method : Base.lit.FactorFillNanMethod = fill_method
-        self.kwargs = kwargs
+        self.notice_empty = notice_empty
+        self.factor_filters = factor_filters
         
     def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load factor data , alias for load"""
@@ -130,12 +131,12 @@ class FactorLoader(BlockLoader):
         from src.res.factor.calculator import FactorCalculator
         with self.logger.timer(f'factor blocks reading [{len(self.names)} factors]'):
             dates = CALENDAR.range(start , end , 'td')
-            for calc in FactorCalculator.iter(selected_factors = self.names , **self.kwargs):
+            for calc in FactorCalculator.iter(selected_factors = self.names , **self.factor_filters):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         if not [fac for fac in factors if not fac.empty]:
-            if self.kwargs.get('notice_empty', True):
+            if self.notice_empty:
                 self.logger.alert1(f'no factors found for {self.names} within {start} - {end}')
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 
@@ -155,14 +156,16 @@ class FactorCategory1Loader(BlockLoader):
         self , 
         category1 : Base.lit.FactorCategory1 , 
         normalize = False , 
-        fill_method : Base.lit.FactorFillNanMethod = 'drop' ,
-        **kwargs
+        fill_method : Base.lit.FactorFillNanMethod = 'drop' , * ,
+        indent : int = 1 , vb_level : Base.lit.VerbosityLevel = 1 ,
+        notice_empty : bool = True , **factor_filters
     ):
-        super().__init__('factor' , **kwargs)
+        super().__init__('factor' , indent = indent , vb_level = vb_level)
         self.category1 : Base.lit.FactorCategory1 = category1
         self.normalize = normalize
         self.fill_method : Base.lit.FactorFillNanMethod = fill_method
-        self.kwargs = kwargs
+        self.notice_empty = notice_empty
+        self.factor_filters = factor_filters
         
     def load(self , start : int | None = None , end : int | None = None , **kwargs) -> DataBlock:
         """Load factor data , alias for load"""
@@ -170,13 +173,13 @@ class FactorCategory1Loader(BlockLoader):
         factors : list[pd.DataFrame] = []
         with self.logger.timer(f'factor blocks reading [{self.category0} , {self.category1}]'):
             dates = CALENDAR.range(start , end , 'td')
-            for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.kwargs):
+            for calc in FactorCalculator.iter(category0 = self.category0 , category1 = self.category1 , **self.factor_filters):
                 df = calc.Loads(dates , normalize = self.normalize , fill_method = self.fill_method)
                 df = df.rename(columns = {calc.factor_name:'value'}).assign(feature = calc.factor_name)
                 factors.append(df)
         factors = [fac for fac in factors if not fac.empty]
         if not factors:
-            if self.kwargs.get('notice_empty', True):
+            if self.notice_empty:
                 self.logger.alert1(f'no factors found for {self.category0} , {self.category1} within {start} - {end}')
             return DataBlock()
         with self.logger.timer(f'factor blocks merging ({len(factors)} factors)' , silent = len(factors) <= 1): 

@@ -213,7 +213,7 @@ manual recovery attempt after fixing the reported condition.
   daily all/top universe snapshots. Only changed files are backed up and replaced.
   The patch keeps surviving rows in order and does not refill rankings.
 
-### Sellside portfolio replay in 0.7.11
+### Data repairs in 0.7.11
 
 - **0.7.11/001** replays the configured tracking and backtest portfolios that
   use `df_scores_v0`, `df_scores_v2`, or `df_scores_v3` from their first saved
@@ -224,6 +224,12 @@ manual recovery attempt after fixing the reported condition.
   tracking portfolios. Original files and output checksums are in the attempt
   backup. Receiver hosts get verified replacements through the production
   artifact channel.
+- **0.7.11/002** rebuilds the 18 stock-factor categories from stored factor
+  data. Fit dumps resume after their last usable date, starting no later than
+  the first trading day after 2026-04-10. Predict dumps are rebuilt for the
+  current prediction window. Each written dump is checked for usable values
+  on its latest stored source date. The attempt backup includes the original
+  dumps and `factor-datablocks.json` with the verified dates.
 
 Hosts upgraded from the previous name keep using their existing
 `PATH.runtime/version_autofix/` directory. The new CLI reads the same history
