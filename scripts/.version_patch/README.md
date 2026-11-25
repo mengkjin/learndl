@@ -207,6 +207,20 @@ previously stopped services. The automatic Git maintenance worker retries a
   daily all/top universe snapshots. Only changed files are backed up and replaced.
   The patch keeps surviving rows in order and does not refill rankings.
 
+### Turnover snapshot repair in 0.7.13
+
+`0.7.13/001` checks the local `turn_1m.20260622.feather`. For the known
+legacy schema it removes the redundant `level_0` column after checking every
+label equals `turn_fr`. The attempt backup contains the original Feather
+under `turn_1m/`. Verification compares every remaining value and its dtype
+with that backup. A missing local snapshot or an already valid file needs no
+rewrite. Unexpected layouts fail the patch.
+
+If `0.7.11/002` is pending or failed, its rebuild runs the same source repair
+first. The original snapshot then lives in the rebuild attempt's backup.
+Other dates with unexpected columns or nonnumeric signals still fail normalized
+reads and require investigation.
+
 ### Data repairs in 0.7.11
 
 - **0.7.11/001** replays the configured tracking and backtest portfolios that

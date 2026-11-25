@@ -15,10 +15,10 @@ from src.data.util import DataBlock
 from src.proj import CALENDAR, DB, Dates, PATH
 from src.proj.core.literals import DataBlockTimeFrame
 from src.res.factor.calculator import FactorCalculator
-from src.res.factor.util.classes.stock_factor import StockFactor
 
 
 migration = load_patch_support('0.7.11', 'factor_datablocks')
+repair = load_patch_support('0.7.13', 'turnover_snapshot')
 
 
 class FactorDataBlocksPatchTest(TestCase):
@@ -30,6 +30,7 @@ class FactorDataBlocksPatchTest(TestCase):
         root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.ctx = SimpleNamespace(root=root, backup_dir=root / 'backup')
         self.ctx.backup_dir.mkdir()
+        self.enterContext(patch.object(PATH, 'export', root / 'Export'))
         self.enterContext(patch.object(PATH, 'datablock', root / 'DataBlock'))
         self.enterContext(patch.object(CALENDAR, 'updated', return_value=20260415))
         self.enterContext(patch.object(CALENDAR, 'update_to', return_value=20260415))
@@ -98,34 +99,50 @@ class FactorDataBlocksPatchTest(TestCase):
 
 
 class StoredStockFactorPatchTest(TestCase):
-    dates = [20260413, 20260414]
+    dates = [20260619, repair.DATE]
 
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.enterContext(patch.object(PATH, 'export', self.root / 'Export'))
         self.enterContext(patch.object(PATH, 'datablock', self.root / 'DataBlock'))
-        self.calc = FactorCalculator.get('lncap')
+        self.calc = FactorCalculator.get('turn_1m')
 
     def write_source(self, calc, date, values, **metadata):
         path = calc.target_path(date)
         path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame({'secid': [1, 2, 3], calc.factor_name: values, **metadata}).to_feather(path)
 
-    def test_only_signal_is_normalized_and_invalid_values_identify_source_row(self):
-        for date in self.dates:
-            self.write_source(self.calc, date, [1., 2., 3.])
-        expected = self.calc.Loads(self.dates, normalize=True)
-        for date in self.dates:
-            self.write_source(self.calc, date, ['1', '2.0', '3e0'],
-                              lncap__source_key=['archive', None, 'live'], lncap__source_date=[date] * 3)
-        pd.testing.assert_frame_equal(self.calc.Loads(self.dates, normalize=True), expected)
-        raw = self.calc.Loads(self.dates, normalize=False)
-        self.assertIn('lncap__source_key', raw)
-        self.assertIn('lncap__source_date', raw)
-        self.assertEqual(raw['lncap'].iloc[0], '1')
-        self.write_source(self.calc, self.dates[-1], ['1', 'unparsed', None])
-        with self.assertRaisesRegex(ValueError, "lncap: invalid factor value 'unparsed' on 20260414 for secid 2"):
-            self.calc.Loads(self.dates, normalize=True)
+    def test_normalized_load_rejects_unknown_columns_and_text_signals(self):
+        date = self.dates[-1]
+        self.write_source(self.calc, date, [1., 2., 3.], level_0='turn_fr')
+        with self.assertRaisesRegex(ValueError, 'turn_1m.*level_0'):
+            self.calc.Loads([date], normalize=True)
+        for text in ('2.0', 'unparsed'):
+            self.write_source(self.calc, date, ['1', text, None])
+            with self.assertRaisesRegex(TypeError, 'turn_1m.*numeric'):
+                self.calc.Loads([date], normalize=True)
+            self.assertEqual(self.calc.Loads([date], normalize=False)['turn_1m'].iloc[1], text)
+        self.write_source(self.calc, date, [1., 2., 3.], turn_1m__source_key='archive')
+        self.assertNotIn('turn_1m__source_key', self.calc.Loads([date], normalize=True))
+
+    def test_snapshot_repair_preserves_rows_on_retry_and_rejects_unknown_layout(self):
+        ctx = SimpleNamespace(backup_dir=self.root / 'backup')
+        path = self.calc.target_path(repair.DATE)
+        repair.apply(ctx)
+        self.assertTrue(repair.verify(ctx))
+        self.write_source(self.calc, repair.DATE, [3., None, 1.], level_0='turn_fr')
+        original = path.read_bytes()
+        repair.apply(ctx)
+        self.assertTrue(repair.verify(ctx))
+        repaired = path.read_bytes()
+        repair.apply(ctx)
+        self.assertEqual(path.read_bytes(), repaired)
+        self.assertEqual((ctx.backup_dir / 'turn_1m' / path.name).read_bytes(), original)
+        self.write_source(self.calc, repair.DATE, [3., None, 1.], level_0=['turn_fr', None, 'other'])
+        invalid = path.read_bytes()
+        with self.assertRaisesRegex(ValueError, 'unexpected level_0'):
+            repair.apply(ctx)
+        self.assertEqual(path.read_bytes(), invalid)
 
     def test_retry_after_fifteen_fit_blocks_matches_uninterrupted_rebuild(self):
         self.enterContext(patch.object(CALENDAR, 'updated', return_value=self.dates[-1]))
@@ -141,20 +158,13 @@ class StoredStockFactorPatchTest(TestCase):
             if processor.key == 'liquidity':
                 calc = self.calc
             for date in self.dates:
-                if calc.factor_name == self.calc.factor_name:
-                    self.write_source(calc, date, ['1', '2', '3'], lncap__source_key='archive')
-                else:
-                    self.write_source(calc, date, [1., 2., 3.])
+                legacy = calc is self.calc and date == repair.DATE
+                self.write_source(calc, date, [1., 2., 3.], **({'level_0': 'turn_fr'} if legacy else {}))
 
         def attempt(name):
             backup_dir = self.root / name
             backup_dir.mkdir()
             return SimpleNamespace(root=self.root, backup_dir=backup_dir)
-
-        # Exercise the failing release's whole-frame normalization on the original Feather files.
-        def legacy_load(dates, **options):
-            return StockFactor.normalize_df(DB.loads(self.calc.db_src, self.calc.db_key, dates),
-                                            fill_method=options['fill_method'])
 
         def seed_history():
             PATH.datablock.mkdir()
@@ -164,7 +174,7 @@ class StoredStockFactorPatchTest(TestCase):
 
         seed_history()
         first = attempt('first')
-        with patch.object(type(self.calc), 'Loads', side_effect=legacy_load), self.assertRaisesRegex(TypeError, 'str'):
+        with patch.object(repair, 'apply'), self.assertRaisesRegex(ValueError, 'level_0'):
             migration.apply(first)
         saved = {path.name for path in (first.backup_dir / 'fit').iterdir()}
         self.assertEqual(len(saved), 15)

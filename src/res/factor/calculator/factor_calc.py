@@ -489,18 +489,14 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         if df.empty or cls.meta_type != 'stock' or not normalize:
             return df
 
-        # Stored stock factors may include per-row provenance alongside the signal.
         name = cls.factor_name
-        signal = df.loc[:, ['secid', 'date', name]].copy()
-        values = signal[name]
-        if not pd.api.types.is_numeric_dtype(values):
-            numeric = pd.to_numeric(values, errors='coerce')
-            invalid = values.notna() & numeric.isna()
-            if invalid.any():
-                sample = signal.loc[invalid].iloc[0]
-                raise ValueError(f'{name}: invalid factor value {sample[name]!r} on {sample["date"]} '
-                                 f'for secid {sample["secid"]} (dtype={values.dtype})')
-            signal[name] = numeric
+        signal_columns = ['secid', 'date', name]
+        unexpected = [col for col in df if col not in signal_columns and not str(col).startswith(name + '__source_')]
+        if unexpected:
+            raise ValueError(f'{name}: unexpected stored factor columns {unexpected}')
+        if not pd.api.types.is_numeric_dtype(df[name]):
+            raise TypeError(f'{name}: expected a numeric stored factor, got {df[name].dtype}')
+        signal = df.loc[:, signal_columns].copy()
         return StockFactor.normalize_df(signal, fill_method=fill_method)
 
     @classmethod

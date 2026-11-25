@@ -7,6 +7,7 @@ import shutil
 
 import numpy as np
 
+from src.automation.version_patch import load_patch_support
 from src.data.preprocess.processors import factors
 from src.data.util import DataBlock
 from src.proj import CALENDAR, Logger, MACHINE, Save
@@ -87,6 +88,8 @@ def _rebuild(ctx, processor, allow_create):
 
 
 def apply(ctx):
+    # A pending rebuild must repair its source before the later version can run.
+    load_patch_support('0.7.13', 'turnover_snapshot').apply(ctx)
     results = {'fit': {}, 'predict': {}}
     for frame, allow_create in (('fit', MACHINE.cuda_server), ('predict', MACHINE.updatable)):
         for name in factors.__all__:
