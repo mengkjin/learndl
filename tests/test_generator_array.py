@@ -208,6 +208,29 @@ class GeneratorArrayTest(TestCase):
             )
             assert_groups(self, old, new, a, b)
 
+    def test_fresh_fmp_saves_native_holdings_and_account_for_resume(self):
+        from src.res.factor.api import FactorTestAPI
+        from src.res.factor.analytic.fmp_t50 import T50FMPTest
+        from src.res.factor.util import Portfolio
+        from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
+
+        market = Market(days=7)
+        with ExitStack() as stack, TemporaryDirectory() as tmp:
+            market.install(stack, resume=True)
+            def proceed(test, dates, benchmarks):
+                group = market.group(dates, models=1, resume=test.resume, resume_path=test.resume_path)
+                run_generator(group, 'legacy')
+                test.portfolio_group = group
+            stack.enter_context(patch.object(T50FMPTest, 'proceed', proceed))
+            for dates in (market.dates, market.dates[2:]):
+                test = FactorTestAPI.run_test('t50', dates, test_path=tmp, resume=False, save_resumable=True)
+                builder = test.portfolio_group.builders[0]
+                stored = Portfolio.load(builder.resume_path_portfolio)
+                self.assertEqual(set(stored.port_date), set(dates))
+                pd.testing.assert_frame_equal(PortfolioAccount.load(builder.resume_path_account).df,
+                                              builder.account.df)
+            self.assertEqual(T50FMPTest.last_portfolio_date(tmp), market.dates[-1])
+
     def test_fmp_preserves_changed_nbest(self):
         import importlib
         from types import SimpleNamespace

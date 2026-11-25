@@ -155,6 +155,13 @@ class FactorTestAPI:
             indent = indent , vb_level = vb_level , **kwargs
         )
         testor.proceed(factor , benchmarks)
+        if test_type != Base.TestType.FACTOR and save_resumable and not resume and testor.resume_path is not None:
+            # Keep old snapshots out of the calculation. Persist the finished
+            # holdings and accounts for the next incremental test.
+            for builder in testor.portfolio_group.builders:
+                builder.resume_path = testor.resume_path
+                builder.save_portfolio(append=False)
+                builder.account.save(builder.resume_path_account, async_save=False)
         if write_down:   
             testor.write_down()
         if display_figs: 

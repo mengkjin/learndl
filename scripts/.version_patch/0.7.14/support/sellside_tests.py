@@ -11,6 +11,7 @@ from src.automation.artifact_exchange.core import digest
 from src.automation.console import logger
 from src.automation.version_patch import load_patch_support
 from src.proj import CALENDAR, MACHINE, PATH, Save
+from src.res.factor.fmp.builder import FMP_RESUME_VERSION
 from src.res.model.model_module.application import ModelTrainer
 from src.shared.file_ops import atomic_json, fsync_dir
 
@@ -102,9 +103,25 @@ def rebuild(base, staged, observed, skipped):
         raise ValueError(f'{base.name}: incomplete prediction history after fresh test')
     # Detailed analysis callbacks may skip work. Check that every prior test
     # family still has its statistics, holdings and accounts before installation.
-    for path in (base / 'snapshot/detailed_alpha').rglob('*'):
+    analysis = Path('snapshot/detailed_alpha')
+    groups = analysis / 'factor_perf_test/factor_stats/group_perf'
+    if (base / groups).is_dir():
+        from src.res.factor.analytic.factor_perf import FactorPerfTest
+        from src.res.factor.util.classes.stock_factor import FactorStats
+
+        for params in FactorPerfTest.required_group_stats():
+            target = staged / groups / (FactorStats.param_to_str(params) + '.feather')
+            if not target.is_file() or not target.stat().st_size:
+                raise ValueError(f'{base.name}: missing rebuilt group statistics {target}')
+    for path in (base / analysis).rglob('*'):
         if path.is_file() and path.suffix in ('.feather', '.tar'):
-            target = staged / path.relative_to(base)
+            if path.parent == base / groups:
+                continue  # Daily resume uses the current grouping identities checked above.
+            relative = path.relative_to(base / analysis)
+            parts = relative.parts
+            if len(parts) == 3 and parts[0].endswith('_fmp_test') and parts[1] in ('portfolio', 'account'):
+                relative = Path(parts[0], FMP_RESUME_VERSION, *parts[1:])
+            target = staged / analysis / relative
             if not target.is_file() or not target.stat().st_size:
                 raise ValueError(f'{base.name}: missing rebuilt analysis {target}')
     for name in ('basic_test.xlsx', 'detailed_alpha_data.xlsx', 'detailed_alpha_plot.pdf'):
