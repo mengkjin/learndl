@@ -486,9 +486,22 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         ) -> pd.DataFrame:
         """load factor values of a given date range""" 
         df = DB.loads(cls.db_src , cls.db_key , dates , override_existing_key = True , closest = closest , vb_level = 'max')
-        if cls.meta_type == 'stock' and normalize:
-            df = StockFactor.normalize_df(df , fill_method = fill_method)
-        return df
+        if df.empty or cls.meta_type != 'stock' or not normalize:
+            return df
+
+        # Stored stock factors may include per-row provenance alongside the signal.
+        name = cls.factor_name
+        signal = df.loc[:, ['secid', 'date', name]].copy()
+        values = signal[name]
+        if not pd.api.types.is_numeric_dtype(values):
+            numeric = pd.to_numeric(values, errors='coerce')
+            invalid = values.notna() & numeric.isna()
+            if invalid.any():
+                sample = signal.loc[invalid].iloc[0]
+                raise ValueError(f'{name}: invalid factor value {sample[name]!r} on {sample["date"]} '
+                                 f'for secid {sample["secid"]} (dtype={values.dtype})')
+            signal[name] = numeric
+        return StockFactor.normalize_df(signal, fill_method=fill_method)
 
     @classmethod
     def Eval(cls , date : int) -> pd.DataFrame:

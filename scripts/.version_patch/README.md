@@ -235,6 +235,45 @@ manual recovery attempt after fixing the reported condition.
   on its latest stored source date. The attempt backup includes the original
   dumps and `factor-datablocks.json` with the verified dates.
 
+If `0.7.11/002` stops at `liquidity/fit` with a string arithmetic error,
+preserve the first attempt's backup. From the affected checkout, this read-only
+inspection prints the first example of each extra column, text signal or
+unparseable signal per factor in the failed window:
+
+```bash
+.venv/bin/python - <<'PY'
+import pandas as pd
+from src.res.factor.calculator import FactorCalculator
+
+for calc in FactorCalculator.iter(category1='liquidity'):
+    seen = set()
+    name = calc.factor_name
+    for date in calc.stored_dates(20260413, 20261124):
+        data = calc.Load(date)
+        for col in data.columns.difference(['date', 'secid']):
+            series = data[col].dropna()
+            if series.empty or (col == name and pd.api.types.is_numeric_dtype(series)):
+                continue
+            issue = 'extra column'
+            if col == name:
+                invalid = series[pd.to_numeric(series, errors='coerce').isna()]
+                issue = 'numeric text' if invalid.empty else 'invalid value'
+                if not invalid.empty:
+                    series = invalid
+            signature = (col, issue, str(series.dtype))
+            if signature not in seen:
+                print(name, date, *signature, repr(series.iloc[0]))
+                seen.add(signature)
+PY
+```
+
+After the corrected commit is verified on the server, check
+`python -m src.automation.version_patch status`. If the installed Git worker
+does not retry automatically and the patch is still failed, use
+`python -m src.automation.version_patch retry 0.7.11/002`. Confirm verification
+and business admission in `status`. The successful attempt writes
+`factor-datablocks.json` in its own backup directory.
+
 Hosts upgraded from the previous name keep using their existing
 `PATH.runtime/version_autofix/` directory. The new CLI reads the same history
 and backups in place. Use the new CLI and catalog path for new work.
