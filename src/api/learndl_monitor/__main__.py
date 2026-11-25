@@ -19,6 +19,7 @@ import portalocker
 import psutil
 
 from .preferences import Preferences
+from .access import ADMIN_REQUIRED, GUEST_SERVICES, is_guest, permits_guest_action, role_page
 from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import ROOT, STATE, Manager, SERVICES
 
@@ -111,13 +112,15 @@ def main():
                 self.send_header('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'")
                 self.end_headers()
                 page = Path(__file__).with_name('index.html').read_text()
-                self.wfile.write(page.replace('__CONSOLE_TOKEN__', token).encode())
+                self.wfile.write(role_page(page, self.headers).replace('__CONSOLE_TOKEN__', token).encode())
                 return
             if not self.authorized():
                 self.reply({'error': 'Session expired. Refresh the page to reconnect.'}, 403)
                 return
+            guest = is_guest(self.headers)
             if self.path == '/api/services':
-                self.reply({'application': 'learndl-monitor', 'services': [manager.snapshot(key) for key in SERVICES],
+                self.reply({'application': 'learndl-monitor',
+                            'services': [manager.snapshot(key) for key in SERVICES if not guest or key in GUEST_SERVICES],
                             'preferences': preferences.read(), 'instance': instance,
                             'restart_batch': manager.restart_status()})
             elif self.path == '/api/resources':
@@ -125,7 +128,10 @@ def main():
 
                 self.reply(asdict(sample_resources(ROOT)))
             elif self.path.startswith('/api/log/') and self.path.split('/')[-1] in SERVICES:
-                path = STATE / (self.path.split('/')[-1] + '.log')
+                key = self.path.split('/')[-1]
+                if guest and key not in GUEST_SERVICES:
+                    return self.reply({'error': ADMIN_REQUIRED}, 403)
+                path = STATE / (key + '.log')
                 if path.exists():
                     with path.open('rb') as stream:
                         stream.seek(max(0, path.stat().st_size - 16000))
@@ -150,6 +156,8 @@ def main():
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data, dict):
                     raise ValueError('Expected an object')
+                if is_guest(self.headers) and not permits_guest_action('console', self.path, data):
+                    return self.reply({'error': ADMIN_REQUIRED}, 403)
                 with operations:
                     self.handle_operation(data)
             except (ValueError, KeyError) as exc:

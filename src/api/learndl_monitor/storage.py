@@ -14,6 +14,7 @@ import psutil
 
 from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import STATE, SERVICES
+from .access import role_page
 
 __all__ = ['main']
 
@@ -181,7 +182,7 @@ def main():
             self.send_response(200)
             self.send_header('Content-Type', 'text/html; charset=utf-8')
             self.end_headers()
-            self.wfile.write(page.encode())
+            self.wfile.write(role_page(page, self.headers).encode())
 
         def do_POST(self):
             action = self.path.removeprefix('/' + token + '/')

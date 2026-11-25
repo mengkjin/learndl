@@ -11,7 +11,8 @@ import shutil
 from urllib.parse import parse_qs, quote, urlsplit
 from zipfile import BadZipFile
 
-from .artifact_library import Library, open_folder, open_local
+from .artifact_library import LOCAL_DATA_TYPES, Library, open_folder, open_local
+from .access import ADMIN_REQUIRED, is_guest, permits_guest_action, role_page
 from .mail_html import static_mail_html
 from .page_assets import PAGE_ASSETS, serve_page_asset
 from .services import SERVICES, STATE
@@ -61,6 +62,8 @@ def main(kind, *, state=STATE):
             url = urlsplit(self.path)
             if not self.local():
                 return self.reply({'error': 'Forbidden'}, 403)
+            if kind == 'model_preview' and url.path in ('/manage', '/api/model-management') and is_guest(self.headers):
+                return self.reply({'error': ADMIN_REQUIRED}, 403)
             if url.path in PAGE_ASSETS:
                 return serve_page_asset(self, url.path)
             if url.path == '/health':
@@ -72,7 +75,7 @@ def main(kind, *, state=STATE):
                 return
             if url.path == '/' or kind == 'model_preview' and url.path in ('/preview', '/manage'):
                 page = Path(__file__).with_name('artifact_library.html').read_text()
-                return self.reply(page.replace('__TOKEN__', token).replace('__TITLE__', title)
+                return self.reply(role_page(page, self.headers).replace('__TOKEN__', token).replace('__TITLE__', title)
                                   .replace('__KIND__', kind).replace('__OTHER__', str(other)), html=True)
             if not self.authorized():
                 return self.reply({'error': 'Forbidden'}, 403)
@@ -131,6 +134,11 @@ def main(kind, *, state=STATE):
                 if not 0 < size <= 64 * 1024:
                     raise ValueError('Invalid request size')
                 data = json.loads(self.rfile.read(size))
+                if not isinstance(data, dict):
+                    raise ValueError('Expected an object')
+                guest = is_guest(self.headers)
+                if guest and not permits_guest_action(kind, self.path, data):
+                    return self.reply({'error': ADMIN_REQUIRED}, 403)
                 action = data['action']
                 if action in ('history_models', 'undo_models') and kind == 'model_preview':
                     from src.res.model.workflow.model_management import operation_history, undo_latest
@@ -155,6 +163,8 @@ def main(kind, *, state=STATE):
                     return self.reply({'file': catalog.open_mail_attachment(row, int(data['index']))})
                 if action == 'open_file' and kind == 'model_preview':
                     path, _, _ = catalog.file(row, 0)
+                    if guest and path.suffix.lower() not in LOCAL_DATA_TYPES | {'.html', '.htm'}:
+                        return self.reply({'error': 'This file type cannot be opened on the host by a guest.'}, 403)
                     return self.reply({'file': open_local(path)})
                 if action == 'folder':
                     if row.get('trashed'):
@@ -162,7 +172,7 @@ def main(kind, *, state=STATE):
                     path = row['path']
                     return self.reply({'folder': open_folder(path) if data.get('open_locally') is True
                                        else str(path if path.is_dir() else path.parent)})
-                return self.reply(catalog.experiment(row, action))
+                return self.reply(catalog.experiment(row, action, guest=guest))
             except Exception as exc:
                 self.reply({'error': str(exc)}, 409)
 

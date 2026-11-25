@@ -20,6 +20,7 @@ import psutil
 
 from src.api.learndl_monitor.page_assets import PAGE_ASSETS, serve_page_asset
 from src.api.learndl_monitor.services import ROOT, STATE, SERVICES
+from src.api.learndl_monitor.access import ADMIN_REQUIRED, is_guest, permits_guest_action, role_page
 
 __all__ = ['Instances', 'main', 'argument', 'KINDS']
 KINDS = {'tensorboard': ('tensorboard.main', 6006), 'optuna': ('optuna_dashboard', 8080)}
@@ -148,13 +149,13 @@ class Instances:
                 continue
         return sorted(rows, key=lambda row: (row['created'], row['pid']))
 
-    def act(self, data):
+    def act(self, data, *, guest=False):
         from src.automation.patch_services import interface_operation
 
         with interface_operation(self.state.parent, key='experiments'):
-            return self._operate(data)
+            return self._operate(data, guest=guest)
 
-    def _operate(self, data):
+    def _operate(self, data, *, guest=False):
         if data.get('action') == 'email':
             # Packaging/mail must not hold the process-control lock.
             from src.api.learndl_monitor.experiment_mail import send_experiment
@@ -168,14 +169,14 @@ class Instances:
                     raise ValueError('Instance data source is unavailable')
                 return {'mail_status': 'sent' if send_experiment(row['kind'], Path(row['source'])) else 'pending'}
         with portalocker.Lock(str(self.state / 'operations.lock'), timeout=1):
-            return self._act(data)
+            return self._act(data, guest=guest)
 
     def start_for_maintenance(self, kind, source, *, port):
         """Start a previous instance while its caller holds the interface lock."""
         with portalocker.Lock(str(self.state / 'operations.lock'), timeout=1):
             return self._act({'action': 'start', 'kind': kind, 'source': source}, preferred_port=port)
 
-    def _act(self, data, attempt=0, *, preferred_port=None):
+    def _act(self, data, attempt=0, *, preferred_port=None, guest=False):
         action = data.get('action')
         kind = data.get('kind')
         if kind not in KINDS:
@@ -239,7 +240,8 @@ class Instances:
             with source.open('rb') as stream:
                 if stream.read(16) != b'SQLite format 3\x00':
                     raise ValueError('Not a SQLite database')
-        existing = next((r for r in rows if r['kind'] == kind and r['source'] == str(source)), None)
+        existing = next((r for r in rows if r['kind'] == kind and r['source'] == str(source)
+                         and (not guest or r['origin'] == 'managed')), None)
         if existing:
             return {'instance': existing, 'reused': True}
         if sum(row['kind'] == kind for row in rows) >= self.settings()[kind]:
@@ -274,7 +276,7 @@ class Instances:
             if child.poll() is not None:
                 detail = log.read_text(errors='replace')[-3000:]
                 if attempt < 2 and ('address already in use' in detail.lower() or 'port is in use' in detail.lower()):
-                    return self._act(data, attempt + 1, preferred_port=preferred_port)
+                    return self._act(data, attempt + 1, preferred_port=preferred_port, guest=guest)
                 raise RuntimeError(f'Dashboard exited: {detail}')
             try:
                 with urlopen(f'http://127.0.0.1:{port}', timeout=.5) as response:
@@ -426,13 +428,16 @@ def main():
                 serve_page_asset(self, self.path)
             elif urlsplit(self.path).path == '/':
                 page = Path(__file__).with_name('experiments.html').read_text().replace('__TOKEN__', token)
-                self.reply(page, html=True)
+                self.reply(role_page(page, self.headers), html=True)
             elif self.path == '/health':
                 self.reply({'ok': True})
             elif self.headers.get('Authorization') != 'Bearer ' + token:
                 self.reply({'error': 'Refresh the page to reconnect'}, 403)
             elif self.path == '/api/status':
-                self.reply({'instances': manager.discover(), 'limits': manager.settings()})
+                instances = manager.discover()
+                if is_guest(self.headers):
+                    instances = [instance for instance in instances if instance['origin'] == 'managed']
+                self.reply({'instances': instances, 'limits': manager.settings()})
             elif self.path == '/api/sources':
                 self.reply(manager.sources())
             elif self.path.startswith('/api/log/'):
@@ -458,7 +463,16 @@ def main():
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data, dict):
                     raise ValueError('Expected object')
-                self.reply(manager.act(data))
+                guest = is_guest(self.headers)
+                if guest and not permits_guest_action('experiments', self.path, data):
+                    return self.reply({'error': ADMIN_REQUIRED}, 403)
+                if guest and data.get('action') == 'start':
+                    kind, source = data.get('kind'), data.get('source')
+                    if (not isinstance(kind, str) or not isinstance(source, str)
+                            or not any(source == item['path'] for group in manager.sources().get(kind, ())
+                                       for item in group['items'])):
+                        return self.reply({'error': 'Select an experiment from the published list.'}, 403)
+                self.reply(manager.act(data, guest=guest))
             except Exception as exc:
                 self.reply({'error': str(exc)}, 409)
 

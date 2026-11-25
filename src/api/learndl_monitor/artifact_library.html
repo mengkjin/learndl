@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="zh" data-monitor-role="__MONITOR_ROLE__">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__ · Learndl</title>
@@ -233,6 +233,7 @@ const button=(value,fn)=>{
  return b;
 };
 const action=(key,fn)=>button(()=>t(key),fn);
+const guest = document.documentElement.dataset.monitorRole === 'guest';
 function notice(value){
  $('notice').textContent=typeof value==='function'?value():value;
  if(typeof value==='function')localized($('notice'),value);
@@ -547,9 +548,11 @@ function setup(){
  $('status').hidden=modelPage;
  if(modelPage){
   setupModelLayout();
-  const navigation=label('a',location.pathname==='/manage'?'backPreview':'manageModels');
-  navigation.href=location.pathname==='/manage'?'/preview':'/manage';navigation.onpointerdown=savePage;navigation.onkeydown=savePage;
-  $('catalog-navigation').hidden=false;$('catalog-navigation').append(navigation);
+  if(!guest){
+   const navigation=label('a',location.pathname==='/manage'?'backPreview':'manageModels');
+   navigation.href=location.pathname==='/manage'?'/preview':'/manage';navigation.onpointerdown=savePage;navigation.onkeydown=savePage;
+   $('catalog-navigation').hidden=false;$('catalog-navigation').append(navigation);
+  }
   const bar=$('model-filters');bar.hidden=false;
   for(const id of Object.keys(modelFields))bar.append(field(id,id));
   const experiment=field('experiment','experiment');
@@ -808,11 +811,6 @@ function renderModels(records,query){
  const heading=element('div');heading.className='row model-heading';
  heading.append(element('h2',m.name));
  const caption=localized(element('small'),()=>m.host+' · '+(m.build||t('history')));
- const hideBuild=action('hide',async()=>{
-  const data=await (await api('/api/model-management')).json();
-  const entry=data.records.find(row=>row.model_id===(m.id||activeModel)&&row.build===m.build);
-  await confirmOperation('hide',[{id:entry.id}]);
- });
  const picker=element('div');
  if(!m.build&&versions.some(v=>v.batch)){
   const select=field('metadata-version','history');
@@ -847,7 +845,12 @@ function renderModels(records,query){
  localized(toggle,()=>t(sections.every(section=>section.open)?'collapseDetails':'expandDetails'));
  for(const section of sections)section.ontoggle=updateToggle;
  actions.append(toggle);
- actions.append(action('modelFolder',folder('model_folder',activeModel,activeBuild)),hideBuild);
+ actions.append(action('modelFolder',folder('model_folder',activeModel,activeBuild)));
+ if(!guest)actions.append(action('hide',async()=>{
+  const data=await (await api('/api/model-management')).json();
+  const entry=data.records.find(row=>row.model_id===(m.id||activeModel)&&row.build===m.build);
+  await confirmOperation('hide',[{id:entry.id}]);
+ }));
 }
 function resetModelPreview(){
  active='';
@@ -897,6 +900,7 @@ async function modelFileDetails(r){
 function renderActions(){
  const view=$('view').value, countLabel=$('count');
  const ops=view==='trash'?['restore','purge']:[view==='archived'?'unarchive':'archive','delete'];
+ const available=guest?ops.filter(key=>key!=='delete'&&key!=='purge'):ops;
  bindings.delete(countLabel);
  localized(countLabel,()=>items(mailTotal)+' · '+tr('已选 ','Selected ')+items(selected.size));
  const pick=action(selected.size?'clear':'selectAll',()=>{
@@ -904,7 +908,7 @@ function renderActions(){
   render();
  });
  pick.disabled=!shown.some(r=>!r.readonly);
- $('actions').replaceChildren(pick,...ops.map(key=>{
+ $('actions').replaceChildren(pick,...available.map(key=>{
   const b=action(key,async()=>{
    if(['delete','purge'].includes(key)&&!confirm(t(key)+' '+items(selected.size)+'?'))return;
    const result=await (await api('/api/action',{action:key,ids:[...selected]})).json();

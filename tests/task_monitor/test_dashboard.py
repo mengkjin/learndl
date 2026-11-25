@@ -156,6 +156,21 @@ class DashboardTest(unittest.TestCase):
                 self.request('/api/kill/confirm', body={'token': prepared['token']})
             stop.assert_called_once_with(target)
 
+    def test_guest_can_confirm_a_termination(self):
+        headers = {'Authorization': 'Bearer ' + self.token, 'Origin': self.base,
+                   'X-LearnDL-Role': 'admin', 'X-Forwarded-Host': 'phone.example'}
+        with urlopen(Request(self.base, headers=headers)) as page:
+            self.assertIn(b'data-monitor-role="guest"', page.read())
+        def action(path, data):
+            with urlopen(Request(self.base + path, headers=headers, data=json.dumps(data).encode())) as result:
+                return json.load(result)
+        target = KillTarget('run', 123, 100, 'run.py', 100)
+        with patch('src.api.task_monitor.web_api.prepare_kill', return_value=target), \
+             patch('src.api.task_monitor.web_api.kill_task', return_value=KillResult('success', 'Terminated')) as stop:
+            prepared = action('/api/kill/prepare', {'task': 'run'})
+            self.assertEqual(action('/api/kill/confirm', {'token': prepared['token']})['status'], 'success')
+            stop.assert_called_once_with(target)
+
     @unittest.skipUnless(os.environ.get('LEARNDL_TEST_BROWSER'), 'set LEARNDL_TEST_BROWSER to run Chrome verification')
     def test_browser_terminal_preferences_and_finished_report(self):
         from playwright.sync_api import expect, sync_playwright

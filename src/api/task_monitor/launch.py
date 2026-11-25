@@ -18,6 +18,7 @@ from urllib.parse import parse_qsl, quote, urlsplit
 import psutil
 
 from src.api.learndl_monitor.page_assets import PAGE_ASSETS, serve_page_asset
+from src.api.learndl_monitor.access import ADMIN_REQUIRED, is_guest, permits_guest_action, role_page
 from src.api.task_monitor.web_api import TaskCenter
 
 __all__ = ['create_server', 'main']
@@ -73,7 +74,7 @@ def create_server(port=8502, *, center=None):
                 return serve_page_asset(self, url.path)
             if url.path in PAGES:
                 page = (ASSETS / 'dashboard.html').read_text(encoding='utf-8')
-                page = page.replace('__TOKEN__', token)
+                page = role_page(page, self.headers).replace('__TOKEN__', token)
                 return self.reply(page.encode(), mime='text/html; charset=utf-8')
             if url.path in STATIC:
                 asset = ASSETS / STATIC[url.path]
@@ -143,6 +144,8 @@ def create_server(port=8502, *, center=None):
                 params = json.loads(self.rfile.read(length))
                 if not isinstance(params, dict):
                     raise ValueError('Invalid request')
+                if is_guest(self.headers) and not permits_guest_action('tasks', self.path, params):
+                    return self.reply({'error': ADMIN_REQUIRED}, 403)
                 if self.path == '/api/kill/prepare':
                     return self.reply(center.prepare_termination(params['task']))
                 if self.path == '/api/kill/confirm':

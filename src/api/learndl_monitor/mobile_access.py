@@ -9,11 +9,13 @@ import re
 import signal
 import subprocess
 import time
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 import psutil
 
 from src.automation.console import logger
+from .access import GUEST_SERVICES, ROLE_HEADER
 from .services import SERVICES, STATE
 
 __all__ = ['main']
@@ -25,28 +27,57 @@ TAILSCALE = '/usr/local/bin/tailscale'
 GATEWAY = 'http://127.0.0.1:18590'
 
 
-def record_port(path):
+class Route(NamedTuple):
+    port: int
+    service: str
+
+
+OPTUNA_READ = (r'(?:dashboard(?:/[a-zA-Z0-9_/-]*)?|favicon\.ico|static/[a-zA-Z0-9_./-]+|csv/[0-9]+|'
+               r'api/(?:meta|studies(?:/[0-9]+(?:/param_importances|/plot/[a-z_]+)?)?|'
+               r'compare-studies/plot/[a-z_]+))?')
+# Optuna's rename endpoint copies the study and deletes the original.
+OPTUNA_POST = (r'api/(?:studies(?:/[0-9]+/(?:preference(?:/[a-zA-Z0-9_-]+)?|[0-9]+/skip))?|'
+               r'trials/[0-9]+/(?:tell|user-attrs))')
+OPTUNA_PUT = r'api/studies/[0-9]+/(?:note|preference_feedback_component|[0-9]+/note)'
+TENSORBOARD_READ = (r'(?:index\.html|index\.js|chart_worker\.js|icon_bundle\.svg|favicon\.ico|'
+                    r'(?:font-roboto|tf-imports)/[a-zA-Z0-9_./-]+|'
+                    r'data/(?:plugins_listing|plugin_entry\.html|environment|logdir|runs|experiments|'
+                    r'experiment_runs|notifications|window_properties)|'
+                    r'data/plugin/(?:scalars/(?:tags|scalars|scalars_multirun)|'
+                    r'custom_scalars/(?:layout|scalars|download_data)|histograms/(?:tags|histograms)|'
+                    r'distributions/(?:tags|distributions)|graphs/(?:graph|info|run_metadata)|'
+                    r'images/(?:tags|images|individualImage)|audio/(?:tags|audio|individualAudio)|'
+                    r'text/(?:tags|text)|pr_curves/(?:tags|pr_curves)|timeseries/(?:tags|timeSeries|imageData)|'
+                    r'mesh/(?:tags|meshes|data)|hparams/download_data|'
+                    r'projector/(?:runs|info|tensor|metadata|bookmarks|sprite_image|'
+                    r'index\.js|projector_binary\.(?:js|html))))?')
+TENSORBOARD_QUERY = r'data/plugin/(?:hparams/(?:experiment|session_groups|metric_evals)|timeseries/timeSeries)'
+
+
+def record_route(path, service):
     """Use a registration only while it belongs to the original live process."""
     try:
         record = json.loads(path.read_text())
         process = psutil.Process(record['pid'])
         if process.create_time() != record['created']:
             return None
-        if path.parent.name == 'experiments' and record['kind'] not in ('tensorboard', 'optuna'):
-            return None
+        if service == 'experiment-instance':
+            service = record['kind']
+            if service not in ('tensorboard', 'optuna'):
+                return None
         port = record.get('port') or urlsplit(record['url']).port
-        return port if isinstance(port, int) and 1024 <= port <= 65535 else None
+        return Route(port, service) if isinstance(port, int) and 1024 <= port <= 65535 else None
     except (OSError, ValueError, KeyError, TypeError, psutil.Error):
         return None
 
 
 def ports():
-    console = record_port(STATE / 'console.json')
-    records = [STATE / f'{key}.json' for key in SERVICES]
-    records.extend((STATE / 'experiments').glob('[0-9]*.json'))
-    active = {port: port for path in records if (port := record_port(path))}
+    records = [(path, 'experiment-instance') for path in (STATE / 'experiments').glob('[0-9]*.json')]
+    records.extend((STATE / f'{key}.json', key) for key in SERVICES if key in GUEST_SERVICES)
+    active = {route.port: route for path, service in records if (route := record_route(path, service))}
+    console = record_route(STATE / 'console.json', 'console')
     if console:
-        active.update({443: console, console: console})
+        active.update({443: console, console.port: console})
     return active
 
 
@@ -60,15 +91,15 @@ def apache_config(host, phones, routes, published):
     for mod in modules:
         lines.append(f'LoadModule {mod}_module /usr/libexec/apache2/mod_{mod}.so')
     lines += ['ProxyRequests Off', 'ProxyAddHeaders Off', 'ProxyTimeout 180',
-              '<Location />', 'Require all denied', '</Location>']
+              'TraceEnable Off', '<Location />', 'Require all denied', '</Location>']
     ips = ', '.join(f"'{ip}'" for ip in phones)
     ready_ports = ','.join(str(port) for port in sorted(routes.keys() & published)) or 'pending'
-    for front, backend in sorted(routes.items()):
+    for front, (backend, service) in sorted(routes.items()):
         authority = host if front == 443 else f'{host}:{front}'
         public = f'https://{authority}'
         local = f'http://127.0.0.1:{backend}'
         prefix = f'/p{front}/'
-        options = ' upgrade=websocket retry=0' if front == 443 or backend != routes.get(443) else ''
+        options = ' upgrade=websocket retry=0' if service == 'compare' else ''
         lines += [
             f'ProxyPass {prefix} {local}/{options}',
             f'<Location "{prefix}">',
@@ -77,14 +108,31 @@ def apache_config(host, phones, routes, published):
             f'    Require expr "req(\'X-Forwarded-Host\') == \'{authority}\'"',
             '    Require expr "req(\'X-Forwarded-Proto\') == \'https\' && -z req(\'Tailscale-Funnel-Request\')"',
             f'    Require expr "-z req(\'Origin\') || req(\'Origin\') == \'{public}\'"',
+            '    Require expr "-z req(\'Connection\') || req(\'Connection\') =~ m#^(keep-alive|close|upgrade)$#i"',
             # Requests without Origin are safe only for ordinary reads.
             f'    Require expr "%{{REQUEST_METHOD}} in {{\'GET\', \'HEAD\', \'OPTIONS\'}} || req(\'Origin\') == \'{public}\'"',
+        ]
+        if service != 'compare':
+            lines.append('    Require expr "-z req(\'Upgrade\')"')
+        if service in ('tensorboard', 'optuna'):
+            read_path = TENSORBOARD_READ if service == 'tensorboard' else OPTUNA_READ
+            read = f"(%{{REQUEST_METHOD}} in {{'GET', 'HEAD'}} && %{{REQUEST_URI}} =~ m#^{prefix}{read_path}$#)"
+            allowed = [('POST', TENSORBOARD_QUERY)] if service == 'tensorboard' else [
+                ('POST', OPTUNA_POST), ('PUT', OPTUNA_PUT)]
+            actions = [f"(%{{REQUEST_METHOD}} == '{method}' && %{{REQUEST_URI}} =~ m#^{prefix}{path}$#)"
+                       for method, path in allowed]
+            lines.append('    Require expr "' + ' || '.join([read, *actions]) + '"')
+        lines += [
             '  </RequireAll>',
+            f'  RequestHeader set {ROLE_HEADER} "guest"',
             f'  SetEnvIf Origin "^{re.escape(public)}$" mobile_same_origin',
             f'  RequestHeader set Origin "{local}" env=mobile_same_origin',
             f'  Header edit Location "^{re.escape(local)}(/|$)" "{public}$1"',
-            '</Location>',
         ]
+        if service == 'compare':
+            # A remote Streamlit connection must begin its own session.
+            lines.append('  RequestHeader edit Sec-WebSocket-Protocol "^([^,]+,[^,]+),.*$" "$1"')
+        lines.append('</Location>')
         # The browser checks the source service before opening a newly registered port.
         # Read this header through the same authenticated route as the page asset.
         lines += [f'<Location "{prefix}monitor-navigation.js">',
@@ -101,7 +149,7 @@ def reconcile(host, routes):
     current = serve_config()
     # Reserved project ports can be published before service startup. Apache
     # only enables forwarding once the project registers the live process.
-    published = {443, *(s['port'] for s in SERVICES.values()), *routes}
+    published = {443, *(SERVICES[key]['port'] for key in GUEST_SERVICES), *routes}
     ours_before = set()
     for name, web in current.get('Web', {}).items():
         server, _, port = name.rpartition(':')

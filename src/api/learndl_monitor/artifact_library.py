@@ -27,6 +27,11 @@ from .services import ROOT, STATE
 
 __all__ = ['Library', 'open_folder', 'open_local']
 
+LOCAL_DATA_TYPES = frozenset({
+    '.txt', '.md', '.log', '.csv', '.json', '.jsonl', '.yaml', '.yml', '.toml',
+    '.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.zip', '.sqlite3', '.parquet', '.feather',
+})
+
 
 def read_json(path):
     return json.loads(real_tree(path).read_text())
@@ -307,10 +312,7 @@ class Library:
         if path.parent != row['path'] / 'mail/attachments':
             raise ValueError('Select a mail attachment')
         # Restrict OS handlers to data files; archived senders can supply any filename.
-        if Path(name).suffix.lower() not in {
-            '.txt', '.md', '.log', '.csv', '.json', '.jsonl', '.yaml', '.yml', '.toml',
-            '.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.zip', '.sqlite3', '.parquet', '.feather',
-        } or path.suffix.lower() != Path(name).suffix.lower():
+        if Path(name).suffix.lower() not in LOCAL_DATA_TYPES or path.suffix.lower() != Path(name).suffix.lower():
             raise ValueError('This attachment type cannot be opened on the host. Use Preview instead.')
         return open_local(path)
 
@@ -469,11 +471,11 @@ class Library:
                     raise ValueError('Stop the experiment instance before moving its source')
             return setup.pop_all()
 
-    def experiment(self, row, action):
+    def experiment(self, row, action, *, guest=False):
         if self.instances is None or row.get('trashed') or row['type'] not in ('tensorboard', 'optuna'):
             raise ValueError('Choose an experiment source')
         if action == 'start':
-            return self.instances.act({'action': 'start', 'kind': row['type'], 'source': str(row['path'])})
+            return self.instances.act({'action': 'start', 'kind': row['type'], 'source': str(row['path'])}, guest=guest)
         if action != 'stop':
             raise ValueError('Unknown experiment action')
         candidates = [r for r in self.instances.discover()
