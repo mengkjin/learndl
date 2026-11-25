@@ -3,6 +3,7 @@ from __future__ import annotations
 
 __all__ = [
     'MaintenanceBusy',
+    'ScriptStartDeferred',
     'configured',
     'sandbox_request',
     'inherited_fd',
@@ -10,13 +11,14 @@ __all__ = [
     'child_env',
     'pending',
     'permit',
+    'script_permit',
 ]
 
 import contextvars
 import json
 import os
 import time
-from contextlib import contextmanager, ExitStack
+from contextlib import contextmanager, ExitStack, nullcontext
 from pathlib import Path
 
 import portalocker
@@ -33,6 +35,49 @@ _kind = contextvars.ContextVar('maintenance_kind', default='shared')
 
 class MaintenanceBusy(RuntimeError):
     pass
+
+
+class PatchAdmissionStopped(MaintenanceBusy):
+    """A patch needs recovery before new business can enter."""
+
+
+class ScriptStartDeferred(SystemExit):
+    """A foreground script exited before starting its business work."""
+
+    def __init__(self, reason):
+        self.reason = str(reason)
+        super().__init__(75)
+
+
+@contextmanager
+def _script_code_lease():
+    from .config import runtime_dir
+    from src.automation import version_patch
+
+    if version_patch.has_code_lease():
+        yield
+        return
+    directory = runtime_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with ExitStack() as stack:
+        try:
+            stack.enter_context(version_patch.code_lease(directory, shared=True))
+        except version_patch.CodeBusy as exc:
+            raise MaintenanceBusy(str(exc)) from None
+        yield
+
+
+@contextmanager
+def script_permit():
+    # Catch only admission errors. Once started, a script's own exceptions
+    # belong to its normal recorder and exit path.
+    with ExitStack() as stack:
+        try:
+            stack.enter_context(permit(code=True))
+        except MaintenanceBusy as exc:
+            logger.warning('Script not started: %s', exc, extra={'console_stderr': True})
+            raise ScriptStartDeferred(exc) from None
+        yield
 
 
 def configured() -> bool:
@@ -86,14 +131,23 @@ def pending(directory):
 
 
 @contextmanager
-def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None, task_class=None, exclusive_groups=None):
-    if _depth.get() or sandbox_request() is not None:
+def permit(*, exclusive=False, blocking=True, directory=None, priority=False, installation_id=None,
+           task_class=None, exclusive_groups=None, code=False):
+    code_guard = _script_code_lease if code else nullcontext
+    if _depth.get():
+        if exclusive and _kind.get() != 'exclusive':
+            raise MaintenanceBusy('Cannot upgrade an existing shared lease')
+        with code_guard():
+            yield
+        return
+    if sandbox_request() is not None:
         if exclusive and _kind.get() != 'exclusive':
             raise MaintenanceBusy('Cannot upgrade an existing shared lease')
         yield
         return
     if directory is None and not state_dir().exists() and not configured():
-        yield
+        with code_guard():
+            yield
         return
     directory = directory or state_dir(ROOT)
     Store(directory)  # Missing/corrupt control state fails closed.
@@ -101,7 +155,8 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
     if inherited is not None and not exclusive:
         token, fd_token = _depth.set(1), _fd.set(inherited)
         try:
-            yield
+            with code_guard():
+                yield
         finally:
             _fd.reset(fd_token)
             _depth.reset(token)
@@ -116,6 +171,8 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
     previous = os.environ.get('LEARNDL_MAINTENANCE_FD')
     previous_owner = os.environ.get('LEARNDL_MAINTENANCE_OWNER')
     last_wait_reason = None
+    from src.automation.version_patch import has_code_lease
+    borrowed_code = blocking and has_code_lease()
     try:
         while True:
             try:
@@ -138,12 +195,21 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         raise MaintenanceBusy(preferred)
                     portalocker.lock(stream, (portalocker.LOCK_EX if exclusive else portalocker.LOCK_SH) | portalocker.LOCK_NB)
                     try:
+                        lane_leases.enter_context(code_guard())
+                        if code and modern:
+                            from .config import installed_config, runtime_dir
+                            from src.automation.version_patch import activation, admission_block
+                            if activation(installed_config()):
+                                block = admission_block(ROOT, runtime_dir().parent, announce_pending=blocking)
+                                if block:
+                                    error = PatchAdmissionStopped if block.terminal else MaintenanceBusy
+                                    raise error(block.reason)
                         reason = blocker(Store(directory), task_class) if modern else None
                         if reason:
                             raise MaintenanceBusy(reason)
                         if modern_channels:
                             descriptors = lane_leases.enter_context(channels.leases(Store(directory), task_class, exclusive_groups))
-                        if modern and task_class not in {'git', 'installation'}:
+                        if not code and modern and task_class not in {'git', 'installation'}:
                             from .config import installed_config, runtime_dir
                             from src.automation.version_patch import activation, admission_reason
                             if activation(installed_config()):
@@ -156,8 +222,10 @@ def permit(*, exclusive=False, blocking=True, directory=None, priority=False, in
                         portalocker.unlock(stream)
                         raise
                 break
+            except PatchAdmissionStopped:
+                raise
             except (portalocker.LockException, MaintenanceBusy) as exc:
-                if not blocking:
+                if not blocking or borrowed_code:
                     raise MaintenanceBusy(str(exc) or 'Maintenance execution lock unavailable') from None
                 reason = str(exc) if isinstance(exc, MaintenanceBusy) else 'Maintenance admission or execution lock occupied'
                 if reason != last_wait_reason:

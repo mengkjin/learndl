@@ -384,9 +384,10 @@ for local data and models after verified updates and manual pulls. Install the u
 managed bootstrap to enable migration checks before new business work.
 
 With automatic Git updates and version patches enabled, a recorded patch
-failure keeps business work paused while Git maintenance continues checking
-`origin/master` for a clean fast-forward. After verifying the new checkout, the
-worker retries the first failed or interrupted patch once per commit. This
+failure blocks new business work. Git maintenance can still fetch a fix into
+its tracking ref while the write leases are busy. It checks out the fix once
+the worktree is clean and both write leases are available. After verifying the
+new checkout, the worker retries the first failed or interrupted patch once per commit. This
 also applies when an operator pulls the fast-forward first. The attempt
 ledger prevents re-execution on the same commit across worker restarts.
 Set `watchdog.jobs.git_auto_update.retry_failed_patch_on_update: false` in

@@ -180,10 +180,9 @@ def record_training(func):
     """Record the shared training lifecycle; failure must propagate to ScriptTool."""
     @wraps(func)
     def wrapped(self, *args, **kwargs):
-        from src.proj.util.script.code_update_lock import training_code_guard
-        from src.automation.scheduling.maintenance_gate import permit
+        from src.automation.scheduling.maintenance_gate import script_permit
         from src.automation.scheduling.training_maintenance import TrainingPaused, previous_training_run
-        with permit(), training_code_guard():
+        with script_permit():
             run = TrainingRun(self)
             if previous := previous_training_run():
                 run.data['resumed_from_training_run'] = previous

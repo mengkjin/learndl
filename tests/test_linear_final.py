@@ -331,7 +331,7 @@ class LinearScheduleTest(unittest.TestCase):
             with patch.object(FinalSource, 'storage_paths', return_value=[self.root]), \
                  patch.object(PATH, 'lc_machine', self.root), \
                  patch.object(history, 'git', return_value='test-git'), \
-                 patch('src.proj.util.script.code_update_lock.training_code_guard', return_value=nullcontext()), \
+                 patch('src.automation.scheduling.maintenance_gate.script_permit', return_value=nullcontext()), \
                  patch.object(BaseTrainer, 'main_process', history.record_training(BaseTrainer.main_process)), \
                  history.collect_training_runs() as runs, \
                  patch.object(BaseTrainer, 'stage_summary') as summary, \

@@ -180,8 +180,8 @@ class ScriptTool:
             from src.proj.util.functional.parallel import is_main_process
             if not is_main_process():
                 return inner(*args, **kwargs)
-            from src.automation.scheduling.maintenance_gate import permit
-            with permit():
+            from src.automation.scheduling.maintenance_gate import script_permit
+            with script_permit():
                 return admitted(*args, **kwargs)
         return wrapper
 

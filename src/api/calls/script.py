@@ -33,6 +33,7 @@ class RunPipelineScript(DirectCall):
         return 'Interactively pick and run a pipeline script from scripts/.'
 
     def run(self) -> None:
+        from src.automation.scheduling.maintenance_gate import ScriptStartDeferred, script_permit
         from src.proj.util.cli import AskFor
         from src.proj.util.cli.script_session import as_script_main
         from src.proj.util.script.param_schema import ScriptParamSchema
@@ -76,8 +77,12 @@ class RunPipelineScript(DirectCall):
             with as_script_main(runner.script):
                 schema = ScriptParamSchema.from_source(runner.script)
                 if schema is None:
-                    main = self._load_main(runner)
-                    schema = ScriptParamSchema.from_script(runner.script, main=main)
+                    try:
+                        with script_permit():
+                            main = self._load_main(runner)
+                            schema = ScriptParamSchema.from_script(runner.script, main=main)
+                    except ScriptStartDeferred:
+                        return
                 flag_kwargs = AskFor.ScriptKwargs(
                     schema,
                     help_description=(
@@ -92,9 +97,13 @@ class RunPipelineScript(DirectCall):
                 if runner.header.email:
                     kwargs = {**kwargs, 'email': True}
                 Logger.note(f'Running [{runner.script_key}] with {kwargs}')
-                if main is None:
-                    main = self._load_main(runner)
-                main(**kwargs)
+                try:
+                    with script_permit():
+                        if main is None:
+                            main = self._load_main(runner)
+                        main(**kwargs)
+                except ScriptStartDeferred:
+                    return
 
     @staticmethod
     def _load_main(runner: ScriptRunner) -> Callable[..., Any]:

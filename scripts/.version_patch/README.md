@@ -150,11 +150,18 @@ Run from the project checkout with the project's Python environment.
   successful patches are preserved. Task admission resumes after the next
   Git maintenance verification if a checkout was still pending.
 - With automatic Git updates enabled, a recorded patch failure still allows
-  a clean fast-forward. The worker automatically retries the first unfinished
+  the Git worker to fetch a repair into its tracking ref before acquiring the
+  write leases. Checkout still requires a clean, fast-forwardable worktree
+  and exclusive access. The worker automatically retries the first unfinished
   patch once on each newly verified descendant commit. Set
   `watchdog.jobs.git_auto_update.retry_failed_patch_on_update: false` to require
   explicit retries. To retry the same commit after an operational fix, run the
   reported `version_patch retry` command.
+- A foreground script can wait during a patch attempt without holding the
+  maintenance gate or the code lease. A failed or interrupted patch ends
+  the launch with `Script not started`, the patch log, and exit code `75`
+  for direct command-line runs. Start it again after verification succeeds.
+  Scheduled runs stay queued.
 - Restore a missing or damaged ledger from backup before resuming. Keep the
   ledger with the host data when recovering a server.
   A code downgrade below the data version requires an operator-managed restore.

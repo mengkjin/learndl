@@ -207,17 +207,17 @@ def inherited_lock(lock_group: str) -> bool:
 
 def legacy(task_id: str, arguments: list[str]) -> int:
     """Compatibility shell wrappers enter durable admission after installation."""
-    from .maintenance_gate import permit, pass_fds
+    from .maintenance_gate import MaintenanceBusy, permit, pass_fds
     from .autofix_store import state_dir
     from .installer import normalize_args
     from src.proj import PATH
     config = installed_config()
     if not config or not state_dir().exists():
         try:
-            with permit(), version_patch.business_lease(runtime_dir()) as code_fd:
+            with permit(blocking=False), version_patch.business_lease(runtime_dir()) as code_fd:
                 return subprocess.call([sys.executable, str(PATH.main / ENTRYPOINTS[task_id]),
                                         '--source=bash', '--email=1', *arguments], pass_fds=(code_fd, *pass_fds()))
-        except version_patch.CodeBusy as exc:
+        except (MaintenanceBusy, version_patch.CodeBusy) as exc:
             logger.info('Calendar task %s waiting: %s', task_id, exc)
             return 75
     normalized = normalize_args(arguments)

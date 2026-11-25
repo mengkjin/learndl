@@ -20,7 +20,8 @@ import sys
 import time
 import traceback
 import types
-from typing import Literal, TypedDict, cast
+from contextvars import ContextVar
+from typing import Literal, NamedTuple, TypedDict, cast
 import uuid
 
 from src.automation.console import logger
@@ -34,11 +35,13 @@ __all__ = [
     'MigrationError',
     'MigrationStatus',
     'activation',
+    'admission_block',
     'admission_reason',
     'apply_pending',
     'business_lease',
     'code_lease',
     'initialize',
+    'has_code_lease',
     'queue_completed_batches',
     'load_patch_support',
     'main',
@@ -372,6 +375,12 @@ def status(root: Path, runtime: Path, *, required: bool = True) -> MigrationStat
 
 
 _STATUS_ERRORS = (MigrationError, OSError, sqlite3.Error, ValueError, SyntaxError)
+_has_code_lease: ContextVar[bool] = ContextVar('version_patch_code_lease', default=False)
+
+
+class AdmissionBlock(NamedTuple):
+    reason: str
+    terminal: bool
 
 
 def needs_migration(root: Path, runtime: Path) -> bool:
@@ -383,31 +392,42 @@ def needs_migration(root: Path, runtime: Path) -> bool:
     return not state['ready']
 
 
-def admission_reason(root: Path, runtime: Path, *, announce_pending: bool = False) -> str | None:
-    """Return the reason a new business process must wait, if any."""
+def admission_block(root: Path, runtime: Path, *, announce_pending: bool = False) -> AdmissionBlock | None:
+    """Describe whether admission waits for a live worker or requires recovery."""
     try:
         state = status(root, runtime)
         if state['baseline'] is None:
-            return 'Version patch ledger is awaiting automatic initialization'
+            return AdmissionBlock('Version patch ledger is awaiting automatic initialization', False)
         if state['ready']:
             return None
         command = 'python -m src.automation.version_patch'
         if attempt := state['failed']:
             action = (f'{command} status' if attempt['status'] == 'running'
                       else f'{command} retry {attempt["patch"]}')
-            return f'Version patch {attempt["patch"]} ({attempt["status"]}). See {attempt["log_path"]}. Run {action}'
+            return AdmissionBlock(
+                f'Version patch {attempt["patch"]} ({attempt["status"]}). See {attempt["log_path"]}. Run {action}',
+                attempt['status'] != 'running')
         # A worker can exit between patches in the same version, after changing
         # data but before recording the new applied version or the next attempt.
         applied = version_key(state['applied'])
         if any(version_key(row['patch'].split('/')[0]) > applied for row in state['records']):
-            return f'Version migration partially applied. Run {command} apply'
+            return AdmissionBlock(f'Version migration partially applied. Run {command} apply', True)
         committed_catalog(root, 'HEAD', state['target'])
         if announce_pending:
             logger.info('Version migration pending (%s -> %s). Continuing with current data. Details: %s status',
                         state['applied'], state['target'], command, extra={'console_stderr': True})
     except (*_STATUS_ERRORS, subprocess.SubprocessError) as exc:
-        return f'Version migration check failed: {exc}'
+        return AdmissionBlock(f'Version migration check failed: {exc}', True)
     return None
+
+
+def admission_reason(root: Path, runtime: Path, *, announce_pending: bool = False) -> str | None:
+    block = admission_block(root, runtime, announce_pending=announce_pending)
+    return block.reason if block else None
+
+
+def has_code_lease() -> bool:
+    return _has_code_lease.get()
 
 
 @contextmanager
@@ -421,7 +441,11 @@ def code_lease(scheduling_runtime: Path, *, shared: bool = False):
             fcntl.flock(stream, mode | fcntl.LOCK_NB)
         except BlockingIOError:
             raise CodeBusy('Code lease occupied') from None
-        yield stream.fileno()
+        token = _has_code_lease.set(True)
+        try:
+            yield stream.fileno()
+        finally:
+            _has_code_lease.reset(token)
 
 
 @contextmanager

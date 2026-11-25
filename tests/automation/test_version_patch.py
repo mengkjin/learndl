@@ -15,6 +15,8 @@ import time
 import unittest
 from unittest.mock import Mock, patch
 
+import portalocker
+
 from src.automation import version_patch as version
 from src.automation.scheduling import autofix, calendar_lanes, channels, git_update, priority, runner
 from src.automation.scheduling.autofix_store import Store, initialize
@@ -228,7 +230,7 @@ def verify(ctx):
         self.assertEqual(self.apply()['patches'], [])
         self.patch_file('0.7.14', '003_unreviewed', body)
         self.commit()
-        self.assertIn('already applied', version.admission_reason(self.root, self.runtime))
+        self.assertIn('already applied', version.admission_reason(self.root, self.runtime) or '')
 
     def test_interruption_between_patches_of_same_version_requires_completion(self):
         self.release('0.7.2')
@@ -243,28 +245,122 @@ def verify(ctx):
         self.assertEqual(self.apply()['patches'], ['0.7.2/002'])
         self.assertIsNone(version.admission_reason(self.root, self.runtime))
 
-    def test_manual_permit_reports_pending_and_explains_a_blocked_wait_once(self):
-        control = self.control().directory
-        self.release('0.7.2')
-        self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
-        self.commit()
+    def script_control(self, control):
         self.enterContext(patch.object(maintenance_gate, 'ROOT', self.root))
+        self.enterContext(patch.object(maintenance_gate, 'state_dir', return_value=control))
         self.enterContext(patch.object(priority, 'enabled', return_value=True))
         self.enterContext(patch.object(channels, 'enabled', return_value=True))
         self.enterContext(patch('src.automation.scheduling.config.installed_config', return_value={'version_patch': True}))
         self.enterContext(patch('src.automation.scheduling.config.runtime_dir', return_value=self.scheduling))
         self.enterContext(patch('src.automation.scheduling.install_request.directory', return_value=control.parent / 'installation'))
-        with redirect_stderr(StringIO()) as pending, maintenance_gate.permit(directory=control):
+
+    def test_manual_script_stops_on_failed_patch_and_restarts_after_repair(self):
+        control = self.control().directory
+        self.script_control(control)
+        self.release('0.7.2')
+        path = self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
+        self.commit()
+        with redirect_stderr(StringIO()) as pending, maintenance_gate.script_permit():
             self.assertIn('pending (0.7.1 -> 0.7.2)', pending.getvalue())
             self.assertTrue(version.needs_migration(self.root, self.runtime))
         self.assertEqual(self.apply()['status'], 'blocked')
+        head = self.git('rev-parse', 'HEAD').decode().strip()
+        priority.write(Store(control), {'phase': 'blocked', 'target': head, 'last_completed': 0,
+                                       'version_verified': True, 'version_verified_head': head})
         with (redirect_stderr(StringIO()) as waiting,
-              patch.object(maintenance_gate.time, 'sleep', side_effect=[None, KeyboardInterrupt]),
-              self.assertRaises(KeyboardInterrupt), maintenance_gate.permit(directory=control)):
+              patch.object(maintenance_gate.time, 'sleep', side_effect=AssertionError('terminal failure slept')),
+              self.assertRaises(maintenance_gate.ScriptStartDeferred) as stopped,
+              maintenance_gate.script_permit()):
             self.fail('Failed migration admitted a manual script')
-        self.assertEqual(waiting.getvalue().count('Waiting for maintenance access'), 1)
+        self.assertEqual(stopped.exception.code, 75)
+        self.assertIn('Script not started', waiting.getvalue())
         self.assertIn('retry 0.7.2/001', waiting.getvalue())
+        self.assertIn('patch.log', waiting.getvalue())
         self.assertFalse(list(control.glob('waiting-*.json')))
+        path.write_text('def apply(ctx): pass\ndef verify(ctx): return True\n')
+        self.commit()
+        self.assertEqual(self.apply(retry='0.7.2/001')['status'], 'ready')
+        priority.write(Store(control), {'phase': 'idle', 'last_completed': 0})
+        with maintenance_gate.script_permit():
+            self.assertTrue(version.has_code_lease())
+
+    def test_foreground_waiter_does_not_hold_leases_after_patch_failure(self):
+        control = self.control().directory
+        self.script_control(control)
+        self.release('0.7.2')
+        self.patch_file('0.7.2', '001_check', 'def apply(ctx): pass\ndef verify(ctx): return False\n')
+        self.commit()
+        script = '''
+import sys
+from pathlib import Path
+from unittest.mock import patch
+from src.automation.scheduling import channels, config, maintenance_gate, priority
+from src.proj.util.script import ScriptTool
+
+root, control, scheduling = map(Path, sys.argv[1:])
+with (patch.object(maintenance_gate, 'ROOT', root), patch.object(maintenance_gate, 'state_dir', return_value=control),
+      patch.object(config, 'runtime_dir', return_value=scheduling),
+      patch.object(config, 'installed_config', return_value={'version_patch': True}),
+      patch.object(channels, 'enabled', return_value=True), patch.object(priority, 'enabled', return_value=True),
+      patch('src.automation.scheduling.install_request.directory', return_value=control.parent / 'installation')):
+    tool = ScriptTool('patch_admission_fixture')
+
+    @tool
+    def main():
+        (root / 'business-started').touch()
+
+    try:
+        main()
+    except maintenance_gate.ScriptStartDeferred:
+        assert 'backend_recorder' not in vars(tool)
+        raise
+'''
+        with version.code_lease(self.scheduling) as fd:
+            process = subprocess.Popen([sys.executable, '-c', script, str(self.root), str(control), str(self.scheduling)],
+                                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            self.addCleanup(process.communicate, timeout=5)
+            self.addCleanup(lambda: process.kill() if process.poll() is None else None)
+            waiter = control / f'waiting-{process.pid}.json'
+            until = time.monotonic() + 15
+            while not waiter.exists():
+                self.assertLess(time.monotonic(), until, 'foreground script did not enter maintenance wait')
+                self.assertIsNone(process.poll())
+                time.sleep(.02)
+            # The waiter was blocked by the code lease alone and released the
+            # maintenance gate before it parked.
+            with maintenance_gate.permit(exclusive=True, blocking=False, task_class='git'):
+                result = version.apply_pending(self.root, self.runtime, pass_fds=(fd,), notify=self.notify)
+                self.assertEqual(result['status'], 'blocked')
+        _, stderr = process.communicate(timeout=10)
+        self.assertEqual(process.returncode, 75, stderr)
+        self.assertIn('Waiting for maintenance access', stderr)
+        self.assertIn('Script not started: Version patch 0.7.2/001 (failed)', stderr)
+        self.assertFalse((self.root / 'business-started').exists())
+        self.assertFalse(waiter.exists())
+        with maintenance_gate.permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(self.scheduling):
+            pass
+
+    def test_cancelled_foreground_wait_removes_its_marker(self):
+        control = self.control().directory
+        self.script_control(control)
+        with (portalocker.Lock(control / 'gate.lock', mode='r+'),
+              patch.object(maintenance_gate.time, 'sleep', side_effect=KeyboardInterrupt),
+              self.assertRaises(KeyboardInterrupt), maintenance_gate.script_permit()):
+            self.fail('Script started during maintenance')
+        self.assertFalse(list(control.glob('waiting-*.json')))
+
+    def test_borrowed_shared_code_lease_never_enters_foreground_wait(self):
+        control = self.control().directory
+        self.script_control(control)
+        with (maintenance_gate.permit(exclusive=True, blocking=False, task_class='git', directory=control),
+              version.code_lease(self.scheduling, shared=True),
+              patch.object(maintenance_gate, '_depth') as depth,
+              patch.object(maintenance_gate.time, 'sleep', side_effect=AssertionError('borrowed lease waited'))):
+            depth.get.return_value = 0  # Independent script entry with an external code lease.
+            with self.assertRaises(maintenance_gate.ScriptStartDeferred) as stopped, maintenance_gate.script_permit():
+                self.fail('Borrowed lease entered business work while maintenance was busy')
+            self.assertEqual(stopped.exception.code, 75)
+            self.assertFalse(list(control.glob('waiting-*.json')))
 
     def test_timeout_and_interrupted_worker_preserve_evidence(self):
         self.release('0.7.2')
@@ -708,6 +804,13 @@ sys.stdin.buffer.read()
 
             location.write_text('def apply(ctx): pass\ndef verify(ctx): return True\n')
             publish('working fix')
+            before = self.git('rev-parse', 'HEAD')
+            with version.code_lease(self.scheduling, shared=True):
+                deferred = git_update._channel_update(self.root, {'enabled': True})
+                self.assertEqual(deferred['status'], 'deferred')
+                self.assertEqual(deferred['repair_head'],
+                                 self.git('rev-parse', 'refs/learndl/watchdog-master').decode().strip())
+                self.assertEqual(self.git('rev-parse', 'HEAD'), before)
             self.assertEqual(worker('updated'), attempts)
             attempts = worker('verified')
             self.assertEqual([row['status'] for row in attempts], ['failed', 'failed', 'success'])

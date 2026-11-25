@@ -322,8 +322,10 @@ def training_blocker() -> str | None:
     from src.proj.util.script import FitLock
     if FitLock.is_held():
         return 'fit lock occupied'
-    if RunStore().active():
-        return 'managed task is active'
+    if runs := RunStore().active():
+        run = runs[0]
+        pid = f' (PID {run["pid"]})' if run.get('pid') else ''
+        return f'managed task {run["id"]}{pid} is active'
     for path in (PATH.lc_machine / 'training_history').glob('*/run.json'):
         try:
             run = json.loads(path.read_text())
@@ -331,7 +333,7 @@ def training_blocker() -> str | None:
                 continue
             process = psutil.Process(run['pid'])
             if abs(process.create_time() - run['process_created']) < .01 and process.status() != psutil.STATUS_ZOMBIE:
-                return 'training/evaluation pipeline is active'
+                return f'training/evaluation pipeline is active (run {path.parent.name}, PID {run["pid"]})'
         except psutil.NoSuchProcess:
             continue
         except (OSError, psutil.Error, ValueError, KeyError, TypeError):
@@ -517,8 +519,36 @@ def _upgrades_version(root, before, target, deadline):
     return version_key(new) > version_key(old)
 
 
+def _failed_patch_for_remote_check(root, runtime, state, deadline):
+    """A verified failed attempt at HEAD can look for a fix before execution admission."""
+    from src.automation import version_patch
+    from src.automation.patch_diagnostics import failure_summary
+
+    try:
+        snapshot = version_patch.status(root, runtime)
+    except (version_patch.MigrationError, OSError, sqlite3.Error, ValueError, SyntaxError):
+        return None  # The normal reconciliation path owns invalid or missing ledgers.
+    failed = snapshot['failed']
+    if not failed or failed['status'] not in {'failed', 'interrupted'}:
+        return None
+    head = _git(root, ['rev-parse', 'HEAD'], deadline)
+    if state['phase'] in {'checkout', 'blocked'} and (
+            not state.get('version_verified') or state.get('version_verified_head') != head
+            or state['target'] != head):
+        return None
+    if failed['commit_hash'] != head:
+        return None  # Retry a new local revision through exclusive reconciliation first.
+    try:
+        queue_version_failure(failed)
+    except Exception as exc:
+        logger.error('Could not queue version patch email: %s', exc)
+    summary = failure_summary(failed)
+    return {'status': 'blocked', 'reason': f'{failed["patch"]} requires a repair: {summary["error"]}',
+            'failure': summary, 'log': failed['log_path'], 'attempt_id': failed['id']}
+
+
 def _channel_update(root, options):
-    """Reconcile data, then fetch only when a fast-forward can be admitted."""
+    """Reconcile data and check for a fast-forward or a repair for a failed patch."""
     from . import channels, priority
     from .autofix_store import Store, state_dir
     from .maintenance_gate import permit, MaintenanceBusy, pass_fds
@@ -571,17 +601,30 @@ def _channel_update(root, options):
                     except (version.MigrationError, OSError, sqlite3.Error, SyntaxError, ValueError, subprocess.SubprocessError):
                         # The regular migration path reports invalid or unreadable state.
                         pass
-                with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory) as fd:
-                    if checkout_pending:
-                        if retry_enabled and state.get('version_verified_head') == state.get('target'):
-                            deadline = time.monotonic() + options.get('max_seconds', 45)
-                            head = _git(root, ['rev-parse', 'HEAD'], deadline)
-                            if head != state['target']:
-                                if retry := _automatic_patch_retry(root, runtime, deadline, head):
-                                    version.verify_manual_checkout(root, runtime, retry=retry)
-                        result = _admitted_update(root, options, migrate=(lambda: migrate(fd)) if activated else None)
-                    else:
-                        result = migrate(fd)
+                def repair_check():
+                    if retry_enabled:
+                        return _failed_patch_for_remote_check(
+                            root, runtime, priority.read(store), time.monotonic() + options.get('max_seconds', 45))
+                    return None
+
+                try:
+                    with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory) as fd:
+                        if checkout_pending:
+                            if retry_enabled and state.get('version_verified_head') == state.get('target'):
+                                deadline = time.monotonic() + options.get('max_seconds', 45)
+                                head = _git(root, ['rev-parse', 'HEAD'], deadline)
+                                if head != state['target']:
+                                    if retry := _automatic_patch_retry(root, runtime, deadline, head):
+                                        version.verify_manual_checkout(root, runtime, retry=retry)
+                            result = _admitted_update(root, options, migrate=(lambda: migrate(fd)) if activated else None)
+                        else:
+                            result = migrate(fd)
+                except (portalocker.LockException, MaintenanceBusy, version.CodeBusy):
+                    if not (repair := repair_check()):
+                        raise
+                    result = repair
+                if result.get('status') == 'deferred':
+                    result = repair_check() or result
                 state = priority.read(store)
                 if (not retry_enabled or result.get('status') != 'blocked' or not result.get('attempt_id')
                         or (checkout_pending and not state.get('version_verified'))):
@@ -605,6 +648,8 @@ def _channel_update(root, options):
             if _git(root, ['merge-base', before, target], deadline, allow_failure=True) != before:
                 result = {'status': 'deferred', 'reason': 'local commits or divergent master'}
                 return result
+            if result.get('attempt_id'):
+                result['repair_head'] = target
             confirmed_git = _upgrades_version(root, before, target, deadline)
             if confirmed_git:
                 publish_request('git', target, directory=directory, interval=interval)
@@ -612,11 +657,11 @@ def _channel_update(root, options):
                 publish_request('git', directory=directory)
             keep_reservation = True
             if not channels.reserve(store, 'git', channels.GROUPS):
-                result = {'status': 'deferred', 'reason': 'maintenance occupied or cooling down'}
+                result = dict(result, status='deferred', reason='maintenance occupied or cooling down')
                 return result
             with permit(exclusive=True, blocking=False, task_class='git'), version.code_lease(directory):
                 if reason := training_blocker():
-                    result = {'status': 'deferred', 'reason': reason}
+                    result = dict(result, status='deferred', reason=reason)
                     return result
                 channels.running(store, 'git')
                 result = _admitted_update(root, options, target_snapshot=(before, target))
@@ -625,7 +670,7 @@ def _channel_update(root, options):
         except (portalocker.LockException, MaintenanceBusy, version.CodeBusy) as exc:
             from .maintenance_notice import record_failure
             record_failure(store, 'git', exc)
-            result = {'status': 'deferred', 'reason': str(exc) or 'code users still active'}
+            result = dict(result, status='deferred', reason=str(exc) or 'code users still active')
             return result
         except (OSError, GitUpdateError, version.MigrationError) as exc:
             result = dict(result, status='error', reason=str(exc))
