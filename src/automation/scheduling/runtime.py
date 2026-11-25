@@ -20,6 +20,8 @@ __all__ = [
     'inspect_timeouts',
     'deliver_timeout_events',
     'timeout_task_ids',
+    'operator_task_stop_ids',
+    'pin_crash_logs',
 ]
 
 import json
@@ -27,12 +29,21 @@ import os
 import signal
 import sqlite3
 import time
+from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import psutil
 
 from .config import runtime_dir
+
+if TYPE_CHECKING:
+    from src.api.util.backend.task import TaskItem
+
+OPERATOR_STOP_EVENT = 'operator_stopped'
+OPERATOR_TASK_PREFIX = 'task-center-stop:'
+_AWAITING_OPERATOR_EXIT = -2
 
 
 class RunStore:
@@ -91,10 +102,46 @@ class RunStore:
         with self.connect() as connection:
             return [row[0] for row in connection.execute('SELECT task_id FROM task_links WHERE run_id=?', (run_id,))]
 
-    def event(self, run: dict, kind: str, detail: str) -> None:
+    def event(self, run: dict, kind: str, detail: str, *, awaiting_exit: bool = False) -> bool:
         body = json.dumps({'run': run, 'detail': detail, 'kind': kind})
         with self.connect() as connection:
-            connection.execute('INSERT OR IGNORE INTO events(id,body) VALUES (?,?)', (f'{run["id"]}:{kind}', body))
+            inserted = connection.execute('INSERT OR IGNORE INTO events(id,body,sent) VALUES (?,?,?)',
+                                          (f'{run["id"]}:{kind}', body, _AWAITING_OPERATOR_EXIT if awaiting_exit else 0))
+            return inserted.rowcount == 1
+
+    def finish_operator_task(self, run_id: str, finished_at: float | None,
+                             logs: dict[str, list[str]] | None = None) -> None:
+        event_id = f'{run_id}:{OPERATOR_STOP_EVENT}'
+        with self.connect() as connection:
+            if finished_at is not None:
+                connection.execute("""
+                    UPDATE events SET sent=0, body=json_set(body, '$.run.finished_at', ?, '$.run.operator_crash_logs',
+                        coalesce(json(?), json_extract(body, '$.run.operator_crash_logs')))
+                    WHERE id=? AND sent=?
+                """, (finished_at, json.dumps(logs) if logs is not None else None, event_id, _AWAITING_OPERATOR_EXIT))
+            else:
+                connection.execute('DELETE FROM events WHERE id=? AND sent=?', (event_id, _AWAITING_OPERATOR_EXIT))
+
+
+def pin_crash_logs(store: RunStore, task: TaskItem) -> list[str]:
+    """Keep the same inode so writes through the original handle are captured until exit."""
+    key = sha256(task.id.encode()).hexdigest()
+    folder = store.path.parent / 'operator_stops' / key
+    paths = []
+    for raw in task.get_crash_protector():
+        source = Path(raw)
+        link = folder / source.name
+        try:
+            folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.link(source, link)
+        except FileExistsError:
+            pass
+        except OSError:
+            # Captures may already be closing. The exit handler can find any
+            # surviving original and retry the link after the process exits.
+            continue
+        paths.append(str(link))
+    return paths
 
 
 def record_script_email(*, success: bool) -> None:
@@ -282,7 +329,7 @@ def timeout_due(run: dict, now: float) -> bool:
 
 
 def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
-    if run.get('owner') != 'idle_worklist':
+    if run.get('owner') != 'idle_worklist' or run.get('operator_stop'):
         return
     if run.get('returncode') == 75 and 'term_at' not in run:
         run['phase'] = 'deferred'
@@ -338,16 +385,25 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
                 if timed_out:
                     from src.api.util.backend.task import TaskDatabase
                     database = TaskDatabase()
+                    operator_logs = run.get('operator_crash_pins', {}).copy()
                     for task_id in store.links(run['id']):
                         task = database.get_task(task_id)
                         if task is None or (task.pid != run['pid'] and not task.is_running):
                             continue
-                        database.update_task(task_id, backend_updated=True, **{
+                        updates = {
                             'status': 'killed', 'end_time': run['finished_at'], 'exit_code': -9 if run.get('kill_at') else -15,
                             'exit_error': timeout_message(run),
-                        })
+                        }
+                        if run.get('operator_stop'):
+                            paths = list(dict.fromkeys([*operator_logs.get(task_id, []), *pin_crash_logs(store, task)]))
+                            operator_logs[task_id] = paths
+                            updates['exit_files'] = list(dict.fromkeys([*paths, *(task.exit_files or [])]))
+                        database.update_task(task_id, backend_updated=True, **updates)
                     run['phase'] = 'killed'
-                    if run.get('owner') != 'idle_worklist':
+                    if run.get('operator_stop'):
+                        run['operator_crash_logs'] = operator_logs
+                        store.event(run, OPERATOR_STOP_EVENT, timeout_message(run))
+                    elif run.get('owner') != 'idle_worklist':
                         store.event(run, 'terminated', timeout_message(run)+'; verified session processes have exited.')
                     store.put(run)
                 finish_idle_event(store, run, f'Process finished: {run["phase"]}; returncode={run.get("returncode", "unavailable (abnormal exit)")}.')
@@ -377,8 +433,41 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
     return {'checked_runs': checked}
 
 
+def _recover_operator_task_events(store: RunStore) -> None:
+    """Recover an interrupted Monitor request after its bounded signal wait."""
+    with store.connect() as connection:
+        rows = connection.execute('SELECT body FROM events WHERE sent=?', (_AWAITING_OPERATOR_EXIT,)).fetchall()
+    now = time.time()
+    for (body,) in rows:
+        run = json.loads(body)['run']
+        if now - run['stop_requested_at'] < 15:
+            continue
+        try:
+            process = psutil.Process(run['pid'])
+            exited = process.create_time() != run['process_created'] or process.status() == psutil.STATUS_ZOMBIE
+        except psutil.NoSuchProcess:
+            exited = True
+        except psutil.AccessDenied:
+            continue
+        store.finish_operator_task(run['id'], now if exited else None)
+
+
+def _send_operator_stop(sender: Any, event_id: str, event: dict, mail_options: dict) -> bool:
+    run = event['run']
+    attachments = list(dict.fromkeys(Path(path) for paths in run['operator_crash_logs'].values()
+                                     for path in paths if Path(path).is_file()))
+    ended = datetime.fromtimestamp(run['finished_at'], timezone.utc).isoformat(timespec='seconds')
+    message = (f'Task: {run["task"]}\nPID: {run["pid"]}\n'
+               f'Termination confirmed at: {ended}\n{event["detail"]}\n'
+               + ('Crash Protector output is attached.' if attachments else 'No Crash Protector output was available.'))
+    return sender(f'Task Center - {run["task"]} - Stopped by operator', message,
+                  attachments=attachments, confirmation_message='Learndl operator stop alert',
+                  queue_on_failure=False, delivery_id=f'watchdog-event:{event_id}', **mail_options)
+
+
 def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     store = store or RunStore()
+    _recover_operator_task_events(store)
     with store.connect() as connection:
         rows = connection.execute('SELECT id,body FROM events WHERE sent=0').fetchall()
     success = True
@@ -390,6 +479,17 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
         if run.get('no_email'):
             with store.connect() as connection:
                 connection.execute('UPDATE events SET sent=-1 WHERE id=?', (event_id,))
+            continue
+        if event['kind'] == OPERATOR_STOP_EVENT:
+            try:
+                sent = _send_operator_stop(sender, event_id, event, mail_options)
+            except Exception:
+                sent = False
+            if sent:
+                with store.connect() as connection:
+                    connection.execute('UPDATE events SET sent=1 WHERE id=?', (event_id,))
+            else:
+                success = False
             continue
         if run.get('owner') == 'idle_worklist' and event['kind'] == 'configuration_error':
             # Missing schedules have no process/task record or result email.
@@ -467,12 +567,26 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     return success
 
 
+def operator_task_stop_ids(store: RunStore | None = None) -> set[str]:
+    """Ordinary tasks with an operator event owned by the watchdog mail queue."""
+    if store is None:
+        path = runtime_dir() / 'runs.sqlite'
+        if not path.is_file():
+            return set()
+        store = RunStore(path)
+    with store.connect() as connection:
+        rows = connection.execute('SELECT id FROM events WHERE id LIKE ?', (f'{OPERATOR_TASK_PREFIX}%',)).fetchall()
+    return {event_id.removeprefix(OPERATOR_TASK_PREFIX).removesuffix(f':{OPERATOR_STOP_EVENT}') for (event_id,) in rows}
+
+
 def timeout_task_ids() -> set[str]:
-    """Exclude timeout events from the generic killed notification path."""
+    """Exclude tasks whose termination mail is owned by another watchdog event."""
     path = runtime_dir() / 'runs.sqlite'
     if not path.exists():
         return set()
     store = RunStore(path)
     with store.connect() as connection:
         rows = connection.execute('SELECT task_id,data FROM task_links JOIN runs ON runs.id=task_links.run_id').fetchall()
-    return {task_id for task_id, data in rows if 'term_at' in json.loads(data) or json.loads(data).get('owner') == 'idle_worklist'}
+    return operator_task_stop_ids(store) | {
+        task_id for task_id, data in rows if 'term_at' in json.loads(data) or json.loads(data).get('owner') == 'idle_worklist'
+    }

@@ -154,6 +154,8 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
     delivered = True
     if not directory.exists():
         return True
+    from src.automation.scheduling.runtime import operator_task_stop_ids
+    operator_stops = operator_task_stop_ids()
     for path in directory.glob('*/run.json'):
         folder = path.parent
         try:
@@ -166,7 +168,8 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
             if task.status == 'killed' and alive(meta['process']):
                 continue
             ended = task.end_time or now
-            if task.status in {'error', 'killed'} and not (folder / 'notified.json').exists():
+            operator_stopped = task.id in operator_stops
+            if task.status in {'error', 'killed'} and not operator_stopped and not (folder / 'notified.json').exists():
                 if task.status == 'killed' and not (folder / 'evidence.json').exists():
                     # Recover even when the sampler was killed along with the terminal.
                     group = None
@@ -198,7 +201,7 @@ def maintain(task_db, email_sender, *, directory: Path | None = None, now: float
                     delivered = False
             # Never remove logs for a live process, an unsent failure or a recent run.
             if now - ended > 30 * 86400 and not alive(meta['process']) and (
-                task.status == 'complete' or (folder / 'notified.json').exists()
+                task.status == 'complete' or operator_stopped or (folder / 'notified.json').exists()
             ):
                 shutil.rmtree(folder)
         except (OSError, ValueError, KeyError):

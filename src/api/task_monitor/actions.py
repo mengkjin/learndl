@@ -74,7 +74,7 @@ def prepare_kill(task: TaskSnapshot) -> KillTarget:
 
 
 def kill_task(target: KillTarget) -> KillResult:
-    """Revalidate the confirmed identity and use the same lifecycle operation as CLI."""
+    """Revalidate the confirmed identity and queue mail for a verified stop."""
     if target.pid <= 0 or target.pid == os.getpid():
         return KillResult('invalid', 'Invalid target or Monitor process; kill skipped.')
     try:
@@ -87,17 +87,42 @@ def kill_task(target: KillTarget) -> KillResult:
         current = db.get_task(target.task_id)
         if current is None or current.id != target.task_id or not current.is_running or current.pid != target.pid:
             return KillResult('invalid', 'The task has finished or its PID changed; kill skipped.')
-        current.set_task_db(db)
         proc = psutil.Process(target.pid)
         if proc.create_time() != target.process_created or proc.status() not in ALIVE_STATUSES:
             return KillResult('invalid', 'The process identity or status changed; kill skipped.')
-        if not current.kill():
-            return KillResult('failed', f'Failed to kill PID {target.pid}.')
-        if current.is_running:
-            current.update({
-                'status': 'killed', 'end_time': timestamp(), 'exit_code': 1,
-                'exit_error': 'Killed by operator from Learndl Monitor',
-            }, sync=True)
+        from src.automation.scheduling.runtime import OPERATOR_STOP_EVENT, OPERATOR_TASK_PREFIX, RunStore, pin_crash_logs
+
+        store = RunStore()
+        run_id = f'{OPERATOR_TASK_PREFIX}{target.task_id}'
+        paths = pin_crash_logs(store, current)
+        logs = {target.task_id: paths}
+        detail = 'Killed by operator from Learndl Monitor'
+        run = dict(id=run_id, task=target.script, pid=target.pid, process_created=target.process_created,
+                   stop_requested_at=timestamp(), operator_crash_logs=logs)
+        if not store.event(run, OPERATOR_STOP_EVENT, detail, awaiting_exit=True):
+            return KillResult('invalid', 'A stop has already been requested for this task.')
+        finished_at = None
+        try:
+            proc.terminate()
+            try:
+                exit_code = proc.wait(timeout=2)
+            except psutil.TimeoutExpired:
+                try:
+                    proc.kill()
+                except psutil.NoSuchProcess:
+                    pass
+                exit_code = proc.wait(timeout=2)
+            finished_at = timestamp()
+            # The recorder may have written final output during SIGTERM cleanup.
+            latest = db.get_task(target.task_id)
+            if latest and latest.pid == target.pid:
+                paths = list(dict.fromkeys([*paths, *pin_crash_logs(store, latest)]))
+                logs[target.task_id] = paths
+                db.update_task(target.task_id, backend_updated=True, status='killed', end_time=finished_at,
+                               exit_code=exit_code if exit_code is not None else 1, exit_error=detail,
+                               exit_files=list(dict.fromkeys([*paths, *(latest.exit_files or [])])))
+        finally:
+            store.finish_operator_task(run_id, finished_at, logs)
         return KillResult('success', f'Killed PID {target.pid} ({target.script}).')
     except psutil.NoSuchProcess:
         return KillResult('invalid', 'The process has exited; kill skipped.')
