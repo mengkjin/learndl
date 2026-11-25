@@ -12,6 +12,8 @@ header{display:flex;justify-content:space-between;align-items:center;margin-bott
 #filter-options label{display:flex;align-items:center;gap:8px;padding:6px 2px;cursor:pointer}
 #filter-options input{accent-color:#55ccb9}
 #show-all{margin-top:8px}
+#syncthing-link{display:block;margin-top:12px;padding-top:12px;border-top:1px solid #344355;color:#8de2d3}
+#syncthing-link[aria-disabled=true]{color:#a8bdcc}
 #batch-status{white-space:pre-line;color:#a8bdcc;margin:0 0 14px}
 #batch-status:empty{display:none}
 select,button{background:#202c3a;color:#dce8ee;border:1px solid #344355;border-radius:7px;padding:10px 12px;cursor:pointer}
@@ -48,7 +50,10 @@ h2:hover+.tooltip,h2:focus+.tooltip{display:block}#notice{color:#ffb6a6;margin-b
  <div class="monitor-toolbar">
   <details id="resources" class="monitor-menu">
    <summary class="monitor-icon" data-monitor-icon="resources" aria-label="系统资源"></summary>
-   <div class="monitor-panel" id="resource-data" role="status"></div>
+   <div class="monitor-panel">
+    <div id="resource-data" role="status"></div>
+    <a id="syncthing-link" __SYNCTHING_ACCESS__>Syncthing</a>
+   </div>
   </details>
   <details id="settings" class="monitor-menu">
    <summary class="monitor-icon" id="settings-toggle" data-monitor-icon="settings" aria-label="设置"></summary>
@@ -178,6 +183,10 @@ async function restartServices(){
 function renderResources(){
  const panel=document.getElementById('resource-data');
  if(!document.getElementById('resources').open)return;
+ const syncthing=document.getElementById('syncthing-link');
+ syncthing.textContent=syncthing.hasAttribute('href')
+  ?(lang==='zh'?'打开 Syncthing':'Open Syncthing')
+  :(lang==='zh'?'Syncthing（仅管理员可用）':'Syncthing (administrators only)');
  if(resourceError){panel.textContent=resourceError;return;}
  if(!resource){panel.textContent=lang==='zh'?'正在读取系统资源…':'Loading system resources…';return;}
  const unknown=lang==='zh'?'不可用':'Unavailable';

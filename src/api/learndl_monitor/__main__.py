@@ -112,7 +112,10 @@ def main():
                 self.send_header('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'none'")
                 self.end_headers()
                 page = Path(__file__).with_name('index.html').read_text()
-                self.wfile.write(role_page(page, self.headers).replace('__CONSOLE_TOKEN__', token).encode())
+                syncthing_access = ('role="link" aria-disabled="true"' if is_guest(self.headers) else
+                                    'href="http://127.0.0.1:8384/" target="_blank" rel="noopener noreferrer"')
+                page = role_page(page, self.headers).replace('__CONSOLE_TOKEN__', token)
+                self.wfile.write(page.replace('__SYNCTHING_ACCESS__', syncthing_access).encode())
                 return
             if not self.authorized():
                 self.reply({'error': 'Session expired. Refresh the page to reconnect.'}, 403)

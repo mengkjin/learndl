@@ -58,8 +58,13 @@ class GuestAccessTest(unittest.TestCase):
         self.assertEqual(request('/api/restart-services', {'targets': mixed_targets})[0], 403)
         manager.return_value.restart_running.assert_called_once_with(targets)
         self.assertEqual(request('/api/action', {'service': 'research', 'action': 'start'}, guest=False)[0], 202)
-        self.assertIn(b'data-monitor-role="guest"', request('/')[1])
-        self.assertIn(b'data-monitor-role="admin"', request('/', guest=False)[1])
+        guest_page = request('/')[1]
+        admin_page = request('/', guest=False)[1]
+        self.assertIn(b'data-monitor-role="guest"', guest_page)
+        self.assertIn(b'data-monitor-role="admin"', admin_page)
+        self.assertIn(b'id="syncthing-link" role="link" aria-disabled="true"', guest_page)
+        self.assertNotIn(b'http://127.0.0.1:8384/', guest_page)
+        self.assertIn(b'id="syncthing-link" href="http://127.0.0.1:8384/" target="_blank"', admin_page)
 
     def test_guest_can_preview_models_and_manage_mail_without_deleting_data(self):
         with patch.object(library_server, 'Library') as library:
