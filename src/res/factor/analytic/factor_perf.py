@@ -293,8 +293,10 @@ class FactorPerfTest(BaseFactorAnalyticTest):
             task = task_type()
             params = task.params
             for benchmark in task.use_benchmarks():
+                # StockFactor.within keeps the unfiltered prediction factor for market.
+                subset_name = benchmark.name if benchmark else None
                 required.append(FactorStats.group_perf_params(
-                    benchmark, nday=params['nday'],
+                    subset_name, nday=params['nday'],
                     lag=params['lag_init'] if task_type is IC_Monotony else params['lag'],
                     group_num=params.get('group_num', 100),
                     excess=task_type is not Group_Percentile,

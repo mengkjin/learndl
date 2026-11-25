@@ -78,6 +78,37 @@ class SellsideModelReplayTest(unittest.TestCase):
         self.assertTrue(repair.verify(self.ctx))
         self.assertFalse((self.base / relative / files[0]).exists())
 
+    def test_replay_accepts_group_files_written_by_factor_calculators(self):
+        from src.res.factor.analytic.factor_perf import Group_Percentile, Group_Return, IC_Monotony, FactorPerfTest
+        from src.res.factor.util import Benchmark, StockFactor
+
+        groups = Path('snapshot/detailed_alpha/factor_perf_test/factor_stats/group_perf')
+        (self.base / groups).mkdir(parents=True)
+        dates = [20251231, 20260105]
+        frame = pd.DataFrame([(date, secid, float(secid)) for date in dates for secid in range(100)],
+                             columns=['date', 'secid', 'best'])
+        factor = StockFactor(frame, factor_names=['best'])
+        with patch.object(Benchmark, 'factor_mask', side_effect=lambda data: data), \
+                patch.object(StockFactor, 'frame_with_cols', return_value=factor.frame().assign(ret=0.01)):
+            for task in (IC_Monotony(), Group_Return(), Group_Percentile()):
+                task.calc(factor)
+
+        def run(*, base_path, **kwargs):
+            self.outputs(base_path, dates, b'new')
+            factor.cache_factor_stats.save(base_path / groups.parent)
+            if omit_rank:
+                next((base_path / groups).glob('*rank=True.feather')).unlink()
+
+        with patch.object(repair, 'run_staged_test', side_effect=run):
+            omit_rank = True
+            with self.assertRaisesRegex(ValueError, 'missing rebuilt group statistics'):
+                repair.apply(self.ctx)
+            omit_rank = False
+            repair.apply(self.ctx)
+        required = FactorPerfTest.required_group_stats()
+        self.assertEqual({p['bm'] for p in required}, {'None', 'csi300', 'csi500', 'csi1000'})
+        self.assertTrue(repair.verify(self.ctx))
+
     def test_incomplete_replay_preserves_original_output_and_no_receipt(self):
         def run(*, base_path, **kwargs):
             self.outputs(base_path, [20260105], b'incomplete')
