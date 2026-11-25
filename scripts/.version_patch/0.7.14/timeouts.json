@@ -1,1 +1,4 @@
-{"001_restore_use_daily.py": 7200}
+{
+  "001_restore_use_daily.py": 7200,
+  "002_rebuild_sellside_model_tests.py": 86400
+}

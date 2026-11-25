@@ -342,7 +342,10 @@ def inspect(root: Path, runtime: Path, db: sqlite3.Connection | None) -> Migrati
                 raise MigrationError(f'Successful patch changed or disappeared: {row["patch"]}')
     pending = [patch for patch in patches.values() if version_key(baseline or current) < version_key(patch.version)
                and (patch.id not in latest or latest[patch.id]['status'] != 'success')]
-    if any(version_key(patch.version) <= version_key(current) for patch in pending):
+    # The published 0.7.14 follow-up repairs existing backtests on hosts that
+    # already completed /001. Keep the guard for unreviewed retroactive patches.
+    if any(version_key(patch.version) <= version_key(current) and patch.id != '0.7.14/002'
+           for patch in pending):
         raise MigrationError('A new patch was added to an already applied version')
     unfinished = [row for row in latest.values() if row['status'] != 'success']
     failed = unfinished[0] if unfinished else None
@@ -352,7 +355,7 @@ def inspect(root: Path, runtime: Path, db: sqlite3.Connection | None) -> Migrati
         raise MigrationError(f'Unfinished patch changed identity or order: {failed["patch"]}')
     return MigrationStatus(target=target, baseline=baseline, applied=current, pending=pending,
                            records=records, failed=failed,
-                           ready=baseline is not None and target == current and failed is None)
+                           ready=baseline is not None and target == current and not pending and failed is None)
 
 
 def activation(config: dict | None) -> bool:

@@ -214,6 +214,22 @@ def verify(ctx):
         path.unlink()
         self.assertIn('Successful patch changed or disappeared', version.admission_reason(self.root, self.runtime) or '')
 
+    def test_published_0714_followup_is_pending_once_after_001(self):
+        self.release('0.7.14')
+        body = 'def apply(ctx): pass\ndef verify(ctx): return True\n'
+        self.patch_file('0.7.14', '001_first', body)
+        self.commit()
+        self.assertEqual(self.apply()['patches'], ['0.7.14/001'])
+        self.patch_file('0.7.14', '002_rebuild_sellside_model_tests', body)
+        self.commit()
+        self.assertTrue(version.needs_migration(self.root, self.runtime))
+        self.assertEqual(self.apply()['patches'], ['0.7.14/002'])
+        self.assertFalse(version.needs_migration(self.root, self.runtime))
+        self.assertEqual(self.apply()['patches'], [])
+        self.patch_file('0.7.14', '003_unreviewed', body)
+        self.commit()
+        self.assertIn('already applied', version.admission_reason(self.root, self.runtime))
+
     def test_interruption_between_patches_of_same_version_requires_completion(self):
         self.release('0.7.2')
         for name in ('001_first', '002_second'):
