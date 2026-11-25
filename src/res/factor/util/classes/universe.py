@@ -71,7 +71,7 @@ class Universe:
         else:
             return Portfolio(name)
 
-    def get_universe_df(self , date : int, *, rebuild=False) -> pd.DataFrame:
+    def get_universe_df(self , date : int, *, rebuild=False, write_cache=True) -> pd.DataFrame:
         path = DB.path('universe' , self.name , date)
         if path.exists() and not rebuild:
             df = Load.df(path)
@@ -95,7 +95,7 @@ class Universe:
  
         old_columns = tuple(df.columns)
         df_new = UniverseExclusions.append_exclusions(df , date)
-        if rebuild or not path.exists() or old_columns != tuple(df_new.columns):
+        if write_cache and (rebuild or not path.exists() or old_columns != tuple(df_new.columns)):
             Save.df(df_new , path)
         return df
     

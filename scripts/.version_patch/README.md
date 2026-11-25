@@ -208,6 +208,18 @@ interface recovery after fixing the reported condition.
   daily all/top universe snapshots. Only changed files are backed up and replaced.
   The patch keeps surviving rows in order and does not refill rankings.
 
+### Sellside portfolio replay in 0.7.11
+
+- **0.7.11/001** replays the configured tracking and backtest portfolios that
+  use `df_scores_v0`, `df_scores_v2`, or `df_scores_v3` from their first saved
+  rebalance on or after 2026-01-01. This covers the Dongfang cutoff and uses the
+  corrected Huayuan fallback and portfolio freshness rules. The earlier holdings
+  seed the replay and stay in place. The platform server rebuilds the holdings,
+  accounts, analysis reports and existing daily CSV entries for the affected
+  tracking portfolios. Original files and output checksums are in the attempt
+  backup. Receiver hosts get verified replacements through the production
+  artifact channel.
+
 Hosts upgraded from the previous name keep using their existing
 `PATH.runtime/version_autofix/` directory. The new CLI reads the same history
 and backups in place. Use the new CLI and catalog path for new work.
