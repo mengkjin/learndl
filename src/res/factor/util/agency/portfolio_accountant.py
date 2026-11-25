@@ -47,7 +47,8 @@ class AccountConfig:
         return True
 
     def to_dict(self):
-        return asdict(self)
+        return {key: value.item() if isinstance(value, np.generic) else value
+                for key, value in asdict(self).items()}
 
     @property
     def key(self):

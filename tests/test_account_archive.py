@@ -5,10 +5,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pandas as pd
 
 from src.proj.db.io.tarfile import save_dfs_to_tar, load_dfs_from_tar, load_tar_meta
-from src.res.factor.util.agency.portfolio_accountant import PortfolioAccount
+from src.res.factor.util.agency.portfolio_accountant import AccountConfig, PortfolioAccount
 
 
 class AccountArchiveTest(unittest.TestCase):
@@ -31,6 +32,15 @@ class AccountArchiveTest(unittest.TestCase):
         self.assertEqual(load_dfs_from_tar(self.path)['basic'].iloc[0, 0], 2.0)
         self.assertEqual(load_tar_meta(self.path), {'version': 2})
         self.assertEqual(list(self.root.iterdir()), [self.path])
+
+    def test_account_metadata_with_numpy_calendar_bounds(self):
+        config = AccountConfig(start=np.int64(20180101), end=np.int64(20261124), daily=np.bool_(True))
+        account = PortfolioAccount([0.1, 0.2], config=config)
+        account.save(self.path, async_save=False)
+        meta = load_tar_meta(self.path)
+        self.assertEqual((meta['start'], meta['end']), (20180101, 20261124))
+        self.assertIs(meta['daily'], True)
+        pd.testing.assert_frame_equal(PortfolioAccount.load(self.path).df, account.df)
 
     def test_failed_write_preserves_previous_archive(self):
         self.save(self.old)
