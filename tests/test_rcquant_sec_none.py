@@ -255,7 +255,8 @@ class MigrationTest(unittest.TestCase):
         instruments = pd.DataFrame({'code': ids, 'is_active': True})
         provider = (pd.concat([minute_frame(date).assign(order_book_id=code) for code in ids],
                               ignore_index=True).drop(columns=['code', 'time', 'date']))
-        self.job.direct_none = Mock(return_value=provider)
+        truncated = provider.loc[provider['datetime'] < provider['datetime'].max()]
+        self.job.direct_none = Mock(side_effect=[truncated, provider])
         migrate = self.job.migrate_date
 
         def publish_backfill_only(day, events, **kwargs):
@@ -269,8 +270,12 @@ class MigrationTest(unittest.TestCase):
                 patch.object(self.job, 'migrate_date', side_effect=publish_backfill_only), \
                 patch.object(self.job, 'rebuild_datablocks') as rebuild:
             self.job.run()
+            self.assertFalse(self.job.minute_path(date).exists())
+            self.assertIsNone(self.job.read('scan', date))
             self.job.run()
-        self.job.direct_none.assert_called_once_with(date, ids)
+            self.job.run()
+        self.assertEqual(self.job.direct_none.call_count, 2)
+        self.job.direct_none.assert_called_with(date, ids)
         self.assertTrue(bar_min.is_none_min(pd.read_feather(self.job.minute_path(date))))
         self.assertEqual(migration.fingerprint(self.job.minute_path(date)), self.job.read('raw_backfill', date))
         self.assertFalse(self.job.backup_path(date).exists())

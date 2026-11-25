@@ -110,17 +110,20 @@ def valid_raw_day(frame: pl.DataFrame, date: int) -> None:
     minute = at.dt.hour().cast(pl.Int64) * 60 + at.dt.minute()
     session = minute.is_between(571, 690) | minute.is_between(781, 900)
     session_date = pl.date(date // 10000, date // 100 % 100, date % 100)
-    keys_valid, codes_present, clock_matches = frame.select(
+    keys_valid, codes_present, clock_matches, last_minute = frame.select(
         (at.is_not_null() & at.dt.date().eq(session_date) & at.eq(at.dt.truncate('1m'))
          & session).all(),
         pl.col('code').is_not_null().all(),
         (at.dt.hour().cast(pl.Int64) * 100 + at.dt.minute())
         .eq(pl.col('time').cast(pl.Int64, strict=False)).fill_null(False).all().alias('time_valid'),
+        minute.max().alias('last_minute'),
     ).row(0)
     if not (len(frame) and keys_valid and codes_present and frame.select(KEYS).n_unique() == len(frame)):
         raise ValueError(f'{date}: invalid or duplicate RCQuant stock-minute keys')
     if not clock_matches:
         raise ValueError(f'{date}: datetime and time disagree')
+    if last_minute != 900:
+        raise ValueError(f'{date}: stock bars are missing the last session minute')
 
 
 def valid_quote() -> pl.Expr:
@@ -561,8 +564,6 @@ class Migration:
         minute = normalize_bars(restored, stocks)
         if (minute['secid'].null_count() or minute.select('secid', 'minute').n_unique() != len(minute)):
             raise ValueError(f'{date}: invalid or overlapping normalized stock-minute keys')
-        if minute['minute'].max() != 239:
-            raise ValueError(f'{date}: normalized stock bars are missing the last session minute')
         outputs = [] if preserve_raw else [(self.minute_path(date), restored)]
         reference = minute.select(pl.col(TOTALS).sum()).row(0)
         evidence = []
