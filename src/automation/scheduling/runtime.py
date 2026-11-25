@@ -339,7 +339,7 @@ def finish_idle_event(store: RunStore, run: dict, detail: str) -> None:
     # Preserve the outcome context even if a later manual run replaces worklist state.
     try:
         from src.res.model.workflow.worklist_state import WorklistState
-        state = WorklistState(run['task']).read() if run.get('task_kind') not in {
+        state = WorklistState(run['task']).read() if run.get('training_priority') != 'promotion' and run.get('task_kind') not in {
             'rl_experiment', 'nn_metrics_ab', 'factor_sequence', 'model_promotion'
         } else None
         if state and state.get('revisions') == run.get('revisions'):
@@ -488,7 +488,7 @@ def deliver_timeout_events(sender: Any, store: RunStore | None = None) -> bool:
     for event_id, body in rows:
         event = json.loads(body)
         run = event['run']
-        promotion = run.get('task_kind') == 'model_promotion'
+        promotion = run.get('task_kind') == 'model_promotion' or run.get('training_priority') == 'promotion'
         mail_options = ({'recipient': run.get('recipient') or run.get('config', {}).get('recipient')}
                         if run.get('task_kind') == 'rl_experiment' else {})
         if run.get('no_email'):

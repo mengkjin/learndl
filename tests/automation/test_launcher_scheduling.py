@@ -46,7 +46,7 @@ class SchedulingMenuTest(unittest.TestCase):
     def test_operations_are_grouped_in_non_research_menu(self):
         labels = [label for label, _, _ in DirectCallHub._source_code_entries()]
         self.assertEqual(labels, [
-            'Watchdog / Schedule Management', 'Test Code', 'Project AutoFix',
+            'Watchdog / Schedule Management', 'Training Scheduler Mode', 'Test Code', 'Project AutoFix',
             'Check Code Issues', 'Preview Project File',
         ])
         self.assertEqual(_TOP_LEVEL_LABELS, (

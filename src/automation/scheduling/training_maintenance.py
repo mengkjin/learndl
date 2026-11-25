@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import sys
 import time
+import uuid
 
 from src.shared.file_ops import atomic_json
 from .config import installed_config, runtime_dir
@@ -26,6 +27,7 @@ ENTRIES = {'model': '1_train_model.py', 'schedule': '2_schedule_model.py'}
 _entry: ContextVar[str | None] = ContextVar('maintenance_training_entry', default=None)
 _worklist: ContextVar[dict | None] = ContextVar('maintenance_training_worklist', default=None)
 _resume: ContextVar[dict | None] = ContextVar('maintenance_training_resume', default=None)
+_promotion: ContextVar[dict | None] = ContextVar('maintenance_promotion', default=None)
 
 
 class TrainingPaused(BaseException):
@@ -96,6 +98,15 @@ def continuation(ticket):
         _resume.reset(token)
 
 
+@contextmanager
+def promotion_entry(plan):
+    token = _promotion.set(plan)
+    try:
+        yield
+    finally:
+        _promotion.reset(token)
+
+
 def checkpointed_script(kind):
     """Register only standard training entry points. A batch owns its own exit."""
     def decorate[**P, R](func: Callable[P, R]) -> Callable[P, R | TrainingPaused]:
@@ -117,6 +128,11 @@ def checkpointed_script(kind):
 
 def checkpoint_group():
     """Only explicit CLI entries and the managed worklist can hand off a fit."""
+    from . import training_scheduler
+
+    admission = training_scheduler.current()
+    if _promotion.get() is not None and admission and admission['mode'] == 'unified':
+        return 'research'
     if _entry.get() is None or not available() or os.environ.get('LEARNDL_AUTOFIX_ID'):
         return None
     managed = os.environ.get('LEARNDL_MANAGED_RUN')
@@ -126,6 +142,8 @@ def checkpoint_group():
 
 
 def checkpoint(trainer):
+    from . import training_scheduler
+
     group = checkpoint_group()
     if group is None:
         return
@@ -138,7 +156,8 @@ def checkpoint(trainer):
     config = trainer.config
     if config.module_type not in ('nn', 'boost') or config.is_null_model:
         return
-    request = maintenance_request(group)
+    priority_request = training_scheduler.pause_request()
+    request = maintenance_request(group) or priority_request
     if request is None:
         return
     Save.async_wait_all(raise_first_error=True, caller_name='maintenance checkpoint')
@@ -166,7 +185,8 @@ def checkpoint(trainer):
         'node': [date, number], 'completed': completed, 'created_at': time.time(),
         'retrained': [[int(d), int(n)] for d, n in trainer.record.retrained_models],
         'config_files': {str(path.relative_to(manager.base)): _checksum(path)
-                         for path in config.base_path.conf().glob('*.yaml')},
+                         for path in config.base_path.conf().glob('*.yaml')
+                         if _promotion.get() is None or path.name != 'lifecycle.yaml'},
         'start': config.beg_date, 'end': config.end_date,
         'stage': 0 if 'test' in config.queue_of_stages else 1,
         'short_test': config.short_test,
@@ -174,6 +194,13 @@ def checkpoint(trainer):
         'schedule_name': worklist['reference'] if worklist else (
             config.model_config.schedule_name or (_resume.get() or {}).get('schedule_name')),
     }
+    admission = training_scheduler.current()
+    if admission and (admission['mode'] == 'unified' or (_resume.get() or {}).get('training_priority')):
+        ticket['training_priority'] = admission['kind']
+        ticket['training_requested_at'] = admission['requested_at']
+        ticket['training_resource'] = admission['resource']
+    if promotion := _promotion.get():
+        ticket.update(entry='promotion', promotion_request=promotion, email=False)
     _save_ticket(ticket, ready=False)
     trainer.logger.note(f'Paused after {date}/{number} for {request["kind"]}. Resume ID: {run.run_id}')
     raise TrainingPaused(ticket)
@@ -190,41 +217,79 @@ def _save_ticket(ticket, *, ready):
 
 def _parent_released(store, ticket):
     if parent_id := ticket.get('managed_parent'):
-        from .recovery import exit_reason
+        from .recovery import RECOVERABLE_EXITS, exit_reason
 
         parent = store.get(parent_id)
         if parent.get('phase') in {'starting', 'running', 'terminating', 'finalizing'}:
             return False
         if not parent or parent.get('suppress_auto_recovery') or 'term_at' in parent:
             return False
-        return parent.get('returncode') == 75 or exit_reason(store, parent) == 'maintenance_pause'
+        outcome = exit_reason(store, parent)
+        return (parent.get('returncode') == 75 or outcome == 'maintenance_pause'
+                or bool(ticket.get('training_priority') and outcome in RECOVERABLE_EXITS))
     # A direct CLI call can return to a live menu. Only the synchronous script
     # scope needs to have exited, which is what publication above acknowledges.
     return True
 
 
-def candidate(store):
-    from .idle_worklist import version
+def candidates(store):
+    from .idle_worklist import OWNER, settings, version
+    from .recovery import recovery_plan
 
     folder = runtime_dir() / 'maintenance-resumes'
+    attempts = None
     for path in sorted(folder.glob('*.json'), key=lambda path: (path.stat().st_mtime_ns, path.name)):
         ticket = json.loads(path.read_text())
-        if not ticket['ready']:
-            continue
-        existing = store.get(ticket['id'])
-        if existing and not (existing['phase'] == 'deferred' and not existing.get('started_at')):
+        if not ticket['ready'] and not (ticket.get('training_priority') and ticket.get('managed_parent')):
             continue
         if not _parent_released(store, ticket):
             continue
+        identity = ticket['id']
+        existing = store.get(identity)
+        if ticket.get('training_priority'):
+            if attempts is None:
+                attempts = store.owned(OWNER)
+            latest = next((run for run in reversed(attempts) if run.get('resume_ticket_id') == identity), None)
+            existing = latest or existing
+        retry = {}
+        if existing:
+            if existing['phase'] == 'deferred' and not existing.get('started_at'):
+                identity = existing['id']
+                retry = {key: existing[key] for key in ('parent_run_id', 'retry_index', 'retry_not_before') if key in existing}
+            elif ticket.get('training_priority') and existing['phase'] == 'error':
+                decision = recovery_plan(store, existing, settings())
+                if not decision['retry']:
+                    continue
+                retry = {key: decision[key] for key in ('parent_run_id', 'retry_index', 'retry_not_before')}
+                identity = uuid.uuid5(uuid.NAMESPACE_URL, f'training-resume:{ticket["id"]}:{existing["id"]}').hex
+            else:
+                continue
         worklist = ticket['worklist']
         parent = store.get(ticket['managed_parent']) if ticket['managed_parent'] else {}
-        return {'id': ticket['id'], 'task_kind': TASK, 'task': worklist['name'] if worklist else
-                (ticket['schedule_name'] or Path(ticket['model_path']).name),
-                'schedule_reference': ticket['schedule_name'],
-                'version': version(worklist['revisions']) if worklist else ticket['id'],
-                'revisions': worklist['revisions'] if worklist else {},
-                'retry_index': parent.get('retry_index', 0), 'no_email': not ticket['email']}
-    return None
+        promotion = ticket.get('promotion_request')
+        automatic = worklist and worklist.get('automatic_source', bool(ticket.get('managed_parent')))
+        yield {'id': identity, 'task_kind': TASK,
+               'task': f'promotion:{promotion["name"]}' if promotion else (
+                   worklist['name'] if worklist else ticket['schedule_name'] or Path(ticket['model_path']).name),
+               'schedule_reference': ticket['schedule_name'],
+               'version': version(worklist['revisions']) if worklist else ticket['id'],
+               'revisions': worklist['revisions'] if worklist else {},
+               'training_priority': ticket.get('training_priority', 'promotion' if promotion else 'idle' if automatic else 'manual'),
+               'training_requested_at': ticket.get('training_requested_at', ticket.get('created_at', path.stat().st_mtime)),
+               'training_resource': ticket.get('training_resource', 'all'),
+               'retry_index': parent.get('retry_index', 0), 'no_email': not ticket['email'] and not promotion,
+               **({'resume_ticket_id': ticket['id']} if ticket.get('training_priority') else {}),
+               **retry,
+               **({'script_email_enabled': False} if promotion else {})}
+
+
+def candidate(store, *, unified=False):
+    waiting = candidates(store)
+    if not unified:
+        return next(waiting, None)
+    from .training_scheduler import PRIORITY
+    return min(waiting, key=lambda row: (PRIORITY[row['training_priority']], row['training_requested_at'], row['id']),
+               default=None)
 
 
 def cancel(store, ticket_id):
@@ -301,7 +366,21 @@ def execute(request):
     from src.res.model.workflow.execution import ScheduleWorklist
     from src.shared.dynamic_import import dynamic_modules
 
-    ticket = json.loads((runtime_dir() / 'maintenance-resumes' / f'{request["id"]}.json').read_text())
+    ticket_id = request.get('resume_ticket_id', request['id'])
+    ticket = json.loads((runtime_dir() / 'maintenance-resumes' / f'{ticket_id}.json').read_text())
+    if ticket['entry'] == 'promotion':
+        from . import model_lifecycle
+        from .runtime import RunStore
+        from src.res.model.util.lifecycle_promotion import still_requested
+        from src.res.model.workflow.worklist_state import AutomaticDeferred
+        if not still_requested(ticket['promotion_request']):
+            raise AutomaticDeferred('Paused lifecycle declaration or target was superseded')
+        validate_checkpoint(ticket, 'config_files')
+        validate_checkpoint(ticket)
+        with continuation(ticket):
+            return model_lifecycle.execute(
+                request | {'promotion_request': ticket['promotion_request']}, RunStore(),
+                expected_candidate=Path(ticket['model_path']))
     if ticket['worklist']:
         sys.argv = [str(ScheduleWorklist.SCHEDULE_SCRIPT)]
         return ScheduleWorklist(automatic=True, maintenance_ticket=ticket).run()

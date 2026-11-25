@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping
+from contextlib import nullcontext
 from pathlib import Path
 
 from .core import ModelPath
@@ -33,15 +34,17 @@ def registration(name, options):
     return dict(options) | {'name': name, 'base': str(source.base)}
 
 
-def plan(name, options):
+def plan(name, options, *, read_only=False):
     from src.proj import CALENDAR
     from .config import ModelConfig
 
     declared = registration(name, options)
     manager = ModelLifecycle(Path(declared['base']))
-    with manager.lock():
+    with (nullcontext() if read_only else manager.lock()):
         # Upgrade legacy directories from their saved configuration on first use.
         if not manager.file.exists():
+            if read_only:
+                return None
             saved = ModelConfig(ModelPath(manager.base), stage=2, resume=1, selection=0,
                                 short_test=False, vb_level='never')
             manager.prepare(saved)
@@ -70,6 +73,14 @@ def _check_request(source, request):
             or source.state.get('repair_generation', 0) != request['repair_generation']):
         raise ValueError(f'Lifecycle promotion target changed for {name}')
     return target
+
+
+def still_requested(request):
+    try:
+        _check_request(ModelLifecycle(Path(request['base'])), request)
+    except (ValueError, FileNotFoundError):
+        return False
+    return True
 
 
 def _new_candidate(source, request, target):
@@ -113,7 +124,9 @@ def _copy_weights(source, staged, request, target):
     _write(staged.manifest_file, copied)
 
 
-def execute(request, run):
+def execute(request, run, *, expected_candidate=None):
+    from src.automation.scheduling.training_maintenance import TrainingPaused
+
     source = ModelLifecycle(Path(request['base']))
     with source.lock():
         target = _check_request(source, request)
@@ -122,6 +135,8 @@ def execute(request, run):
         staged = ModelLifecycle(Path(recorded)) if recorded else None
         if staged is not None and staged.state.get('promotion_version') != request['version']:
             staged = None
+        if expected_candidate is not None and (staged is None or staged.base != expected_candidate):
+            raise ValueError(f'Paused lifecycle candidate changed: {expected_candidate}')
         if staged is not None and staged.state.get('status') == 'ready':
             source.save(upgrade_accepted=request['version'], upgrade_status='ready', upgrade_error=None)
             return ModelPath(staged.base).full_name
@@ -148,6 +163,10 @@ def execute(request, run):
                 _write(staged.base / 'snapshot/evaluation_manifest.json', evaluation)
                 staged.save(stage=request['stage'], status='ready', accepted_request=request['version'])
                 source.save(upgrade_accepted=request['version'], upgrade_status='ready', upgrade_error=None)
+            except TrainingPaused:
+                staged.save(status='upgrade_paused')
+                source.save(upgrade_status='paused', upgrade_error=None)
+                raise
             except BaseException as exc:
                 staged.save(status='upgrade_failed')
                 source.save(upgrade_status='failed', upgrade_error=f'{type(exc).__name__}: {exc}')

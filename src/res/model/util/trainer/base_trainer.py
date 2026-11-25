@@ -105,7 +105,7 @@ class BaseTrainer(BasePipeline):
     def __repr__(self): 
         return f'{self.__class__.__name__}(path={self.base_path})'
 
-    def init_config(self) -> None:
+    def init_config(self, *, before_prepare=None) -> None:
         from src.automation.scheduling.training_maintenance import configure_resume
 
         config_kwargs = dict(self._config_kwargs)
@@ -144,7 +144,10 @@ class BaseTrainer(BasePipeline):
         try:
             if not automatic_resume and schedule_resume and not linear_schedule and self._config.boost_head_config:
                 validate_saved_configs(self._config.base_path, boost_head=self._config.boost_head_config.model_module)
-            self._config.start_model()
+            if before_prepare is None:
+                self._config.start_model()
+            else:
+                self._config.start_model(before_prepare=before_prepare)
         finally:
             if self.training_run is not None:
                 selected_path = self._config.base_path.base
@@ -306,9 +309,22 @@ class BaseTrainer(BasePipeline):
     def main_process(self):
         """Main stage of data & fit & test"""
         from contextlib import ExitStack
+        from src.automation.scheduling import training_scheduler
+        from src.automation.scheduling.training_maintenance import checkpoint_group
+        from src.proj.util.script.fit_lock import FitLockNN
 
-        self.stage_setup()
+        def admit_fit(config):
+            if 'fit' in config.queue_of_stages:
+                resource = 'nn' if config.try_cuda and FitLockNN.enabled() else 'shared'
+                leases.enter_context(training_scheduler.admit(
+                    'manual', config.base_path.full_name, resource=resource, checkpointable=checkpoint_group() is not None))
+
         with ExitStack() as leases:
+            if training_scheduler.available():
+                self.stage_setup(before_prepare=admit_fit)
+            else:
+                self.stage_setup()
+
             leases.callback(self.data.clear_disk_batches)
             from src.proj.util.memory_tracker import ProcessMemoryTracker
             from src.automation.artifact_exchange.research import model_run
@@ -345,10 +361,13 @@ class BaseTrainer(BasePipeline):
             self._kwargs["resume"] = resume
         return self.main_process()
 
-    def stage_setup(self):
+    def stage_setup(self, *, before_prepare=None):
         """stage of setting up"""
         with self.logger.paragraph('Stage [Setup]' , 2):
-            self.init_config()
+            if before_prepare is None:
+                self.init_config()
+            else:
+                self.init_config(before_prepare=before_prepare)
             if self.training_run is not None:
                 self.training_run.configured(self.config)
             self.init_cores()

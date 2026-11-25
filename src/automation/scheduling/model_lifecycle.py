@@ -1,14 +1,14 @@
 """Schedule explicit model promotions through the supervised idle worker."""
 from __future__ import annotations
 
-from .recovery import record, recovery_plan
+from .recovery import evidence, record, recovery_plan
 
 __all__ = ['TASK', 'candidate', 'execute']
 
 TASK = 'model_promotion'
 
 
-def candidate(store, options):
+def candidate(store, options, *, observe=False):
     import portalocker
     from src.proj import Const
     from src.res.model.util import lifecycle_promotion
@@ -17,32 +17,38 @@ def candidate(store, options):
     declarations = Const.Model.strategies.get('lifecycle', {})
     if not isinstance(declarations, dict):
         message = 'strategy/model.yaml lifecycle must be a mapping'
-        store.event({'id': 'promotion-config-' + version({'error': message}), 'owner': OWNER,
-                     'task_kind': TASK}, 'configuration_error', message)
+        if not observe:
+            store.event({'id': 'promotion-config-' + version({'error': message}), 'owner': OWNER,
+                         'task_kind': TASK}, 'configuration_error', message)
         return None
     owned = store.owned(OWNER)
     for name, options_for_model in declarations.items():
         if isinstance(options_for_model, dict) and set(options_for_model) <= {'start', 'end'}:
             continue  # Production date bounds are handled by the nightly task.
         try:
-            plan = lifecycle_promotion.plan(name, options_for_model)
+            plan = (lifecycle_promotion.plan(name, options_for_model, read_only=True) if observe
+                    else lifecycle_promotion.plan(name, options_for_model))
         except portalocker.LockException:
             continue
         except Exception as exc:
             message = f'Lifecycle promotion {name}: {type(exc).__name__}: {exc}'
             key = version({'model': name, 'declaration': options_for_model, 'error': message})
-            store.event({'id': f'promotion-config-{key}', 'owner': OWNER, 'task_kind': TASK},
-                        'configuration_error', message)
+            if not observe:
+                store.event({'id': f'promotion-config-{key}', 'owner': OWNER, 'task_kind': TASK},
+                            'configuration_error', message)
             continue
         if plan is None:
             continue
         task = f'promotion:{name}'
         previous = next((run for run in reversed(owned) if run.get('task_kind') == TASK
                          and run['task'] == task and run['version'] == plan['version']
-                         and run['phase'] != 'deferred'), None)
+                         and (run['phase'] != 'deferred'
+                              or evidence(store, run['id']).get('script_outcome') == 'maintenance_paused')), None)
         recovery = {}
         if previous:
             if previous['phase'] in ACTIVE or previous['phase'] == 'complete':
+                continue
+            if evidence(store, previous['id']).get('script_outcome') == 'maintenance_paused':
                 continue
             decision = recovery_plan(store, previous, options)
             if not decision['retry']:
@@ -54,13 +60,22 @@ def candidate(store, options):
     return None
 
 
-def execute(request, store):
+def execute(request, store, *, expected_candidate=None):
     from src.res.model.model_module.application import ModelTrainer
     from src.res.model.util import lifecycle_promotion
+    from .training_maintenance import TrainingPaused, enqueue, promotion_entry, record_pause
 
     plan = request['promotion_request']
     try:
-        result = lifecycle_promotion.execute(plan, ModelTrainer.GO)
+        with promotion_entry(plan):
+            if expected_candidate is None:
+                result = lifecycle_promotion.execute(plan, ModelTrainer.GO)
+            else:
+                result = lifecycle_promotion.execute(plan, ModelTrainer.GO, expected_candidate=expected_candidate)
+    except TrainingPaused as pause:
+        enqueue(pause)
+        record_pause(store, request['id'])
+        return pause
     except BaseException as exc:
         outcome = 'interrupted' if isinstance(exc, (KeyboardInterrupt, SystemExit)) else 'error'
         record(store, request['id'], script_outcome=outcome, error=f'{type(exc).__name__}: {exc}')

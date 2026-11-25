@@ -73,7 +73,7 @@ class DirectCallHub(DirectCall):
 
     @classmethod
     def _source_code_entries(cls) -> list[tuple[str, Type[DirectCall], str]]:
-        from src.api.calls.app import ManageTaskSchedules
+        from src.api.calls.app import ManageTaskSchedules, ManageTrainingScheduler
         from src.api.calls.files import ProjectAutoFix
         from src.api.calls.preview import PreviewProjectFile
         from src.api.calls.source_code import CheckCodeIssues
@@ -82,6 +82,8 @@ class DirectCallHub(DirectCall):
         return [
             ('Watchdog / Schedule Management', ManageTaskSchedules,
              'Choose preview, status, install/update, or rollback; defaults to preview.'),
+            ('Training Scheduler Mode', ManageTrainingScheduler,
+             'Inspect training requests or switch training priority policy on this host.'),
             ('Test Code', TestCode,
              'Smoke tests for logging, quick training, and parallel factor calculation.'),
             ('Project AutoFix', ProjectAutoFix,

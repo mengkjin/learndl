@@ -59,7 +59,7 @@ def version(revisions: dict) -> str:
     return hashlib.sha256(json.dumps(revisions, sort_keys=True).encode()).hexdigest()
 
 
-def gpu_memory_percent() -> float:
+def gpu_memory_percent(*, releasing: set[int] | None = None) -> float:
     """Probe the GPU used as cuda:0; an ambiguous/unreadable device is not idle."""
     result = subprocess.run(['nvidia-smi', '--query-gpu=index,uuid,memory.used,memory.total',
                              '--format=csv,noheader,nounits'], capture_output=True, text=True,
@@ -70,10 +70,20 @@ def gpu_memory_percent() -> float:
                 (row[0] == visible or (visible.startswith('GPU-') and row[1].startswith(visible)))]
     if len(selected) != 1 or float(selected[0][3]) <= 0:
         raise ValueError('Cannot identify cuda:0 GPU memory')
-    return float(selected[0][2]) / float(selected[0][3]) * 100
+    _, device, used, total = selected[0]
+    releasable = 0.
+    if releasing:
+        processes = subprocess.run(['nvidia-smi', '--query-compute-apps=gpu_uuid,pid,used_gpu_memory',
+                                    '--format=csv,noheader,nounits'], capture_output=True, text=True,
+                                   timeout=10, check=True)
+        for line in processes.stdout.splitlines():
+            device_uuid, pid, memory = (value.strip() for value in line.split(','))
+            if device_uuid == device and int(pid) in releasing:
+                releasable += float(memory)
+    return max(float(used) - releasable, 0.) / float(total) * 100
 
 
-def idle_reason(options: dict, *, continuation: bool = False) -> str | None:
+def idle_reason(options: dict, *, continuation: bool = False, releasing: set[int] | None = None) -> str | None:
     from .maintenance_gate import configured, pending
     from .autofix_store import state_dir
     from .channels import enabled as channels_enabled
@@ -83,12 +93,12 @@ def idle_reason(options: dict, *, continuation: bool = False) -> str | None:
     from src.proj.util.script import FitLock
     if sys.platform != 'linux' or (not continuation and not MACHINE.cuda_server):
         return 'requires a CUDA server on Linux'
-    if FitLock.is_held():
+    if not releasing and FitLock.is_held():
         return 'fit lock occupied'
     if not MACHINE.cuda_server:
         return None
     try:
-        used = gpu_memory_percent()
+        used = gpu_memory_percent(releasing=releasing) if releasing else gpu_memory_percent()
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         return f'GPU probe unavailable: {exc}'
     if not 0 <= used < options.get('max_gpu_memory_percent', 20):
@@ -212,7 +222,11 @@ def _dispatch(options: dict, store: RunStore) -> dict:
     from . import model_lifecycle
     from . import rl_experiment as rl
     from . import training_maintenance as maintenance
+    from . import training_scheduler as scheduler
     with queue_lock():
+        mode, switching = scheduler.policy()
+        if switching:
+            return {'idle_worklist': 'waiting for training scheduler mode transition'}
         _defer_retired_requests(store)
         rl_request = rl.observe(store, throttle=True)
         # Superseded queues are deferrals, not attempted training. Running jobs
@@ -225,15 +239,20 @@ def _dispatch(options: dict, store: RunStore) -> dict:
                     store.put(run)
         worklist, schedules, missing = worklist_schedules(store) if options.get('enabled') else ({}, {}, [])
         diagnostics = {'missing_schedules': missing} if missing else {}
+        maintenance_enabled = maintenance.available()
+        blocker = maintenance.maintenance_request('research') if maintenance_enabled else None
+        if options.get('enabled') and mode in ('observe', 'unified'):
+            ready = not blocker and _promotion_resources_ready(options, store, scheduler.active_idle_runs())
+            upgrade = model_lifecycle.candidate(store, options, observe=mode == 'observe') if ready else None
+            scheduler.discover_promotion(upgrade, ready)
         if any(run['phase'] in ACTIVE for run in store.owned(OWNER)):
             rl.waiting(store, 'another idle training is queued or active')
             return {'idle_worklist': 'queued or active', **diagnostics}
-        maintenance_enabled = maintenance.available()
-        if maintenance_enabled and (request := maintenance.maintenance_request('research')):
-            reason = f'waiting for {request["kind"]}'
+        if blocker:
+            reason = f'waiting for {blocker["kind"]}'
             rl.waiting(store, reason)
             return {'idle_worklist': reason, **diagnostics}
-        resume = maintenance.candidate(store) if maintenance_enabled else None
+        resume = _continuation(store, mode) if maintenance_enabled else None
         if reason := idle_reason(options, continuation=bool(resume)):
             rl.waiting(store, reason)
             return {'idle_worklist': reason, **diagnostics}
@@ -243,12 +262,36 @@ def _dispatch(options: dict, store: RunStore) -> dict:
                    else model_request)
         from .factor_sequence import observe as observe_factor_sequence
         request = (observe_factor_sequence(store) if options.get('enabled') else None) or request
-        upgrade = model_lifecycle.candidate(store, options) if options.get('enabled') and resume is None else None
-        request = resume or upgrade or request
+        request = _prefer_promotion(store, options, mode, resume or request)
         if request is None:
             return {'idle_worklist': 'no eligible schedules', **diagnostics}
         _queue(request, store, options)
         return {'queued': request['task'], 'version': request['version'], **diagnostics}
+
+
+def _promotion_resources_ready(options, store, idle_runs):
+    try:
+        releasing = {proc.pid for identity in idle_runs for proc in members(store.get(identity))}
+    except (KeyError, OSError, psutil.Error, RuntimeError):
+        return False
+    return idle_reason(options, releasing=releasing) is None
+
+
+def _continuation(store, mode):
+    from . import training_maintenance as maintenance
+    return maintenance.candidate(store, unified=True) if mode == 'unified' else maintenance.candidate(store)
+
+
+def _prefer_promotion(store, options, mode, request):
+    from . import model_lifecycle, training_maintenance
+    from .training_scheduler import automatic_kind
+
+    if not options.get('enabled'):
+        return request
+    if request and (automatic_kind(request) != 'idle'
+                    or (mode != 'unified' and request.get('task_kind') == training_maintenance.TASK)):
+        return request
+    return model_lifecycle.candidate(store, options) or request
 
 
 def _queue(request, store, options):
@@ -314,32 +357,45 @@ def worker() -> int:
     from src.proj.util.script.script_lock import ScriptLock
     from .maintenance_gate import MaintenanceBusy, permit
     from . import training_maintenance as maintenance
-    from . import model_lifecycle
+    from . import model_lifecycle, training_scheduler as scheduler
     try:
         with (version_patch.business_lease(runtime_dir()) as code_fd,
               ScriptLock('idle_worklist_worker', timeout=1, wait_time=2), ExitStack() as leases):
             store = RunStore()
             with queue_lock():
+                mode, switching = scheduler.policy()
+                if switching:
+                    return 0
                 _defer_retired_requests(store)
                 options = settings()
                 if maintenance.available() and maintenance.maintenance_request('research'):
                     return 0
                 queued = [run for run in store.owned(OWNER) if run['phase'] == 'queued']
-                if (maintenance.available() and not any(run.get('task_kind') == maintenance.TASK for run in queued)
-                        and (resume := maintenance.candidate(store))):
-                    for ordinary in queued:
-                        store.put(dict(ordinary, phase='deferred', blocked_by='maintenance continuation has priority'))
+                if (maintenance.available() and (mode == 'unified'
+                        or not any(run.get('task_kind') == maintenance.TASK for run in queued))
+                        and (resume := _continuation(store, mode))):
                     _queue(resume, store, options)
-                    queued = [resume]
-                if not queued:
+                    queued.append(resume)
+                if mode == 'unified':
+                    queued.sort(key=lambda run: (scheduler.PRIORITY[scheduler.automatic_kind(run)],
+                                                 run.get('training_requested_at', run['queued_at']), run['id']))
+                else:
+                    queued.sort(key=lambda run: run.get('task_kind') != maintenance.TASK)
+                request = queued[0] if queued else None
+                if mode == 'unified' and request and scheduler.automatic_kind(request) == 'idle' and not idle_reason(options):
+                    preferred = _prefer_promotion(store, options, mode, request)
+                    if preferred is not request:
+                        _queue(preferred, store, options)
+                        request = preferred
+                if request is None:
                     return 0
-                request = queued[0]
-                others = [run for run in store.owned(OWNER) if run['phase'] in ACTIVE and run['id'] != request['id']]
+                others = [run for run in store.owned(OWNER) if run['phase'] in ACTIVE - {'queued'} and run['id'] != request['id']]
                 # Candidate must ignore its own queued row, while preserving failed attempts.
                 request['phase'] = 'deferred'
                 store.put(request)
                 if request.get('task_kind') == maintenance.TASK:
-                    next_candidate = maintenance.candidate(store)
+                    next_candidate = (next((row for row in maintenance.candidates(store) if row['id'] == request['id']), None)
+                                      if mode == 'unified' else maintenance.candidate(store))
                 elif request.get('task_kind') == 'factor_sequence':
                     from .factor_sequence import observe
                     next_candidate = observe(store) if options.get('enabled') else None
@@ -364,6 +420,15 @@ def worker() -> int:
                     request.update(phase='queued', blocked_by=str(exc))
                     store.put(request)
                     return 0
+                decision = leases.enter_context(scheduler.admit(
+                    scheduler.automatic_kind(request), request['task'], request_id=request['id'],
+                    requested_at=request.get('training_requested_at', request.get('queued_at')),
+                    resource=request.get('training_resource', 'all'), managed_run=request['id'],
+                    checkpointable=request.get('task_kind') not in ('factor_sequence', 'rl_experiment'), wait=False))
+                if decision is None:
+                    request.update(phase='queued', blocked_by='training scheduler admission')
+                    store.put(request)
+                    return 0
                 request.pop('blocked_by', None)
                 request.update(phase='starting', started_at=time.time())
                 store.put(request)
@@ -381,6 +446,12 @@ def child(run_id: str) -> int:
     os.close(gate)
     if ready != b'1':
         return 1
+    from . import training_scheduler
+    with training_scheduler.managed_context(run_id):
+        return _run_child(run_id)
+
+
+def _run_child(run_id: str) -> int:
     store = RunStore()
     request = store.get(run_id)
     from . import training_maintenance as maintenance
@@ -406,7 +477,8 @@ def child(run_id: str) -> int:
         return DEFERRED
     from . import model_lifecycle
     if request.get('task_kind') == model_lifecycle.TASK:
-        return model_lifecycle.execute(request, store)
+        result = model_lifecycle.execute(request, store)
+        return DEFERRED if isinstance(result, maintenance.TrainingPaused) else result
     if request.get('task_kind') == 'factor_sequence':
         from .factor_sequence import execute
         from .recovery import record

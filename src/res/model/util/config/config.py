@@ -1098,9 +1098,11 @@ class ModelConfig(BaseModelConfig):
         self.parser_select(self.options.selection)
         return self
 
-    def start_model(self):
+    def start_model(self, *, before_prepare=None):
         self.start_time = datetime.now()
         self.process_parser()
+        if before_prepare is not None:
+            before_prepare(self)
         from src.res.model.util.schedule_output import guard_model_source, saved_reference
 
         reference = self.model_config.schedule_name

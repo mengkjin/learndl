@@ -75,6 +75,25 @@ class IdleTest(unittest.TestCase):
         self.assertIn('retired', records[0]['blocked_by'])
         store.put.assert_called_once_with(records[0])
 
+    def test_discover_upgrade_while_worklist_runs_and_deduct_only_its_gpu_memory(self):
+        from src.automation.scheduling import model_lifecycle, training_scheduler
+
+        self.store.put({'id': 'busy', 'owner': idle.OWNER, 'phase': 'running'})
+        promotion = {'task': 'promotion:research', 'version': 'new'}
+        with (patch.object(training_scheduler, 'policy', return_value=('unified', False)),
+              patch.object(training_scheduler, 'active_idle_runs', return_value=('busy',)),
+              patch.object(training_scheduler, 'discover_promotion') as discover,
+              patch.object(idle, 'members', return_value=[SimpleNamespace(pid=123)]),
+              patch.object(model_lifecycle, 'candidate', return_value=promotion)):
+            self.assertEqual(idle.dispatch(self.options, self.store)['idle_worklist'], 'queued or active')
+            discover.assert_called_once_with(promotion, True)
+        with (patch.dict(os.environ, {'CUDA_VISIBLE_DEVICES': '0'}),
+              patch.object(idle.subprocess, 'run', side_effect=[
+                  SimpleNamespace(stdout='0, GPU-device, 800, 1000\n'),
+                  SimpleNamespace(stdout='GPU-device, 123, 640\nGPU-device, 456, 100\nGPU-other, 123, 500\n'),
+              ])):
+            self.assertAlmostEqual(idle.gpu_memory_percent(releasing={123}), 16.)
+
     def test_promotion_in_idle_lane_precedes_worklist_and_reports_accepted_identity(self):
         from src.automation.scheduling import model_lifecycle
         from src.proj import Const

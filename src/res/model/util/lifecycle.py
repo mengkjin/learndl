@@ -513,7 +513,7 @@ class ModelLifecycle:
                     state = manager.state
                     if state.get('promotion_version') and (
                             state.get('promotion_stage') != 'production'
-                            or state.get('status') in {'upgrading', 'upgrade_failed'}):
+                            or state.get('status') in {'upgrading', 'upgrade_failed', 'upgrade_paused'}):
                         raise ValueError(f'Promotion has not passed production acceptance: {active.full_name}')
                     # Previous versions could point a prediction registration at another directory.
                     redirected = (state.get('approved_model') not in (None, active.full_name)

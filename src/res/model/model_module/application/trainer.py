@@ -84,6 +84,7 @@ class ModelTrainer(BaseTrainer):
             Proj.exit_files.ban('detailed_alpha_data' , 'detailed_alpha_plot')
             from src.res.model.util.lifecycle import ModelLifecycle
             from src.proj.util.script.fit_lock import FitLock
+            from src.automation.scheduling import training_scheduler
             successes = []
             failures = []
             scan_errors = []
@@ -119,7 +120,10 @@ class ModelTrainer(BaseTrainer):
                     reported_wait = True
 
             guard = FitLock.production_guard(on_wait=on_wait) if production_notice else nullcontext(0.)
-            with guard as wait_seconds:
+            admission = (training_scheduler.admit('production', names, on_wait=on_wait) if production_notice
+                         else training_scheduler.admit('manual', names, resource='nn'))
+            with admission as admitted, guard as wait_seconds:
+                wait_seconds += (admitted or {}).get('wait_seconds', 0.)
                 batch_started = monotonic()
                 if production_notice:
                     message = f'Acquired training lock after {wait_seconds:.1f}s. Due models: {names}'

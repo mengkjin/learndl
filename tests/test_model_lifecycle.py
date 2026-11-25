@@ -592,7 +592,9 @@ class ModelLifecycleTest(unittest.TestCase):
                 lifecycle_promotion.execute(request, train)
             self.assertEqual(source_manager.state['upgrade_status'], 'failed')
             self.assertEqual(ModelLifecycle(attempts[0].base).state['status'], 'upgrade_failed')
-            candidate_name = lifecycle_promotion.execute(request, train)
+            with self.assertRaisesRegex(ValueError, 'Paused lifecycle candidate changed'):
+                lifecycle_promotion.execute(request, train, expected_candidate=self.root / 'wrong')
+            candidate_name = lifecycle_promotion.execute(request, train, expected_candidate=attempts[0].base)
             self.assertEqual(len(attempts), 2)
             self.assertEqual(attempts[0].base, attempts[1].base)
             self.assertEqual(candidate_name, attempts[0].full_name)

@@ -113,7 +113,8 @@ def recovery_plan(store: RunStore, run: dict, options: dict, *, now: float | Non
         return dict(retry=False, recovery_status='Stopped for installation; manual recovery required')
     if run.get('task_kind') == 'rl_experiment':
         return dict(retry=False, recovery_status='RL attempts require a committed configuration/rerun_mark change or a new explicit resume request')
-    if run.get('task_kind') == 'maintenance_resume' and not run.get('revisions'):
+    if (run.get('task_kind') == 'maintenance_resume' and not run.get('revisions')
+            and run.get('training_priority') != 'promotion'):
         return dict(retry=False, recovery_status='Standalone training requires manual recovery after an abnormal exit')
     now = time.time() if now is None else now
     reason = exit_reason(store, run)
