@@ -24,6 +24,12 @@ def latest_nightly_slot(now: float) -> float:
     return evening.timestamp()
 
 
+def manual_nightly_slot(root: Path, now: float) -> float:
+    """Use the open overnight window, or today's window for a daytime start."""
+    previous = latest_nightly_slot(now)
+    return previous if now < load_window(root, previous).cutoff else now
+
+
 def load_window(root: Path, scheduled_at: float) -> NightlyWindow:
     settings = yaml.safe_load((root / 'configs/automation/nightly.yaml').read_text())
     timezone = ZoneInfo(settings['timezone'])

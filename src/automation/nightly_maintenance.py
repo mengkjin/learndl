@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import polars as pl
 import portalocker
 
-from src.automation.scheduling.nightly_window import latest_nightly_slot, load_window
+from src.automation.scheduling.nightly_window import load_window, manual_nightly_slot
 from src.proj import Logger, MACHINE, PATH
 
 
@@ -76,9 +76,11 @@ def run():
     if MACHINE.name != 'mengkjin-server':
         raise RuntimeError('Nightly maintenance is configured for mengkjin-server')
     slot_text = os.environ.get('LEARNDL_NIGHTLY_SLOT')
-    slot = latest_nightly_slot(time.time()) if slot_text is None else float(slot_text)
+    slot = manual_nightly_slot(PATH.main, time.time()) if slot_text is None else float(slot_text)
     window = load_window(PATH.main, slot)
     cutoff = float(os.environ.get('LEARNDL_NIGHTLY_CUTOFF', window.cutoff))
+    Logger.stdout(f'Nightly maintenance checkpoint cutoff {datetime.fromtimestamp(cutoff, ZoneInfo("Asia/Shanghai"))}',
+                  vb_level=0)
     if set(window.tasks) - HANDLERS.keys() or len(set(window.tasks)) != len(window.tasks):
         raise ValueError('Unknown or duplicate nightly maintenance tasks')
 

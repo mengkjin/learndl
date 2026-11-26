@@ -6,6 +6,10 @@
 # email: False
 # mode: shell
 
+if __name__ == '__main__':
+    from src.automation.scheduling.runner import supervise_nightly_script
+    supervise_nightly_script('rcquant_sec_none')
+
 from src.proj import CALENDAR
 from src.proj.util.script import ScriptTool
 

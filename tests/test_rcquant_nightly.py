@@ -15,7 +15,7 @@ import polars as pl
 import torch
 
 from src.automation import nightly_maintenance
-from src.automation.scheduling.nightly_window import latest_nightly_slot, load_window
+from src.automation.scheduling.nightly_window import latest_nightly_slot, load_window, manual_nightly_slot
 from src.automation.scheduling import runtime
 from src.automation.scheduling.calendar_lanes import eligibility
 from src.data.download.other_source.rcquant import sec_native_revision as native
@@ -60,6 +60,27 @@ class NightlyTest(unittest.TestCase):
                 key = f'{name}:{int(scheduled // 60)}'
                 self.assertEqual(eligibility(name, key, config, cutoff - 1)[0], 'ready')
                 self.assertEqual(eligibility(name, key, config, cutoff)[0], 'expired')
+
+    def test_manual_daytime_and_overnight_cutoffs(self):
+        directory = self.root / 'configs/automation'
+        directory.mkdir(parents=True)
+        def stamp(day, hour, minute=0):
+            return datetime(2026, 11, day, hour, minute, tzinfo=ZoneInfo('Asia/Shanghai')).timestamp()
+        for end, start, expected in [
+            ('00:00', stamp(26, 9), stamp(27, 0)),
+            ('00:00', stamp(26, 23), stamp(27, 0)),
+            ('01:30', stamp(27, 0, 30), stamp(27, 1, 30)),
+            ('01:30', stamp(27, 9), stamp(28, 1, 30)),
+            ('23:00', stamp(26, 23, 5), stamp(26, 23)),
+        ]:
+            with self.subTest(end=end, start=start):
+                (directory / 'nightly.yaml').write_text(
+                    f"timezone: Asia/Shanghai\ncutoff: '{end}'\ngrace_minutes: 10\ntasks: []\n"
+                )
+                slot = manual_nightly_slot(self.root, start)
+                window = load_window(self.root, slot)
+                self.assertEqual(window.cutoff, expected)
+                self.assertEqual(window.hard_deadline, expected + 600)
 
     def test_supervisor_force_stops_only_the_expired_nightly_session(self):
         store = Mock()

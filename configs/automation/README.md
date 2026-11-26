@@ -37,6 +37,14 @@ compatible entrypoint. The configured handlers, cutoff and grace period are
 read from `configs/automation/nightly.yaml` on each run. The default stops
 starting work at midnight and forcibly ends a managed run at 00:10.
 
+For an immediate foreground run on the server, execute
+`PYTHONPATH=. .venv/bin/python scripts/1_autorun/8_nightly_maintenance.py` from the checkout,
+or launch `8_nightly_maintenance.py` in the Task Center. The manual run uses
+the same supervisor, execution lock, checkpoints and cutoff as the timer.
+A daytime start uses that evening's cutoff. If the run is active at 21:00,
+the calendar records the slot as skipped. If it has finished, the timer runs
+normally and checks the saved progress.
+
 From 2026-11-25, the server's `daily_update` archives the dated RQData stock
 universe and that day's `get_ex_factor` and `get_split` events before the
 RCQuant minute download. It publishes the three files in

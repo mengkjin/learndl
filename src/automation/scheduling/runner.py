@@ -6,6 +6,7 @@ __all__ = [
     'run_deferred',
     'deferred_worker',
     'inherited_lock',
+    'supervise_nightly_script',
     'legacy',
     'main',
 ]
@@ -21,7 +22,7 @@ from pathlib import Path
 import psutil
 
 from .config import ENTRYPOINTS, installed_config, runtime_dir
-from .nightly_window import NIGHTLY_ENTRYPOINTS, latest_nightly_slot, load_window
+from .nightly_window import NIGHTLY_ENTRYPOINTS, latest_nightly_slot, load_window, manual_nightly_slot
 from .runtime import RunStore, members
 
 from src.automation import version_patch
@@ -113,8 +114,37 @@ def deferred_worker() -> int:
     return 0
 
 
+def supervise_nightly_script(entrypoint: str) -> None:
+    """Only the registered child continues into ScriptTool. Direct launches supervise that child."""
+    if entrypoint not in NIGHTLY_ENTRYPOINTS:
+        raise ValueError(f'Unknown nightly entrypoint {entrypoint}')
+    if inherited_lock('rcquant_sec_backfill'):
+        return
+    from src.proj import MACHINE, PATH
+    from .config import load_config
+    from .maintenance_gate import MaintenanceBusy, permit
+    if MACHINE.name != 'mengkjin-server':
+        raise RuntimeError('Nightly maintenance is configured for mengkjin-server')
+    try:
+        with version_patch.business_lease(runtime_dir()) as fd, permit(blocking=False, task_class='independent'):
+            config = installed_config() or {}
+            # Honor the active policy during the one-time timer rename.
+            registered = config.get('tasks', {})
+            task_id = next((name for name in (entrypoint, *NIGHTLY_ENTRYPOINTS) if name in registered), None)
+            if task_id is None:
+                config = load_config(PATH.main / 'configs/automation', MACHINE.name)
+                task_id = 'nightly_maintenance'
+            slot = manual_nightly_slot(PATH.main, time.time())
+            code = _run(task_id, code_fd=fd, config_snapshot=config, scheduled_at=slot, script_args=sys.argv[1:])
+    except (MaintenanceBusy, version_patch.CodeBusy) as exc:
+        logger.info('Manual nightly maintenance deferred: %s', exc)
+        code = 75
+    raise SystemExit(code)
+
+
 def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: str | None = None,
-         config_snapshot: dict | None = None, scheduled_at: float | None = None) -> int:
+         config_snapshot: dict | None = None, scheduled_at: float | None = None,
+         script_args: list[str] | None = None) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
     config = config_snapshot or installed_config()
@@ -172,7 +202,8 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
         env.update(LEARNDL_MANAGED_RUN=run_id, LEARNDL_LOCK_FD=str(lock_fd),
                    LEARNDL_LOCK_GROUP=task['lock_group'], LEARNDL_GATE_FD=str(read_fd), **nightly_env)
         script = str(PATH.main / ENTRYPOINTS[task['entrypoint']])
-        command = [sys.executable, '-m', 'src.automation.scheduling.runner', '_child', script, *task['args']]
+        arguments = ['--source=bash', '--email=1', *task['args']] if script_args is None else script_args
+        command = [sys.executable, '-m', 'src.automation.scheduling.runner', '_child', script, *arguments]
         from .maintenance_gate import pass_fds, child_env
         env.update(child_env())
         child = subprocess.Popen(command, cwd=PATH.main, env=env, start_new_session=True,
@@ -188,13 +219,19 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
             os.write(write_fd, b'1')  # Child may only execute after durable registration.
         finally:
             os.close(write_fd)
-        try:
-            returncode = child.wait(timeout=None if hard_deadline is None else max(0., hard_deadline - time.time()))
-        except subprocess.TimeoutExpired:
-            from .runtime import inspect_timeouts
-            inspect_timeouts(store, run_id=run_id)
-            returncode = child.wait()
+        wait = None if hard_deadline is None else max(0., hard_deadline - time.time())
+        while True:
+            try:
+                returncode = child.wait(timeout=wait)
+                break
+            except subprocess.TimeoutExpired:
+                from .runtime import inspect_timeouts
+                inspect_timeouts(store, run_id=run_id)
+                wait = 1  # Retry verified termination until this session has exited.
         while members(run_record):
+            if hard_deadline is not None and time.time() >= hard_deadline:
+                from .runtime import inspect_timeouts
+                inspect_timeouts(store, run_id=run_id)
             time.sleep(1)  # Keep the execution lock while descendants remain.
         # Watchdog is the single finalizer: do not overwrite termination intent.
         with store.connect() as connection:
@@ -263,7 +300,7 @@ def main() -> int:
         if ready != b'1':
             return 1
         os.set_inheritable(int(os.environ['LEARNDL_LOCK_FD']), True)
-        os.execv(sys.executable, [sys.executable, str(Path(sys.argv[2])), '--source=bash', '--email=1', *sys.argv[3:]])
+        os.execv(sys.executable, [sys.executable, str(Path(sys.argv[2])), *sys.argv[3:]])
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=['run'])
     parser.add_argument('task')

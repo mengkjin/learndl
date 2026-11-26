@@ -174,6 +174,53 @@ class ChannelsTest(unittest.TestCase):
         with self.store.connect() as db:
             self.assertEqual(db.execute("SELECT state FROM scheduled WHERE task='daily_update'").fetchone()[0], 'skipped_overlap')
 
+    def test_manual_nightly_holds_old_timer_lock_until_hard_deadline(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import signal
+        import sys
+        from src.proj import MACHINE
+        from src.proj.util.script.script_lock import ScriptLockMultiple
+        from src.automation.scheduling.nightly_window import NightlyWindow
+
+        task = 'rcquant_sec_none'  # Installed timer still uses the previous name.
+        self.config['tasks'][task] = dict(channel='independent', entrypoint=task, lock_group='rcquant_sec_backfill',
+                                         enabled=True, overlap='skip', timeout_seconds=None, args=[])
+        script = self.root / 'probe.py'
+        script.write_text("from pathlib import Path\nimport json, os, sys, time\n"
+                          "Path(__file__).with_suffix('.json').write_text(json.dumps("
+                          "[sys.argv[1:], os.environ['LEARNDL_NIGHTLY_CUTOFF']]))\ntime.sleep(30)\n")
+        args = ['--source=app', '--task_id=manual-test']
+        with (patch.object(MACHINE, 'name', 'mengkjin-server'),
+              patch.object(sys, 'argv', [str(script), *args]),
+              patch.object(runner, 'installed_config', return_value=self.config),
+              patch.object(runner, 'RunStore', return_value=self.runs),
+              patch.object(runner, 'runtime_dir', return_value=self.base),
+              patch.object(maintenance_gate, 'state_dir', return_value=self.control),
+              patch.object(runner.version_patch, 'admission_reason', return_value=None),
+              patch.object(ScriptLockMultiple, 'LOCK_DIR', self.base / 'locks'),
+              patch.dict(runner.ENTRYPOINTS, {task: str(script)}),
+              ThreadPoolExecutor(max_workers=1) as pool):
+            cutoff = time.time() + 4
+            with patch.object(runner, 'load_window', return_value=NightlyWindow(cutoff, cutoff + 1, ())):
+                execution = pool.submit(runner.supervise_nightly_script, 'nightly_maintenance')
+                while not script.with_suffix('.json').exists():
+                    if execution.done():
+                        execution.result()
+                    self.assertLess(time.time(), cutoff, 'fixture did not start before cutoff')
+                    time.sleep(.02)
+                self.assertEqual(json.loads(script.with_suffix('.json').read_text()), [args, str(cutoff)])
+                calendar_lanes.register(task)
+                with self.store.connect() as db:
+                    self.assertEqual(db.execute('SELECT state FROM scheduled WHERE task=?', (task,)).fetchone(),
+                                     ('skipped_overlap',))
+                self.assertFalse(self.store.scheduled())
+                with self.assertRaises(SystemExit) as stopped:
+                    execution.result(timeout=12)
+                self.assertEqual(stopped.exception.code, 128 + signal.SIGKILL)
+                run, = self.runs.active()
+                self.assertEqual(run['hard_deadline'], cutoff + 1)
+                self.assertGreaterEqual(run['kill_at'], run['hard_deadline'])
+
     def test_waiting_requests_coalesce_without_duplicate_execution(self):
         for slot in ('100', '101'):
             with patch.dict(os.environ, {'LEARNDL_SCHEDULE_SLOT': slot}):
