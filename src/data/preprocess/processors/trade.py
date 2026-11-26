@@ -7,7 +7,8 @@ __all__ = [
     'PrePro_15mraw',
     'PrePro_30m',
     'PrePro_30mcont',
-    'PrePro_60m',
+    'PrePro_15mt',
+    'PrePro_30mt',
     'PrePro_week',
 ]
 import numpy as np
@@ -144,19 +145,51 @@ class PrePro_30mcont(_VwapInfClosePreProcessor):
         db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
         return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
     
-class PrePro_60m(_VwapInfClosePreProcessor):
-    """60-minute bar preprocessor (key: ``'60m'``).  Same normalisation as ``PrePro_15m``."""
-    AllowInactive : bool = TRADE_ALLOW_INACTIVE
+def standardize_num_trades(counts: torch.Tensor) -> torch.Tensor:
+    """Normalize each bar using the previous 20 sessions of that same bar."""
+    logged = torch.where(counts >= 0, counts.double().log1p(), torch.nan)
+    valid = logged.isfinite()
+    logged = logged.masked_fill(~valid, 0.)
+
+    def prior_sum(values):
+        cumulative = torch.nn.functional.pad(values.cumsum(dim=1), (0, 0, 1, 0))
+        previous = cumulative[:, :-1]
+        return previous - torch.nn.functional.pad(previous, (0, 0, 20, 0))[:, :previous.shape[1]]
+
+    n = prior_sum(valid.double())
+    mean = prior_sum(logged) / n.clamp_min(1)
+    variance = (prior_sum(logged.square()) / n.clamp_min(1) - mean.square()).clamp_min(0)
+    z = torch.where(variance > 1e-12, (logged - mean) / variance.sqrt(), 0.)
+    return z.masked_fill(~valid | (n < 10), torch.nan).to(counts.dtype)
+
+
+class _TradeCount:
+    CalculationWindow = 21
+    bar_key: str
+
     def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        return {
-            '60m' : BlockLoader('trade_ts', '60min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
-            'day' : BlockLoader('trade_ts', 'day', ['turn_fl', 'preclose'], **kwargs)}
+        loaders = super().block_loaders(**kwargs)
+        loader = loaders[self.bar_key]
+        loader.feature = [*loader.feature, 'num_trades']
+        return loaders
 
     def process(self , blocks):
-        data_block = blocks['60m']
-        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
-        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
+        bars = super().process(blocks).align_feature(self.final_feat(), inplace=True)
+        bars.values[..., -1] = standardize_num_trades(bars.values[..., -1])
+        return bars
+
+    def final_feat(self):
+        return [*super().final_feat(), 'num_trades']
+
+
+class PrePro_15mt(_TradeCount, PrePro_15m):
+    """15-minute features with standardized trade counts."""
+    bar_key = '15m'
+
+
+class PrePro_30mt(_TradeCount, PrePro_30m):
+    """30-minute features with standardized trade counts."""
+    bar_key = '30m'
     
 class PrePro_week(_VwapInfClosePreProcessor):
     """

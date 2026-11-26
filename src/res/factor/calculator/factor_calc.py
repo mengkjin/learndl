@@ -364,7 +364,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
 
     def update_periodic_stats(
         self , stats_type : Base.lit.FactorStatsPeriod , dates : Base.alias.DateType , 
-        overwrite = False
+        overwrite = False, *, save=None
     ) -> None:
         """update factor daily or weekly stats"""
         target_dates = self.stats_target_dates()[stats_type]
@@ -383,7 +383,10 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         new_df['grouping_version'] = GROUPING_VERSION
         df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
             sort_values('date').reset_index(drop = True)
-        DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
+        if save is None:
+            DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
+        else:
+            save(df, f'factor_stats_{stats_type}', self.db_key)
         self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
 
     def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:

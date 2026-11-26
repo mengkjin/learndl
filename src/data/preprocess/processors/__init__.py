@@ -11,7 +11,8 @@ from .trade import (
     PrePro_15m as PrePro_15m,
     PrePro_30m as PrePro_30m,
     PrePro_30mcont as PrePro_30mcont,
-    PrePro_60m as PrePro_60m,
+    PrePro_15mt as PrePro_15mt,
+    PrePro_30mt as PrePro_30mt,
     PrePro_week as PrePro_week,
 )
 from .risk import PrePro_style as PrePro_style, PrePro_indus as PrePro_indus

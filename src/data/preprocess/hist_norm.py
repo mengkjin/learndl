@@ -17,8 +17,8 @@ from src.data.util import DataBlock
 
 __all__ = ['PreProHistNorm']
 
-HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , '15m' , '30m')
-HistNorm : tuple[str,...] = ('day' , '30mcont', '15m')
+HistNormTasks : tuple[str,...] = ('day' , 'week' , '30mcont' , '15m' , '30m', '15mt', '30mt')
+HistNorm : tuple[str,...] = ('day' , '30mcont', '15m', '15mt', '30mt')
 DivLast : tuple[str,...] = ('day' , '30mcont')
 SequenceLens : dict[str,int] = defaultdict(lambda: 1) | {'day': 60 , '30mcont': 30}
 SequenceSteps : dict[str,int] = defaultdict(lambda: 1) 
@@ -91,6 +91,12 @@ class PreProHistNorm:
         if key not in HistNormTasks: 
             return None
 
+        trade_count = key in ('15mt', '30mt')
+        if trade_count:
+            if block.feature[-1] != 'num_trades':
+                raise ValueError(f'{key}: expected num_trades as the last feature')
+            # Trade counts have already been normalized against trailing sessions.
+            block = block.align_feature(block.feature[:-1])
         seq_len = SequenceLens.get(key , 1)
         seq_step = SequenceSteps.get(key , 1)
 
@@ -139,6 +145,9 @@ class PreProHistNorm:
             raise ValueError(f'{key}: non-finite historical norm; valid samples='
                              f'{int((nan_sample == 0).sum())}, range={start}..{end}; not saving')
         
+        if trade_count:
+            avg_x = torch.cat([avg_x, torch.zeros_like(avg_x[:, :1])], dim=1)
+            std_x = torch.cat([std_x, torch.ones_like(std_x[:, :1])], dim=1)
         data = cls(avg_x , std_x)
         data.save(key)
         return data

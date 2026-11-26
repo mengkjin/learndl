@@ -151,12 +151,21 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
         run_record = {'id': run_id, 'task': task_id, 'phase': 'starting', 'started_at': time.time(),
                       'timeout_seconds': task['timeout_seconds'], 'uid': os.getuid(), 'lock_group': task['lock_group'],
                       'request_id': request_id, 'schedule_config': dict(task), 'channel': task.get('channel', 'data')}
+        hard_deadline = None
+        nightly_env = {}
+        if task['entrypoint'] in ('nightly_maintenance', 'rcquant_sec_none'):
+            from .nightly_window import load_window
+            slot = int(request_id.rsplit(':', 1)[1]) * 60 if request_id else time.time()
+            window = load_window(PATH.main, slot)
+            hard_deadline = window.hard_deadline
+            run_record['hard_deadline'] = hard_deadline
+            nightly_env.update(LEARNDL_NIGHTLY_SLOT=str(slot), LEARNDL_NIGHTLY_CUTOFF=str(window.cutoff))
         store.put(run_record)
         read_fd, write_fd = os.pipe()
         lock_fd = lock.acquired_locks[0].fileno()
         env = os.environ.copy()
         env.update(LEARNDL_MANAGED_RUN=run_id, LEARNDL_LOCK_FD=str(lock_fd),
-                   LEARNDL_LOCK_GROUP=task['lock_group'], LEARNDL_GATE_FD=str(read_fd))
+                   LEARNDL_LOCK_GROUP=task['lock_group'], LEARNDL_GATE_FD=str(read_fd), **nightly_env)
         script = str(PATH.main / ENTRYPOINTS[task['entrypoint']])
         command = [sys.executable, '-m', 'src.automation.scheduling.runner', '_child', script, *task['args']]
         from .maintenance_gate import pass_fds, child_env
@@ -174,7 +183,12 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
             os.write(write_fd, b'1')  # Child may only execute after durable registration.
         finally:
             os.close(write_fd)
-        returncode = child.wait()
+        try:
+            returncode = child.wait(timeout=None if hard_deadline is None else max(0., hard_deadline - time.time()))
+        except subprocess.TimeoutExpired:
+            from .runtime import inspect_timeouts
+            inspect_timeouts(store, run_id=run_id)
+            returncode = child.wait()
         while members(run_record):
             time.sleep(1)  # Keep the execution lock while descendants remain.
         # Watchdog is the single finalizer: do not overwrite termination intent.

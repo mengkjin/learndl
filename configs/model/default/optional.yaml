@@ -41,6 +41,8 @@ input.filter.secid: null
 input.filter.date: null
 input.data.prenorm:
   15m: {divlast: false, histnorm: false, channelnorm: false}
+  15mt: {divlast: false, histnorm: false, channelnorm: false}
+  30mt: {divlast: false, histnorm: false, channelnorm: false}
   day: {'divlast' : True  , 'histnorm' : True}
   week: {'channelnorm' : True}
   30m: {'channelnorm' : False}

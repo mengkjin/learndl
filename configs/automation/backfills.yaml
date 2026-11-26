@@ -1,5 +1,5 @@
 schedules:
-  rcquant_sec_none:
-    task: rcquant_sec_none
+  nightly_maintenance:
+    task: nightly_maintenance
     days: daily
     times: ['21:00']

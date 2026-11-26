@@ -1,0 +1,5 @@
+timezone: Asia/Shanghai
+cutoff: '00:00'
+grace_minutes: 10
+tasks:
+  - rcquant_minutes

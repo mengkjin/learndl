@@ -7,12 +7,12 @@ import torch
 from src.data import DataBlock
 from src.data.preprocess.core import TradePreProcessor
 from src.data.preprocess.processors.trade import (
-    PrePro_15m, PrePro_30m, PrePro_60m, PrePro_30mcont, PrePro_week,
+    PrePro_15m, PrePro_30m, PrePro_30mcont, PrePro_week,
 )
 
 FEATURES = ['open', 'close', 'high', 'low', 'vwap', 'turn_fl']
-BARS = {'15m': 16, '30m': 8, '60m': 4, '30mcont': 8, 'week': 5}
-PROCESSORS = {'15m': PrePro_15m, '30m': PrePro_30m, '60m': PrePro_60m,
+BARS = {'15m': 16, '30m': 8, '30mcont': 8, 'week': 5}
+PROCESSORS = {'15m': PrePro_15m, '30m': PrePro_30m,
               '30mcont': PrePro_30mcont, 'week': PrePro_week}
 
 

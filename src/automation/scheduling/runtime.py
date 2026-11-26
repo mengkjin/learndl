@@ -308,6 +308,8 @@ def timeout_message(run: dict) -> str:
         return f"Stopped by {run['operator_stop']}; automatic recovery disabled"
     if run.get('installation_stop'):
         return f"Stopped for installation {run['installation_stop']}; automatic recovery disabled"
+    if run.get('hard_deadline') is not None:
+        return f'Nightly maintenance forcibly stopped after its checkpoint grace period; run {run["id"]}'
     limit = run.get('progress_timeout_seconds') or run.get('timeout_seconds')
     condition = 'without output' if run.get('progress_timeout_seconds') else 'elapsed'
     return f'TIMEOUT: exceeded {limit} seconds {condition}; run {run["id"]}'
@@ -316,6 +318,8 @@ def timeout_message(run: dict) -> str:
 def timeout_due(run: dict, now: float) -> bool:
     if 'term_at' in run:
         return True
+    if run.get('hard_deadline') is not None:
+        return now >= run['hard_deadline']
     if limit := run.get('progress_timeout_seconds'):
         last = run['started_at']
         if run.get('log_path'):
@@ -363,11 +367,14 @@ def _finish_production_event(store: RunStore, run: dict, detail: str) -> None:
         store.event(run, 'production_finished', detail)
 
 
-def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None) -> dict:
+def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None,
+                     run_id: str | None = None) -> dict:
     store = store or RunStore()
     now = time.time() if now is None else now
     checked = 0
     for run in store.active():
+        if run_id is not None and run['id'] != run_id:
+            continue
         if run['phase'] == 'starting':
             # No child exists until runner has persisted its identity. A
             # crashed launcher before that point cannot be safely signalled.
@@ -427,7 +434,8 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
             if 'term_at' not in run:
                 run.update(phase='terminating', term_at=now)
                 store.put(run)  # Persist intent before sending any signal.
-            if now - run['term_at'] < 30:
+            hard_timeout = now >= (run.get('hard_deadline') or float('inf'))
+            if not hard_timeout and now - run['term_at'] < 30:
                 signal_members(run, processes, signal.SIGTERM)
             else:
                 run['kill_at'] = run.get('kill_at', now)
@@ -438,6 +446,8 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None)
         except (psutil.Error, OSError, RuntimeError) as exc:
             if timeout_due(run, now):
                 store.event(run, 'failed', f'Timeout termination could not be verified/completed: {exc}')
+    if run_id is not None:
+        return {'checked_runs': checked}
     # Repair event persistence after a crash between storing state and inserting mail.
     for run in store.owned('idle_worklist'):
         if run.get('pid'):

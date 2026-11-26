@@ -30,11 +30,12 @@ through the Watchdog Installer and verify it in `status` after installation.
 
 The original RCQuant missing-minute backfill is complete and
 `rcquant_sec_backfill` remains available for manual use. The server schedule
-`rcquant_sec_none` runs at 21:00 Asia/Shanghai and shares its execution lock.
-It prepares corporate actions and stock archives dated 2007-01-01 through
-2026-11-24 and rebuilds the minute DataBlocks after the archives are complete.
-Run `plan --diff`, `apply` and `status` from the deployed checkout
-to publish and verify the timer when adding it to an installation.
+`nightly_maintenance` runs at 21:00 Asia/Shanghai and uses the existing
+RCQuant execution lock. Run `plan --diff`, `apply` and `status` on the server
+once to replace the old `rcquant_sec_none` timer. The old script remains a
+compatible entrypoint. The configured handlers, cutoff and grace period are
+read from `configs/automation/nightly.yaml` on each run. The default stops
+starting work at midnight and forcibly ends a managed run at 00:10.
 
 From 2026-11-25, the server's `daily_update` archives the dated RQData stock
 universe and that day's `get_ex_factor` and `get_split` events before the
@@ -64,17 +65,23 @@ OHLC against Tushare and include the previous gate result when available.
 The archive format marker and file checksums govern the source used for repair.
 Interrupted publications resume from their staged files when
 using the same repair version. A quota interruption resumes on the next
-scheduled evening. Once all dates are published, the task rebuilds the `fit`
-and `predict` DataBlocks for `15m`, `15mraw`, `30m`, `30mcont` and `60m`. Each
-DataBlock has its own checkpoint and the fit processors refresh supported
-normalisation statistics.
+scheduled evening. The first handler checks the dedicated 2026-06-08 revision
+before resuming ordinary history. It reuses validated full-market native download
+batches and records volume discrepancies under `native_20260608_v1`. Raw minutes
+and all six period files must be verified before dependent work can start.
+
+After the full history is ready, the handler replays minute-derived risk tables,
+minute characteristics, factors and factor statistics, then rebuilds affected
+`fit` and `predict` blocks in checkpointed monthly shards. `15mt` and `30mt`
+add standardized trade counts to the corresponding six-feature blocks.
+The replay removes the retired `60m` model-input cache and its normalization
+statistics. The `trade_ts/60min` table remains a published quote period.
 
 The old built-in `--config-dir runs/scheduling` resolves to this directory;
 custom config directories retain their original meaning. Old Python entrypoints
 and shell install commands remain supported, including services installed before
 this reorganization. Apply publishes new startup commands and bootstrap bytes.
-Service names, scheduler versions, runtime directories, request identities and
-lock files do not change. Do not copy, clear or relocate ledgers during this upgrade.
+Keep the runtime directories, request identities and lock files in place.
 
 Run the installer **as the ordinary server account**, from the deployed project.
 It uses sudo only to install the fixed project units and reload/enable timers.
