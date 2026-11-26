@@ -408,8 +408,7 @@ class MigrationTest(unittest.TestCase):
             path.mkdir(parents=True)
             return {'path': str(path), 'dates': 1, 'last': self.date}
 
-        with patch('src.proj.util.script.script_lock.ScriptLockMultiple'), \
-                patch.object(self.job, 'rebuild_minute_block', side_effect=build) as rebuild:
+        with patch.object(self.job, 'rebuild_minute_block', side_effect=build) as rebuild:
             self.job.rebuild_datablocks([self.date])
             self.job.rebuild_datablocks([self.date])
         self.assertEqual([call.args for call in rebuild.call_args_list], [

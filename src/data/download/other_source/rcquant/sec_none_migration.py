@@ -1,7 +1,7 @@
 """Resumable conversion of existing RCQuant stock bars to native price and volume."""
 from __future__ import annotations
 
-from contextlib import ExitStack, closing
+from contextlib import closing
 from datetime import date as calendar_date, datetime, timedelta
 from hashlib import file_digest, sha256
 from itertools import batched
@@ -696,41 +696,37 @@ class Migration:
         from src.data.util import DataBlock
         from src.proj.db.io.mmap import ArrayMemoryMap
 
-        processor = PrePros.get_processor(key, frame, vb_level=1)
-        if frame == 'fit':
-            processor.DateChunkYears = 1
-        canonical = DataBlock.path_preprocess(key, frame, find_if_not_exists=False)
-        interrupted = canonical.with_name(f'{canonical.name}.old')
-        if interrupted.is_dir() and not canonical.exists():
-            interrupted.rename(canonical)
-        original = DataBlock.path_preprocess(key, frame)
-        block = processor.load_with_extension(reconstruct=True)
-        if block.empty or block.last_meaningful_date < block.date[0]:
-            raise ValueError(f'RCQuant {frame}/{key}: empty minute DataBlock')
+        with DataBlock.preprocess_lock(key, frame):
+            processor = PrePros.get_processor(key, frame, vb_level=1)
+            if frame == 'fit':
+                processor.DateChunkYears = 1
+            canonical = DataBlock.path_preprocess(key, frame, find_if_not_exists=False)
+            original = DataBlock.path_preprocess(key, frame)
+            block = processor.load_with_extension(reconstruct=True)
+            if block.empty or block.last_meaningful_date < block.date[0]:
+                raise ValueError(f'RCQuant {frame}/{key}: empty minute DataBlock')
 
-        if original.exists():
-            backup = canonical.parent / f'.{REPAIR}_backup' / original.name
-            if not backup.exists():
-                backup.parent.mkdir(parents=True, exist_ok=True)
-                if original.is_dir():
-                    staged = backup.with_name(f'.{backup.name}-{uuid4().hex}')
-                    shutil.copytree(original, staged, copy_function=os.link)
-                    staged.rename(backup)
-                else:
-                    os.link(original, backup)
-                sync_directory(backup.parent)
-        Save.mmap(block.values, canonical, index={'date': block.date, 'secid': block.secid,
-                                                 'feature': block.feature})
-        sync_directory(canonical.parent)
-        index = ArrayMemoryMap.load(canonical, values=False, index=True)['index']
-        if any(index[name].tolist() != getattr(block, name).tolist() for name in ('date', 'secid', 'feature')):
-            raise ValueError(f'RCQuant {frame}/{key}: DataBlock index differs after publishing')
-        processor.save_norm(block)
-        return {'path': str(canonical), 'dates': len(block.date), 'last': int(block.date[-1])}
+            if original.exists():
+                backup = canonical.parent / f'.{REPAIR}_backup' / original.name
+                if not backup.exists():
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    if original.is_dir():
+                        staged = backup.with_name(f'.{backup.name}-{uuid4().hex}')
+                        shutil.copytree(original, staged, copy_function=os.link)
+                        staged.rename(backup)
+                    else:
+                        os.link(original, backup)
+                    sync_directory(backup.parent)
+            Save.mmap(block.values, canonical, index={'date': block.date, 'secid': block.secid,
+                                                     'feature': block.feature})
+            sync_directory(canonical.parent)
+            index = ArrayMemoryMap.load(canonical, values=False, index=True)['index']
+            if any(index[name].tolist() != getattr(block, name).tolist() for name in ('date', 'secid', 'feature')):
+                raise ValueError(f'RCQuant {frame}/{key}: DataBlock index differs after publishing')
+            processor.save_norm(block)
+            return {'path': str(canonical), 'dates': len(block.date), 'last': int(block.date[-1])}
 
     def rebuild_datablocks(self, dates: list[int]) -> None:
-        from src.proj.util.script.script_lock import ScriptLockMultiple
-
         version = sha256(','.join(map(str, dates)).encode()).hexdigest()
         stage = self.repair_stage('datablocks')
         remaining = []
@@ -747,21 +743,12 @@ class Migration:
             return
 
         Logger.stdout(f'RCQuant [7/7] Rebuilding {len(remaining)} minute DataBlocks')
-        with ExitStack() as locks:
-            try:
-                # The daily prediction and weekly fit builders write the same
-                # cache paths. Defer before computing if either job is active.
-                for group in ('daily_update', 'weekly_update'):
-                    locks.enter_context(ScriptLockMultiple(group, timeout=1, wait_time=2))
-            except (BlockingIOError, TimeoutError):
-                Logger.stdout('RCQuant [7/7] DataBlocks deferred while daily or weekly update is active')
-                return
-            for frame, key, item in remaining:
-                self.guard()
-                Logger.stdout(f'RCQuant [7/7] Rebuilding {frame}/{key}')
-                record = self.rebuild_minute_block(frame, key)
-                self.mark(stage, item, record)
-                Logger.stdout(f'RCQuant [7/7] {frame}/{key}: saved {record["dates"]} dates through {record["last"]}')
+        for frame, key, item in remaining:
+            self.guard()
+            Logger.stdout(f'RCQuant [7/7] Rebuilding {frame}/{key}')
+            record = self.rebuild_minute_block(frame, key)
+            self.mark(stage, item, record)
+            Logger.stdout(f'RCQuant [7/7] {frame}/{key}: saved {record["dates"]} dates through {record["last"]}')
         self.mark(self.repair_stage('complete'), 'history', {'dates': len(dates), 'datablocks': version})
         Logger.stdout('RCQuant [7/7] Historical minute repair and DataBlocks complete')
 

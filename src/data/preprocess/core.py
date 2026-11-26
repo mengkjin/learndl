@@ -319,6 +319,9 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
         dates_for_query = Dates(dates_for_query)
         if dates_for_query.empty:
             start , end = self.load_start , self.load_end
+            if not block.empty and rollback_date is None:
+                # The current dump may have advanced since this builder was created.
+                end = max(end, int(block.date[-1]))
         else:
             start , end = dates_for_query.min , dates_for_query.max
             self.enable_saving = False
@@ -428,6 +431,11 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
             return True
         modified_time = DataBlock.last_preprocess_time(self.key , self.frame)
         if not force_update and CALENDAR.is_updated_today(modified_time):
+            # A historical publication today may still precede today's daily inputs.
+            if DataBlock.path_preprocess(self.key, self.frame).suffix == '.mmap':
+                last_date = DataBlock.max_data_date(self.key, self.frame)
+                if last_date is None or last_date < self.load_end:
+                    return False
             time_str = datetime.strptime(str(modified_time) , '%Y%m%d%H%M%S').strftime("%Y-%m-%d %H:%M:%S")
             self.logger.skipping(f'[{self.key.upper()}] already preprocessing at {time_str}!' , add_prefix = False)
             return True
@@ -456,6 +464,10 @@ class PreProcessor(Base.BoundLogger, metaclass=PreProcessorMeta):
                     return Base.UpdateFlag.FAILED
             force_build = True
 
+        with DataBlock.preprocess_lock(self.key, self.frame):
+            return self._build_locked(force_build, reconstruct, rollback_date)
+
+    def _build_locked(self, force_build, reconstruct, rollback_date):
         if self.should_be_skipped(force_build):
             return Base.UpdateFlag.SKIPPED
 

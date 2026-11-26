@@ -1,5 +1,5 @@
 """Replay minute consumers in dependency order after the source revision is published."""
-from contextlib import ExitStack
+from itertools import batched
 from hashlib import sha256
 
 import pandas as pd
@@ -8,7 +8,7 @@ from src.data.preprocess.nightly_rebuild import rebuild_block, retire_60m
 from src.proj import CALENDAR, DB, Logger
 from src.proj.db.basic import dfHandler
 from src.proj.db.interface.db_path import DBPath
-from src.proj.util.script.script_lock import ScriptLockMultiple
+from src.proj.db.io.output_lock import output_lock
 
 from .sec_none_migration import MINUTE_DATABLOCKS, write_frame
 from .sec_native_revision import REVISION
@@ -16,12 +16,17 @@ from .sec_native_revision import REVISION
 HF_KEYS = ('hf_correlation', 'hf_liquidity', 'hf_momentum', 'hf_volatility')
 
 
-def _save_daily(frame, src, key, date=None):
+def _save_frame(frame, src, key, date=None):
     if frame.empty:
         raise ValueError(f'{src}/{key} produced no rows for {date}')
     descriptor = DBPath(src, key)
     write_frame(dfHandler.reset_index_pandas(frame), descriptor.path_exact(date))
     descriptor.clear_date_cache()
+
+
+def _save_daily(frame, src, key, date):
+    with output_lock(DB.path(src, key, date)):
+        _save_frame(frame, src, key, date)
 
 
 def _tables(job, revision, start, end):
@@ -55,16 +60,12 @@ def _tables(job, revision, start, end):
 
     target = DB.dates('trade_ts', '5min', use_alt=True).slice(start=max(start, MarketRisk.START_DATE), end=end)
     pending = [int(date) for date in target if not job.read(stage, f'market_daily/risk/{date}')]
-    from itertools import batched
     for dates in batched(pending, 10):
         job.guard()
         data = pd.concat([MarketRisk.calculate(day, backend='polars') for day in dates])
         if set(data['date']) != set(dates):
             raise ValueError(f'Market risk did not cover all required dates {dates}')
-        previous = DB.load('market_daily', 'risk')
-        combined = (pd.concat([previous, data]).drop_duplicates('date', keep='last')
-                    .sort_values('date').reset_index(drop=True))
-        _save_daily(combined, 'market_daily', 'risk')
+        MarketRisk.append_result(data, save=_save_frame)
         for day in dates:
             job.mark(stage, f'market_daily/risk/{day}')
         Logger.stdout(f'Nightly market risk replay through {dates[-1]}')
@@ -96,7 +97,7 @@ def _factors(job, revision, start, end):
                 batch = list(map(int, dates[offset:offset + 40]))
                 item = f'{name}/{period}/{batch[0]}-{batch[-1]}'
                 if not job.read(stage, item):
-                    factor.update_periodic_stats(period, batch, overwrite=True, save=_save_daily)
+                    factor.update_periodic_stats(period, batch, overwrite=True, save=_save_frame)
                     job.mark(stage, item)
         Logger.stdout(f'Nightly factor replay completed {name}')
     if not updated:
@@ -150,20 +151,16 @@ def rebuild_minute_consumers(job, dates, source_receipt):
         # Daily jobs can append new dates while earlier replay stages span nights.
         bounds[1] = tail
         job.mark(revision, 'bounds', bounds)
-    with ExitStack() as locks:
-        try:
-            for name in ('daily_update', 'weekly_update'):
-                locks.enter_context(ScriptLockMultiple(name, timeout=1, wait_time=2))
-        except (BlockingIOError, TimeoutError):
-            Logger.stdout('Nightly minute replay waits for the daily or weekly data lock')
-            return False
-
-        retire_60m(job, revision)
-        _tables(job, revision, *bounds)
-        factors = _factors(job, revision, *bounds)
-        for frame in ('fit', 'predict'):
-            for key in (*MINUTE_DATABLOCKS, 'market', 'minc', 'mincr', *HF_KEYS, 'momentum'):
-                job.guard()
-                rebuild_block(job, revision, frame, key)
-        job.mark(revision, 'complete_v2', _review_production(factors))
+    retire_60m(job, revision)
+    _tables(job, revision, *bounds)
+    factors = _factors(job, revision, *bounds)
+    all_published = True
+    for frame in ('fit', 'predict'):
+        for key in (*MINUTE_DATABLOCKS, 'market', 'minc', 'mincr', *HF_KEYS, 'momentum'):
+            job.guard()
+            if not rebuild_block(job, revision, frame, key):
+                all_published = False
+    if not all_published:
+        return False
+    job.mark(revision, 'complete_v2', _review_production(factors))
     return True

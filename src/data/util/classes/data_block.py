@@ -10,6 +10,7 @@ import pandas as pd
 import polars as pl
 import os
 
+from contextlib import contextmanager
 from copy import deepcopy
 
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from typing import Any , Literal , TypeAlias , get_args
 from collections.abc import Iterable
 
 from src.proj import PATH , CALENDAR , Logger , Base , Load , Save , DB , Dates
+from src.proj.db.io.output_lock import output_lock
 from src.shared.numeric.basic import (
     match_slice , forward_fillna , index_merge , intersect_copy , intersect_mesh_bytes ,
     intersect_pos_slice , INTERSECT_MESH_MAX_BYTES , IndexMergeMethod , IntersectCopyMethod ,
@@ -1193,6 +1195,33 @@ class DataBlock:
         if find_if_not_exists:
             return cls.find_existing_dump_path(path)
         return path
+
+    @classmethod
+    @contextmanager
+    def preprocess_lock(cls, key, frame):
+        """Protect one block and its fit norm, including recovery after an interrupted rename."""
+        canonical = cls.path_preprocess(key, frame, find_if_not_exists=False)
+        with output_lock(canonical.parent / f'{cls.data_type_abbr(key)}.preprocess'):
+            candidates = {canonical}
+            if canonical.name.startswith('X_'):
+                candidates.update(canonical.with_name(f'X_{alias}.mmap') for alias in cls.data_type_alias(key))
+            for path in candidates:
+                backup = path.with_name(f'{path.name}.old')
+                if backup.is_dir() and not path.exists():
+                    backup.rename(path)
+            yield
+
+    @classmethod
+    def preprocess_dates(cls, key, frame):
+        """Read the date index without loading mmap values."""
+        path = cls.path_preprocess(key, frame)
+        if not path.exists():
+            return np.array([], dtype=int)
+        if path.suffix == '.mmap':
+            return np.asarray(Load.mmap(path, values=False, index=True)['index']['date'])
+        if path.suffix == '.feather':
+            return pl.read_ipc(path, columns=['date']).get_column('date').unique().to_numpy()
+        return np.asarray(load_dict(path)['date'])
 
     @classmethod
     def path_raw(

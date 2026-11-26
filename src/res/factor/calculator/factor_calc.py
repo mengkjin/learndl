@@ -14,6 +14,7 @@ from typing import Any  , Literal , TypeAlias
 from collections.abc import Callable, Generator, Sequence
 
 from src.proj import PATH , CALENDAR , DB , Const , Base , Save , Load , Dates
+from src.proj.db.io.output_lock import output_lock
 from src.proj.util.functional.parallel import parallel
 from src.data import DATAVENDOR
 from src.res.factor.util import StockFactor
@@ -377,16 +378,17 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
         if dates.empty:
             return
         
-        old_df = DB.load(f'factor_stats_{stats_type}' , self.db_key , vb_level = 'never')
         from src.shared.numeric.factor_groups import GROUPING_VERSION
         new_df = getattr(self.Factor(dates) , f'{stats_type}_stats')()
         new_df['grouping_version'] = GROUPING_VERSION
-        df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
-            sort_values('date').reset_index(drop = True)
-        if save is None:
-            DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
-        else:
-            save(df, f'factor_stats_{stats_type}', self.db_key)
+        with output_lock(DB.path(f'factor_stats_{stats_type}', self.db_key)):
+            old_df = DB.load(f'factor_stats_{stats_type}', self.db_key, vb_level='never')
+            df = pd.concat([old_df , new_df]).drop_duplicates(subset = ['date'] , keep = 'last').\
+                sort_values('date').reset_index(drop = True)
+            if save is None:
+                DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
+            else:
+                save(df, f'factor_stats_{stats_type}', self.db_key)
         self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
 
     def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
@@ -675,7 +677,10 @@ class StockFactorCalculator(FactorCalculator):
         self._df = df
         self._date = date
 
-        return DB.save(df , self.db_src , self.db_key , date , indent = self.indent + 1 , vb_level = 'max')
+        with output_lock(DB.path(self.db_src, self.db_key, date)):
+            if not overwrite and DB.path(self.db_src, self.db_key, date).exists():
+                return False
+            return DB.save(df , self.db_src , self.db_key , date , indent = self.indent + 1 , vb_level = 'max')
 
     def validate_value(self , df : pd.DataFrame , date : int , strict = False) -> pd.DataFrame:
         """

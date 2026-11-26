@@ -15,6 +15,7 @@ import numpy as np
 from typing import Any
 
 from src.proj import CALENDAR, DB, Load, Base, Dates
+from src.proj.db.io.output_lock import output_lock
 from src.data.update.custom.basic import BasicCustomUpdater
 
 __all__ = ["MarketDailyRiskUpdater"]
@@ -73,27 +74,23 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
         cls.append_result(calc_market_daily_risk(date))
 
     @classmethod
-    def append_result(cls, new_df: pd.DataFrame):
+    def append_result(cls, new_df: pd.DataFrame, *, save=None):
         """
         Merge ``new_df`` with the existing database table, deduplicate by date, and overwrite.
 
         Keeps the ``last`` value when duplicate dates exist (allows reprocessing).
         """
-        old_df = DB.load(cls.DB_SRC, cls.DB_KEY)
-        df = pd.concat([old_df, new_df])
-        if not df.empty:
-            df = (
-                df.drop_duplicates("date", keep="last")
-                .reset_index(drop=True)
-                .sort_values("date")
-            )
-            DB.save(
-                df,
-                cls.DB_SRC,
-                cls.DB_KEY,
-                indent=cls.logger.indent + 1,
-                vb_level=cls.logger.vb_level + 1,
-            )
+        with output_lock(DB.path(cls.DB_SRC, cls.DB_KEY)):
+            previous = DB.load(cls.DB_SRC, cls.DB_KEY)
+            combined = pd.concat([previous, new_df])
+            if combined.empty:
+                return
+            combined = combined.drop_duplicates('date', keep='last').sort_values('date').reset_index(drop=True)
+            if save is None:
+                DB.save(combined, cls.DB_SRC, cls.DB_KEY, indent=cls.logger.indent + 1,
+                        vb_level=cls.logger.vb_level + 1)
+            else:
+                save(combined, cls.DB_SRC, cls.DB_KEY)
 
 
 def _get_inputs(date: int) -> dict[str, pd.DataFrame]:

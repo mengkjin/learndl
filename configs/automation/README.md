@@ -85,6 +85,13 @@ add standardized trade counts to the corresponding six-feature blocks.
 The replay removes the retired `60m` model-input cache and its normalization
 statistics. The `trade_ts/60min` table remains a published quote period.
 
+Daily and weekly updates can run throughout downstream replay. Writers serialize
+each dated file separately and merge shared market-risk and factor-statistics
+tables under a lock on that table. Nightly prepares DataBlock shards privately.
+Publication and incremental updates share a lock per block and frame. If daily
+has already added dates missing from the staged block, nightly keeps the live
+block and retries from its checkpoints on the next run.
+
 The old built-in `--config-dir runs/scheduling` resolves to this directory;
 custom config directories retain their original meaning. Old Python entrypoints
 and shell install commands remain supported, including services installed before

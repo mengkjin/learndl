@@ -36,6 +36,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+from src.proj.db.io.output_lock import output_lock
 from src.proj import DB , Dates , CALENDAR , Base
 from src.shared.numeric.basic import DIV_TOL
 from src.data.util.minchars_stock import stock_rows
@@ -220,7 +221,8 @@ def save_stage_df(
     df = stock_rows(df, source=f'{db_key} save {date}')
     if df.empty:
         return False
-    DB.save(df , DB_SRC , db_key , int(date) , indent = indent , vb_level = vb_level)
+    with output_lock(DB.path(DB_SRC, db_key, int(date))):
+        DB.save(df , DB_SRC , db_key , int(date) , indent = indent , vb_level = vb_level)
     return True
 
 

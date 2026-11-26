@@ -1,9 +1,11 @@
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 import signal
 import sqlite3
 from tempfile import TemporaryDirectory
+from threading import Event
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -237,6 +239,58 @@ class NightlyTest(unittest.TestCase):
                 _review_production([])
             path.write_text('model: {input.type: data, input.data.types: day}')
             self.assertEqual(_review_production([])['models'], ['gru@gru_day'])
+
+    def test_shared_table_merges_after_other_writer_commits(self):
+        from src.data.update.custom.market_daily_risk import MarketDailyRiskUpdater
+        from src.proj import DB
+        from src.proj.db.io.output_lock import output_lock
+
+        target = self.root / 'risk.feather'
+        other = self.root / 'other.feather'
+        waiting = Event()
+
+        def append():
+            with output_lock(other):
+                waiting.set()
+            MarketDailyRiskUpdater.append_result(pd.DataFrame({'date': [20260608]}))
+
+        with patch.object(DB, 'path', return_value=target), \
+                patch.object(DB, 'load', side_effect=lambda *_: pd.read_feather(target)) as read, \
+                patch.object(DB, 'save', side_effect=lambda df, *a, **kw: df.to_feather(target)), \
+                ThreadPoolExecutor(max_workers=1) as executor:
+            with output_lock(target):
+                result = executor.submit(append)
+                self.assertTrue(waiting.wait(3))
+                self.assertFalse(result.done())
+                read.assert_not_called()
+                pd.DataFrame({'date': [20261126]}).to_feather(target)
+            result.result(timeout=3)
+        self.assertEqual(pd.read_feather(target).date.tolist(), [20260608, 20261126])
+
+    def test_day_appended_during_private_rebuild_survives_until_caught_up(self):
+        from src.data.preprocess import nightly_rebuild
+
+        first, extra = 20250131, 20250203
+        target = self.root / 'X_mock.mmap'
+        def preprocess(start, end):
+            if start == first:
+                # An incremental builder can publish the same block during private staging.
+                with DataBlock.preprocess_lock('mock', 'predict'):
+                    ArrayMemoryMap.save(torch.full((1, 2, 1, 1), 7.), target,
+                                        index={'secid': np.array([1]), 'date': np.array([first, extra]),
+                                               'feature': np.array(['close'])})
+            return DataBlock(torch.ones(1, 1, 1, 1), np.array([1]), np.array([start]), np.array(['close']))
+
+        processor = SimpleNamespace(load_start=first, load_end=first, pre_process=Mock(side_effect=preprocess))
+        with patch.object(nightly_rebuild.PrePros, 'get_processor', return_value=processor), \
+                patch.object(DataBlock, 'path_preprocess', return_value=target), \
+                patch.object(nightly_rebuild, 'Dates', side_effect=lambda start, end: [d for d in (first, extra) if start <= d <= end]):
+            self.assertFalse(rebuild_block(self.job, 'test', 'predict', 'mock'))
+            self.assertIsNone(self.job.read('test_block', 'predict/mock'))
+            self.assertEqual(ArrayMemoryMap.load(target)['values'].flatten().tolist(), [7., 7.])
+            self.assertTrue(rebuild_block(self.job, 'test', 'predict', 'mock'))
+        self.assertEqual(processor.pre_process.call_count, 2)
+        self.assertEqual(ArrayMemoryMap.load(target, index=True)['index']['date'].tolist(), [first, extra])
 
     def test_datablock_reuses_shards_after_deadline(self):
         from src.data.preprocess import nightly_rebuild

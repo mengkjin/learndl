@@ -43,6 +43,15 @@ class IncrementalFitTest(TestCase):
             self.assertEqual(queried.call_count, 1)
 
 
+    def test_incremental_build_keeps_dates_added_since_processor_creation(self):
+        dates = np.array([20261124, 20261125, 20261126])
+        processor = PrePro_y('predict')
+        processor.load_start, processor.load_end = dates[0], dates[1]
+        dump = DataBlock(torch.ones(1, 3, 1, 1), [1], dates, ['feature'])
+        with patch.object(processor, 'load_dump', return_value=dump):
+            result = processor.load_with_extension()
+        np.testing.assert_array_equal(result.date, dates)
+
     def test_both_extends_stale_fit_dump_without_waiting_for_weekly(self):
         from src.res.model.util.data.module_data import ModuleData
 

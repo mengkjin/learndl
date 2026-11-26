@@ -22,6 +22,7 @@ import numpy as np
 from typing import Any
 from collections.abc import Callable
 
+from src.proj.db.io.output_lock import output_lock
 from src.proj import CALENDAR , DB , Base , Dates
 from src.data.update.custom.basic import BasicCustomUpdater
 
@@ -51,7 +52,9 @@ class DailyRiskUpdater(BasicCustomUpdater):
     @classmethod
     def update_one(cls , date : int):
         """Compute and save daily risk features for a single ``date``."""
-        DB.save(calc_daily_risk(date) , cls.DB_SRC , cls.DB_KEY , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
+        df = calc_daily_risk(date)
+        with output_lock(DB.path(cls.DB_SRC, cls.DB_KEY, date)):
+            DB.save(df , cls.DB_SRC , cls.DB_KEY , date , indent = cls.logger.indent + 2 , vb_level = cls.logger.vb_level + 2)
 
 def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""

@@ -13,20 +13,19 @@ from src.proj.db.io.torch import torch_save
 from src.shared.numeric.basic import index_merge
 
 
-def rebuild_block(job, revision: str, frame: str, key: str):
+def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
+    """Return False when publication must wait for shards covering live dates."""
     processor = PrePros.get_processor(key, frame, vb_level=1)
-    canonical = DataBlock.path_preprocess(key, frame, find_if_not_exists=False)
-    interrupted = canonical.with_name(f'{canonical.name}.old')
-    if interrupted.exists() and not canonical.exists():
-        interrupted.rename(canonical)
-    base = canonical.parent / f'.{revision}.{key}'
     stage = f'{revision}_block'
     item = f'{frame}/{key}'
     fill = getattr(processor, 'ChunkFillNan', None)
     # Older minchars publications skipped the final fill and listing mask.
     completion = item if fill is None else f'{item}/masked'
-    if job.read(stage, completion) and canonical.is_dir():
-        return
+    with DataBlock.preprocess_lock(key, frame):
+        canonical = DataBlock.path_preprocess(key, frame, find_if_not_exists=False)
+        if job.read(stage, completion) and canonical.is_dir():
+            return True
+    base = canonical.parent / f'.{revision}.{key}'
     bounds = job.read(stage, f'{item}/bounds')
     if bounds is None:
         bounds = [int(processor.load_start), int(processor.load_end)]
@@ -74,8 +73,11 @@ def rebuild_block(job, revision: str, frame: str, key: str):
     finished_bundle = ArrayMemoryMap(canonical)
     layout = {'version': 2, 'bounds': bounds, 'shape': list(shape)}
     same_layout = job.read(stage, f'{item}/layout') == layout
-    published = (same_layout and job.read(stage, f'{item}/publish_ready')
-                 and not bundle.path.exists() and canonical.is_dir())
+    with DataBlock.preprocess_lock(key, frame):
+        receipt = job.read(stage, f'{item}/publish_ready')
+        # Directory identity distinguishes our interrupted publish from a later daily build.
+        published = (same_layout and not bundle.path.exists() and canonical.is_dir()
+                     and receipt == {'inode': canonical.stat().st_ino})
     if not published:
         bundle.prepare()
         if not same_layout or not bundle.data_path.exists() or not bundle.meta_path.exists():
@@ -114,32 +116,52 @@ def rebuild_block(job, revision: str, frame: str, key: str):
                 os.fsync(handle.fileno())
             job.mark(stage, f'{item}/copy/{path.stem}')
         del values
+    with DataBlock.preprocess_lock(key, frame):
         job.guard()
         original = DataBlock.path_preprocess(key, frame)
-        backup = canonical.parent / f'.{revision}_backup' / original.name
-        if original.exists() and not backup.exists():
-            backup.parent.mkdir(parents=True, exist_ok=True)
-            if original.is_dir():
-                staged = backup.with_name(f'{backup.name}.partial')
-                if staged.exists():
-                    shutil.rmtree(staged)
-                shutil.copytree(original, staged, copy_function=os.link)
-                staged.rename(backup)
-            else:
-                os.link(original, backup)
-        job.mark(stage, f'{item}/publish_ready')
-        ArrayMemoryMap._publish(canonical, bundle.path)
-    index = ArrayMemoryMap.load(canonical, values=False, index=True)['index']
-    if not all(np.array_equal(coords[axis], index[axis]) for axis in coords):
-        raise ValueError(f'Nightly DataBlock {item}: published coordinates differ from shards')
-    if frame == 'fit' and key in ('15m', '30m', '30mcont', '15mt', '30mt'):
-        job.guard()
-        values = finished_bundle.view()
-        historical = DataBlock(values, **index).slice_date(processor.hist_start, processor.hist_end)
-        processor.save_norm(historical)
-    job.mark(stage, completion, {'path': str(canonical), 'dates': len(coords['date'])})
+        if published and (not canonical.is_dir() or receipt != {'inode': canonical.stat().st_ino}):
+            return False
+        live_dates = DataBlock.preprocess_dates(key, frame)
+        missing = np.setdiff1d(live_dates[live_dates >= bounds[0]], coords['date'])
+        if len(missing):
+            # A daily writer can extend the block while private shards are being built.
+            # Keep the live file and reuse every unaffected month on the next pass.
+            job.mark(stage, f'{item}/bounds', [bounds[0], max(bounds[1], int(missing[-1]))])
+            months = set(missing // 100)
+            with job.db:
+                for month, days in groups.items():
+                    if month in months:
+                        job.db.execute('DELETE FROM checkpoints WHERE stage=? AND item=?',
+                                       (stage, f'{item}/{month}-{days[-1]}'))
+            job.mark(stage, f'{item}/layout', False)
+            Logger.stdout(f'Nightly DataBlock {item}: keeping live dates {missing.tolist()}, will retry')
+            return False
+        if not published:
+            backup = canonical.parent / f'.{revision}_backup' / original.name
+            if original.exists() and not backup.exists():
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                if original.is_dir():
+                    staged = backup.with_name(f'{backup.name}.partial')
+                    if staged.exists():
+                        shutil.rmtree(staged)
+                    shutil.copytree(original, staged, copy_function=os.link)
+                    staged.rename(backup)
+                else:
+                    os.link(original, backup)
+            job.mark(stage, f'{item}/publish_ready', {'inode': bundle.path.stat().st_ino})
+            ArrayMemoryMap._publish(canonical, bundle.path)
+        index = ArrayMemoryMap.load(canonical, values=False, index=True)['index']
+        if not all(np.array_equal(coords[axis], index[axis]) for axis in coords):
+            raise ValueError(f'Nightly DataBlock {item}: published coordinates differ from shards')
+        if frame == 'fit' and key in ('15m', '30m', '30mcont', '15mt', '30mt'):
+            job.guard()
+            values = finished_bundle.view()
+            historical = DataBlock(values, **index).slice_date(processor.hist_start, processor.hist_end)
+            processor.save_norm(historical)
+        job.mark(stage, completion, {'path': str(canonical), 'dates': len(coords['date'])})
     shutil.rmtree(base)
     Logger.stdout(f'Nightly DataBlock {item}: published {len(coords["date"])} dates')
+    return True
 
 
 def retire_60m(job, revision):
