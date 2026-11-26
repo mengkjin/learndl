@@ -21,6 +21,7 @@ from pathlib import Path
 import psutil
 
 from .config import ENTRYPOINTS, installed_config, runtime_dir
+from .nightly_window import NIGHTLY_ENTRYPOINTS, latest_nightly_slot, load_window
 from .runtime import RunStore, members
 
 from src.automation import version_patch
@@ -78,7 +79,7 @@ def run_deferred(store) -> None:
                   version_patch.business_lease(runtime_dir()) as code_fd):
                 store.schedule_state(key, 'starting')
                 try:
-                    code = _run(task, code_fd=code_fd, retry_busy=True)
+                    code = _run(task, code_fd=code_fd, retry_busy=True, scheduled_at=int(key.rsplit(':', 1)[1]) * 60)
                 except BaseException:
                     store.schedule_state(key, 'unknown')
                     raise
@@ -113,7 +114,7 @@ def deferred_worker() -> int:
 
 
 def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: str | None = None,
-         config_snapshot: dict | None = None) -> int:
+         config_snapshot: dict | None = None, scheduled_at: float | None = None) -> int:
     from src.proj import PATH
     from src.proj.util.script.script_lock import ScriptLockMultiple
     config = config_snapshot or installed_config()
@@ -153,10 +154,14 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
                       'request_id': request_id, 'schedule_config': dict(task), 'channel': task.get('channel', 'data')}
         hard_deadline = None
         nightly_env = {}
-        if task['entrypoint'] in ('nightly_maintenance', 'rcquant_sec_none'):
-            from .nightly_window import load_window
-            slot = int(request_id.rsplit(':', 1)[1]) * 60 if request_id else time.time()
+        if task['entrypoint'] in NIGHTLY_ENTRYPOINTS:
+            slot = int(request_id.rsplit(':', 1)[1]) * 60 if request_id else scheduled_at
+            if slot is None:
+                slot = latest_nightly_slot(time.time())
             window = load_window(PATH.main, slot)
+            if time.time() >= window.cutoff:
+                logger.info('SCHEDULER SKIPPED: %s: nightly cutoff already passed', task_id)
+                return 0
             hard_deadline = window.hard_deadline
             run_record['hard_deadline'] = hard_deadline
             nightly_env.update(LEARNDL_NIGHTLY_SLOT=str(slot), LEARNDL_NIGHTLY_CUTOFF=str(window.cutoff))

@@ -4,11 +4,13 @@ import shutil
 
 import numpy as np
 
+from src.data.preprocess.core import FactorPreProcessor
 from src.data.preprocess.processors import PrePros
 from src.data.util import DataBlock
 from src.proj import Dates, Logger, Save
 from src.proj.db.io.mmap import ArrayMemoryMap, ArrayMeta
 from src.proj.db.io.torch import torch_save
+from src.shared.numeric.basic import index_merge
 
 
 def rebuild_block(job, revision: str, frame: str, key: str):
@@ -20,15 +22,17 @@ def rebuild_block(job, revision: str, frame: str, key: str):
     base = canonical.parent / f'.{revision}.{key}'
     stage = f'{revision}_block'
     item = f'{frame}/{key}'
-    if job.read(stage, item) and canonical.is_dir():
+    fill = getattr(processor, 'ChunkFillNan', None)
+    # Older minchars publications skipped the final fill and listing mask.
+    completion = item if fill is None else f'{item}/masked'
+    if job.read(stage, completion) and canonical.is_dir():
         return
     bounds = job.read(stage, f'{item}/bounds')
     if bounds is None:
-        bounds = [processor.load_start, processor.load_end]
+        bounds = [int(processor.load_start), int(processor.load_end)]
         job.mark(stage, f'{item}/bounds', bounds)
-    elif (processor.load_end > bounds[1] and not (base / 'publish.mmap').exists()
-          and not job.read(stage, f'{item}/publish_ready')):
-        bounds[1] = processor.load_end
+    elif processor.load_end > bounds[1]:
+        bounds[1] = int(processor.load_end)
         job.mark(stage, f'{item}/bounds', bounds)
     dates = list(map(int, Dates(*bounds)))
     groups = {}
@@ -58,25 +62,35 @@ def rebuild_block(job, revision: str, frame: str, key: str):
     coords = {
         'secid': np.unique(np.concatenate([index['secid'] for index in indexes])),
         'date': np.concatenate([index['date'] for index in indexes]),
-        'feature': indexes[0]['feature'],
+        # FactorCategory1Loader pivots the full range in factor-name order.
+        'feature': index_merge([index['feature'] for index in indexes],
+                               method='union' if isinstance(processor, FactorPreProcessor) else 'stack'),
     }
     if len(coords['date']) == 0 or not np.all(np.diff(coords['date']) > 0):
         raise ValueError(f'Nightly DataBlock {item}: missing or overlapping date shards')
     meta = ArrayMeta.from_json(ArrayMemoryMap(shards[0]).meta_path)
-    shape = (len(coords['secid']), len(coords['date']), *meta.shape[2:])
+    shape = (len(coords['secid']), len(coords['date']), meta.shape[2], len(coords['feature']))
     bundle = ArrayMemoryMap(base / 'publish.mmap')
     finished_bundle = ArrayMemoryMap(canonical)
-    published = job.read(stage, f'{item}/publish_ready') and not bundle.path.exists() and canonical.is_dir()
+    layout = {'version': 2, 'bounds': bounds, 'shape': list(shape)}
+    same_layout = job.read(stage, f'{item}/layout') == layout
+    published = (same_layout and job.read(stage, f'{item}/publish_ready')
+                 and not bundle.path.exists() and canonical.is_dir())
     if not published:
         bundle.prepare()
-        if not bundle.data_path.exists() or not bundle.meta_path.exists():
+        if not same_layout or not bundle.data_path.exists() or not bundle.meta_path.exists():
+            # Offsets change if daily_update appended dates between nights. Reuse
+            # the calculated month shards, but copy them into the new layout.
+            prefix = f'{item}/copy/'
             with job.db:
-                job.db.execute('DELETE FROM checkpoints WHERE stage=? AND item LIKE ?',
-                               (stage, f'{item}/copy/%'))
+                job.db.execute('DELETE FROM checkpoints WHERE stage=? AND '
+                               '(substr(item,1,?)=? OR item IN (?,?))',
+                               (stage, len(prefix), prefix, f'{item}/layout', f'{item}/publish_ready'))
             with bundle.data_path.open('wb') as data:
                 data.truncate(int(np.prod(shape)) * np.dtype(meta.dtype).itemsize)
             torch_save(coords, bundle.path / 'index.pt')
             ArrayMeta('Tensor', meta.dtype, shape).to_json(bundle.meta_path)
+            job.mark(stage, f'{item}/layout', layout)
         values = np.memmap(bundle.data_path, mode='r+', dtype=meta.dtype, shape=shape)
         for path, index in zip(shards, indexes):
             job.guard()
@@ -84,11 +98,17 @@ def rebuild_block(job, revision: str, frame: str, key: str):
                 continue
             start = np.searchsorted(coords['date'], index['date'][0])
             end = start + len(index['date'])
-            if not np.array_equal(index['feature'], coords['feature']):
-                raise ValueError(f'Nightly DataBlock {item}: inconsistent features at {path.stem}')
-            rows = np.searchsorted(coords['secid'], index['secid'])
-            values[:, start:end] = np.nan
-            values[rows, start:end] = ArrayMemoryMap(path).view()
+            block = DataBlock(ArrayMemoryMap(path).view(), **index)
+            if block.shape[2] != shape[2]:
+                raise ValueError(f'Nightly DataBlock {item}: inconsistent intraday axis at {path.stem}')
+            block = block.align_feature(coords['feature'], inplace=True)
+            if fill is None:
+                rows = np.searchsorted(coords['secid'], block.secid)
+                values[:, start:end] = np.nan
+                values[rows, start:end] = block.values
+            else:
+                block = block.align_secid(coords['secid'], inplace=True).fillna(fill)
+                values[:, start:end] = block.mask_values(processor.mask).values
             values.flush()
             with bundle.data_path.open('rb') as handle:
                 os.fsync(handle.fileno())
@@ -117,7 +137,7 @@ def rebuild_block(job, revision: str, frame: str, key: str):
         values = finished_bundle.view()
         historical = DataBlock(values, **index).slice_date(processor.hist_start, processor.hist_end)
         processor.save_norm(historical)
-    job.mark(stage, item, {'path': str(canonical), 'dates': len(coords['date'])})
+    job.mark(stage, completion, {'path': str(canonical), 'dates': len(coords['date'])})
     shutil.rmtree(base)
     Logger.stdout(f'Nightly DataBlock {item}: published {len(coords["date"])} dates')
 

@@ -6,12 +6,22 @@ from zoneinfo import ZoneInfo
 
 import yaml
 
+NIGHTLY_ENTRYPOINTS = ('nightly_maintenance', 'rcquant_sec_none')
+
 
 @dataclass(frozen=True)
 class NightlyWindow:
     cutoff: float
     hard_deadline: float
     tasks: tuple[str, ...]
+
+
+def latest_nightly_slot(now: float) -> float:
+    local = datetime.fromtimestamp(now, ZoneInfo('Asia/Shanghai'))
+    evening = datetime.combine(local.date(), time(21), local.tzinfo)
+    if local < evening:
+        evening -= timedelta(days=1)
+    return evening.timestamp()
 
 
 def load_window(root: Path, scheduled_at: float) -> NightlyWindow:

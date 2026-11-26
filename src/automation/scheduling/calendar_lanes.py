@@ -20,8 +20,10 @@ import portalocker
 
 from src.automation import version_patch
 from src.automation.console import logger
+from src.automation.paths import ROOT
 
 from .config import require_installed_config, runtime_dir
+from .nightly_window import NIGHTLY_ENTRYPOINTS, load_window
 from .autofix_store import Store, state_dir
 from .runtime import RunStore, members
 
@@ -85,6 +87,8 @@ def eligibility(task_id, key, config, now=None):
     task = config['tasks'][task_id]
     if not task['enabled']:
         return 'expired', 'task disabled'
+    if task.get('entrypoint') in NIGHTLY_ENTRYPOINTS and now >= load_window(ROOT, planned).cutoff:
+        return 'expired', 'nightly maintenance cutoff passed'
     if task.get('window') == 'rcquant_evening':
         if scheduled.date() != local.date():
             return 'expired', 'RCQuant request passed its calendar day'

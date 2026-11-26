@@ -6,6 +6,7 @@ import pandas as pd
 
 from src.data.preprocess.nightly_rebuild import rebuild_block, retire_60m
 from src.proj import CALENDAR, DB, Logger
+from src.proj.db.basic import dfHandler
 from src.proj.db.interface.db_path import DBPath
 from src.proj.util.script.script_lock import ScriptLockMultiple
 
@@ -19,8 +20,7 @@ def _save_daily(frame, src, key, date=None):
     if frame.empty:
         raise ValueError(f'{src}/{key} produced no rows for {date}')
     descriptor = DBPath(src, key)
-    write_frame(frame.reset_index() if not isinstance(frame.index, pd.RangeIndex) else frame,
-                descriptor.path_exact(date))
+    write_frame(dfHandler.reset_index_pandas(frame), descriptor.path_exact(date))
     descriptor.clear_date_cache()
 
 
@@ -113,16 +113,13 @@ def _review_production(factors):
     configured = yaml.safe_load((strategy / 'model.yaml').read_text())
     models = {entry['name'] for key in ('prediction', 'hidden_extraction')
               for entry in configured.get(key, {}).values()}
-    # These production directories have archived daily-only input schemas.
-    verified_daily = {'gru@gru_day', 'gru@gruRTN_day', 'gru@gru_avg'}
+    verified_daily = set()
     for model in models:
         path = PATH.main / 'models/nn' / model / 'configs/production.yaml'
         if path.is_file():
-            config = yaml.safe_load(path.read_text())
-            values = [section['input.data.types'] for section in config.values()
-                      if isinstance(section, dict) and 'input.data.types' in section]
-            if values and any(value != 'day' for value in values):
-                verified_daily.discard(model)
+            config = yaml.safe_load(path.read_text())['model']
+            if config.get('input.type') == 'data' and config.get('input.data.types') in ('day', ['day']):
+                verified_daily.add(model)
     ports = yaml.safe_load((strategy / 'trading_port.yaml').read_text()).get('trading_ports', {})
     alphas = set()
     for port in ports.values():
@@ -142,7 +139,7 @@ def _review_production(factors):
 def rebuild_minute_consumers(job, dates, source_receipt):
     source = ','.join(map(str, dates)) + REVISION + ''.join(x['digest'] for x in source_receipt['outputs'])
     revision = 'minute_consumers_v1_' + sha256(source.encode()).hexdigest()[:16]
-    if job.read(revision, 'complete'):
+    if job.read(revision, 'complete_v2'):
         return True
     bounds = job.read(revision, 'bounds')
     tail = int(CALENDAR.updated())
@@ -168,5 +165,5 @@ def rebuild_minute_consumers(job, dates, source_receipt):
             for key in (*MINUTE_DATABLOCKS, 'market', 'minc', 'mincr', *HF_KEYS, 'momentum'):
                 job.guard()
                 rebuild_block(job, revision, frame, key)
-        job.mark(revision, 'complete', _review_production(factors))
+        job.mark(revision, 'complete_v2', _review_production(factors))
     return True

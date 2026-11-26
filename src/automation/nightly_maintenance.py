@@ -1,6 +1,6 @@
 """Run resumable maintenance handlers under one stable schedule."""
 from contextlib import closing
-from datetime import datetime, time as local_time, timedelta
+from datetime import datetime
 import os
 import sqlite3
 import time
@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 import polars as pl
 import portalocker
 
-from src.automation.scheduling.nightly_window import load_window
+from src.automation.scheduling.nightly_window import latest_nightly_slot, load_window
 from src.proj import Logger, MACHINE, PATH
 
 
@@ -76,15 +76,7 @@ def run():
     if MACHINE.name != 'mengkjin-server':
         raise RuntimeError('Nightly maintenance is configured for mengkjin-server')
     slot_text = os.environ.get('LEARNDL_NIGHTLY_SLOT')
-    if slot_text is None:
-        now = datetime.now(ZoneInfo('Asia/Shanghai'))
-        evening = datetime.combine(now.date(), local_time(21), now.tzinfo)
-        # A manual continuation after midnight belongs to the previous night.
-        if now < evening:
-            evening -= timedelta(days=1)
-        slot = evening.timestamp()
-    else:
-        slot = float(slot_text)
+    slot = latest_nightly_slot(time.time()) if slot_text is None else float(slot_text)
     window = load_window(PATH.main, slot)
     cutoff = float(os.environ.get('LEARNDL_NIGHTLY_CUTOFF', window.cutoff))
     if set(window.tasks) - HANDLERS.keys() or len(set(window.tasks)) != len(window.tasks):

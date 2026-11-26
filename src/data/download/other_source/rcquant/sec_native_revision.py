@@ -90,7 +90,9 @@ def _audit(directory, old, native, stocks, old_mapping):
             pl.col(TOTALS).sum(), pl.len().cast(pl.Int64).alias('bars'),
         )
     original = old.with_columns(pl.col('code').replace_strict(old_mapping).alias(ID)).sort(ID, 'datetime')
-    reference = daily_reference(stocks, DB.load_pl('trade_ts', 'day', DATE, vb_level='never'))
+    reference = daily_reference(stocks, DB.load_pl('trade_ts', 'day', DATE, vb_level='never')).filter(
+        pl.col('volume_day').is_finite()
+    )
     delta = (
         one(original).join(one(native), on=ID, suffix='_native', how='full', coalesce=True)
         .join(reference.select(ID, 'volume_day'), on=ID, how='left')
