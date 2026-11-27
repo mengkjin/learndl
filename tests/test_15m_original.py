@@ -11,6 +11,7 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
+import polars as pl
 import torch
 import yaml
 
@@ -110,7 +111,7 @@ class OriginalParity(TestCase):
         raw.loc[:14, 'volume'] = 0
         day = DataBlock(torch.ones(1, 2, 1, 2), [1], [1, 2], ['turn_fl', 'preclose'])
         with patch('src.data.preprocess.processors.original_15m.CALENDAR.range', return_value=np.array([1, 2])), \
-             patch('src.data.preprocess.processors.original_15m.DB.load', return_value=raw) as load, \
+             patch('src.data.preprocess.processors.original_15m.DB.load_pl', return_value=pl.from_pandas(raw)) as load, \
              patch.object(proc, 'block_loaders', return_value={'day': Mock(load=Mock(return_value=day))}):
             actual = proc.process_blocks(proc.load_blocks(1, 2))
         self.assertEqual(actual.shape, (1, 2, 16, 6))
@@ -178,7 +179,7 @@ class OriginalParity(TestCase):
                ('open', 'close', 'high', 'low', 'vwap', 'amount', 'volume')}})
         day = DataBlock(torch.ones(1, 3, 1, 2), [1], [1,2,3], ['turn_fl', 'preclose'])
         with patch('src.data.preprocess.processors.original_15m.CALENDAR.range', return_value=np.array([1,2,3])), \
-             patch('src.data.preprocess.processors.original_15m.DB.load', side_effect=lambda *a, **kw: pd.DataFrame() if a[2] == 2 else raw), \
+             patch('src.data.preprocess.processors.original_15m.DB.load_pl', side_effect=lambda *a, **kw: pl.DataFrame() if a[2] == 2 else pl.from_pandas(raw)), \
              patch.object(proc, 'block_loaders', return_value={'day': Mock(load=Mock(return_value=day))}):
             actual = proc.process_blocks(proc.load_blocks(1,3))
             self.assertEqual(actual.date.tolist(), [1,2,3])

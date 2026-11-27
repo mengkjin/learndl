@@ -4,6 +4,7 @@ Code mapper tools, used to transform between code and secid.
 from __future__ import annotations
 import numpy as np
 import pandas as pd
+import re
 from typing import Any , TypeVar 
 from collections.abc import Iterable
 
@@ -81,6 +82,18 @@ def secid2secid(secid : T) -> T:
     new_secid = new_secid.astype(str).map(MACHINE.dfdata.get('mapping/code/secid')).fillna(new_secid).astype(int)
     new_secid = _from_series(new_secid , secid)
     return new_secid
+
+def secid2secid_polars(secid):
+    """Apply the same rewrites to the integer security IDs used by standard tables."""
+    import polars as pl
+    if not secid.dtype.is_integer() or secid.null_count():
+        return pl.from_pandas(secid2secid(secid.to_pandas()))
+    mapping = {
+        int(key): value for key, value in MACHINE.dfdata.get('mapping/code/secid').items()
+        if isinstance(key, str) and re.fullmatch(r'0|-?[1-9][0-9]*', key) and value is not None
+    }
+    secid = secid.cast(pl.Int64)
+    return secid.replace(mapping).cast(pl.Int64)
 
 def secid2code(secid : T) -> T:
     """Format secids as zero-padded tickers with ``.SH`` / ``.SZ`` / ``.BJ`` suffixes.

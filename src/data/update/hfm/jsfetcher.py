@@ -14,6 +14,7 @@ See TODO_data.md item A3 for the proposed externalisation.
 from __future__ import annotations
 import pyreadr , re
 import pandas as pd
+import polars as pl
 import numpy as np
 
 from dataclasses import dataclass , field
@@ -24,7 +25,7 @@ from collections.abc import Callable
 from src.proj import PATH , MACHINE , DB , Base , Logger , Dates
 from src.data.util import (
     secid_adjust , col_reform , row_filter , adjust_precision , 
-    trade_min_reform , trade_min_fillna
+    trade_min_reform_pl , trade_min_fillna
 )
 
 __all__ = ['FailedData' , 'JSFetcher' , 'JSDownloader']
@@ -461,7 +462,7 @@ class JSFetcher:
             return FailedData(f'{x}min' , date)
         with np.errstate(invalid='ignore' , divide = 'ignore'):
             if x != 1: 
-                df = trade_min_reform(df , x)
+                df = trade_min_reform_pl(pl.from_pandas(df), x).to_pandas()
             if df is None: 
                 return df
         if with_date: 

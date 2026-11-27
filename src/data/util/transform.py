@@ -12,13 +12,14 @@ from __future__ import annotations
 import re
 import pandas as pd
 import numpy as np
+import polars as pl
 
 from pypinyin import lazy_pinyin
 from src.proj import DB , Base
 
 __all__ = [
     'secid_adjust' , 'col_reform' , 'row_filter' , 'adjust_precision' , 
-    'trade_min_fillna' , 'trade_min_reform' , 'chinese_to_pinyin'
+    'trade_min_fillna' , 'trade_min_reform' , 'trade_min_reform_pl' , 'chinese_to_pinyin'
 ]
 
 def secid_adjust(
@@ -216,6 +217,50 @@ def trade_min_reform(df : pd.DataFrame , x_min_new : int , x_min_old = 1):
         close = data_new['close'].where(np.isfinite(data_new['close']))
         data_new['vwap'] = vwap.where(~fallback, close)
     return data_new.reset_index(drop=False)
+
+def trade_min_reform_pl(df: pl.DataFrame, x_min_new: int, x_min_old: int = 1,
+                        *, legacy_vwap: bool = False) -> pl.DataFrame:
+    """Aggregate stock bars in input order within each security and minute bucket."""
+    if df.is_empty():
+        return df
+    df = df.fill_nan(None)
+    prices = [name for name in ('open', 'high', 'low', 'vwap', 'close') if name in df.columns]
+    reference = df.select('secid', (pl.col('minute') - pl.col('minute').min()).alias('minute'),
+                          pl.col('close').alias('_fill_price'))
+    df = df.join(reference, on=['secid', 'minute'], how='left', maintain_order='left').with_columns(
+        pl.col('amount', 'volume').fill_null(0),
+        pl.col(prices).fill_null(pl.coalesce('_fill_price', 'open')),
+    ).drop('_fill_price')
+    if x_min_new == x_min_old:
+        return df
+    assert x_min_new % x_min_old == 0, f'{x_min_new} % {x_min_old} != 0'
+    last = df['minute'].max()
+    bars_per_day = 240 // x_min_old
+    assert last in (bars_per_day - 1, bars_per_day), f'Unexpected minute axis ending at {last}'
+    minute = pl.col('minute') - int(last == bars_per_day)
+    sums = [pl.col(name).cast(pl.Float64).sum() for name in ('amount', 'volume')]
+    if legacy_vwap:
+        sums = [expr.cast(df.schema[name]) for expr, name in zip(sums, ('amount', 'volume'))]
+    if 'num_trades' in df.columns:
+        sums.append(pl.col('num_trades').sum().cast(df.schema['num_trades']))
+    bars = df.filter(minute >= 0).with_columns((minute // (x_min_new // x_min_old)).alias('minute'))
+    bars = bars.group_by('secid', 'minute').agg(
+        pl.col('open').drop_nulls().first(), pl.col('high').max(), pl.col('low').min(),
+        pl.col('close').drop_nulls().last(), *sums,
+    ).sort('secid', 'minute')
+    if 'vwap' in prices:
+        amount, volume, close = pl.col('amount'), pl.col('volume'), pl.col('close')
+        vwap = amount / volume
+        if not legacy_vwap:
+            vwap = (
+                pl.when((volume == 0) | vwap.is_infinite())
+                .then(pl.when(close.is_finite()).then(close))
+                .when(amount.is_finite() & volume.is_finite() & (volume > 0) & vwap.is_finite())
+                .then(vwap)
+            )
+        bars = bars.with_columns(vwap.alias('vwap'))
+    return bars
+
 
 def chinese_to_pinyin(text : str):
     """convert chinese characters to pinyin"""

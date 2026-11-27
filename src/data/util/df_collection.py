@@ -115,7 +115,7 @@ class _df_collection(ABC):
     def ensure_dates(
         self ,
         dates : Base.alias.DateType ,
-        loader : Callable[[int], pd.DataFrame | None] ,
+        loader : Callable[[int], pd.DataFrame | pl.DataFrame | None] ,
         overwrite : bool = False ,
     ) -> None:
         """
@@ -324,9 +324,7 @@ class PLDFCollection(_df_collection):
 
     Each date's data is stored as an independent ``pl.DataFrame`` in
     ``data_frames``.  Multi-date reads use ``pl.concat`` (vertical) over
-    the requested dates.  Input DataFrames are expected to be pandas
-    ``pd.DataFrame`` objects; they are converted to Polars via
-    ``pl.from_pandas`` inside ``add_one_day``.
+    the requested dates. Pandas inputs are converted when added.
     """
     def __init__(self , max_len : int = -1 , date_key : str | None = None) -> None:
         super().__init__(max_len , date_key)
@@ -359,10 +357,12 @@ class PLDFCollection(_df_collection):
         dates = Dates(dates)
         if dates.empty:
             return pl.DataFrame()
-        pldf = pl.concat([self.data_frames[date] for date in dates] , how = 'vertical')
-        return pldf
+        frames = [self.data_frames[date] for date in dates]
+        populated = [frame for frame in frames if not frame.is_empty()]
+        return pl.concat(populated, how='vertical') if populated else frames[0]
 
-    def add_one_day(self , date : int , df : pd.DataFrame):
-        pldf = pl.from_pandas(df , include_index = bool([i for i in df.index.names if i]))
-        pldf = pldf.with_columns(pl.lit(date).alias(self.date_key))
+    def add_one_day(self , date : int , df : pd.DataFrame | pl.DataFrame):
+        pldf = df if isinstance(df, pl.DataFrame) else pl.from_pandas(
+            df, include_index=any(df.index.names))
+        pldf = pldf.with_columns(pl.repeat(date, pl.len()).alias(self.date_key))
         self.data_frames[date] = pldf

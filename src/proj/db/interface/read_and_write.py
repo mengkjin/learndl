@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     
 __all__ = ['dfIOHandler' , 'save' , 'load' , 'loads' , 'load_pl' , 'loads_pl']
 
+STOCK_MINUTE_KEYS = frozenset(('min', '5min', '10min', '15min', '30min', '60min'))
+
 def save(
     df : pd.DataFrame | pl.DataFrame | None , 
     db_src : str , db_key : str , date = None , *, 
@@ -75,7 +77,8 @@ def load(
     """
     db_path = DBPath(db_src , db_key)
     df = load_df(db_path.path(date , use_alt = use_alt , closest = closest , indent = indent , vb_level = vb_level) , 
-                 missing_ok = missing_ok , key_column = None)
+                 missing_ok = missing_ok , key_column = None,
+                 read_with_polars = db_src in ('trade_ts', 'trade_js') and db_key in STOCK_MINUTE_KEYS)
     df = dfHandler.load_process_pandas(df , date , reassign_date_col = key_column , syntax = db_path.syntax(date) , indent = indent , vb_level = vb_level , **kwargs)
     return df
 
@@ -108,7 +111,8 @@ def loads(
     paths = db_path.get_paths(dates , start , end , use_alt = use_alt , closest = closest)
     if not paths:
         return pd.DataFrame()
-    df = load_df(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator)
+    df = load_df(paths , key_column = key_column , override_existing_key = override_existing_key , accelerator = accelerator,
+                 read_with_polars = db_src in ('trade_ts', 'trade_js') and db_key in STOCK_MINUTE_KEYS)
     df = dfHandler.load_process_pandas(df , syntax = db_path.syntax(dates) , indent = indent , vb_level = vb_level , **kwargs)
     if fill_datavendor:
         from src.data.loader import DATAVENDOR

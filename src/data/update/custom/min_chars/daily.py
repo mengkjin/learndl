@@ -224,7 +224,7 @@ def _with_derived(df : pl.DataFrame , * , include_side_wap : bool) -> pl.DataFra
     return df
 
 
-def _prepare_bars(raw : pd.DataFrame) -> pl.DataFrame:
+def _prepare_bars(raw : pl.DataFrame | pd.DataFrame) -> pl.DataFrame:
     """Attach market return, lags, and bar-level flags used by daily HF stats."""
     df = prepare_ret_bars(raw)
     mkt = df.group_by('minute').agg(pl.col('ret').mean().alias('mkt'))
@@ -312,8 +312,8 @@ def calc_min_chars(date : int) -> pd.DataFrame:
     pandas.DataFrame
         Columns ``OUTPUT_COLUMNS``.  Empty if no 1-minute bars exist.
     """
-    raw = stock_rows(DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
-    if raw.empty:
+    raw = stock_rows(DB.load_pl(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
+    if raw.is_empty():
         return pd.DataFrame(columns = list(OUTPUT_COLUMNS))
 
     bars = _prepare_bars(raw)

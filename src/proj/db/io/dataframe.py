@@ -126,7 +126,8 @@ class dfIOHandler:
     def load_pandas_multiple(
         cls , paths : strPaths , * ,
         accelerator : PandasAccelerator | None = 'thread' , 
-        mapper : PdMapper = None
+        mapper : PdMapper = None,
+        read_with_polars: bool = False,
     ) -> dict[int | Any, pd.DataFrame]:
         """load dataframe from multiple paths in accelerating mode"""
         if snapshot_active():
@@ -143,9 +144,11 @@ class dfIOHandler:
             return dfs
 
         def loader(p : strPath) -> pd.DataFrame:
+            if read_with_polars:
+                return dfHandler.apply_mapper(cls.load_polars(p).to_pandas(), mapper)
             return cls.load_pandas(p , mapper = mapper)
         if accelerator is None:
-            dfs = {d:loader(p) for d,p in paths.items() if not loader(p).empty}
+            dfs = {d: df for d, p in paths.items() if not (df := loader(p)).empty}
         elif accelerator == 'dask':
             from dask.delayed import delayed
             from dask.base import compute
@@ -244,7 +247,8 @@ def load_df(
     path : strPath | strPaths , * , 
     missing_ok = True , key_column : str | None = 'date' , override_existing_key = False ,
     accelerator : PandasAccelerator | None = 'thread' , 
-    mapper : PdMapper = None
+    mapper : PdMapper = None,
+    read_with_polars: bool = False,
 ):
     """
     load dataframe from path or paths
@@ -262,14 +266,18 @@ def load_df(
         mapper function to execute on each dataframe
     """
     if isinstance(path , strPath):
-        df = dfIOHandler.load_pandas(path , missing_ok = missing_ok , mapper = None)
+        if read_with_polars:
+            df = dfIOHandler.load_polars(path, missing_ok=missing_ok).to_pandas()
+        else:
+            df = dfIOHandler.load_pandas(path , missing_ok = missing_ok , mapper = None)
     
     else:
         if accelerator in ['polars' , 'polars_thread']:
             polars_accelerator = 'thread' if accelerator == 'polars_thread' else None
             df = load_df_pl(path , missing_ok = missing_ok , key_column = key_column , override_existing_key = override_existing_key , accelerator = polars_accelerator , mapper = None).to_pandas()
         else:
-            dfs = dfIOHandler.load_pandas_multiple(path , accelerator = accelerator , mapper = None)
+            dfs = dfIOHandler.load_pandas_multiple(path , accelerator = accelerator , mapper = None,
+                                                   read_with_polars=read_with_polars)
             if not dfs and missing_ok:
                 return pd.DataFrame()
             temp_key = f'_concat_index_{np.random.randint(1000000)}'

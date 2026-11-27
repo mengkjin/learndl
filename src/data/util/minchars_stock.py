@@ -32,6 +32,8 @@ def stock_rows(df, known=None, *, source='min_chars'):
         ids = df['secid'] if 'secid' in df.columns else df.index.get_level_values('secid')
         result = df.loc[ids.isin(known)]
     else:
+        if df.is_empty():
+            return df
         if not df.schema['secid'].is_integer():
             raise ValueError(f'{source}: secid must be integer, got {df.schema["secid"]}')
         result = df.filter(pl.col('secid').is_in(pl.Series(known).implode()))

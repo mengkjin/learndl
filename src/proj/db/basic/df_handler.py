@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 
 from src.proj.core import lit
 from src.proj.log import Logger
-from .code_mapper import secid2secid
+from .code_mapper import secid2secid, secid2secid_polars
 
 if TYPE_CHECKING:
     import polars as pl
@@ -74,7 +74,7 @@ class dfHandler:
             ret = df
         elif isinstance(df , pl.DataFrame):
             if 'secid' in df.columns: 
-                ret = df.with_columns(pl.from_pandas(secid2secid(df['secid'].to_pandas())).alias('secid')) 
+                ret = df.with_columns(secid2secid_polars(df['secid']).alias('secid'))
         else:
             raise ValueError(f'Unsupported dataframe type: {type(df)}')
         return ret

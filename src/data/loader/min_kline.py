@@ -40,9 +40,9 @@ class MinKLineAccess(DateDataAccess):
 
     def data_loader(self , date , data_type):
         """Load a single-date minute-bar slice, filtered to listed securities."""
-        df = DB.load(self.DB_SRC , self.DB_KEYS[data_type] , date , vb_level = 'never' , use_alt = True)
-        if not df.empty:
-            df = df.query('secid in @self.get_secid(@date)')
+        df = DB.load_pl(self.DB_SRC, self.DB_KEYS[data_type], date, vb_level='never', use_alt=True)
+        if not df.is_empty():
+            df = df.filter(pl.col('secid').is_in(pl.Series(self.get_secid(date)).implode())).fill_nan(None)
         return df
 
     def db_loads_callback(self , *args , **kwargs):
@@ -58,6 +58,8 @@ class MinKLineAccess(DateDataAccess):
         column (previous bar's close, or open for the first bar of the day) and
         computes ``ret = (close - preclose) / preclose``.
         """
+        if df.is_empty():
+            return df
         df = df.with_columns(pl.col('secid').cast(pl.Int64))
         if with_ret:
             df = df.with_columns(

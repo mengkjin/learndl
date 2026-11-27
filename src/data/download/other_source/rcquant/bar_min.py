@@ -20,6 +20,7 @@ backfill is manual only; daily update does not trigger it.
 from __future__ import annotations
 import rqdatac
 import pandas as pd
+import polars as pl
 import numpy as np
 import warnings
 
@@ -30,7 +31,7 @@ from collections.abc import Sequence
 
 from src.proj import MACHINE , CALENDAR , Dates , DB , Base , Save , Load , Logger
 from src.proj.util.catcher import IOCatcher
-from src.data.util import secid_adjust , trade_min_reform
+from src.data.util import secid_adjust , trade_min_reform_pl
 
 from .initializer import RQInitializer , MinDataType , RQ_PATH , QuotaExceeded , is_quota_exceeded
 
@@ -418,11 +419,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
         else:
             for dt in dates:
                 with date_lock(RQ_PATH, data_type, dt):
-                    for x_min in x_mins_to_update(dt, data_type):
-                        min_df = DB.load('trade_ts', src_key(data_type), dt)
-                        x_min_df = trade_min_reform(min_df, x_min, 1)
-                        _save_bar(x_min_df, 'trade_ts', src_key(data_type, x_min), dt,
-                                  indent=self.indent + 1, vb_level=self.vb_level + 1)
+                    RcquantMinBarDownloader._publish_missing_periods(self, dt, data_type)
             self.logger.success(f'Transform RcQuant {data_type} X-min bars at {dates}')
             flags += Base.UpdateFlag.SUCCESS
         return flags.summarize()
@@ -487,14 +484,23 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 check_sec_backfill_quality(None, instrument_list, date)
             return False
 
+    def _publish_missing_periods(self, date, data_type):
+        periods = x_mins_to_update(date, data_type)
+        if periods:
+            minute = DB.load_pl('trade_ts', src_key(data_type), date, missing_ok=False)
+            RcquantMinBarDownloader._publish_periods(self, minute, date, data_type, periods)
+
+    def _publish_periods(self, minute, date, data_type, periods):
+        for period in periods:
+            _save_bar(trade_min_reform_pl(minute, period), 'trade_ts', src_key(data_type, period),
+                      date, indent=self.indent + 1, vb_level=self.vb_level + 1)
+
     def _publish_downloaded_min(self, data, date, data_type, rebuild_all):
         minute = self.rcquant_min_to_normal_min(data, data_type)
         kwargs = {'indent': self.indent + 1, 'vb_level': self.vb_level + 1}
         _save_bar(minute, 'trade_ts', src_key(data_type), date, **kwargs)
         if rebuild_all:
-            for period in SEC_PERIODS[1:]:
-                _save_bar(trade_min_reform(minute.copy(), period), 'trade_ts',
-                          src_key(data_type, period), date, **kwargs)
+            RcquantMinBarDownloader._publish_periods(self, pl.from_pandas(minute), date, data_type, SEC_PERIODS[1:])
             atomic_frame(pd.DataFrame([_raw_identity(date)]), _sec_receipt(date), vb_level='never')
 
     def rcquant_min_to_normal_min(self , df : pd.DataFrame , data_type : MinDataType) -> pd.DataFrame:
@@ -614,13 +620,7 @@ class RcquantMinBarDownloader(Base.BasicUpdater):
                 filled.append(dt)
                 continue
             with date_lock(RQ_PATH, data_type, dt):
-                for x_min in x_mins_to_update(dt , data_type = data_type):
-                    min_df = DB.load('trade_ts' , src_key(data_type) , dt)
-                    x_min_df = trade_min_reform(min_df , x_min , 1)
-                    _save_bar(
-                        x_min_df , 'trade_ts' , src_key(data_type , x_min) , dt ,
-                        indent = self.indent + 1 , vb_level = self.vb_level + 1 ,
-                    )
+                RcquantMinBarDownloader._publish_missing_periods(self, dt, data_type)
             filled.append(dt)
             self.logger.success(
                 f'Backfill RcQuant sec bar min {dt} ({len(filled)}/{len(dates)} this run)'

@@ -98,14 +98,14 @@ class MinCharsSchedule:
         return {'start' : start , 'end' : end , 'overwrite' : overwrite}
 
 
-def prepare_ret_bars(raw : pd.DataFrame) -> pl.DataFrame:
+def prepare_ret_bars(raw : pl.DataFrame | pd.DataFrame) -> pl.DataFrame:
     """
     Standard 1-minute bars: session id, close-to-close ``ret``, buy/sell weights.
 
     First bar of each stock-day uses ``open`` as preclose.  ``px`` is bar VWAP
     falling back to close.
     """
-    df = pl.from_pandas(raw)
+    df = raw.fill_nan(None) if isinstance(raw, pl.DataFrame) else pl.from_pandas(raw)
     if 'vwap' not in df.columns:
         df = df.with_columns(pl.col('close').alias('vwap'))
     return (
@@ -144,8 +144,8 @@ def prepare_ret_bars(raw : pd.DataFrame) -> pl.DataFrame:
 
 def load_ret_panel(date : int) -> pl.DataFrame:
     """Load one date of ``secid/ret/volume/amount``; empty frame if min is missing."""
-    raw = stock_rows(DB.load(DB_MIN_SRC , MIN_KEY , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
-    if raw.empty:
+    raw = stock_rows(DB.load_pl(DB_MIN_SRC , MIN_KEY , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
+    if raw.is_empty():
         return pl.DataFrame(schema = {
             'secid' : pl.Int64 ,
             'ret' : pl.Float32 ,

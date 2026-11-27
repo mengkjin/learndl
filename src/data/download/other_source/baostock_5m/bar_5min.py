@@ -16,7 +16,7 @@ import pandas as pd
 from typing import Any , Literal , TypeAlias
 
 from src.proj import PATH , CALENDAR , Dates , DB , Base , Save , Load
-from src.data.util import secid_adjust , trade_min_reform
+from src.data.util import secid_adjust , trade_min_reform_pl
 
 __all__ = ['Baostock5minBarDownloader']
 
@@ -179,15 +179,16 @@ class Baostock5minBarDownloader(Base.BasicUpdater):
             return Base.UpdateFlag.FAILED
                 
         dates = x_mins_update_dates()
-        updated = False
         with self.logger.subprocess(idt = 1 , vb = 1):
             for dt in dates:
-                for x_min in x_mins_to_update(dt):
-                    five_min_df = DB.load('trade_ts' , '5min' , dt)
-                    x_min_df = trade_min_reform(five_min_df , x_min , 5)
-                    DB.save(x_min_df , 'trade_ts' , f'{x_min}min' , dt , indent = self.indent , vb_level = self.vb_level)
-                    updated = updated or mark
-                self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed')
+                periods = x_mins_to_update(dt)
+                if periods:
+                    five_min_df = DB.load_pl('trade_ts', '5min', dt, missing_ok=False)
+                    for x_min in periods:
+                        bars = trade_min_reform_pl(five_min_df, x_min, 5)
+                        DB.save(bars.to_pandas(), 'trade_ts', f'{x_min}min', dt,
+                                indent=self.indent, vb_level=self.vb_level)
+                        self.logger.stdout(f'baostock {x_min}min bars at {dt} transformed')
         if len(dates) > 0:
             self.logger.success(f'Transform baostock X-min bars at {dates}')
         return Base.UpdateFlag.SUCCESS

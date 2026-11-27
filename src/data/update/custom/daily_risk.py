@@ -18,9 +18,9 @@ Features
 from __future__ import annotations
 import pandas as pd
 import numpy as np
+import polars as pl
 
 from typing import Any
-from collections.abc import Callable
 
 from src.proj.db.io.output_lock import output_lock
 from src.proj import CALENDAR , DB , Base , Dates
@@ -60,43 +60,24 @@ def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""
     return series.where(np.isfinite(series) , fill_value)
 
-def _get_inputs(date : int) -> dict[str , pd.DataFrame]:
-    """
-    Load the three data sources needed for daily risk calculation on ``date``.
-
-    Returns a dict with keys ``'quote'`` (daily OHLCV), ``'moneyflow'`` (daily
-    money-flow), and ``'min'`` (5-minute bars), each indexed by ``secid``.
-    """
-    inputs : dict[str , pd.DataFrame] = {
-        'quote' : DB.load('trade_ts' , 'day' , date) ,
-        'moneyflow' : DB.load('trade_ts' , 'day_moneyflow' , date),
-        'min' : DB.load('trade_ts' , '5min' , date , use_alt=True)
+def _get_inputs(date: int) -> dict[str, pd.DataFrame | pl.DataFrame]:
+    return {
+        'quote': DB.load('trade_ts', 'day', date).set_index('secid'),
+        'moneyflow': DB.load('trade_ts', 'day_moneyflow', date).set_index('secid'),
+        'min': DB.load_pl('trade_ts', '5min', date, use_alt=True),
     }
-    for name , df in inputs.items():
-        if not df.empty:
-            inputs[name] = df.set_index('secid')
-    return inputs
 
-def calc_daily_risk(date : int):
-    """
-    Dispatch all 8 daily risk feature functions for ``date`` and concatenate results.
 
-    Returns a DataFrame with one row per secid, aligned to the quote universe.
-    """
+def calc_daily_risk(date: int):
+    """Compute daily risk features aligned to the daily quote universe."""
     inputs = _get_inputs(date)
-    funcs : list[Callable[[pd.DataFrame,] , pd.Series]] = [
-        day_true_range , 
-        day_turnover ,
-        day_largebuy_price_deviation , 
-        day_smallbuy_percentage , 
-        day_sqrt_avg_size , 
-        day_open_close_percentage , 
-        day_5min_ret_volatility , 
-        day_5min_ret_skewness
-    ]
-    results = {func.__name__ : func(**inputs) for func in funcs}
-    result = pd.concat([df.reindex(inputs['quote'].index) for df in results.values()] , axis = 1).reset_index()
-    return result
+    quote, moneyflow = inputs['quote'], inputs['moneyflow']
+    daily = [day_true_range(quote), day_turnover(quote),
+             day_largebuy_price_deviation(quote, moneyflow),
+             day_smallbuy_percentage(quote, moneyflow)]
+    minute = _minute_risk(quote, inputs['min'], moneyflow)
+    return pd.concat([*daily, minute], axis=1).reset_index()
+
 
 def day_true_range(quote : pd.DataFrame , **kwargs) -> pd.Series:
     """Normalised true range: max(high-low, abs(high-preclose), abs(low-preclose)) / preclose."""
@@ -122,40 +103,42 @@ def day_smallbuy_percentage(quote : pd.DataFrame , moneyflow : pd.DataFrame , **
     q['small_buy_pct'] = _fillinf((q['buy_sm_amount']) / q['amount'] * 10 , 0)
     return q['small_buy_pct']
 
-def day_sqrt_avg_size(quote : pd.DataFrame , min : pd.DataFrame , moneyflow : pd.DataFrame , **kwargs) -> pd.Series:
-    """Square root of average trade size (total amount / estimated trade count)."""
-    if not min.empty and 'num_trades' in min.columns:
-        num_trades = min.groupby('secid')['num_trades'].sum()
+def _minute_risk(quote: pd.DataFrame, bars: pl.DataFrame, moneyflow: pd.DataFrame) -> pd.DataFrame:
+    daily = pl.from_pandas(quote[['amount']].reset_index())
+    if bars.is_empty():
+        bars = pl.DataFrame(schema={'secid': daily.schema['secid'], 'minute': pl.Int64,
+                                    'amount': daily.schema['amount'], 'close': pl.Float64})
+    bars = bars.fill_nan(None)
+    trades_from_bars = 'num_trades' in bars.columns
+    # Preserve the historical positional shift before dropping each opening bar.
+    returns = bars.with_columns((pl.col('close') / pl.col('close').shift(1) - 1)
+                                .fill_nan(None).alias('ret')).filter(pl.col('minute') >= 1)
+    moments = returns.group_by('secid').agg(
+        pl.col('ret').std(ddof=1).alias('ret_volatility'),
+        pl.when(pl.col('ret').is_infinite().any()).then(None)
+        .when((pl.col('ret').count() >= 3) & (pl.col('ret').max() == pl.col('ret').min())).then(0.0)
+        .otherwise(pl.col('ret').skew(bias=False)).alias('ret_skewness'),
+    )
+    open_close = bars.filter((pl.col('minute') <= 5) | (pl.col('minute') >= 42)).group_by('secid').agg(
+        pl.col('amount').sum().alias('open_close_amount'),
+    )
+    if trades_from_bars:
+        counts = bars.group_by('secid').agg(pl.col('num_trades').sum())
     else:
-        avg_size = [5 , 20 , 100 , 500]
-        mf_buy_size = moneyflow.loc[:,['buy_sm_amount' , 'buy_md_amount' , 'buy_lg_amount' , 'buy_elg_amount']]
-        mf_buy_num = (mf_buy_size / avg_size).sum(axis = 1)
-
-        mf_sell_size = moneyflow.loc[:,['sell_sm_amount' , 'sell_md_amount' , 'sell_lg_amount' , 'sell_elg_amount']]
-        mf_sell_num = (mf_sell_size / avg_size).sum(axis = 1)
-
-        num_trades = (mf_buy_num + mf_sell_num) / 2 * 10
-        num_trades = num_trades.rename('num_trades')
-
-    q = quote.join(num_trades)
-    q['sqrt_avg_size'] = _fillinf((q['amount'] / q['num_trades']).pow(0.5) , np.nan)
-    return q['sqrt_avg_size']
-
-def day_open_close_percentage(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
-    """Fraction of daily amount traded in the opening and closing auction periods (÷1000)."""
-    ocamount = min.query('minute <= 5 or minute >= 42').groupby('secid')['amount'].sum().rename('open_close_amount')
-    q = quote.join(ocamount)
-    q['open_close_pct'] = _fillinf(q['open_close_amount'] / q['amount'] / 1000 , 0)
-    return q['open_close_pct']
-
-def day_5min_ret_volatility(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
-    """Standard deviation of 5-minute bar returns across the trading day."""
-    min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
-    ret_volatility = min.query('minute >= 1').groupby('secid')['ret'].std().rename('ret_volatility')
-    return quote.join(ret_volatility)['ret_volatility']
-
-def day_5min_ret_skewness(quote : pd.DataFrame , min : pd.DataFrame , **kwargs) -> pd.Series:
-    """Skewness of 5-minute bar returns across the trading day."""
-    min = min.assign(ret = lambda x: x['close'] / x['close'].shift(1) - 1)
-    ret_skewness = min.query('minute >= 1').groupby('secid')['ret'].skew().rename('ret_skewness')
-    return quote.join(ret_skewness)['ret_skewness']
+        fields = [(f'{side}_{size}_amount', scale) for side in ('buy', 'sell')
+                  for size, scale in zip(('sm', 'md', 'lg', 'elg'), (5, 20, 100, 500))]
+        counts = pl.from_pandas(moneyflow[[name for name, _ in fields]].reset_index()).select(
+            'secid', (pl.sum_horizontal([(pl.col(name) / scale).fill_null(0)
+                                         for name, scale in fields]) / 2 * 10).alias('num_trades'),
+        )
+    ratio = pl.col('open_close_amount') / pl.col('amount') / 1000
+    sqrt_size = (pl.col('amount') / pl.col('num_trades')).sqrt()
+    result = (
+        daily.join(counts, on='secid', how='left', maintain_order='left')
+        .join(open_close, on='secid', how='left', maintain_order='left')
+        .join(moments, on='secid', how='left', maintain_order='left')
+        .select('secid', pl.when(sqrt_size.is_finite()).then(sqrt_size).alias('sqrt_avg_size'),
+                pl.when(ratio.is_finite()).then(ratio).otherwise(0).alias('open_close_pct'),
+                'ret_volatility', 'ret_skewness')
+    )
+    return result.to_pandas().set_index('secid').reindex(quote.index)

@@ -29,7 +29,7 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
     DB_KEY = "risk"
 
     @classmethod
-    def calculate(cls, date: int, *, backend: str = "pandas", inputs=None):
+    def calculate(cls, date: int, *, backend: str = "polars", inputs=None):
         """Compute one date; Polars independently replaces four minute-derived metrics."""
         return calc_market_daily_risk(date, inputs=inputs, backend=backend)
 
@@ -93,16 +93,16 @@ class MarketDailyRiskUpdater(BasicCustomUpdater):
                 save(combined, cls.DB_SRC, cls.DB_KEY)
 
 
-def _get_inputs(date: int) -> dict[str, pd.DataFrame]:
-    inputs: dict[str, pd.DataFrame] = {
+def _get_inputs(date: int) -> dict:
+    inputs = {
         "quote": DB.load("trade_ts", "day", date),
         "val": DB.load("trade_ts", "day_val", date),
         "moneyflow": DB.load("trade_ts", "day_moneyflow", date),
-        "min": DB.load("trade_ts", "5min", date, use_alt=True),
     }
     for name, df in inputs.items():
         if not df.empty:
             inputs[name] = df.set_index("secid")
+    inputs["min"] = DB.load_pl("trade_ts", "5min", date, use_alt=True)
     return inputs
 
 
@@ -110,10 +110,12 @@ def _fillinf(series: pd.Series, fill_value: float | Any = 0) -> pd.Series:
     return series.where(np.isfinite(series), fill_value)
 
 
-def calc_market_daily_risk(date: int, *, inputs=None, backend="pandas"):
+def calc_market_daily_risk(date: int, *, inputs=None, backend="polars"):
     if backend not in ("pandas", "polars"):
         raise ValueError(f"Unknown risk backend: {backend}")
     inputs = _get_inputs(date) if inputs is None else inputs
+    if backend == "pandas" and not isinstance(inputs["min"], pd.DataFrame):
+        inputs = {**inputs, "min": inputs["min"].to_pandas().set_index("secid")}
     funcs = [
         market_day_true_range,
         market_day_turnover,
@@ -286,8 +288,18 @@ def polars_minutes(quote, val, minutes, moneyflow):
     """Recompute returns, trade counts, open/close fraction and moments in Polars."""
     import polars as pl
 
-    q, v, m = _minute_inputs(quote, val, minutes)
-    q, v, m = [pl.from_pandas(f, nan_to_null=True) for f in (q, v, m)]
+    q, v = [pl.from_pandas(_minute_rows(f), nan_to_null=True) for f in (quote, val)]
+    m = minutes.fill_nan(None) if isinstance(minutes, pl.DataFrame) else pl.from_pandas(_minute_rows(minutes))
+    key_columns = ["secid", "minute", *(["date"] if "date" in m else [])]
+    if m.is_empty() or q.is_empty() or v.is_empty():
+        raise ValueError("Empty required daily/minute source")
+    identities = m.select(key_columns)
+    if any(identities.null_count().row(0)) or identities.is_duplicated().any():
+        raise ValueError("Missing/duplicate security/date/minute")
+    if "date" in m and m["date"].n_unique() != 1:
+        raise ValueError("Expected one trading date per market aggregation")
+    if q["secid"].is_duplicated().any() or v["secid"].is_duplicated().any():
+        raise ValueError("Duplicate daily security identifiers")
     keys = ["secid"] + (["date"] if "date" in m.columns else [])
     m = m.sort(keys + ["minute"]).with_columns(
         (pl.col("close") / pl.col("close").shift(1).over(keys) - 1)

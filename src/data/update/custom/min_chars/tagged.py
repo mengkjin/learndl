@@ -93,9 +93,9 @@ def calc_min_chars_tag(date : int) -> pd.DataFrame:
     pandas.DataFrame
         Columns ``TAG_COLUMNS``.  Empty if min or roll is missing.
     """
-    raw = stock_rows(DB.load(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
+    raw = stock_rows(DB.load_pl(DB_MIN_SRC , 'min' , date , use_alt = True , vb_level = 'never'), source=f'minute bars {date}')
     roll = stock_rows(DB.load(DB_SRC , 'min_chars_roll' , date , vb_level = 'never'), source=f'roll chars {date}')
-    if raw.empty or roll.empty:
+    if raw.is_empty() or roll.empty:
         return pd.DataFrame(columns = list(TAG_COLUMNS))
 
     th = pl.from_pandas(roll).select(['secid' , *_ROLL_TH])

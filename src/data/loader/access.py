@@ -18,10 +18,13 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from abc import abstractmethod
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from src.proj import CALENDAR , Base , Dates
 from src.data.util import INFO , DFCollection , PLDFCollection
+
+if TYPE_CHECKING:
+    import polars as pl
 
 __all__ = ['DateDataAccess']
 
@@ -59,9 +62,9 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
             for data_type in self.DB_KEYS.keys() if data_type in self.LOAD_AS_PL}
        
     @abstractmethod
-    def data_loader(self , date , data_type : str) -> pd.DataFrame | None:
+    def data_loader(self , date , data_type : str) -> pd.DataFrame | pl.DataFrame | None:
         """
-        loader function should return a pd.DataFrame or None
+        loader function should return a pandas or Polars DataFrame, or None
         if None is returned , the data will not be added to the collection
         if DataFrame is returned , it will be added to the collection , even if it is empty
         """
@@ -196,4 +199,3 @@ class DateDataAccess(Base.BoundLogger , metaclass=Base.SingletonABC):
         min_finite_mask = np.where(min_finite_mask.reindex(secid_values).fillna(False).values , np.nan , 0)
 
         return df + min_finite_mask
-    

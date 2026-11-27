@@ -1,7 +1,7 @@
 """Isolated dd51a3cb 15-minute experiment; never repairs infinite VWAP.
 
-The two aggregation functions below are frozen from dd51a3cb. Do not route
-this experiment through the production aggregator or VWAP repair mixin.
+The frozen pandas helpers provide the dd51a3cb reference. Production loading
+uses the historical VWAP rule through the Polars aggregator.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import polars as pl
 from collections.abc import Callable
 
 from src.proj import CALENDAR, DB
-from src.data.util import DataBlock
+from src.data.util import DataBlock, trade_min_reform_pl
 from src.data.loader import BlockLoader
 from ..core import TradePreProcessor
 from .registry import TRADE_ALLOW_INACTIVE
@@ -107,8 +107,8 @@ class PrePro_15m_original(TradePreProcessor):
                 if self.source_observer is not None:
                     self.source_observer({'date': int(date), 'status': 'missing_min_or_day_source'})
                 continue
-            raw = DB.load('trade_ts', 'min', int(date), use_alt=True, vb_level='never')
-            if raw.empty:
+            raw = DB.load_pl('trade_ts', 'min', int(date), use_alt=True, vb_level='never')
+            if raw.is_empty():
                 if self.require_continuous_dates:
                     raise ValueError(f'15m_original: missing minute source {date}')
                 if self.source_observer is not None:
@@ -117,19 +117,18 @@ class PrePro_15m_original(TradePreProcessor):
             required = {'secid', 'minute', 'open', 'high', 'low', 'close', 'amount', 'volume', 'vwap'}
             if not required.issubset(raw.columns):
                 raise ValueError(f'15m_original: missing minute columns {required - set(raw.columns)} on {date}')
-            with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
-                bars = trade_min_reform(raw.copy(), 15)
-            if set(bars.minute.unique()) != set(range(16)):
+            bars = trade_min_reform_pl(raw, 15, legacy_vwap=True)
+            if set(bars['minute'].unique()) != set(range(16)):
                 raise ValueError(f'15m_original: incomplete bar axis on {date}')
             if self.source_observer is not None:
                 self.source_observer({'date': int(date), 'minute_rows': len(raw),
-                    'amount_dtype': str(raw['amount'].dtype), 'volume_dtype': str(raw['volume'].dtype),
+                    'amount_dtype': str(raw.schema['amount']).lower(), 'volume_dtype': str(raw.schema['volume']).lower(),
                     'bar_rows': len(bars)})
-            bars['date'] = int(date)
-            parts.append(bars[['secid', 'date', 'minute', 'open', 'close', 'high', 'low', 'vwap', 'volume']])
+            parts.append(bars.with_columns(pl.lit(int(date), dtype=pl.Int64).alias('date')).select(
+                'secid', 'date', 'minute', 'open', 'close', 'high', 'low', 'vwap', 'volume'))
         if not parts:
             return {'15m': DataBlock(), 'day': DataBlock()}
-        intraday = DataBlock.from_polars(pl.from_pandas(pd.concat(parts, ignore_index=True)))
+        intraday = DataBlock.from_polars(pl.concat(parts, how='vertical_relaxed').fill_nan(None))
         intraday = intraday.align(secid=secid, date=dates, inplace=True)
         day = self.block_loaders(**kwargs)['day'].load(start, end).align(
             secid=intraday.secid, date=dates, inplace=True)
