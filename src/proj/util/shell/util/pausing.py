@@ -5,9 +5,11 @@ from __future__ import annotations
 import sys
 from typing import Literal , TypeAlias
 
-__all__ = ["compose_with_done_action" , "DoneActionType"]
+__all__ = ["compose_with_done_action" , "DoneActionType", "EXPLICIT_QUIT_CODE"]
 
-DoneActionType : TypeAlias = Literal['pause' , 'close' , 'keep']
+DoneActionType : TypeAlias = Literal['pause' , 'close' , 'keep', 'pause_unless_quit']
+
+EXPLICIT_QUIT_CODE = 85
 
 _WIN_ACTION_SUFFIX : dict[DoneActionType , str] = {
     'pause': " & echo. & echo Task complete. Press any key to exit... & timeout /t -1 >nul & exit",
@@ -22,6 +24,12 @@ _UNIX_ACTION_SUFFIX : dict[DoneActionType , str] = {
 
 def compose_with_done_action(command: str, *, done_action: DoneActionType = 'pause') -> str:
     """Append a platform-appropriate 'press any key to exit' snippet to ``command`` when requested."""
+    if done_action == 'pause_unless_quit':
+        if sys.platform == 'win32':
+            return (f'{command} & if errorlevel {EXPLICIT_QUIT_CODE} if not errorlevel '
+                    f'{EXPLICIT_QUIT_CODE + 1} exit 0' + _WIN_ACTION_SUFFIX['pause'])
+        return (f'{command}; if [ "$?" -eq {EXPLICIT_QUIT_CODE} ]; then exit 0; fi'
+                + _UNIX_ACTION_SUFFIX['pause'])
     if sys.platform == "win32":
         return f"{command}{_WIN_ACTION_SUFFIX[done_action]}"
     else:

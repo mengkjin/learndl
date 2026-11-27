@@ -297,7 +297,8 @@ class DirectCallHub(DirectCall):
             from src.api.calls.script import RunPipelineScript
 
             Logger.note(f'Spawning [RunPipelineScript] for [{runner.script_key}] in new pane')
-            RunPipelineScript.spawn_in_pane(script_key=runner.script_key, done_action='close')
+            RunPipelineScript.spawn_in_pane(
+                script_key=runner.script_key, close_on_quit=True, done_action='pause_unless_quit')
             return
 
         raise ValueError(f'Unknown top-level choice: {choice}')

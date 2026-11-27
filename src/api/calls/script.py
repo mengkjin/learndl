@@ -50,9 +50,10 @@ class RunPipelineScript(DirectCall):
 
         label_to_runner = {runner.format_path: runner for runner in runners}
         labels = list(label_to_runner.keys())
-        loop_message = 'Run again with different parameters?' if fixed_key else 'Run another script?'
+        loop_message = 'Run again with the same parameters? (No: change parameters)' if fixed_key else 'Run another script?'
 
-        for loop in AskFor.LoopTillExit(message=loop_message):
+        previous_kwargs = None
+        for loop in AskFor.LoopTillExit(ask=False):
             if fixed_key:
                 runner = ScriptRunner.from_key(fixed_key)
             else:
@@ -83,27 +84,43 @@ class RunPipelineScript(DirectCall):
                             schema = ScriptParamSchema.from_script(runner.script, main=main)
                     except ScriptStartDeferred:
                         return
-                flag_kwargs = AskFor.ScriptKwargs(
-                    schema,
-                    help_description=(
-                        f'Configure parameters for [{runner.script_key}] before execution. '
-                        'Required fields are prompted first; then accept defaults or enter each remaining field in order.'
-                    ),
-                )
-                if not loop.set_flag(flag_kwargs) or flag_kwargs.result is None:
-                    continue
-
-                kwargs = flag_kwargs.result
-                if runner.header.email:
-                    kwargs = {**kwargs, 'email': True}
+                if previous_kwargs is None:
+                    flag_kwargs = AskFor.ScriptKwargs(
+                        schema,
+                        help_description=f'Configure parameters for [{runner.script_key}] before execution.',
+                    )
+                    if not loop.set_flag(flag_kwargs) or flag_kwargs.result is None:
+                        continue
+                    kwargs = flag_kwargs.result
+                    if runner.header.email:
+                        kwargs = {**kwargs, 'email': True}
+                else:
+                    kwargs = previous_kwargs
                 Logger.note(f'Running [{runner.script_key}] with {kwargs}')
                 try:
                     with script_permit():
                         if main is None:
                             main = self._load_main(runner)
-                        main(**kwargs)
+                        try:
+                            main(**kwargs)
+                        except SystemExit as exc:
+                            if exc.code not in (None, 0):
+                                raise
                 except ScriptStartDeferred:
                     return
+
+            decision = AskFor.Retry(loop_message)
+            if decision.exit:
+                self._handle_quit('Quit selected')
+                return
+            previous_kwargs = kwargs if fixed_key and decision.valid else None
+
+    def _handle_quit(self, reason: str) -> None:
+        if self.kwargs.get('close_on_quit'):
+            from src.proj.util.shell.util.pausing import EXPLICIT_QUIT_CODE
+
+            raise SystemExit(EXPLICIT_QUIT_CODE)
+        super()._handle_quit(reason)
 
     @staticmethod
     def _load_main(runner: ScriptRunner) -> Callable[..., Any]:
