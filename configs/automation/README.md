@@ -870,7 +870,8 @@ its migration manifest together in the same commit.
 批间检查代码维护请求，每次服务运行最多补传约 20 秒，再交由下一次定时触发继续。
 日志轮换、截断无法恢复的区间会显示缺失提示并使用新代次。
 脚本退出前把运行日志原子移至私有 `remote_monitor/pending/`，与运行日志应位于同一文件系统。
-移交失败保留原文件。结束后进入最近结束列表，最终输出发布完成后保留 24 小时再清理。
+移交失败保留原文件。结束后进入最近结束列表，最终输出发布完成后保留 7 天再清理。
+升级时，尚未清理的日志会按最初的发布完成时间延长到 7 天。
 
 本机任务中心通过 Learndl Monitor 控制台启动，也可使用
 `uv run --frozen python -m src.api.task_monitor.launch --open`。

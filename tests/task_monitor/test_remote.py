@@ -87,12 +87,36 @@ class RemotePublicationTest(unittest.TestCase):
         self.task['status'] = 'complete'
         task = self.tick()
         self.assertEqual(read_volume(self.publisher.shared, task, 0), 'finished\n')
-        self.assertEqual(task['expires_at'], 100 + RETENTION)
+        expires_at = 100 + 7 * 24 * 3600
+        self.assertEqual(task['expires_at'], expires_at)
+        self.assertEqual(self.publisher.tick([], now=expires_at - 1)['tasks'][0]['task_id'], 'run-1')
         other = dict(self.task, task_id='run-2', status='running', log=None)
-        packet = self.publisher.tick([other], now=100 + RETENTION)
+        packet = self.publisher.tick([other], now=expires_at)
         self.assertEqual([t['task_id'] for t in packet['tasks']], ['run-2'])
         self.assertFalse((self.publisher.shared / 'tasks' / task_key('run-1')).exists())
         self.assertFalse((self.root / 'private/remote_monitor/pending' / (task_key('run-1') + '.md')).exists())
+
+    def test_existing_finished_log_expiration_extends_once_without_republishing_bytes(self):
+        one_day = 24 * 3600
+        self.log.write_text('finished before the upgrade\n')
+        self.task['status'] = 'complete'
+        with patch('src.api.task_monitor.remote_transport.RETENTION', one_day):
+            task = self.tick()
+        state_path = self.publisher.private / 'state.json'
+        state = json.loads(state_path.read_text())
+        del state['tasks'][task['key']]['finalized_at']
+        state_path.write_text(json.dumps(state))
+        segment = self.publisher.shared / 'tasks' / task['key'] / task['segments'][0]['file']
+        original_mtime = segment.stat().st_mtime_ns
+        self.publisher = Publisher(self.root / 'shared', self.root / 'private', 'server')
+
+        upgraded, = self.publisher.tick([], now=100 + one_day)['tasks']
+        self.assertEqual(upgraded['expires_at'], 100 + 7 * one_day)
+        self.assertEqual(upgraded['segments'], task['segments'])
+        self.assertEqual(segment.stat().st_mtime_ns, original_mtime)
+        self.assertEqual(read_volume(self.publisher.shared, upgraded, 0), self.log.read_text())
+        self.assertEqual(self.publisher.tick([], now=100 + 7 * one_day)['tasks'], [])
+        self.assertFalse(segment.exists())
 
     def test_published_queue_entries_disappear_when_linked_or_deferred(self):
         from src.api.task_monitor.core import TaskMonitorRepository
@@ -126,7 +150,7 @@ class RemotePublicationTest(unittest.TestCase):
 
         packet = self.publisher.tick([], now=130)
         self.assertEqual({row['task_id'] for row in packet['tasks']}, {'script', 'managed:scheduler:queued'})
-        self.publisher.tick([], now=115 + RETENTION)
+        self.publisher.tick([], now=115 + 24 * 3600)
         self.assertFalse((self.publisher.shared / 'tasks' / task_key('managed:scheduler:linked')).exists())
 
     def test_replacement_retains_previous_history_and_missing_volume_waits(self):

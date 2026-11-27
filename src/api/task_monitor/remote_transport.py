@@ -15,7 +15,9 @@ __all__ = ['CHUNK_BYTES', 'ROUND_BYTES', 'RETENTION', 'task_key', 'Publisher']
 
 CHUNK_BYTES = 256 * 1024
 ROUND_BYTES = 4 * 1024 * 1024
-RETENTION = 24 * 3600
+RETENTION = 7 * 24 * 3600
+_LEGACY_RETENTION = 24 * 3600
+_HIDDEN_RETENTION = 24 * 3600
 
 
 def task_key(task_id: str) -> str:
@@ -99,9 +101,14 @@ class Publisher:
             record = state['tasks'][identity]
             task = record['task']
             directory = Path('tasks') / identity
+            expires_at = record.get('expires_at')
+            if expires_at is not None and 'finalized_at' not in record:
+                # Existing logs retain their original publication time on upgrade.
+                record['finalized_at'] = expires_at - _LEGACY_RETENTION
+                record['expires_at'] = record['finalized_at'] + RETENTION
             hidden_since = record.get('hidden_since')
             if (record.get('expires_at', float('inf')) <= now
-                    or hidden_since is not None and hidden_since + RETENTION <= now):
+                    or hidden_since is not None and hidden_since + _HIDDEN_RETENTION <= now):
                 deleted.append(str(directory))
                 pending_delete.extend([identity + '.md', identity + '.json'])
                 del state['tasks'][identity]
@@ -153,9 +160,10 @@ class Publisher:
                     record.update(size=stat.st_size, complete=record['offset'] == stat.st_size)
             elif not active and not record.get('expires_at'):
                 record.update(complete=True, gap=True)
-            if not active and record.get('complete') and 'expires_at' not in record:
-                record['expires_at'] = now + RETENTION
-            if not record.get('expires_at') or record['expires_at'] == now + RETENTION:
+            finalizing = not active and record.get('complete') and 'expires_at' not in record
+            if finalizing:
+                record.update(finalized_at=now, expires_at=now + RETENTION)
+            if not record.get('expires_at') or finalizing:
                 self._compact(record, directory, stage, deleted)
             summary = dict(task, key=identity, generation=record['generation'], offset=record['offset'],
                            size=record.get('size', 0), complete=record.get('complete', False),
