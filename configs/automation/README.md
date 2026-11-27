@@ -32,8 +32,8 @@ The original RCQuant missing-minute backfill is complete and
 `rcquant_sec_backfill` remains available for manual use. The server schedule
 `nightly_maintenance` runs at 21:00 Asia/Shanghai and uses the existing
 RCQuant execution lock. Run `plan --diff`, `apply` and `status` on the server
-once to replace the old `rcquant_sec_none` timer. The old script remains a
-compatible entrypoint. The configured handlers, cutoff and grace period are
+once to replace the old `rcquant_sec_none` timer. An installed timer that still
+uses that task name runs the current nightly entrypoint. The configured handlers, cutoff and grace period are
 read from `configs/automation/nightly.yaml` on each run. The default stops
 starting work at midnight and forcibly ends a managed run at 00:10.
 
@@ -94,12 +94,22 @@ destination filesystem. Cleanup can run below the reserve. Space-reclaiming
 `space deferred` result leaves checkpoints available for the next scheduled or
 manual run.
 
-After the full history is ready, the handler replays minute-derived risk tables,
+When the full history is ready, nightly queues the migration completion email,
+records a handoff checkpoint and exits. The outbox retries delivery independently.
+If the mail cannot be queued, the next run retries the notification first.
+The next manual or scheduled run reuses the checkpoint, replays minute-derived risk tables,
 minute characteristics, factors and factor statistics, then rebuilds affected
 `fit` and `predict` blocks in checkpointed monthly shards. `15mt` and `30mt`
 add standardized trade counts to the corresponding six-feature blocks.
 The replay removes the retired `60m` model-input cache and its normalization
 statistics. The `trade_ts/60min` table remains a published quote period.
+
+Downstream table and factor updates publish one atomic file at a time. DataBlock
+publication retains the previous bundle under each frame's
+`.minute_consumers_v1_*_backup` directory. The backup uses hard links, so its
+bytes remain allocated after the live bundle is replaced. While a block rebuilds,
+its monthly shards and merged bundle also occupy space. The normal finish
+removes the shards and keeps the rollback backup.
 
 Daily and weekly updates can run throughout downstream replay. Writers serialize
 each dated file separately and merge shared market-risk and factor-statistics

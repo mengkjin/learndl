@@ -1,6 +1,7 @@
 """Run resumable maintenance handlers under one stable schedule."""
 from contextlib import closing
 from datetime import datetime
+from hashlib import sha256
 import os
 import sqlite3
 import time
@@ -12,6 +13,9 @@ import yaml
 
 from src.automation.scheduling.nightly_window import load_window, manual_nightly_slot
 from src.proj import Logger, MACHINE, PATH
+
+HISTORY_COMPLETE = 'history complete'
+HISTORY_NOTICE_DEFERRED = 'history notice deferred'
 
 
 def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
@@ -63,14 +67,30 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
                 if saved is not None:
                     Logger.stdout(f'RCQuant {DATE}: secmin compressed, {saved / GIB:.2f} GiB reclaimed')
             reason = 'historical minute publication blocks downstream'
-            recorded = job.read(f'{REVISION}_history', 'dates')
+            history_stage = f'{REVISION}_history'
+            recorded = job.read(history_stage, 'dates')
             dates = recorded if recorded and all(job.minute_path(day).is_file() for day in recorded) else None
             if dates is None:
                 dates = job.run(revised_dates=(DATE,), rebuild=False)
                 if dates is None:
                     return 'waiting on data', f'{reason}, history {job.history_progress}'
-                job.mark(f'{REVISION}_history', 'dates', dates)
+                job.mark(history_stage, 'dates', dates)
             job.history_progress = (len(dates), len(dates))
+            if job.read(history_stage, 'downstream_handoff') != dates:
+                from src.proj.util.web.emailer import Email
+
+                reason = 'historical minute completion email'
+                message = (
+                    f'已完成 {len(dates)} 个交易日的 RCQuant 历史分钟迁移'
+                    f'（{dates[0]} 至 {dates[-1]}）。本轮在下游重算前退出。'
+                    '下一次手动或定时运行会继续重算特征、因子和 DataBlock。'
+                )
+                digest = sha256(','.join(map(str, dates)).encode()).hexdigest()
+                if not Email.enqueue_once('RCQuant 历史分钟迁移完成', message,
+                                          delivery_id=f'nightly:{REPAIR}:{REVISION}:{digest}'):
+                    return HISTORY_NOTICE_DEFERRED, '邮件队列尚不可用，下次运行会先重试入队。'
+                job.mark(history_stage, 'downstream_handoff', dates)
+                return HISTORY_COMPLETE, message
             guard()
             from src.data.download.other_source.rcquant.sec_minute_downstream import rebuild_minute_consumers
             reason = f'downstream replay, native audit {state / REVISION}'
@@ -126,5 +146,5 @@ def run():
         summary = f'Nightly {name} {status}, {details}'
         Logger.conclude(summary)
         Logger.stdout(summary, vb_level=0)
-        if status in ('deadline deferred', 'space deferred'):
+        if status in (HISTORY_COMPLETE, HISTORY_NOTICE_DEFERRED, 'deadline deferred', 'space deferred'):
             break

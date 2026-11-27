@@ -30,8 +30,8 @@ ENTRYPOINTS = {
     'daily_update': 'scripts/1_autorun/0_daily_update.py',
     'production_model_update': 'scripts/1_autorun/6_production_model_update.py',
     'weekly_update': 'scripts/1_autorun/1_weekly_update.py',
-    'rcquant_sec_backfill': 'scripts/1_autorun/5_rcquant_sec_backfill.py',
-    'rcquant_sec_none': 'scripts/1_autorun/7_rcquant_sec_none.py',
+    'rcquant_sec_backfill': 'scripts/1_autorun/.5_rcquant_sec_backfill.py',
+    'rcquant_sec_none': 'scripts/1_autorun/8_nightly_maintenance.py',
     'nightly_maintenance': 'scripts/1_autorun/8_nightly_maintenance.py',
 }
 DAYS = ('sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat')

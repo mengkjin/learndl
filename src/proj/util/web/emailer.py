@@ -8,6 +8,7 @@ from datetime import datetime , timezone
 from email import encoders, policy
 from email.message import Message
 from email.parser import BytesParser
+from hashlib import sha256
 from .mail_package import MAX_BYTES, fingerprint, needs_preparation, wire
 from .mail_queue import MailQueue
 from email.mime.base import MIMEBase
@@ -291,12 +292,14 @@ class Email(BoundLogger, metaclass=NoInstance):
         _atomic_write(folder / 'meta.json' , json.dumps(meta , ensure_ascii = False , indent = 2).encode('utf-8'))
 
     @classmethod
-    def _enqueue(cls , message : Message , confirmation_message : str , last_error : str , attempts : int = 0) -> Path:
+    def _enqueue(cls, message: Message, confirmation_message: str, last_error: str,
+                 attempts: int = 0, *, name: str | None = None) -> Path:
         """Publish one assembled message. The directory appears only after both files exist."""
         root = PATH.email_outbox
         root.mkdir(parents = True , exist_ok = True)
-        name = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}_{uuid.uuid4().hex[:8]}"
-        staging = root / f'.{name}.tmp'
+        if name is None:
+            name = f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')}_{uuid.uuid4().hex[:8]}"
+        staging = root / f'.{name}.{uuid.uuid4().hex}.tmp'
         staging.mkdir(parents = True , exist_ok = False)
         try:
             _atomic_write(staging / 'message.eml' , message.as_bytes())
@@ -318,6 +321,21 @@ class Email(BoundLogger, metaclass=NoInstance):
         _fsync_dir(root)
         cls.logger.stdout(f'Email queued: {dest.name}' + (f': {last_error}' if last_error else ''))
         return dest
+
+    @classmethod
+    def enqueue_once(cls, title: str, body: str, *, delivery_id: str) -> bool:
+        """Persist an event in the ordinary outbox, including retries after caller interruption."""
+        if not MACHINE.emailable:
+            return False
+        name = 'event-' + sha256(delivery_id.encode()).hexdigest()
+        with cls._outbox_lock() as locked:
+            if not locked:
+                return False
+            root = PATH.email_outbox
+            if any((directory / name).is_dir() for directory in (root, root / '.archive', root / 'dead')):
+                return True
+            cls._enqueue(cls.message(title, body), '', '', name=name)
+            return True
 
     @classmethod
     def _move_dead(cls , folder : Path , meta : dict[str , Any] | None = None) -> None:

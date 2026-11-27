@@ -338,6 +338,7 @@ class NightlyTest(unittest.TestCase):
             self.assertEqual(handler(lambda: None, 0)[0], 'waiting on data')
             history.assert_not_called()
             downstream.assert_not_called()
+
         with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
                 patch.object(native, 'repair_native_day', return_value=True), \
                 patch.object(migration.Migration, 'run', return_value=None) as history, \
@@ -345,6 +346,72 @@ class NightlyTest(unittest.TestCase):
             self.assertEqual(handler(lambda: None, 0)[0], 'waiting on data')
             history.assert_called_once_with(revised_dates=(native.DATE,), rebuild=False)
             downstream.assert_not_called()
+
+    def test_history_completion_exits_once_before_downstream(self):
+        from src.proj.util.web.emailer import Email
+
+        days = [20260608, 20260609]
+        for day in days:
+            path = self.job.minute_path(day)
+            path.parent.mkdir(exist_ok=True)
+            path.touch()
+
+        def native_ready(job):
+            job.mark(f'{native.REVISION}_done', native.DATE, {'outputs': []})
+            return True
+
+        original_mark = migration.Migration.mark
+        interrupted = False
+        def mark(job, stage, item, value=True):
+            nonlocal interrupted
+            if item == 'downstream_handoff' and not interrupted:
+                interrupted = True
+                raise migration.EveningEnded
+            original_mark(job, stage, item, value)
+
+        with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
+                patch.object(native, 'repair_native_day', side_effect=native_ready), \
+                patch.object(migration.Migration, 'run', return_value=days) as history, \
+                patch.object(migration.Migration, 'mark', mark), \
+                patch.object(Email, 'enqueue_once', side_effect=[False, True, True]) as enqueue, \
+                patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers',
+                      return_value=True) as downstream:
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0],
+                             nightly_maintenance.HISTORY_NOTICE_DEFERRED)
+            downstream.assert_not_called()
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'deadline deferred')
+            downstream.assert_not_called()
+            status, message = nightly_maintenance.rcquant_minutes(lambda: None, 0)
+            self.assertEqual(status, nightly_maintenance.HISTORY_COMPLETE)
+            self.assertIn('2 个交易日', message)
+            downstream.assert_not_called()
+
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'complete')
+            history.assert_called_once_with(revised_dates=(native.DATE,), rebuild=False)
+            self.assertEqual(downstream.call_args.args[1], days)
+            self.assertEqual(enqueue.call_count, 3)
+            self.assertEqual(len({call.kwargs['delivery_id'] for call in enqueue.call_args_list}), 1)
+
+    def test_history_handoff_ends_dispatch_and_enters_task_mail_summary(self):
+        first = Mock(return_value=(nightly_maintenance.HISTORY_COMPLETE, 'history handoff'))
+        later = Mock()
+        window = SimpleNamespace(cutoff=4_000_000_000, tasks=('rcquant_minutes', 'later'))
+        with patch.object(nightly_maintenance, 'MACHINE', SimpleNamespace(name='mengkjin-server')), \
+                patch.object(nightly_maintenance, 'manual_nightly_slot', return_value=0), \
+                patch.object(nightly_maintenance, 'load_window', return_value=window), \
+                patch.object(nightly_maintenance, 'HANDLERS', {'rcquant_minutes': first, 'later': later}), \
+                patch.object(nightly_maintenance.Logger, 'conclude') as conclusion:
+            nightly_maintenance.run()
+        conclusion.assert_called_once_with('Nightly rcquant_minutes history complete, history handoff')
+        later.assert_not_called()
+
+    def test_legacy_rcquant_schedule_uses_the_current_entrypoint(self):
+        from src.automation.scheduling.config import ENTRYPOINTS
+
+        self.assertEqual(ENTRYPOINTS['rcquant_sec_none'], ENTRYPOINTS['nightly_maintenance'])
+        root = Path(__file__).resolve().parents[1]
+        self.assertTrue((root / ENTRYPOINTS['rcquant_sec_none']).is_file())
+        self.assertTrue((root / ENTRYPOINTS['rcquant_sec_backfill']).is_file())
 
     def test_production_exemption_requires_active_daily_only_inputs(self):
         from src.data.download.other_source.rcquant.sec_minute_downstream import _review_production

@@ -75,6 +75,21 @@ class OutboxRetryTest(unittest.TestCase):
         Email.retry_pending()
         self.assertTrue((self.root / 'dead' / 'broken').exists())
 
+    def test_enqueue_once_recognizes_a_pending_and_delivered_event(self):
+        message = EmailMessage()
+        message['To'] = 'nobody@example.invalid'
+        message['Subject'] = 'historical repair complete'
+        with patch.object(Email, 'message', return_value=message) as build:
+            for _ in range(2):
+                self.assertTrue(Email.enqueue_once('milestone', 'body', delivery_id='test:milestone'))
+            self.assertEqual(len(Email._pending_outbox()), 1)
+            self.deliver.assert_not_called()
+            self.assertEqual(Email.retry_pending()['sent'], 1)
+            self.assertTrue(Email.enqueue_once('milestone', 'body', delivery_id='test:milestone'))
+            build.assert_called_once()
+        self.assertEqual(len(Email._pending_outbox()), 0)
+        self.deliver.assert_called_once()
+
     def test_business_send_drains_retry_queue_without_duplicate(self):
         self.enqueue('old')
         msg = EmailMessage()
