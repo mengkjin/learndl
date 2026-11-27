@@ -105,6 +105,9 @@ The ledger persists each download batch and each published date. A quota
 interruption stops RCQuant downloads for the current night, and the next
 night resumes from the first incomplete batch. The previous raw and period
 files are retained in `.native_volume_warning_days_v1_backup` where replaced.
+Dates with missing or invalid native minutes stay pending while downloads
+continue for other dates. Later runs prioritize new dates before retrying
+known gaps and retain the live files for each pending date.
 
 Once all 183 dates are verified, a new downstream revision replays the full
 date range of minute-derived risk tables, minute characteristics, factors

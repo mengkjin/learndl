@@ -101,8 +101,16 @@ def _download(job: Migration, directory: Path, manifest: dict, expected: pl.Data
         if missing:
             job.check_space(directory, 0, operation=f'{date} download native batch {i + 1}')
             requested += 1
-            response = job.direct_none(date, missing)
-            if not response.empty:
+            try:
+                response = job.direct_none(date, missing)
+            except ValueError as exc:
+                if revision != FLAGGED_REVISION or not str(exc).startswith(
+                    'order_book_ids: at least one valid instrument expected, got none'
+                ):
+                    raise
+                # The provider could not resolve any code in this batch.
+                response = None
+            if response is not None and not response.empty:
                 incoming = pl.from_pandas(response, nan_to_null=False).select(
                     ID, pl.col('datetime').cast(expected.schema['datetime']), pl.col(QUOTE).cast(pl.Float64),
                 )
@@ -264,10 +272,14 @@ def _publication_receipt(prepared):
 
 def redownload_flagged_days(job: Migration) -> str | None:
     """Return the identity of the full published set, or defer the downstream replay."""
-    identities = []
+    identities = {}
+    pending = []
     stage = f'{FLAGGED_REVISION}_done'
-    for month, days in groupby(FLAGGED_DATES, key=lambda day: day // 100):
-        updated = reused = 0
+    previously_missing = {date for date in FLAGGED_DATES if job.read(f'{FLAGGED_REVISION}_missing', date)}
+    # Use this run's quota on new dates before retrying known data gaps.
+    dates = sorted(FLAGGED_DATES, key=lambda date: (date in previously_missing, date))
+    for month, days in groupby(dates, key=lambda day: day // 100):
+        updated = reused = deferred = 0
         try:
             for date in days:
                 job.guard()
@@ -281,17 +293,26 @@ def redownload_flagged_days(job: Migration) -> str | None:
                 else:
                     try:
                         if not repair_native_day(job, date, revision=FLAGGED_REVISION):
-                            return None
+                            pending.append(date)
+                            deferred += 1
+                            continue
                     except QuotaExceeded:
                         Logger.warning(f'Nightly RCQuant native refresh quota exhausted at {date}, '
                                        f'{len(identities)}/{len(FLAGGED_DATES)} dates already published')
                         raise
                     receipt = job.require_record(stage, date)
                     updated += 1
-                identities.append(f"{date}:" + ','.join(item['digest'] for item in receipt['outputs']))
+                identities[date] = ','.join(item['digest'] for item in receipt['outputs'])
         finally:
-            if updated:
+            if updated or deferred:
                 Logger.stdout(f'Nightly RCQuant native refresh {month}: {updated} published, {reused} reused, '
+                              f'{deferred} pending, '
                               f'{len(identities)}/{len(FLAGGED_DATES)} total')
+    if pending:
+        Logger.warning(f'Nightly RCQuant native refresh: {len(identities)}/{len(FLAGGED_DATES)} published, '
+                       f'{len(pending)} dates need review, first dates: {sorted(pending)[:10]}', vb_level=0)
+        return None
     Logger.info(f'Nightly RCQuant native refresh: all {len(identities)} dates verified', vb_level=0)
-    return sha256((FLAGGED_REVISION + '|'.join(identities)).encode()).hexdigest()
+    # Keep the replay identity stable even when some dates finish out of order.
+    source = FLAGGED_REVISION + '|'.join(f'{date}:{identities[date]}' for date in FLAGGED_DATES)
+    return sha256(source.encode()).hexdigest()

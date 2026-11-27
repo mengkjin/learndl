@@ -375,6 +375,48 @@ class NightlyTest(unittest.TestCase):
             replay.assert_called_once()
             self.assertEqual(replay.call_args.kwargs, {'refreshed': 'complete-id'})
 
+    def test_flagged_refresh_continues_after_a_missing_date_and_retries_only_that_date(self):
+        dates = (20081024, 20081027, 20100317)
+        previous_hash = {}
+        for date in dates:
+            archive = self.job.minute_path(date)
+            archive.parent.mkdir(exist_ok=True)
+            minute_frame(date, price=8.).to_feather(archive)
+            previous_hash[date] = migration.fingerprint(archive)
+
+        def descriptor(_, key):
+            return SimpleNamespace(path_exact=lambda day: self.root / key / f'{day}.feather',
+                                   clear_date_cache=lambda: None)
+
+        stock = '000001.XSHE'
+        instruments = pd.DataFrame({'code': [stock], 'is_active': [True]})
+
+        def fetch(date, ids):
+            if date == dates[0] and not retry:
+                raise ValueError('order_book_ids: at least one valid instrument expected, got none')
+            return minute_frame(date, price=10.).assign(order_book_id=stock)
+
+        retry = False
+        self.job.direct_none = Mock(side_effect=fetch)
+        done_stage = f'{native.FLAGGED_REVISION}_done'
+        missing_stage = f'{native.FLAGGED_REVISION}_missing'
+        with (patch.object(native, 'FLAGGED_DATES', dates),
+              patch.object(migration.bar_min, 'rcquant_instrument_list', return_value=instruments),
+              patch.object(migration, 'DBPath', side_effect=descriptor)):
+            self.assertIsNone(native.redownload_flagged_days(self.job))
+            self.assertIsNone(self.job.read(done_stage, dates[0]))
+            self.assertEqual(self.job.read(missing_stage, dates[0]), [stock])
+            self.assertEqual(migration.fingerprint(self.job.minute_path(dates[0])), previous_hash[dates[0]])
+            for date in dates[1:]:
+                self.assertIsNotNone(self.job.read(done_stage, date))
+                self.assertNotEqual(migration.fingerprint(self.job.minute_path(date)), previous_hash[date])
+            retry = True
+            identity = native.redownload_flagged_days(self.job)
+            self.assertIsNotNone(identity)
+            self.assertEqual(native.redownload_flagged_days(self.job), identity)
+        self.assertEqual([call.args for call in self.job.direct_none.call_args_list],
+                         [(date, [stock]) for date in (*dates, dates[0])])
+
     def test_flagged_refresh_restarts_downstream_from_the_historical_start(self):
         from hashlib import sha256
         from src.data.download.other_source.rcquant import sec_minute_downstream as downstream
