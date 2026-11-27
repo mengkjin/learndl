@@ -23,7 +23,7 @@ import psutil
 
 from .config import ENTRYPOINTS, installed_config, runtime_dir
 from .nightly_window import NIGHTLY_ENTRYPOINTS, latest_nightly_slot, load_window, manual_nightly_slot
-from .runtime import RunStore, members
+from .runtime import RunStore, members, nightly_hard_deadline
 
 from src.automation import version_patch
 from src.automation.console import logger
@@ -134,8 +134,7 @@ def supervise_nightly_script(entrypoint: str, *, script_args: list[str] | None =
             if task_id is None:
                 config = load_config(PATH.main / 'configs/automation', MACHINE.name)
                 task_id = 'nightly_maintenance'
-            slot = manual_nightly_slot(PATH.main, time.time())
-            code = _run(task_id, code_fd=fd, config_snapshot=config, scheduled_at=slot,
+            code = _run(task_id, code_fd=fd, config_snapshot=config,
                         script_args=sys.argv[1:] if script_args is None else script_args)
     except (MaintenanceBusy, version_patch.CodeBusy) as exc:
         logger.info('Manual nightly maintenance deferred: %s', exc)
@@ -183,18 +182,21 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
         run_record = {'id': run_id, 'task': task_id, 'phase': 'starting', 'started_at': time.time(),
                       'timeout_seconds': task['timeout_seconds'], 'uid': os.getuid(), 'lock_group': task['lock_group'],
                       'request_id': request_id, 'schedule_config': dict(task), 'channel': task.get('channel', 'data')}
-        hard_deadline = None
         nightly_env = {}
         if task['entrypoint'] in NIGHTLY_ENTRYPOINTS:
-            slot = int(request_id.rsplit(':', 1)[1]) * 60 if request_id else scheduled_at
-            if slot is None:
-                slot = latest_nightly_slot(time.time())
-            window = load_window(PATH.main, slot)
+            now = time.time()
+            manual = script_args is not None and request_id is None
+            if request_id:
+                slot = int(request_id.rsplit(':', 1)[1]) * 60
+            elif manual:
+                slot = manual_nightly_slot(PATH.main, now)
+            else:
+                slot = scheduled_at if scheduled_at is not None else latest_nightly_slot(now)
+            window = load_window(PATH.main, now if manual else slot, manual=manual)
             if time.time() >= window.cutoff:
                 logger.info('SCHEDULER SKIPPED: %s: nightly cutoff already passed', task_id)
                 return 0
-            hard_deadline = window.hard_deadline
-            run_record['hard_deadline'] = hard_deadline
+            run_record.update(nightly_cutoff=window.cutoff, hard_deadline=window.hard_deadline)
             nightly_env.update(LEARNDL_NIGHTLY_SLOT=str(slot), LEARNDL_NIGHTLY_CUTOFF=str(window.cutoff))
         store.put(run_record)
         read_fd, write_fd = os.pipe()
@@ -220,6 +222,7 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
             os.write(write_fd, b'1')  # Child may only execute after durable registration.
         finally:
             os.close(write_fd)
+        hard_deadline = nightly_hard_deadline(run_record)
         wait = None if hard_deadline is None else max(0., hard_deadline - time.time())
         while True:
             try:

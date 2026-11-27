@@ -31,6 +31,9 @@ DATE = 20260608
 REVISION = 'native_20260608_v1'
 
 FLAGGED_REVISION = 'native_volume_warning_days_v1'
+# The 2008 contract list uses the current code. Neither the current nor the
+# historical exchange code returned minutes for this date in the provider check.
+KNOWN_NATIVE_GAPS = {20081024: ['601607.XSHG']}
 # Distinct dates in the completed November 27 history run (task 1795762688).
 FLAGGED_DATES = (
     20070122, 20070329, 20070402, 20070413, 20070416, 20070417, 20070418, 20070419,
@@ -184,6 +187,35 @@ def _backup(path: Path, destination: Path) -> None:
         sync_directory(destination.parent)
 
 
+def _retain_known_gap(job: Migration, date: int) -> bool:
+    from .sec_storage_recovery import published_matches
+
+    known = KNOWN_NATIVE_GAPS.get(date)
+    if known is None or job.read(f'{FLAGGED_REVISION}_missing', date) != known:
+        return False
+    if job.read(f'{FLAGGED_REVISION}_prepared', date) is not None:
+        return False  # A partially published replacement must be reconciled instead.
+    previous = job.read(job.repair_stage('prepared'), date)
+    if not previous or job.read(job.repair_stage('done'), date) is None:
+        return False
+    outputs = list(previous['outputs'])
+    raw = job.minute_path(date)
+    if previous.get('preserve_raw') and (source := job.read('scan', date)):
+        outputs.insert(0, {'target': str(raw), 'digest': source['raw']})
+    targets = {Path(item['target']) for item in outputs}
+    if len(outputs) != 7 or len(targets) != 7 or raw not in targets or not all(
+        published_matches(job, date, item) for item in outputs
+    ):
+        Logger.warning(f'RCQuant {date}: cannot retain the existing files for known gap {known}')
+        return False
+    # Record the live encoding's digest, including any lossless secmin transcoding.
+    live = [{**item, 'digest': fingerprint(Path(item['target']))} for item in outputs]
+    receipt = _publication_receipt({'outputs': live, 'retained_for_missing': known})
+    job.mark(f'{FLAGGED_REVISION}_done', date, receipt)
+    Logger.info(f'RCQuant {date}: retained existing raw and six periods for known native gap {known}', vb_level=0)
+    return True
+
+
 def repair_native_day(job: Migration, date: int = DATE, *, revision: str = REVISION) -> bool:
     from .sec_storage_recovery import published_matches
 
@@ -199,6 +231,8 @@ def repair_native_day(job: Migration, date: int = DATE, *, revision: str = REVIS
                 job.mark(f'{revision}_done', date, _publication_receipt(done))
             else:
                 Logger.stdout(f'RCQuant {date}: native revision verified, all 7 files already published')
+            return True
+        if revision == FLAGGED_REVISION and _retain_known_gap(job, date):
             return True
         if revision == REVISION:
             Logger.stdout(f'RCQuant {date}: checking native minute download and publication')
@@ -225,7 +259,7 @@ def repair_native_day(job: Migration, date: int = DATE, *, revision: str = REVIS
             expected = old.select(pl.col('code').replace_strict(manifest['mapping']).alias(ID), 'datetime')
             native = _download(job, directory, manifest, expected, date=date, revision=revision)
             if native is None:
-                return False
+                return revision == FLAGGED_REVISION and _retain_known_gap(job, date)
             job.guard()
             start = perf_counter()
             code = pl.col(ID).str.replace(r'\.XSHE$', '.SZ').str.replace(r'\.XSHG$', '.SH')
@@ -274,12 +308,13 @@ def redownload_flagged_days(job: Migration) -> str | None:
     """Return the identity of the full published set, or defer the downstream replay."""
     identities = {}
     pending = []
+    retained = 0
     stage = f'{FLAGGED_REVISION}_done'
     previously_missing = {date for date in FLAGGED_DATES if job.read(f'{FLAGGED_REVISION}_missing', date)}
     # Use this run's quota on new dates before retrying known data gaps.
     dates = sorted(FLAGGED_DATES, key=lambda date: (date in previously_missing, date))
     for month, days in groupby(dates, key=lambda day: day // 100):
-        updated = reused = deferred = 0
+        updated = reused = deferred = kept = 0
         try:
             for date in days:
                 job.guard()
@@ -301,18 +336,23 @@ def redownload_flagged_days(job: Migration) -> str | None:
                                        f'{len(identities)}/{len(FLAGGED_DATES)} dates already published')
                         raise
                     receipt = job.require_record(stage, date)
-                    updated += 1
+                    if receipt.get('retained_for_missing'):
+                        kept += 1
+                    else:
+                        updated += 1
+                retained += bool(receipt.get('retained_for_missing'))
                 identities[date] = ','.join(item['digest'] for item in receipt['outputs'])
         finally:
-            if updated or deferred:
+            if updated or deferred or kept:
                 Logger.stdout(f'Nightly RCQuant native refresh {month}: {updated} published, {reused} reused, '
-                              f'{deferred} pending, '
+                              f'{kept} retained for known gaps, {deferred} pending, '
                               f'{len(identities)}/{len(FLAGGED_DATES)} total')
     if pending:
-        Logger.warning(f'Nightly RCQuant native refresh: {len(identities)}/{len(FLAGGED_DATES)} published, '
+        Logger.warning(f'Nightly RCQuant native refresh: {len(identities)}/{len(FLAGGED_DATES)} verified, '
                        f'{len(pending)} dates need review, first dates: {sorted(pending)[:10]}', vb_level=0)
         return None
-    Logger.info(f'Nightly RCQuant native refresh: all {len(identities)} dates verified', vb_level=0)
+    Logger.info(f'Nightly RCQuant native refresh: all {len(identities)} dates verified, '
+                f'{retained} retained for known gaps', vb_level=0)
     # Keep the replay identity stable even when some dates finish out of order.
     source = FLAGGED_REVISION + '|'.join(f'{date}:{identities[date]}' for date in FLAGGED_DATES)
     return sha256(source.encode()).hexdigest()

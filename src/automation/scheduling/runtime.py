@@ -15,6 +15,7 @@ __all__ = [
     'members',
     'signal_members',
     'timeout_message',
+    'nightly_hard_deadline',
     'timeout_due',
     'finish_idle_event',
     'inspect_timeouts',
@@ -303,12 +304,22 @@ def signal_members(run: dict, processes: list[psutil.Process], sig: signal.Signa
             continue
 
 
+def nightly_hard_deadline(run: dict) -> float | None:
+    """A night's grace period applies to processes started before its cutoff."""
+    deadline = run.get('hard_deadline')
+    cutoff = run.get('nightly_cutoff')
+    started = run.get('process_created', run.get('started_at'))
+    if cutoff is not None and started is not None and started >= cutoff:
+        return None
+    return deadline
+
+
 def timeout_message(run: dict) -> str:
     if run.get('operator_stop'):
         return f"Stopped by {run['operator_stop']}; automatic recovery disabled"
     if run.get('installation_stop'):
         return f"Stopped for installation {run['installation_stop']}; automatic recovery disabled"
-    if run.get('hard_deadline') is not None:
+    if nightly_hard_deadline(run) is not None:
         return f'Nightly maintenance forcibly stopped after its checkpoint grace period; run {run["id"]}'
     limit = run.get('progress_timeout_seconds') or run.get('timeout_seconds')
     condition = 'without output' if run.get('progress_timeout_seconds') else 'elapsed'
@@ -318,8 +329,9 @@ def timeout_message(run: dict) -> str:
 def timeout_due(run: dict, now: float) -> bool:
     if 'term_at' in run:
         return True
-    if run.get('hard_deadline') is not None:
-        return now >= run['hard_deadline']
+    deadline = nightly_hard_deadline(run)
+    if deadline is not None:
+        return now >= deadline
     if limit := run.get('progress_timeout_seconds'):
         last = run['started_at']
         if run.get('log_path'):
@@ -434,7 +446,8 @@ def inspect_timeouts(store: RunStore | None = None, *, now: float | None = None,
             if 'term_at' not in run:
                 run.update(phase='terminating', term_at=now)
                 store.put(run)  # Persist intent before sending any signal.
-            hard_timeout = now >= (run.get('hard_deadline') or float('inf'))
+            deadline = nightly_hard_deadline(run)
+            hard_timeout = deadline is not None and now >= deadline
             if not hard_timeout and now - run['term_at'] < 30:
                 signal_members(run, processes, signal.SIGTERM)
             else:

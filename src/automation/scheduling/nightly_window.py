@@ -35,12 +35,13 @@ def latest_nightly_slot(now: float) -> float:
 
 
 def manual_nightly_slot(root: Path, now: float) -> float:
-    """Use the open overnight window, or today's window for a daytime start."""
+    """Choose the quota/checkpoint date for a manual launch."""
     previous = latest_nightly_slot(now)
     return previous if now < load_window(root, previous).cutoff else now
 
 
-def load_window(root: Path, scheduled_at: float) -> NightlyWindow:
+def load_window(root: Path, scheduled_at: float, *, manual: bool = False) -> NightlyWindow:
+    """Resolve the configured cutoff for a scheduled slot or an actual manual start."""
     settings = yaml.safe_load((root / 'configs/automation/nightly.yaml').read_text())
     timezone = ZoneInfo(settings['timezone'])
     slot = datetime.fromtimestamp(scheduled_at, timezone)
@@ -49,7 +50,8 @@ def load_window(root: Path, scheduled_at: float) -> NightlyWindow:
     if end.tzinfo is not None or type(grace) is not int or grace < 0:
         raise ValueError('Nightly maintenance requires a local cutoff and nonnegative grace_minutes')
     cutoff = datetime.combine(slot.date(), end, timezone)
-    if end < time(21):
+    next_day = cutoff.timestamp() <= scheduled_at if manual else end < slot.time()
+    if next_day:
         cutoff += timedelta(days=1)
     return NightlyWindow(cutoff.timestamp(), (cutoff + timedelta(minutes=grace)).timestamp(),
                          tuple(settings['tasks']))

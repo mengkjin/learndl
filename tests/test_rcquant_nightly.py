@@ -89,26 +89,50 @@ class NightlyTest(unittest.TestCase):
         for end, start, expected in [
             ('00:00', stamp(26, 9), stamp(27, 0)),
             ('00:00', stamp(26, 23), stamp(27, 0)),
+            ('00:00', stamp(27, 0), stamp(28, 0)),
+            ('00:00', stamp(27, 0, 5), stamp(28, 0)),
             ('01:30', stamp(27, 0, 30), stamp(27, 1, 30)),
+            ('01:30', stamp(27, 1, 30), stamp(28, 1, 30)),
             ('01:30', stamp(27, 9), stamp(28, 1, 30)),
-            ('23:00', stamp(26, 23, 5), stamp(26, 23)),
+            ('23:00', stamp(26, 22, 59), stamp(26, 23)),
+            ('23:00', stamp(26, 23), stamp(27, 23)),
+            ('23:00', stamp(26, 23, 5), stamp(27, 23)),
         ]:
             with self.subTest(end=end, start=start):
                 (directory / 'nightly.yaml').write_text(
                     f"timezone: Asia/Shanghai\ncutoff: '{end}'\ngrace_minutes: 10\ntasks: []\n"
                 )
-                slot = manual_nightly_slot(self.root, start)
-                window = load_window(self.root, slot)
+                window = load_window(self.root, start, manual=True)
                 self.assertEqual(window.cutoff, expected)
                 self.assertEqual(window.hard_deadline, expected + 600)
 
+    def test_manual_before_the_overridden_cutoff_preserves_the_open_slot(self):
+        directory = self.root / 'configs/automation'
+        directory.mkdir(parents=True)
+        (directory / 'nightly.yaml').write_text(
+            "timezone: Asia/Shanghai\ncutoff: '01:30'\ngrace_minutes: 0\ntasks: []\n"
+        )
+        zone = ZoneInfo('Asia/Shanghai')
+        start = datetime(2026, 11, 27, 0, 5, tzinfo=zone).timestamp()
+        previous = datetime(2026, 11, 26, 21, tzinfo=zone).timestamp()
+        self.assertEqual(manual_nightly_slot(self.root, start), previous)
+        window = load_window(self.root, start, manual=True)
+        self.assertEqual(window.cutoff, datetime(2026, 11, 27, 1, 30, tzinfo=zone).timestamp())
+        self.assertEqual(window.hard_deadline, window.cutoff)
+
     def test_supervisor_force_stops_only_the_expired_nightly_session(self):
         store = Mock()
-        run = {'id': 'nightly', 'phase': 'running', 'hard_deadline': 1000}
-        store.active.return_value = [run, {'id': 'unrelated'}]
+        run = {'id': 'nightly', 'phase': 'running', 'nightly_cutoff': 400,
+               'hard_deadline': 1000, 'process_created': 399, 'started_at': 401}
+        late = {'id': 'after-midnight', 'phase': 'running', 'nightly_cutoff': 400,
+                'hard_deadline': 1000, 'process_created': 400, 'started_at': 401}
+        store.active.return_value = [run, late]
         worker = object()
         with patch.object(runtime, 'members', return_value=[worker]), \
                 patch.object(runtime, 'signal_members') as terminate:
+            runtime.inspect_timeouts(store, now=1000, run_id='after-midnight')
+            terminate.assert_not_called()
+            self.assertNotIn('term_at', late)
             runtime.inspect_timeouts(store, now=1000, run_id='nightly')
         self.assertEqual(run['term_at'], 1000)
         self.assertEqual(run['kill_at'], 1000)
@@ -436,6 +460,29 @@ class NightlyTest(unittest.TestCase):
         tables.assert_called_once()
         self.assertNotEqual(tables.call_args.args[1], old_revision)
         self.assertEqual(tables.call_args.args[2:], (20070104, 20261127))
+
+    def test_known_gap_retains_verified_outputs_without_retrying_the_provider(self):
+        date = 20081024
+        archive = self.job.minute_path(date)
+        archive.parent.mkdir()
+        paths = [archive, *(self.root / f'{period}min.feather' for period in migration.bar_min.SEC_PERIODS)]
+        for path in paths:
+            path.write_bytes(path.name.encode())
+        outputs = [{'target': str(path), 'digest': migration.fingerprint(path)} for path in paths]
+        self.job.mark(self.job.repair_stage('prepared'), date, {'outputs': outputs})
+        self.job.mark(self.job.repair_stage('done'), date)
+        stage = f'{native.FLAGGED_REVISION}_missing'
+        self.job.mark(stage, date, ['000001.XSHE', '601607.XSHG'])
+        self.assertFalse(native._retain_known_gap(self.job, date))
+        self.job.mark(stage, date, ['601607.XSHG'])
+        with (patch.object(native, 'FLAGGED_DATES', (date,)),
+              patch.object(self.job, 'direct_none', side_effect=AssertionError('provider retried'))):
+            identity = native.redownload_flagged_days(self.job)
+            self.assertIsNotNone(identity)
+            self.assertEqual(native.redownload_flagged_days(self.job), identity)
+        receipt = self.job.require_record(f'{native.FLAGGED_REVISION}_done', date)
+        self.assertEqual(receipt['retained_for_missing'], ['601607.XSHG'])
+        self.assertEqual([migration.fingerprint(path) for path in paths], [item['digest'] for item in outputs])
 
     def test_receipt_missing_after_batch_write_reuses_download(self):
         response = pl.from_pandas(minute_frame(native.DATE).assign(order_book_id='000001.XSHE'))

@@ -34,14 +34,18 @@ The original RCQuant missing-minute backfill is complete and
 RCQuant execution lock. Run `plan --diff`, `apply` and `status` on the server
 once to replace the old `rcquant_sec_none` timer. An installed timer that still
 uses that task name runs the current nightly entrypoint. The configured handlers, cutoff and grace period are
-read from `configs/automation/nightly.yaml` on each run. The default stops
-starting work at midnight and forcibly ends a managed run at 00:10.
+read from `configs/automation/nightly.yaml` on each run. By default an active run
+stops starting work at midnight. At 00:10 the supervisor forcibly ends runs
+that started before that cutoff.
 
 For an immediate foreground run on the server, execute
 `PYTHONPATH=. .venv/bin/python scripts/1_autorun/8_nightly_maintenance.py` from the checkout,
 or launch `8_nightly_maintenance.py` in the Task Center. The manual run uses
 the same supervisor, execution lock, checkpoints and cutoff as the timer.
-A daytime start uses that evening's cutoff. If the run is active at 21:00,
+A manual start uses the next configured cutoff strictly after it starts.
+With the defaults, a start at or after midnight can run through the previous
+night's 00:10 deadline. The shared lock still applies while the previous run
+is exiting. If the run is active at 21:00,
 the calendar records the slot as skipped. If it has finished, the timer runs
 normally and checks the saved progress.
 
@@ -108,6 +112,9 @@ files are retained in `.native_volume_warning_days_v1_backup` where replaced.
 Dates with missing or invalid native minutes stay pending while downloads
 continue for other dates. Later runs prioritize new dates before retrying
 known gaps and retain the live files for each pending date.
+The confirmed unavailable `601607.XSHG` minutes on 2008-10-24 are recorded as
+an exception. Once the existing seven published files pass checksum verification,
+the replay can use them for that date.
 
 Once all 183 dates are verified, a new downstream revision replays the full
 date range of minute-derived risk tables, minute characteristics, factors

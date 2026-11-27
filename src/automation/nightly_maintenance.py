@@ -126,8 +126,13 @@ def run():
     if MACHINE.name != 'mengkjin-server':
         raise RuntimeError('Nightly maintenance is configured for mengkjin-server')
     slot_text = os.environ.get('LEARNDL_NIGHTLY_SLOT')
-    slot = manual_nightly_slot(PATH.main, time.time()) if slot_text is None else float(slot_text)
-    window = load_window(PATH.main, slot)
+    if slot_text is None:
+        now = time.time()
+        slot = manual_nightly_slot(PATH.main, now)
+        window = load_window(PATH.main, now, manual=True)
+    else:
+        slot = float(slot_text)
+        window = load_window(PATH.main, slot)
     cutoff = float(os.environ.get('LEARNDL_NIGHTLY_CUTOFF', window.cutoff))
     Logger.info(f'Nightly maintenance checkpoint cutoff {datetime.fromtimestamp(cutoff, ZoneInfo("Asia/Shanghai"))}',
                 vb_level=0)
