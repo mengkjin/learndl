@@ -27,6 +27,24 @@ from pathlib import Path
 from typing import Callable, Any
 
 
+RCQUANT = ('data', 'Miscellaneous', 'Rcquant')
+MINUTE_BARS = ('data', 'DataBase', 'DB_trade_ts', 'min')
+
+
+@dataclass
+class YearSummary:
+    size: int = 0
+    files: int = 0
+    first: str = ''
+    last: str = ''
+
+    def add(self, size: int, date: str) -> None:
+        self.size += size
+        self.files += 1
+        self.first = min(self.first or date, date)
+        self.last = max(self.last, date)
+
+
 @dataclass
 class StorageNode:
     path: str
@@ -41,6 +59,7 @@ class StorageNode:
     file_count: int | None = None
     date_start: str | None = None
     date_end: str | None = None
+    years: dict[str, YearSummary] | None = None
 
 
 @dataclass
@@ -60,6 +79,12 @@ class StorageScan:
 def display_depth(parts: tuple[str, ...]) -> int:
     """Depth relative to the scan root; unknown project categories retain two levels."""
     if parts and parts[0] == 'data':
+        if parts[:3] == RCQUANT:
+            return 4
+        if len(parts) >= 5 and parts[:4] == MINUTE_BARS:
+            year = parts[4]
+            if len(year) == 4 and year.isascii() and year.isdigit():
+                return 5
         return 4 if len(parts) > 1 and parts[1] in {'DataBase', 'Interim', 'Export'} else 3
     if parts and parts[0] in {'models', 'results', '.logs', '.local_resources'}:
         return 3
@@ -130,6 +155,8 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                 seen.add(key)
             node.size = node.own = info.st_blocks * 512
             if is_dir:
+                if visible and len(parts) == 4 and parts[:3] == RCQUANT and not parts[-1].startswith(('.', '~')):
+                    node.years = {}
                 with os.scandir(path) as iterator:
                     names = sorted(entry.name for entry in iterator)
                 for name in names:
@@ -138,6 +165,11 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                     child_parts = (*parts, name)
                     retain = visible and len(child_parts) <= display_depth(child_parts)
                     child = walk(path / name, child_parts, retain, node.node_id)
+                    if node.years is not None and not child.is_dir and child.date_start is not None:
+                        year = child.date_start[:4]
+                        if year not in node.years:
+                            node.years[year] = YearSummary()
+                        node.years[year].add(child.size, child.date_start)
                     node.size += child.size
                     node.file_count = (node.file_count or 0) + (child.file_count or 0)
                     if child.date_start is not None and child.date_end is not None:
@@ -145,7 +177,7 @@ def scan_storage(root: str | Path, progress: Callable[[str], None | Any] | None 
                         node.date_end = max(node.date_end or child.date_end, child.date_end)
                     node.complete = node.complete and child.complete
                     node.has_children = True
-                    if retain:
+                    if retain and (child.is_dir or parts not in (RCQUANT, MINUTE_BARS)):
                         node.children.append(child)
                     else:
                         node.own += child.size
@@ -186,6 +218,14 @@ def render_node(node: StorageNode, parent_size: int, depth: int = 1) -> str:
         if node.date_start is not None:
             description += f' · Dates: {escape(node.date_start)} → {escape(node.date_end or node.date_start)}'
         description = f'<span class="description">{description}</span>'
+    if node.years:
+        # These rows summarize direct dated files. Local drill-down replaces them with real index rows.
+        for year, group in sorted(node.years.items(), key=lambda item: (-item[1].size, item[0])):
+            share = f'{group.size / node.size:.1%}' if node.size else '—'
+            children += (f'<div class="node year" data-path="{escape(node.path, quote=True)}/{year}" data-size="{group.size}">'
+                         f'<div class="entry-row"><span><small class="kind">Year total</small> {year}'
+                         f'<span class="description">{group.files:,} files · Dates: {group.first} → {group.last}</span>'
+                         f'</span><b>{format_size(group.size)}</b><small>{share}</small></div></div>')
     return (f'<details class="node" data-path="{escape(node.path, quote=True)}" '
             f'data-id="{node.node_id}" data-size="{node.size}" {"open" if depth == 0 else ""}>'
             f'<summary><span>{label}{link}{warning}{button}{description}</span><b>{format_size(node.size)}</b>'
@@ -221,6 +261,7 @@ input[type="search"]{min-width:240px}li{overflow-wrap:anywhere}[hidden]{display:
 <p>Sizes use allocated disk blocks, including directories themselves. Do not add parent and child totals together. Symbolic links are not followed; hard links are counted only at the first path in stable traversal order.
 Totals include all deeper contents. File counts include regular file paths (including each hard link), excluding directories and symbolic links.
 Date ranges use valid YYYYMMDD dates at the end of file stems, including deeper contents; undated files are ignored. Incomplete rows may have partial counts and date ranges.
+RCQuant year totals group only directly contained dated files; other contents remain in the dataset total.
 Files may change during the scan. Mounted directories on other filesystems are included; free space refers only to the root filesystem.</p>
 <p id="browse-status">Static report: choose local browsing when starting Project Storage Report to explore deeper files and folders. Attachments do not connect to a local service.</p>
 <label>Search loaded paths <input id="search" type="search" placeholder="e.g. DataBase or gru"></label>

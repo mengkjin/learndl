@@ -18,6 +18,7 @@
     expand: ['全部展开', 'Expand all'], collapse: ['全部折叠', 'Collapse all'],
     item: ['名称', 'Name'], size: ['占用量', 'Size'], share: ['占上级比例', 'Share of parent'],
     file: ['文件', 'File'], link: ['链接', 'Link'], rowIncomplete: ['统计不完整', 'Incomplete'],
+    yearTotal: ['年度汇总', 'Year total'],
     more: ['加载下一级', 'Load next level'], loading: ['加载中…', 'Loading…'],
     retry: ['加载失败，重试', 'Load failed — retry'],
     errors: ['扫描错误', 'Scan errors'], errorLimit: ['最多显示前 100 条错误。', 'Showing up to the first 100 errors.'],
@@ -89,7 +90,10 @@
   const notes = element('details', 'report-notes');
   const explanation = lines.find(line => line.startsWith('Sizes use allocated disk blocks')) || '';
   notes.append(bind(element('summary'), 'notes'));
-  if (explanation) notes.append(bind(element('p'), 'explanation', value => value || explanation));
+  if (explanation) notes.append(bind(element('p'), 'explanation', value => {
+    if (!value) return explanation;
+    return explanation.includes('RCQuant year totals') ? value + ' RCQuant 年度汇总仅统计数据集直属的带日期文件，其余内容计入数据集总量。' : value;
+  }));
   const browse = document.getElementById('browse-status');
   if (browse) notes.append(bind(browse, storageBase ? 'localBrowse' : 'remoteBrowse'));
   const actions = element('div', 'report-actions');
@@ -143,7 +147,7 @@
       for (const node of text.slice(1)) node.remove();
     }
     for (const badge of tree.querySelectorAll('.kind')) {
-      const key = ['Link', '链接'].includes(badge.textContent) ? 'link' : 'file';
+      const key = badge.closest('.year') ? 'yearTotal' : ['Link', '链接'].includes(badge.textContent) ? 'link' : 'file';
       if (badge.textContent !== t(key)) badge.textContent = t(key);
     }
     for (const warning of tree.querySelectorAll('strong')) {

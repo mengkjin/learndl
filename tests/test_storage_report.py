@@ -53,11 +53,40 @@ class StorageReportTest(unittest.TestCase):
                          '.local_resources/server/cache', 'src/package', '.git/objects', 'empty'):
             self.assertIn(expected, nodes)
         self.assertNotIn('models/nn/gru/archive', nodes)
-        self.assertNotIn('data/DataBase/DB_trade_ts/min/2025', nodes)
+        self.assertIn('data/DataBase/DB_trade_ts/min/2025', nodes)
+        self.assertNotIn('data/DataBase/DB_trade_ts/min/2025/a', nodes)
         expected = self.root.stat().st_blocks * 512 + sum(p.lstat().st_blocks * 512 for p in self.root.rglob('*'))
         self.assertEqual(scan.node.size, expected)
         for node in nodes.values():
             self.assertEqual(node.size, node.own + sum(child.size for child in node.children))
+
+    def test_rcquant_year_rows_cover_only_direct_dated_files_and_keep_local_drilldown(self):
+        dataset = 'data/Miscellaneous/Rcquant/secmin'
+        first = self.file(f'{dataset}/20240229.feather')
+        second = self.file(f'{dataset}/20240301.feather')
+        os.link(second, self.root / dataset / 'copy.20240302.feather')
+        self.file(f'{dataset}/20250102.feather')
+        self.file(f'{dataset}/20250230.feather')
+        self.file(f'{dataset}/.receipts/20230101.feather')
+        self.file('data/Miscellaneous/Rcquant/etfmin/20240229.feather')
+        self.file('data/DataBase/DB_trade_ts/min/scratch/test')
+        scan, report = generate_report(self.root, self.root / 'report.html')
+        nodes = self.nodes(scan.node)
+        node = nodes[dataset]
+        self.assertEqual(node.file_count, 6)
+        self.assertEqual(set(node.years), {'2024', '2025'})
+        group = node.years['2024']
+        self.assertEqual((group.files, group.first, group.last), (3, '2024-02-29', '2024-03-02'))
+        self.assertEqual(group.size, (first.stat().st_blocks + second.stat().st_blocks) * 512)
+        self.assertNotIn('data/DataBase/DB_trade_ts/min/scratch', nodes)
+        page = report.read_text()
+        self.assertIn(f'data-path="{dataset}/2024"', page)
+        self.assertIn('Year total', page)
+        self.assertNotIn('20240229.feather', page)
+        with StorageReportServer(report) as server:
+            rows = server.children(node.node_id)['html']
+            self.assertIn('20240229.feather', rows)
+            self.assertNotIn('Year total', rows)
 
     def test_sparse_hardlinks_and_symlinks(self):
         path = self.file('a/data')
