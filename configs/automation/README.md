@@ -97,8 +97,18 @@ manual run.
 When the full history is ready, nightly queues the migration completion email,
 records a handoff checkpoint and exits. The outbox retries delivery independently.
 If the mail cannot be queued, the next run retries the notification first.
-The next manual or scheduled run reuses the checkpoint, replays minute-derived risk tables,
-minute characteristics, factors and factor statistics, then rebuilds affected
+The next run downloads the 183 historical volume-warning dates listed in
+`sec_native_revision.py`, in trading-date order. It publishes the unadjusted
+RCQuant bars and six derived periods after stock-minute coverage and aggregate
+totals pass validation. Publication does not use Tushare comparisons.
+The ledger persists each download batch and each published date. A quota
+interruption stops RCQuant downloads for the current night, and the next
+night resumes from the first incomplete batch. The previous raw and period
+files are retained in `.native_volume_warning_days_v1_backup` where replaced.
+
+Once all 183 dates are verified, a new downstream revision replays the full
+date range of minute-derived risk tables, minute characteristics, factors
+and factor statistics, then rebuilds affected
 `fit` and `predict` blocks in checkpointed monthly shards. `15mt` and `30mt`
 add standardized trade counts to the corresponding six-feature blocks.
 The replay removes the retired `60m` model-input cache and its normalization

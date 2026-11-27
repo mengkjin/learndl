@@ -182,10 +182,13 @@ def _review_production(factors):
     return {'models': sorted(models), 'portfolios': sorted(ports), 'replayed': []}
 
 
-def rebuild_minute_consumers(job, dates, source_receipt):
+def rebuild_minute_consumers(job, dates, source_receipt, *, refreshed=None):
     source = ','.join(map(str, dates)) + REVISION
     if source_receipt is not None:
         source += ''.join(x['digest'] for x in source_receipt['outputs'])
+    if refreshed is not None:
+        # A fully published refresh starts replay from the historical lower bound.
+        source += f'|native-refresh:{refreshed}'
     revision = 'minute_consumers_v1_' + sha256(source.encode()).hexdigest()[:16]
     if job.read(revision, 'complete_v2'):
         return True

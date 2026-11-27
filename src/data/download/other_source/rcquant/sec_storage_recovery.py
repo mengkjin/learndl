@@ -23,7 +23,7 @@ from polars.testing import assert_frame_equal
 from src.proj import Logger
 
 from . import bar_min
-from .sec_native_revision import DATE, REVISION
+from .sec_native_revision import FLAGGED_REVISION, REVISION
 from .sec_none_migration import REPAIR, SEC, file_matches, fingerprint, sync_directory, write_frame
 from .storage import GIB, RAW_IPC, check_space, date_lock, frame_bytes
 
@@ -128,16 +128,17 @@ def _finish(job, date, target, receipt):
 
 def recover_storage(job):
     records = []
-    for revision in (REPAIR, REVISION):
+    for revision in (REPAIR, REVISION, FLAGGED_REVISION):
         rows = job.db.execute('SELECT item, value FROM checkpoints WHERE stage=?',
                               (f'{revision}_prepared',)).fetchall()
         records.extend((revision, int(date), json.loads(value)) for date, value in rows)
     clean_staged(job, records)
 
+    # Later publications can supersede historical bytes before their final receipt.
+    # Never transcode an earlier revision's digest once a replacement was staged.
     candidates = {}
     for revision, date, prepared in records:
-        if revision == REPAIR and date == DATE and job.read(f'{REVISION}_prepared', date):
-            continue
+        candidates.pop(date, None)
         if job.read(f'{revision}_done', date) is not None:
             candidates[date] = prepared
     # Size is used only to prioritize reclaiming bytes before more output is written.

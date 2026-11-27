@@ -43,24 +43,26 @@ class StockFilterTest(unittest.TestCase):
         bars = pd.DataFrame([{'secid': s, 'minute': m, 'open': 10., 'close': 10. + m / 1000,
                               'high': 11., 'low': 9., 'volume': 100., 'amount': 1000.}
                              for s in [1, 99] for m in range(240)])
+        minute_bars = pl.from_pandas(bars)
         with patch('src.data.util.minchars_stock.historical_stock_ids', return_value=np.array([1, 2])):
-            with patch.object(daily.DB, 'load', return_value=bars):
+            with patch.object(daily.DB, 'load_pl', return_value=minute_bars):
                 daily_result = daily.calc_min_chars(20220104)
                 panel = _common.load_ret_panel(20220104)
             self.assertEqual(daily_result['secid'].to_list(), [1])
             self.assertEqual(panel['secid'].unique().to_list(), [1])
             # Old daily files can still contain non-stocks while cleanup is pending.
             polluted_daily = pd.concat([daily_result, daily_result.assign(secid=99)])
-            def load(src, key, *args, **kwargs):
-                return bars if key == 'min' else polluted_daily
-            with patch.object(rolling, 'trailing_aligned_dates', return_value=[20220104]), patch.object(rolling.DB, 'load', side_effect=load):
+            with (patch.object(rolling, 'trailing_aligned_dates', return_value=[20220104]),
+                  patch.object(rolling.DB, 'load_pl', return_value=minute_bars),
+                  patch.object(rolling.DB, 'load', return_value=polluted_daily)):
                 roll_result = rolling.calc_min_chars_roll(20220104, window=1)
             self.assertEqual(roll_result['secid'].to_list(), [1])
             polluted_roll = pd.concat([roll_result, roll_result.assign(secid=99)])
-            with patch.object(tagged.DB, 'load', side_effect=lambda src, key, *a, **kw: bars if key == 'min' else polluted_roll):
+            with (patch.object(tagged.DB, 'load_pl', return_value=minute_bars),
+                  patch.object(tagged.DB, 'load', return_value=polluted_roll)):
                 tag_result = tagged.calc_min_chars_tag(20220104)
             self.assertEqual(tag_result['secid'].to_list(), [1])
-            with patch.object(daily.DB, 'load', return_value=bars.query('secid == 99')):
+            with patch.object(daily.DB, 'load_pl', return_value=minute_bars.filter(pl.col('secid') == 99)):
                 self.assertTrue(daily.calc_min_chars(20220104).empty)
 
 

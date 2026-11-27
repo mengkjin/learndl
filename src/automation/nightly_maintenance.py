@@ -32,7 +32,7 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
     from src.data.download.other_source.rcquant import bar_min
     from src.data.download.other_source.rcquant.initializer import QuotaExceeded
     from src.data.download.other_source.rcquant.sec_none_migration import EveningEnded, Migration, REPAIR
-    from src.data.download.other_source.rcquant.sec_native_revision import DATE, REVISION
+    from src.data.download.other_source.rcquant.sec_native_revision import DATE, REVISION, redownload_flagged_days
     from src.data.download.other_source.rcquant.sec_storage_recovery import recover_storage
     from src.data.download.other_source.rcquant.storage import GIB, SpaceDeferred, disk_full
 
@@ -67,8 +67,6 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
             if job.read('quota_exhausted', night):
                 return 'quota deferred', reason
             guard()
-            # Completed 2026-06-08 native repair. Its receipt preserves the original replay identity.
-            # repair_native_day(job)
             source_receipt = job.read(f'{REVISION}_done', DATE)
             history_stage = f'{REVISION}_history'
             recorded = job.read(history_stage, 'dates')
@@ -86,7 +84,7 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
                 message = (
                     f'已完成 {len(dates)} 个交易日的 RCQuant 历史分钟迁移'
                     f'（{dates[0]} 至 {dates[-1]}）。本轮在下游重算前退出。'
-                    '下一次手动或定时运行会继续重算特征、因子和 DataBlock。'
+                    '下一次手动或定时运行会先补齐专项不复权分钟线，再重算特征、因子和 DataBlock。'
                 )
                 digest = sha256(','.join(map(str, dates)).encode()).hexdigest()
                 if not Email.enqueue_once('RCQuant 历史分钟迁移完成', message,
@@ -94,10 +92,14 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
                     return HISTORY_NOTICE_DEFERRED, '邮件队列尚不可用，下次运行会先重试入队。'
                 job.mark(history_stage, 'downstream_handoff', dates)
                 return HISTORY_COMPLETE, message
+            reason = 'RCQuant flagged-date native refresh blocks downstream'
+            refreshed = redownload_flagged_days(job)
+            if refreshed is None:
+                return 'waiting on data', reason
             guard()
             from src.data.download.other_source.rcquant.sec_minute_downstream import rebuild_minute_consumers
             reason = f'downstream replay, native audit {state / REVISION}'
-            if not rebuild_minute_consumers(job, dates, source_receipt):
+            if not rebuild_minute_consumers(job, dates, source_receipt, refreshed=refreshed):
                 return 'waiting on data', reason
             return 'complete', f'{len(dates)} history dates and all downstream stages complete'
         except QuotaExceeded:
@@ -149,5 +151,6 @@ def run():
         summary = f'Nightly {name} {status}, {details}'
         Logger.conclude(summary)
         Logger.stdout(summary, vb_level=0)
-        if status in (HISTORY_COMPLETE, HISTORY_NOTICE_DEFERRED, 'deadline deferred', 'space deferred'):
+        if status in (HISTORY_COMPLETE, HISTORY_NOTICE_DEFERRED, 'deadline deferred', 'space deferred',
+                      'quota deferred'):
             break

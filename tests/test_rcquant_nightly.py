@@ -303,6 +303,95 @@ class NightlyTest(unittest.TestCase):
         pd.testing.assert_frame_equal(pd.read_feather(self.root / 'secmin' / f'{day}.feather'), frame)
         pd.testing.assert_frame_equal(pd.read_feather(self.root / f'min.{day}.feather'), frame)
 
+    def test_flagged_native_minutes_resume_batches_and_publish_without_tushare(self):
+        from src.data.download.other_source.rcquant.initializer import QuotaExceeded
+
+        date = 20070418
+        ids = ['000001.XSHE', '000002.XSHE']
+        responses = [minute_frame(date, price=10.).assign(code=f'00000{i}.SZ', order_book_id=stock)
+                     for i, stock in enumerate(ids, 1)]
+        archive = self.job.minute_path(date)
+        archive.parent.mkdir()
+        old = pd.concat(responses, ignore_index=True).drop(columns='order_book_id').assign(close=8.)
+        old.to_feather(archive)
+        before = migration.fingerprint(archive)
+        fetch = Mock(side_effect=[responses[0], QuotaExceeded('daily quota exceeded'), responses[1]])
+        self.job.direct_none = fetch
+
+        def descriptor(_, key):
+            return SimpleNamespace(path_exact=lambda day: self.root / key / f'{day}.feather',
+                                   clear_date_cache=lambda: None)
+
+        instruments = pd.DataFrame({'code': ids, 'is_active': [True, True]})
+        revision = native.FLAGGED_REVISION
+        with (patch.object(native, 'FLAGGED_DATES', (date,)),
+              patch.object(native, 'MINUTE_BATCH_SIZE', 1),
+              patch.object(migration.bar_min, 'rcquant_instrument_list', return_value=instruments),
+              patch.object(migration, 'DBPath', side_effect=descriptor),
+              patch.object(native.DB, 'load_pl', side_effect=AssertionError('Tushare audit requested'))):
+            with self.assertRaises(QuotaExceeded):
+                native.redownload_flagged_days(self.job)
+            self.assertEqual(migration.fingerprint(archive), before)
+            self.assertIsNone(self.job.read(f'{revision}_done', date))
+            self.assertIsNotNone(self.job.read(f'{revision}_batch', f'{date}/0'))
+            identity = native.redownload_flagged_days(self.job)
+            self.assertIsNotNone(identity)
+            self.assertEqual(native.redownload_flagged_days(self.job), identity)
+        self.assertEqual([call.args for call in fetch.call_args_list],
+                         [(date, ids[:1]), (date, ids[1:]), (date, ids[1:])])
+        receipt = self.job.require_record(f'{revision}_done', date)
+        self.assertEqual(len(receipt['outputs']), 7)
+        self.assertEqual(receipt['counts']['stocks'], 2)
+        self.assertEqual(pd.read_feather(archive)['close'].unique().tolist(), [10.])
+        self.assertEqual(migration.fingerprint(archive.parent / f'.{revision}_backup' / archive.name), before)
+
+    def test_flagged_refresh_blocks_replay_and_respects_the_daily_quota(self):
+        from src.data.download.other_source.rcquant.initializer import QuotaExceeded
+
+        day = 20070122
+        raw = self.job.minute_path(day)
+        raw.parent.mkdir()
+        raw.touch()
+        state = self.root / '.sec_none_migration'
+        state.mkdir()
+        with closing(sqlite3.connect(state / 'progress.sqlite')) as db:
+            job = migration.Migration(self.root, self.root / 'exfactor', db, None)
+            for key in ('dates', 'downstream_handoff'):
+                job.mark(f'{native.REVISION}_history', key, [day])
+        with (patch.object(migration.bar_min, 'RQ_PATH', self.root),
+              patch.object(native, 'redownload_flagged_days',
+                           side_effect=[QuotaExceeded('daily quota exceeded'), None, 'complete-id']) as refresh,
+              patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers',
+                    return_value=True) as replay):
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'quota deferred')
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'quota deferred')
+            refresh.assert_called_once()
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 86400)[0], 'waiting on data')
+            replay.assert_not_called()
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 86400)[0], 'complete')
+            replay.assert_called_once()
+            self.assertEqual(replay.call_args.kwargs, {'refreshed': 'complete-id'})
+
+    def test_flagged_refresh_restarts_downstream_from_the_historical_start(self):
+        from hashlib import sha256
+        from src.data.download.other_source.rcquant import sec_minute_downstream as downstream
+
+        dates = [20070104, 20261124]
+        old = ','.join(map(str, dates)) + native.REVISION
+        old_revision = 'minute_consumers_v1_' + sha256(old.encode()).hexdigest()[:16]
+        self.job.mark(old_revision, 'complete_v2')
+        with (patch.object(downstream.CALENDAR, 'updated', return_value=20261127),
+              patch.object(downstream, 'retire_60m'),
+              patch.object(downstream, '_tables') as tables,
+              patch.object(downstream, '_factors', return_value=['factor']),
+              patch.object(downstream, 'rebuild_block', return_value=True),
+              patch.object(downstream, '_review_production', return_value={'verified': True})):
+            self.assertTrue(downstream.rebuild_minute_consumers(self.job, dates, None, refreshed='complete-id'))
+            self.assertTrue(downstream.rebuild_minute_consumers(self.job, dates, None, refreshed='complete-id'))
+        tables.assert_called_once()
+        self.assertNotEqual(tables.call_args.args[1], old_revision)
+        self.assertEqual(tables.call_args.args[2:], (20070104, 20261127))
+
     def test_receipt_missing_after_batch_write_reuses_download(self):
         response = pl.from_pandas(minute_frame(native.DATE).assign(order_book_id='000001.XSHE'))
         response = response.select(native.ID, 'datetime', *native.QUOTE)
@@ -383,6 +472,7 @@ class NightlyTest(unittest.TestCase):
                 patch.object(native, 'repair_native_day', side_effect=AssertionError('completed repair')), \
                 patch.object(migration.Migration, 'run', return_value=days) as history, \
                 patch.object(migration.Migration, 'mark', mark), \
+                patch.object(native, 'redownload_flagged_days', return_value='refresh-id'), \
                 patch.object(Email, 'enqueue_once', side_effect=[False, True, True]) as enqueue, \
                 patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers',
                       return_value=True) as downstream:
@@ -399,6 +489,7 @@ class NightlyTest(unittest.TestCase):
             self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'complete')
             history.assert_called_once_with(revised_dates=(native.DATE,), rebuild=False)
             self.assertEqual(downstream.call_args.args[1:], (days, receipt))
+            self.assertEqual(downstream.call_args.kwargs, {'refreshed': 'refresh-id'})
             self.assertEqual(enqueue.call_count, 3)
             self.assertEqual(len({call.kwargs['delivery_id'] for call in enqueue.call_args_list}), 1)
 
