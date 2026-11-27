@@ -289,5 +289,35 @@
         "schedule": "configs/schedule/current/factorseq_v4_graph.yaml"
       }
     }
+  },
+  "factorseq_contextual_v5": {
+    "status": "implemented_not_trained",
+    "version": 5,
+    "streams": [
+      "factorseq",
+      "factorperf",
+      "factormarket"
+    ],
+    "windows": [
+      60,
+      60,
+      1
+    ],
+    "shared_streams": [
+      "factorperf",
+      "factormarket"
+    ],
+    "config": "configs/algo/nn/factorseq_contextual_v5.yaml",
+    "experiment": "configs/experience/model/factor_sequence/contextual_v5.md",
+    "variants": {
+      "market": {
+        "parameters": 25141,
+        "schedule": "configs/schedule/current/factorseq/factorseq_v5_graph_market.yaml"
+      },
+      "market_events": {
+        "parameters": 25186,
+        "schedule": "configs/schedule/current/factorseq/factorseq_v5_graph_market_events.yaml"
+      }
+    }
   }
 }

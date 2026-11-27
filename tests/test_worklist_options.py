@@ -20,14 +20,15 @@ from src.res.model.util.config.config import ScheduleConfig
 class WorklistOptionsTest(TestCase):
     def test_mixed_entries_inherit_and_override(self):
         entries = WorklistState.entries({
-            'resume': True, 'mode': 'quick', 'lifecycle': {'step': 2, 'window': 1000},
+            'resume': True, 'mode': 'quick', 'lifecycle': {'step': 2, 'window': 1000}, 'stage': 0,
             'fit': ['one', {'name': 'two', 'resume': False, 'mode': 'sparse',
-                            'lifecycle': {'step': 3}, 'start': 20200102}],
+                            'lifecycle': {'step': 3}, 'start': 20200102, 'stage': 1}],
         })
         self.assertEqual(list(entries), ['one', 'two'])
         self.assertEqual(entries['one']['lifecycle'], {'mode': 'quick', 'step': 2, 'window': 1000})
         self.assertTrue(entries['one']['resume'])
         self.assertFalse(entries['two']['resume'])
+        self.assertEqual([entries[name]['stage'] for name in entries], [0, 1])
         self.assertEqual(entries['two']['lifecycle'], {'mode': 'sparse', 'step': 3, 'window': 1000})
 
     def test_strings_keep_existing_defaults(self):
@@ -40,6 +41,7 @@ class WorklistOptionsTest(TestCase):
                       {'name': 'a', 'resuem': True}, {'name': 'a', 'lifecycle': {'step': 0}},
                       {'name': 'a', 'lifecycle': {'step': True}}, {'name': 'a', 'lifecycle': {'stage': 'production'}},
                       {'name': 'a', 'start': 20260230}, {'name': 'a', 'start': 20260101, 'end': 20250101},
+                      {'name': 'a', 'stage': True}, {'name': 'a', 'stage': '1'}, {'name': 'a', 'stage': 2},
                       {'name': 'a', 'mode': 'quick', 'lifecycle': {'mode': 'sparse'}}, {'resume': True}):
             with self.subTest(entry=entry), self.assertRaises(ValueError):
                 WorklistState.entries({'fit': [entry]})
@@ -69,7 +71,7 @@ class WorklistExecutionTest(TestCase):
         self.main = Mock(side_effect=self.train)
         self.enterContext(patch.object(CarryOutScheduleWorkList, '_load_schedule_main', return_value=self.main))
         self.runs = []
-        self.config = {'resume': True, 'fit': ['one', {'name': 'two', 'resume': False, 'mode': 'sparse',
+        self.config = {'resume': True, 'fit': ['one', {'name': 'two', 'resume': False, 'mode': 'sparse', 'stage': 1,
                                                       'lifecycle': {'step': 3}}]}
         self.write()
 
@@ -89,8 +91,10 @@ class WorklistExecutionTest(TestCase):
         CarryOutScheduleWorkList().run()
         first, second = self.main.call_args_list
         self.assertTrue(first.kwargs['resume'])
+        self.assertNotIn('stage', first.kwargs)
         self.assertNotIn('lifecycle_options', first.kwargs)
         self.assertFalse(second.kwargs['resume'])
+        self.assertEqual(second.kwargs['stage'], 1)
         self.assertEqual(second.kwargs['lifecycle_options'], {'mode': 'sparse', 'step': 3})
         state = WorklistState('two').read()
         assert state is not None
@@ -111,6 +115,7 @@ class WorklistExecutionTest(TestCase):
         self.assertFalse(decide.call_args.kwargs['resume'])
         CarryOutScheduleWorkList(automatic=True, only_schedule='two', expected_version=request['version']).run()
         self.assertEqual(self.main.call_args.kwargs['lifecycle_options'], {'mode': 'sparse', 'step': 3})
+        self.assertEqual(self.main.call_args.kwargs['stage'], 1)
         self.assertFalse(self.main.call_args.kwargs['resume'])
         self.assertEqual(self.main.call_args.kwargs['resume_selection'], 'latest')
         self.config['fit'][1]['mode'] = 'quick'

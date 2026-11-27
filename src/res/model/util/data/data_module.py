@@ -122,7 +122,11 @@ class DataModule(Base.BoundLogger):
                     self.config.model_module == 'factorseq_residual' and lens.get('factormarket') == 1
                     and modes in (['contextual_v4_market'], ['contextual_v4_events'])
                 )
-                if not legacy_current_market:
+                v5_current_market = (
+                    self.config.model_module == 'factorseq_contextual_v5'
+                    and lens.get('factormarket') == 1 and lens.get('factorperf') == 60
+                )
+                if not (legacy_current_market or v5_current_market):
                     raise ValueError('Performance and market windows must match')
         if self.no_need_to_load_data(use_data):
             return self

@@ -143,6 +143,9 @@ class FactorContextualV4(FactorResidual):
         return state, ready, details
 
     def forward(self, x):
+        return self._forward_with_performance(x)
+
+    def _forward_with_performance(self, x, *, retain_factor_contributions=False):
         if not isinstance(x, (list, tuple)) or len(x) != 2:
             raise ValueError("v4 requires exactly stock and shared performance streams")
         stock, performance = (v.squeeze(2) if v.ndim == 4 else v for v in x)
@@ -173,9 +176,8 @@ class FactorContextualV4(FactorResidual):
         before = F.gelu(stock_term + F.linear(value, value_weight))
         after = F.gelu(stock_term + F.linear(modulated, value_weight))
         by_factor = self.readout_output(after - before).squeeze(-1)
-        correction = torch.where(valid & ready, by_factor, 0.0).mean(
-            dim=1, keepdim=True
-        )
+        by_factor = torch.where(valid & ready, by_factor, 0.0)
+        correction = by_factor.mean(dim=1, keepdim=True)
 
         shrinkage = _masked_mean_square(torch.cat((gamma, beta), dim=-1), ready)
         for key in ("private_delta", "identity_delta", "graph_delta"):
@@ -191,4 +193,7 @@ class FactorContextualV4(FactorResidual):
             loss_context_shrinkage=self.context_penalty * shrinkage,
             **details,
         )
+        if retain_factor_contributions:
+            raw = torch.where(valid, current[..., 0], 0.0) * self.linear.weight
+            other["factor_contributions"] = raw + by_factor / self.k
         return temporal + correction, other

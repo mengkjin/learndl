@@ -33,10 +33,12 @@ class WorklistState:
     @staticmethod
     def _options(value: Mapping) -> dict[str, Any]:
         from src.res.model.util.lifecycle import ModelLifecycle
-        options = {key: value[key] for key in ('resume', 'force', 'short_test', 'start', 'end') if key in value}
+        options = {key: value[key] for key in ('resume', 'force', 'short_test', 'start', 'end', 'stage') if key in value}
         for key in ('resume', 'force', 'short_test'):
             if key in options and type(options[key]) is not bool:
                 raise ValueError(f'worklist {key} must be a YAML boolean')
+        if 'stage' in options and (type(options['stage']) is not int or options['stage'] not in (0, 1)):
+            raise ValueError('worklist stage must be 0 (fit and test) or 1 (fit only)')
         from datetime import datetime
         for key in ('start', 'end'):
             if key in options:
@@ -70,7 +72,7 @@ class WorklistState:
             raise ValueError('worklist.fit must be a list of schedule names or mappings')
         defaults: dict[str, Any] = {'resume': False, 'force': False} | cls._options(worklist)
         entries: dict[str, dict[str, Any]] = {}
-        allowed = {'name', 'resume', 'force', 'short_test', 'start', 'end', 'mode', 'lifecycle'}
+        allowed = {'name', 'resume', 'force', 'short_test', 'start', 'end', 'stage', 'mode', 'lifecycle'}
         for item in worklist['fit']:
             if isinstance(item, str):
                 name, local = item, {}

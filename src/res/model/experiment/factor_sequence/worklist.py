@@ -21,6 +21,7 @@ def resolve_schedule(source, model, name, mode=None):
     if model not in dict(variants(False)) and model not in (
         "factorseq_residual",
         "factorseq_contextual_v4",
+        "factorseq_contextual_v5",
     ):
         raise ValueError("Unsupported factor sequence model")
     if source.startswith("repaired_"):
@@ -29,8 +30,8 @@ def resolve_schedule(source, model, name, mode=None):
         )
 
         return resolve_repaired(source, model, name, mode)
-    if model == "factorseq_contextual_v4":
-        raise ValueError("Contextual v4 requires a repaired frozen campaign")
+    if model in ("factorseq_contextual_v4", "factorseq_contextual_v5"):
+        raise ValueError("Contextual sequence models require a repaired frozen campaign")
     suite = PATH.rslt_custom / "factor_sequence" / source
     report = json.loads((suite / "suite.json").read_text())
     dataset = PATH.relocated_result(
@@ -98,13 +99,24 @@ def residual_config(dataset, name, model, folds, mode, view="compact"):
         ["DetailedAlphaAnalysis", "FactorResidualDiagnostics"]
     )
     config["callbacks.DetailedAlphaAnalysis"] = {"tasks": ["factor", "t50"]}
-    if model == "factorseq_contextual_v4":
+    if model in ("factorseq_contextual_v4", "factorseq_contextual_v5"):
+        keys = {"factorseq": 60, "factorperf": 60}
+        if model == "factorseq_contextual_v5":
+            keys["factormarket"] = 1
+        if mode == "graph_lr_probe":
+            from .repaired_schedule import GRAPH_LR_PROBE_NODES
+
+            if len(folds) != 37 or tuple(fold["model_date"] for fold in folds[::18]) != GRAPH_LR_PROBE_NODES:
+                raise ValueError("The Graph LR probe requires the original 37-fold campaign")
+            config["train.trainer.learn_rate"]["base"] = 0.0003
+            config["train.factor_sequence.fit_nodes"] = list(GRAPH_LR_PROBE_NODES)
+            mode = "graph"
         config.update(
             {
-                "input.data.types": "factorseq+factorperf",
-                "input.sequence.lens": {"factorseq": 60, "factorperf": 60},
-                "input.sequence.steps": {"factorseq": 1, "factorperf": 1},
-                "algo.factorseq_contextual_v4.variant": [mode],
+                "input.data.types": "+".join(keys),
+                "input.sequence.lens": keys,
+                "input.sequence.steps": dict.fromkeys(keys, 1),
+                f"algo.{model}.variant": [mode],
             }
         )
         return config

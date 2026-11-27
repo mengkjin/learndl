@@ -21,12 +21,13 @@ class FactorResidualDiagnostics(BaseCallBack):
 
     @property
     def context_report(self):
-        path = self.config.base_path.rslt("factor_context_v4")
+        version = 5 if self.config.model_module == "factorseq_contextual_v5" else 4
+        path = self.config.base_path.rslt(f"factor_context_v{version}")
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     def on_fit_model_end(self):
-        if self.config.model_module != "factorseq_contextual_v4":
+        if self.config.model_module not in ("factorseq_contextual_v4", "factorseq_contextual_v5"):
             return
         metrics = self.metrics.model_metrics
         best = metrics.best_attempt_metrics()
@@ -79,6 +80,19 @@ class FactorResidualDiagnostics(BaseCallBack):
                 if len(rows)
                 else None
             )
+        if "market_ready" in other:
+            row["market_ready"] = int(other["market_ready"].item())
+            for branch in ("market_factor", "market_stock", "event_factor"):
+                value = other[branch + "_correction"].detach().float()
+                row[branch + "_rms"] = float(value.square().mean().sqrt().item())
+        if "event_values" in other:
+            from src.data.preprocess.factor_sequence.schema import EVENTS
+
+            values = other["event_values"].tolist()
+            valid = other["event_validity"].tolist()
+            for n, name in enumerate(EVENTS):
+                row[name] = int(values[2 * n]) if valid[2 * n] else None
+                row[name + "__age"] = values[2 * n + 1] if valid[2 * n + 1] else None
         return row
 
     @property
@@ -106,7 +120,12 @@ class FactorResidualDiagnostics(BaseCallBack):
             )
         )
         if "film_gamma" in out.other:
-            for key in ("temporal_score", "context_correction"):
+            for key in (
+                "temporal_score", "context_correction", "graph_score",
+                "market_factor_correction", "market_stock_correction", "event_factor_correction",
+            ):
+                if key not in out.other:
+                    continue
                 frame[key] = out.other[key].detach().cpu().numpy().reshape(-1)
         frame.to_feather(self.folder / f"{batch.date0}.feather")
         if "film_gamma" in out.other:

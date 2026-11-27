@@ -220,6 +220,7 @@ class ScheduleWorklist:
                                 task = self._train_one_schedule(
                                     main, schedule_name=reference_for(worklist, schedule_name), short_test=entry.get('short_test'),
                                     resume=effective_resume, start=entry.get('start'), end=entry.get('end'), email=True,
+                                    **({'stage': entry['stage']} if 'stage' in entry else {}),
                                     **({'lifecycle_options': entry['lifecycle']} if entry.get('lifecycle') else {}),
                                     resume_selection='latest' if automatic else 'interactive',
                                 )

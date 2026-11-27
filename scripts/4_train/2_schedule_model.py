@@ -20,6 +20,10 @@
 #       default : "resume/False"
 #       desc : resume training , if change schedule file, set to False
 #       required : True
+#   stage:
+#       type: [0, 1, 2]
+#       default: 0
+#       desc: 0 fits and tests, 1 fits only, 2 tests only
 #   start : 
 #       type : int
 #       desc : start date
@@ -56,7 +60,7 @@ def main(schedule_name : str | None = None , short_test : bool | None = None ,
          base_path : str | Path | None = None, resume_selection : str = 'interactive',
          training_mode: str | None = None, training_step: int | None = None,
          quick_max_epoch: int | None = None, quick_window: int | None = None,
-         lifecycle_options: dict | None = None, **kwargs):
+         lifecycle_options: dict | None = None, stage: int = 0, **kwargs):
     from src.api.pkgs.model import ModelAPI
     from src.res.model.util.lifecycle import ModelLifecycle
     assert schedule_name is not None , 'schedule_name is required'
@@ -67,7 +71,7 @@ def main(schedule_name : str | None = None , short_test : bool | None = None ,
                 raise ValueError(f'Conflicting lifecycle option: {key}')
             options[key] = value
     options = ModelLifecycle.training_options(training_mode, options)
-    ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end ,
+    ModelAPI.schedule_model(schedule_name , short_test , 0 if resume is None else int(resume) , start = start , end = end , stage=stage,
                             resume_selection=resume_selection,
                             **({'lifecycle_options': options} if options else {}),
                             **({'base_path': Path(base_path)} if base_path else {}))

@@ -44,7 +44,7 @@ def variants(ablations=False):
     from src.res.algo.nn.model.factor_sequence import MODELS
 
     values = [(model, {}) for model in MODELS
-              if model not in ('factorseq_residual', 'factorseq_contextual_v4')]
+              if model not in ('factorseq_residual', 'factorseq_contextual_v4', 'factorseq_contextual_v5')]
     if ablations:
         values += [
             ("factorseq_m1", {"use_performance": False}),

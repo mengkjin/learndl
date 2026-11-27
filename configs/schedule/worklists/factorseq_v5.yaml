@@ -1,0 +1,16 @@
+fit:
+  - factorseq_v5_graph_market
+  - factorseq_v5_graph_market_events
+  - name: factorseq_v4_graph_lr_probe
+    stage: 1
+    lifecycle:
+      step: 18
+
+mode: sparse
+lifecycle:
+  step: 2
+stage: 0
+short_test: false
+resume: false
+force: false
+rerun_mark: 1

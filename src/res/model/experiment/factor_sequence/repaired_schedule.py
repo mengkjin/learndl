@@ -15,7 +15,9 @@ from src.data.preprocess.factor_sequence.context_audit import MARKET_NAMES, PERF
 from src.data.preprocess.factor_sequence.repaired_bundle import load_repaired_manifest
 from src.data.preprocess.factor_sequence.bundle import file_digest
 
-__all__ = ["resolve_repaired", "expanded_folds"]
+__all__ = ["resolve_repaired", "expanded_folds", "GRAPH_LR_PROBE_NODES"]
+
+GRAPH_LR_PROBE_NODES = (20161230, 20210827, 20260512)
 
 
 def expanded_folds(dates, ends, ready, start=20170101):
@@ -129,6 +131,7 @@ def _label_state(dataset, dates):
 def resolve_repaired(source, model, name, mode):
     from src.proj import PATH, CALENDAR
     from src.res.algo.nn.model.factor_sequence.contextual_v4 import V4_VARIANTS
+    from src.res.algo.nn.model.factor_sequence.contextual_v5 import V5_VARIANTS
     from src.res.model.experiment.factor_sequence.worklist import residual_config
 
     valid_modes = {
@@ -140,7 +143,8 @@ def resolve_repaired(source, model, name, mode):
             "contextual_v4_market",
             "contextual_v4_events",
         ),
-        "factorseq_contextual_v4": V4_VARIANTS,
+        "factorseq_contextual_v4": (*V4_VARIANTS, "graph_lr_probe"),
+        "factorseq_contextual_v5": V5_VARIANTS,
     }
     if mode not in valid_modes.get(model, ()):
         raise ValueError(
@@ -148,6 +152,8 @@ def resolve_repaired(source, model, name, mode):
         )
     pin_path = PATH.lc_share / "factor_sequence" / f"{source}.json"
     pinned = json.loads(pin_path.read_text()) if pin_path.exists() else None
+    if not pinned and (model == "factorseq_contextual_v5" or mode == "graph_lr_probe"):
+        raise FileNotFoundError(f"Existing Graph campaign pin required: {pin_path}")
     if pinned:
         dataset, source_report = Path(pinned["dataset"]), pinned["source_report"]
     else:

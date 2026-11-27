@@ -9,6 +9,7 @@ from torch import nn
 
 from .residual import FactorResidual
 from .contextual_v4 import FactorContextualV4
+from .contextual_v5 import FactorContextualV5
 
 CHANNELS = ('value', 'valid', 'observed', 'gap', 'never', 'change',
             'change_valid', 'source_age', 'source_age_valid', 'degenerate')
@@ -178,6 +179,12 @@ CATALOG['factorseq_contextual_v4'].update(
     variants={variant: {'parameters': count, 'schedule': f'factorseq_v4_{variant}'}
               for variant, count in [('shared', 23979), ('private', 28003), ('graph', 24975)]},
     experiment='configs/experience/model/factor_sequence/contextual_v4_sequence.md')
+CATALOG['factorseq_contextual_v5'].update(
+    version=5, mode='market', windows=[60, 60, 1],
+    defaults=CATALOG['factorseq_contextual_v4']['defaults'].copy(),
+    variants={variant: {'parameters': count, 'schedule': f'factorseq_v5_graph_{variant}'}
+              for variant, count in [('market', 25141), ('market_events', 25186)]},
+    experiment='configs/experience/model/factor_sequence/contextual_v5.md')
 CATALOG['factorseq_gate'].update(gate_target='factor levels only',
     gate_inputs='stock values and metadata + causal performance/market context',
     context_to_head=False,gate_scale=.5)

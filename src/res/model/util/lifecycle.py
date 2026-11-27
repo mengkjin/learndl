@@ -289,6 +289,10 @@ class ModelLifecycle:
         scoped = [fold for fold in scoped if fold['test']]
         _, test_dates = validate_folds(scoped, dates)
         selected = set(cls.selected_nodes(config, [int(fold['model_date']) for fold in folds]))
+        probe = config.Param.get('train.factor_sequence.fit_nodes')
+        if probe:
+            if 'test' in config.queue_of_stages or selected != set(probe):
+                raise ValueError('Graph LR probe requires fit-only, sparse stride 18 and the full campaign range')
         return np.asarray([fold['model_date'] for fold in scoped if fold['model_date'] in selected], dtype=int), test_dates
 
     @classmethod

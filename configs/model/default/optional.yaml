@@ -142,6 +142,7 @@ train.factor_sequence.train_dates: []
 train.factor_sequence.valid_dates: []
 
 train.factor_sequence.folds: [] # Optional frozen splits for ordinary rolling schedule training
+train.factor_sequence.fit_nodes: [] # Exact node assertion for fit-only research probes
 
 input.factor_sequence.view: full
 
