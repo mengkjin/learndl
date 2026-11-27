@@ -46,7 +46,7 @@ def comparison_schema():
             name=name, type=['pearson', 'spearman'] if name == 'corr_method' else kind,
             desc=descriptions.get(name, name.replace('_', ' ').title()), default=value,
         ))
-    return ScriptParamSchema(PATH.scpt / '5_test/2_compare_models.py', params, defaults)
+    return ScriptParamSchema(PATH.scpt / '5_test/3_compare_models.py', params, defaults)
 
 
 def parse_parameters(values):

@@ -58,12 +58,12 @@ result.export('results/custom/model_compare/example_copy')
 
 ```sh
 # 无输入时，通过项目 CLI 多选已有训练报告的模型。
-python scripts/5_test/2_compare_models.py
+python scripts/5_test/3_compare_models.py
 
-python scripts/5_test/2_compare_models.py results/a.xlsx results/b.xlsx \
+python scripts/5_test/3_compare_models.py results/a.xlsx results/b.xlsx \
   --start 20200101 --periods all year recent_year --no-display
 
-python scripts/5_test/2_compare_models.py --specs compare.json --pred --hidden \
+python scripts/5_test/3_compare_models.py --specs compare.json --pred --hidden \
   --sample-num-corr 20 --sample-num-hidden 10 --custom-period event:20240101:20240331
 ```
 

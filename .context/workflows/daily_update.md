@@ -26,7 +26,7 @@ ordering is declared explicitly, with cycles and missing dependencies rejected.
 
 `UpdateAPI.daily()` stops downstream model work when `DataAPI.is_updated()` fails.
 It then orchestrates factor/model/trading and reporting updates through their APIs.
-Standalone factor updates use `scripts/3_factor/0_update_factors.py`; data block
+Standalone factor updates use `scripts/3_factor/.0_update_factors.py`; data block
 preparation uses `scripts/2_data/0_train_data.py`. Rollback uses
 `scripts/1_autorun/2_rollback_update.py` and retains the project's recomputation
 semantics rather than restoring a point-in-time database snapshot.

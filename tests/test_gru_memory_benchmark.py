@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import torch
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts/5_test/benchmark_gru_memory.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/5_test/.benchmark_gru_memory.py"
 spec = importlib.util.spec_from_file_location("gru_memory_benchmark", SCRIPT)
 assert spec is not None and spec.loader is not None
 bench = importlib.util.module_from_spec(spec)

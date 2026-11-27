@@ -1,4 +1,15 @@
 """Reclaim staged duplicates and transcode published stock minutes without repairing them again."""
+from __future__ import annotations
+
+__all__ = [
+    'TRANSCODE',
+    'RECOVERY_RESERVE',
+    'published_matches',
+    'clean_staged',
+    'transcode_raw',
+    'recover_storage',
+]
+
 from itertools import groupby
 import json
 import os

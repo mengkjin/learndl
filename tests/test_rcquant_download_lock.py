@@ -5,8 +5,7 @@ import multiprocessing
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch, Mock
-from types import SimpleNamespace
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -30,9 +29,10 @@ def download(root, event):
                                            return_value=pd.DataFrame({'code': ['000001.XSHE'], 'is_active': [True]})))
         patches.enter_context(patch.object(bar_min, '_save_bar', return_value=True))
         patches.enter_context(patch.object(bar_min, 'rq_get_price', side_effect=lambda *a, **kw: provider(root)))
-        updater = SimpleNamespace(indent=0, vb_level=0, rcquant_min_to_normal_min=lambda df, kind: df)
+        updater = bar_min.RcquantMinBarDownloader(indent=0, vb_level=0)
+        patches.enter_context(patch.object(updater, 'rcquant_min_to_normal_min', side_effect=lambda df, kind: df))
         assert event.wait(10)
-        assert bar_min.RcquantMinBarDownloader.rcquant_bar_min(updater, 20261029, 'sec')
+        assert bar_min.RcquantMinBarDownloader.rcquant_bar_min(updater, 20261029, bar_min.MinDataType.SEC)
 
 
 class DownloadLockTest(unittest.TestCase):
@@ -44,7 +44,8 @@ class DownloadLockTest(unittest.TestCase):
         self.enterContext(patch.object(bar_min.RQInitializer, 'init', return_value=True))
         self.enterContext(patch.object(bar_min, 'rcquant_instrument_list', return_value=pd.DataFrame({'code':['000001.XSHE'], 'is_active':[True]})))
         self.enterContext(patch.object(bar_min, '_save_bar', return_value=True))
-        self.updater = SimpleNamespace(indent=0, vb_level=0, rcquant_min_to_normal_min=lambda df, kind: df)
+        self.updater = bar_min.RcquantMinBarDownloader(indent=0, vb_level=0)
+        self.enterContext(patch.object(self.updater, 'rcquant_min_to_normal_min', side_effect=lambda df, kind: df))
         self.calls = self.root/'calls'
         self.enterContext(patch.object(bar_min, 'rq_get_price',
                                       side_effect=lambda *a, **kw: provider(self.root)))
@@ -64,31 +65,30 @@ class DownloadLockTest(unittest.TestCase):
                 job.join()
             self.assertEqual(job.exitcode, 0)
         self.assertEqual(self.calls.read_text().splitlines(), ['request'])
-        self.assertTrue(bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, 'sec'))
+        self.assertTrue(bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, bar_min.MinDataType.SEC))
         self.assertEqual(len(self.calls.read_text().splitlines()), 1)
 
     def test_sample_cache_does_not_satisfy_full_download(self):
         method = bar_min.RcquantMinBarDownloader.rcquant_bar_min
-        self.assertTrue(method(self.updater, 20261029, 'sec', 1))
+        self.assertTrue(method(self.updater, 20261029, bar_min.MinDataType.SEC, 1))
         self.assertFalse((self.root/'secmin/20261029.feather').exists())
         self.assertTrue((self.root/'.samples/1/secmin/20261029.feather').exists())
-        self.assertTrue(method(self.updater, 20261029, 'sec'))
+        self.assertTrue(method(self.updater, 20261029, bar_min.MinDataType.SEC))
         self.assertEqual(len(self.calls.read_text().splitlines()), 2)
         self.assertEqual(sample_size.get(), -1)
 
     def test_failed_provider_can_retry(self):
         with patch.object(bar_min, 'rq_get_price', side_effect=RuntimeError('network')):
             with self.assertRaisesRegex(RuntimeError, 'network'):
-                bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, 'sec')
-        self.assertTrue(bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, 'sec'))
+                bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, bar_min.MinDataType.SEC)
+        self.assertTrue(bar_min.RcquantMinBarDownloader.rcquant_bar_min(self.updater, 20261029, bar_min.MinDataType.SEC))
 
     def test_conversion_failure_reuses_raw_cache(self):
         method = bar_min.RcquantMinBarDownloader.rcquant_bar_min
-        self.updater.rcquant_min_to_normal_min = Mock(side_effect=ValueError('conversion'))
-        with self.assertRaisesRegex(ValueError, 'conversion'):
-            method(self.updater, 20261029, 'sec')
-        self.updater.rcquant_min_to_normal_min = lambda df, kind: df
-        self.assertTrue(method(self.updater, 20261029, 'sec'))
+        with (patch.object(self.updater, 'rcquant_min_to_normal_min', side_effect=ValueError('conversion')),
+              self.assertRaisesRegex(ValueError, 'conversion')):
+            method(self.updater, 20261029, bar_min.MinDataType.SEC)
+        self.assertTrue(method(self.updater, 20261029, bar_min.MinDataType.SEC))
         self.assertEqual(len(self.calls.read_text().splitlines()), 1)
 
     def test_atomic_failure_preserves_previous_file(self):

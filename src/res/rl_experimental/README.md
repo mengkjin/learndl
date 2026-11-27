@@ -139,7 +139,7 @@ RL 准备数据时会自动检查日行情、复权价格、涨跌停价、风�
 
 项目脚本只发送一封任务邮件，统一附带 HtmlCatcher 日志、实验 ZIP（或全部分卷）和 JSON 清单；失败运行同样附带已生成的诊断包。邮件遵循项目的 `MACHINE.emailable` 设置及标准发送失败队列。分卷不会降低这封邮件的总附件大小。
 
-项目交互 CLI 中可选择 `4_train / 3_train_rl_experiment`（Train RL Experiment）。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`。可设置 `config_path`、覆盖任务邮件的 `recipient`，或设置 `no_email=True` 跳过整封邮件。收件人依次取脚本参数、实验配置、项目默认邮箱。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。
+手动训练可直接运行 `scripts/4_train/.3_train_rl_experiment.py`。脚本默认读取 `src/res/rl_experimental/example_server_experiment.json`。可设置 `config_path`、覆盖任务邮件的 `recipient`，或设置 `no_email=True` 跳过整封邮件。收件人依次取脚本参数、实验配置、项目默认邮箱。配置中的相对路径均以项目根目录为基准；训练步数、日期、alpha 和设备在 JSON 中修改。
 
 服务器配置模板是 `example_server_experiment.json`，默认 CUDA、`pred@gru_day_V1`、100,000 步和 seed 7。以下模块命令不经过项目任务邮件，保留独立分卷发送方式；需要 HTML 日志与结果包合并发送时，使用上述项目脚本：
 
@@ -264,7 +264,7 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s tests/rl_
   src/res/rl_experimental/example_walk_forward.json --stage quarters
 ```
 
-服务器任务列表继续选择 **Train RL Experiment**，把 `config_path` 改成 `src/res/rl_experimental/example_walk_forward.json`。脚本识别 `kind=walk_forward`，将汇总 ZIP/JSON 加到原任务邮件，保留 HtmlCatcher；子训练不单独发送邮件。可用配置中的 `stage` 分阶段运行。新入口读取已经准备好的 v4 快照；需要时先执行 `prepare-real`，不会自动改写数据库或重建已有快照。
+在服务器执行 `python scripts/4_train/.3_train_rl_experiment.py --config_path src/res/rl_experimental/example_walk_forward.json`。脚本识别 `kind=walk_forward`，将汇总 ZIP/JSON 加到原任务邮件，保留 HtmlCatcher；子训练不单独发送邮件。可用配置中的 `stage` 分阶段运行。新入口读取已经准备好的 v4 快照；需要时先执行 `prepare-real`，不会自动改写数据库或重建已有快照。
 
 ### 账户、时间与恢复契约
 
@@ -290,8 +290,8 @@ MPLCONFIGDIR=/tmp/learndl-mpl .venv/bin/python -m unittest discover -s tests/rl_
 当前配置选择季度方案；切换方案前检查其行情快照、日期及完整训练计算量。
 
 ```bash
-python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
-python scripts/4_train/3_train_rl_experiment.py --config_path src/res/rl_experimental/example_server_experiment.json
+python scripts/4_train/.3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
+python scripts/4_train/.3_train_rl_experiment.py --config_path src/res/rl_experimental/example_server_experiment.json
 python -m src.automation.scheduling.idle_worklist rl-status
 ```
 

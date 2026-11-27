@@ -31,7 +31,8 @@ def inspect_resume(root, results_root, run_id):
     if manifest['version'] != report['data_version']:
         raise ValueError('Frozen dataset version changed')
     # Orchestration/mail can change; scientific input/model implementation cannot.
-    excluded = {'pipeline.py', 'server_suite.py', 'training_mail.py', 'resume.py', '6_factor_sequence_verify.py'}
+    excluded = {'pipeline.py', 'server_suite.py', 'training_mail.py', 'resume.py', '6_factor_sequence_verify.py',
+                '.6_factor_sequence_verify.py'}
     checked = 0
     for relative, digest in report['code'].items():
         if Path(relative).name in excluded:

@@ -60,22 +60,15 @@ def _fillinf(series : pd.Series , fill_value : Any = 0) -> pd.Series:
     """Replace non-finite values (NaN, Inf) in a Series with ``fill_value``."""
     return series.where(np.isfinite(series) , fill_value)
 
-def _get_inputs(date: int) -> dict[str, pd.DataFrame | pl.DataFrame]:
-    return {
-        'quote': DB.load('trade_ts', 'day', date).set_index('secid'),
-        'moneyflow': DB.load('trade_ts', 'day_moneyflow', date).set_index('secid'),
-        'min': DB.load_pl('trade_ts', '5min', date, use_alt=True),
-    }
-
-
 def calc_daily_risk(date: int):
     """Compute daily risk features aligned to the daily quote universe."""
-    inputs = _get_inputs(date)
-    quote, moneyflow = inputs['quote'], inputs['moneyflow']
+    quote = DB.load('trade_ts', 'day', date).set_index('secid')
+    moneyflow = DB.load('trade_ts', 'day_moneyflow', date).set_index('secid')
+    bars = DB.load_pl('trade_ts', '5min', date, use_alt=True)
     daily = [day_true_range(quote), day_turnover(quote),
              day_largebuy_price_deviation(quote, moneyflow),
              day_smallbuy_percentage(quote, moneyflow)]
-    minute = _minute_risk(quote, inputs['min'], moneyflow)
+    minute = _minute_risk(quote, bars, moneyflow)
     return pd.concat([*daily, minute], axis=1).reset_index()
 
 

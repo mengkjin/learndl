@@ -36,12 +36,12 @@ PortCreatorType : TypeAlias = Literal['optim' , 'top']
 class AccountConfig:              
     name : str = ''
     benchmark : str = 'default'
-    start : int = -1
-    end : int = 99991231
+    start : int | np.integer = -1
+    end : int | np.integer = 99991231
     analytic : bool = True
     attribution : bool = True
     trade_engine : str = 'default'
-    daily : bool = False
+    daily : bool | np.bool_ = False
 
     def __bool__(self):
         return True
@@ -480,8 +480,8 @@ class PortfolioAccountant(Base.BoundLogger):
             model_dates = self.port_dates
         else:
             port_min , port_max = self.port_dates.min() , self.port_dates.max()
-            start = np.max([port_min , self.config.start , self.resumed_account.max_model_date + 1])
-            end   = np.min([DATAVENDOR.td(port_max,5) , self.config.end , DATAVENDOR.td(CALENDAR.updated() , -1)])
+            start = np.max([port_min , int(self.config.start) , self.resumed_account.max_model_date + 1])
+            end   = np.min([DATAVENDOR.td(port_max,5) , int(self.config.end) , DATAVENDOR.td(CALENDAR.updated() , -1)])
             model_dates = DATAVENDOR.td_within(start , end)
 
         if len(model_dates) == 0:

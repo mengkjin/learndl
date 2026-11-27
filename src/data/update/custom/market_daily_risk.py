@@ -102,8 +102,7 @@ def _get_inputs(date: int) -> dict:
     for name, df in inputs.items():
         if not df.empty:
             inputs[name] = df.set_index("secid")
-    inputs["min"] = DB.load_pl("trade_ts", "5min", date, use_alt=True)
-    return inputs
+    return {**inputs, "min": DB.load_pl("trade_ts", "5min", date, use_alt=True)}
 
 
 def _fillinf(series: pd.Series, fill_value: float | Any = 0) -> pd.Series:

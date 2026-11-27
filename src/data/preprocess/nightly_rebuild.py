@@ -1,4 +1,11 @@
 """Checkpointed DataBlock rebuilds using the normal production preprocessors."""
+from __future__ import annotations
+
+__all__ = [
+    'rebuild_block',
+    'retire_60m',
+]
+
 import os
 import shutil
 
@@ -7,13 +14,13 @@ import numpy as np
 from src.data.preprocess.core import FactorPreProcessor
 from src.data.preprocess.processors import PrePros
 from src.data.util import DataBlock
-from src.proj import Dates, Logger, Save
+from src.proj import Base, Dates, Logger, Save
 from src.proj.db.io.mmap import ArrayMemoryMap, ArrayMeta
 from src.proj.db.io.torch import torch_save
 from src.shared.numeric.basic import index_merge
 
 
-def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
+def rebuild_block(job, revision: str, frame: Base.lit.DataBlockTimeFrame, key: str) -> bool:
     """Return False when publication must wait for shards covering live dates."""
     processor = PrePros.get_processor(key, frame, vb_level=1)
     stage = f'{revision}_block'
@@ -102,9 +109,10 @@ def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
             job.mark(stage, f'{item}/layout', layout)
         # Reserve real blocks before mmap copying on the Linux server. A sparse
         # file can otherwise raise SIGBUS instead of a recoverable ENOSPC.
-        if hasattr(os, 'posix_fallocate'):
+        allocate = getattr(os, 'posix_fallocate', None)
+        if allocate is not None:
             with bundle.data_path.open('r+b') as data:
-                os.posix_fallocate(data.fileno(), 0, size)
+                allocate(data.fileno(), 0, size)
         values = np.memmap(bundle.data_path, mode='r+', dtype=meta.dtype, shape=shape)
         for path, index in zip(shards, indexes):
             job.guard()

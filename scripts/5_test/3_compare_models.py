@@ -2,9 +2,9 @@
 """Compare at least two training directories or exported Excel reports.
 
 Examples:
-    python scripts/5_test/2_compare_models.py a.xlsx b.xlsx --start 20200101
-    python scripts/5_test/2_compare_models.py --pred --hidden --sample-num-hidden 10
-    python scripts/5_test/2_compare_models.py --specs comparison.json
+    python scripts/5_test/3_compare_models.py a.xlsx b.xlsx --start 20200101
+    python scripts/5_test/3_compare_models.py --pred --hidden --sample-num-hidden 10
+    python scripts/5_test/3_compare_models.py --specs comparison.json
 
 The JSON file is a list of CompareModelSpec dictionaries and permits explicit
 Excel-to-archive associations and per-model hidden_model_num choices.

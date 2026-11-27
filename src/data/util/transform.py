@@ -242,7 +242,7 @@ def trade_min_reform_pl(df: pl.DataFrame, x_min_new: int, x_min_old: int = 1,
     if legacy_vwap:
         sums = [expr.cast(df.schema[name]) for expr, name in zip(sums, ('amount', 'volume'))]
     if 'num_trades' in df.columns:
-        sums.append(pl.col('num_trades').sum().cast(df.schema['num_trades']))
+        sums.append(pl.col('num_trades').cast(pl.Int64).sum())
     bars = df.filter(minute >= 0).with_columns((minute // (x_min_new // x_min_old)).alias('minute'))
     bars = bars.group_by('secid', 'minute').agg(
         pl.col('open').drop_nulls().first(), pl.col('high').max(), pl.col('low').min(),

@@ -506,8 +506,8 @@ class ServerSuiteTests(unittest.TestCase):
         from src.api.calls.script import RunPipelineScript
         from src.proj.util.script.param_schema import ScriptParamSchema
 
-        key = "4_train/6_factor_sequence_verify.py"
-        self.assertIn(key, [runner.script_key for runner in iter_runnable_scripts()])
+        key = "4_train/.6_factor_sequence_verify.py"
+        self.assertNotIn(key, [runner.script_key for runner in iter_runnable_scripts()])
         runner = ScriptRunner.from_key(key)
         self.assertFalse(runner.header.disabled)
         self.assertFalse(

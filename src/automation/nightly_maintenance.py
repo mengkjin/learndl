@@ -1,4 +1,14 @@
 """Run resumable maintenance handlers under one stable schedule."""
+from __future__ import annotations
+
+__all__ = [
+    'HISTORY_COMPLETE',
+    'HISTORY_NOTICE_DEFERRED',
+    'HANDLERS',
+    'rcquant_minutes',
+    'run',
+]
+
 from contextlib import closing
 from datetime import datetime
 from hashlib import sha256
@@ -22,8 +32,8 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
     from src.data.download.other_source.rcquant import bar_min
     from src.data.download.other_source.rcquant.initializer import QuotaExceeded
     from src.data.download.other_source.rcquant.sec_none_migration import EveningEnded, Migration, REPAIR
-    from src.data.download.other_source.rcquant.sec_native_revision import DATE, REVISION, repair_native_day
-    from src.data.download.other_source.rcquant.sec_storage_recovery import recover_storage, transcode_raw
+    from src.data.download.other_source.rcquant.sec_native_revision import DATE, REVISION
+    from src.data.download.other_source.rcquant.sec_storage_recovery import recover_storage
     from src.data.download.other_source.rcquant.storage import GIB, SpaceDeferred, disk_full
 
     reserve = yaml.safe_load((PATH.main / 'configs/automation/nightly.yaml').read_text()).get('disk_reserve_gib', 50)
@@ -53,25 +63,18 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
         reason = 'staging cleanup and secmin compression'
         try:
             recover_storage(job)
-            reason = f'{DATE} native revision blocks downstream'
+            reason = 'historical minute publication blocks downstream'
             if job.read('quota_exhausted', night):
                 return 'quota deferred', reason
             guard()
-            # Existing native receipts only need reads. If more work is required,
-            # the native repair checks space before downloading and writing.
-            if not repair_native_day(job):
-                return 'waiting on data', reason
+            # Completed 2026-06-08 native repair. Its receipt preserves the original replay identity.
+            # repair_native_day(job)
             source_receipt = job.read(f'{REVISION}_done', DATE)
-            if source_receipt is not None:
-                saved = transcode_raw(job, DATE, source_receipt)
-                if saved is not None:
-                    Logger.stdout(f'RCQuant {DATE}: secmin compressed, {saved / GIB:.2f} GiB reclaimed')
-            reason = 'historical minute publication blocks downstream'
             history_stage = f'{REVISION}_history'
             recorded = job.read(history_stage, 'dates')
             dates = recorded if recorded and all(job.minute_path(day).is_file() for day in recorded) else None
             if dates is None:
-                dates = job.run(revised_dates=(DATE,), rebuild=False)
+                dates = job.run(revised_dates=(DATE,) if source_receipt else (), rebuild=False)
                 if dates is None:
                     return 'waiting on data', f'{reason}, history {job.history_progress}'
                 job.mark(history_stage, 'dates', dates)
@@ -94,7 +97,7 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
             guard()
             from src.data.download.other_source.rcquant.sec_minute_downstream import rebuild_minute_consumers
             reason = f'downstream replay, native audit {state / REVISION}'
-            if not rebuild_minute_consumers(job, dates, job.require_record(f'{REVISION}_done', DATE)):
+            if not rebuild_minute_consumers(job, dates, source_receipt):
                 return 'waiting on data', reason
             return 'complete', f'{len(dates)} history dates and all downstream stages complete'
         except QuotaExceeded:

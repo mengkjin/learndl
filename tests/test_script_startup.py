@@ -98,7 +98,7 @@ OptionsDefinition.available_linear_schedules()
         # These entrypoints used to eagerly load the entire model/data/factor stack.
         for folder in ('1_autorun', '3_factor', '4_train', '5_test', '6_predict', '7_trading'):
             for path in sorted((ROOT / 'scripts' / folder).glob('*.py')):
-                if path.name.startswith('.') or path.name in ('6_factor_sequence_verify.py', '2_compare_models.py'):
+                if path.name.startswith('.') or path.name == '3_compare_models.py':
                     continue
                 with self.subTest(script=path.name):
                     static = ScriptParamSchema.from_source(path)

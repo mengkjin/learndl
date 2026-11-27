@@ -40,6 +40,20 @@ class NightlyTest(unittest.TestCase):
         db = self.enterContext(closing(sqlite3.connect(':memory:')))
         self.job = migration.Migration(self.root, self.root / 'exfactor', db, None)
 
+    def test_hub_nightly_entry_starts_supervisor_before_business(self):
+        from src.api.calls.script import RunPipelineScript
+        from src.api.util.backend.script import ScriptRunner
+        from src.automation.scheduling import runner
+
+        entry = ScriptRunner.from_key('1_autorun/8_nightly_maintenance.py')
+        with (patch.object(runner, 'supervise_nightly_script', side_effect=SystemExit(75)) as supervise,
+              patch.object(nightly_maintenance, 'run') as work,
+              self.assertRaises(SystemExit) as stopped):
+            RunPipelineScript._load_main(entry)(email=True)
+        self.assertEqual(stopped.exception.code, 75)
+        supervise.assert_called_once_with('nightly_maintenance', script_args=['--email=True'])
+        work.assert_not_called()
+
     def test_window_uses_scheduled_date_even_after_midnight(self):
         zone = ZoneInfo('Asia/Shanghai')
         slot = datetime(2026, 11, 26, 21, tzinfo=zone).timestamp()
@@ -214,7 +228,7 @@ class NightlyTest(unittest.TestCase):
         self.assertEqual(pd.read_feather(receipt).to_dict('records'), [migration.bar_min.minute_identity(raw)])
         self.assertEqual(migration.fingerprint(backup), backup_digest)
         self.assertEqual(self.job.read(f'{native.REVISION}_done', date), prepared)
-        self.assertTrue(self.job.read(recovery.TRANSCODE, date)['complete'])
+        self.assertTrue(self.job.require_record(recovery.TRANSCODE, date)['complete'])
         self.assertTrue(native.repair_native_day(self.job))
         self.job.direct_none.assert_not_called()
         self.assertFalse(Path(outputs[0]['staged']).exists())
@@ -245,11 +259,11 @@ class NightlyTest(unittest.TestCase):
 
     def test_space_error_defers_before_history_or_downstream(self):
         with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
-                patch.object(native, 'repair_native_day', side_effect=OSError(errno.ENOSPC, 'disk full')), \
+                patch.object(recovery, 'recover_storage', side_effect=OSError(errno.ENOSPC, 'disk full')), \
                 patch.object(migration.Migration, 'run') as history:
             status, message = nightly_maintenance.rcquant_minutes(lambda: None, 0)
         self.assertEqual(status, 'space deferred')
-        self.assertIn(str(native.DATE), message)
+        self.assertIn('staging cleanup', message)
         history.assert_not_called()
 
     def test_history_success_is_logged_by_month(self):
@@ -299,6 +313,7 @@ class NightlyTest(unittest.TestCase):
         expected = response.select(native.ID, 'datetime')
         result = native._download(self.job, self.root, {'ids': ['000001.XSHE'], 'batches': [['000001.XSHE']]},
                                   expected)
+        assert result is not None
         self.assertEqual(result.height, 240)
 
     def test_partial_native_response_only_retries_missing_stock(self):
@@ -309,6 +324,7 @@ class NightlyTest(unittest.TestCase):
         manifest = {'ids': ids, 'batches': [ids]}
         self.assertIsNone(native._download(self.job, self.root, manifest, expected))
         result = native._download(self.job, self.root, manifest, expected)
+        assert result is not None
         self.assertEqual(result.height, 480)
         self.assertEqual([call.args for call in self.job.direct_none.call_args_list],
                          [(native.DATE, ids), (native.DATE, ids[1:])])
@@ -329,22 +345,13 @@ class NightlyTest(unittest.TestCase):
         result = pl.read_ipc(self.root / 'daily_comparison.feather')
         self.assertEqual(result['volume_mismatch_transition'].item(), 'no_reference')
 
-    def test_dispatch_holds_downstream_until_native_and_history_publish(self):
-        handler = nightly_maintenance.rcquant_minutes
-        with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
-                patch.object(native, 'repair_native_day', return_value=False), \
-                patch.object(migration.Migration, 'run') as history, \
-                patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers') as downstream:
-            self.assertEqual(handler(lambda: None, 0)[0], 'waiting on data')
-            history.assert_not_called()
-            downstream.assert_not_called()
-
-        with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
-                patch.object(native, 'repair_native_day', return_value=True), \
-                patch.object(migration.Migration, 'run', return_value=None) as history, \
-                patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers') as downstream:
-            self.assertEqual(handler(lambda: None, 0)[0], 'waiting on data')
-            history.assert_called_once_with(revised_dates=(native.DATE,), rebuild=False)
+    def test_history_without_native_receipt_uses_normal_backfill(self):
+        with (patch.object(migration.bar_min, 'RQ_PATH', self.root),
+              patch.object(native, 'repair_native_day', side_effect=AssertionError('completed repair')),
+              patch.object(migration.Migration, 'run', return_value=None) as history,
+              patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers') as downstream):
+            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'waiting on data')
+            history.assert_called_once_with(revised_dates=(), rebuild=False)
             downstream.assert_not_called()
 
     def test_history_completion_exits_once_before_downstream(self):
@@ -356,9 +363,12 @@ class NightlyTest(unittest.TestCase):
             path.parent.mkdir(exist_ok=True)
             path.touch()
 
-        def native_ready(job):
-            job.mark(f'{native.REVISION}_done', native.DATE, {'outputs': []})
-            return True
+        receipt = {'outputs': [{'digest': 'previously-published'}]}
+        state = self.root / '.sec_none_migration'
+        state.mkdir()
+        with closing(sqlite3.connect(state / 'progress.sqlite')) as db:
+            migration.Migration(self.root, self.root / 'exfactor', db, None).mark(
+                f'{native.REVISION}_done', native.DATE, receipt)
 
         original_mark = migration.Migration.mark
         interrupted = False
@@ -370,7 +380,7 @@ class NightlyTest(unittest.TestCase):
             original_mark(job, stage, item, value)
 
         with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
-                patch.object(native, 'repair_native_day', side_effect=native_ready), \
+                patch.object(native, 'repair_native_day', side_effect=AssertionError('completed repair')), \
                 patch.object(migration.Migration, 'run', return_value=days) as history, \
                 patch.object(migration.Migration, 'mark', mark), \
                 patch.object(Email, 'enqueue_once', side_effect=[False, True, True]) as enqueue, \
@@ -388,7 +398,7 @@ class NightlyTest(unittest.TestCase):
 
             self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'complete')
             history.assert_called_once_with(revised_dates=(native.DATE,), rebuild=False)
-            self.assertEqual(downstream.call_args.args[1], days)
+            self.assertEqual(downstream.call_args.args[1:], (days, receipt))
             self.assertEqual(enqueue.call_count, 3)
             self.assertEqual(len({call.kwargs['delivery_id'] for call in enqueue.call_args_list}), 1)
 

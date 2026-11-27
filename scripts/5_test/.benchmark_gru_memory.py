@@ -5,7 +5,7 @@
 Run from the repository root on the CUDA server:
 
 ```bash
-.venv/bin/python scripts/5_test/benchmark_gru_memory.py
+.venv/bin/python scripts/5_test/.benchmark_gru_memory.py
 ```
 
 The default run measures 22 cases: 5,000 stocks × 30 days × 16 bars × 6 features,
@@ -41,7 +41,7 @@ use this with `full` / `full_checkpoint` when examining the existing encoder.
 ## Larger workload and resident data simulation
 
 ```bash
-.venv/bin/python scripts/5_test/benchmark_gru_memory.py \
+.venv/bin/python scripts/5_test/.benchmark_gru_memory.py \
   --stocks 5000 6000 --hidden 64 --resident-gib 8 --day-checkpoint
 ```
 
@@ -57,7 +57,7 @@ Useful options: `--steps 5`, `--recipient ADDRESS`, `--device cuda:1`, `--no-ema
 To keep running after disconnecting, use a terminal multiplexer or:
 
 ```bash
-nohup .venv/bin/python -u scripts/5_test/benchmark_gru_memory.py > /tmp/gru_memory_benchmark.log 2>&1 &
+nohup .venv/bin/python -u scripts/5_test/.benchmark_gru_memory.py > /tmp/gru_memory_benchmark.log 2>&1 &
 ```
 
 ## Results and email

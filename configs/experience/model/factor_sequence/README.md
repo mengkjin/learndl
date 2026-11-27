@@ -12,11 +12,10 @@ M3（历史情境注意力）、M4（快慢分支）、M5（股票图）仅登�
 在项目根目录执行：
 
 ```bash
-.venv/bin/python scripts/4_train/6_factor_sequence_verify.py
+.venv/bin/python scripts/4_train/.6_factor_sequence_verify.py
 ```
 
-也可在 CLI 的 Run Scripts 中选择 `Train > Factor Sequence Verify`，界面会提示运行参数。
-更新代码后需退出并重新进入脚本选择菜单，以刷新脚本列表。
+可在命令末尾加 `--help` 查看参数。六个标准候选的单种子验证也可通过 `bash runs/train_factor_sequence.sh` 启动。
 
 依次执行离线测试、服务器源数据探测、build、audit，再逐段 smoke → compare，最后汇总并发送结果邮件。
 默认自动生成独立 run ID，不覆盖已有结果。离线测试失败或任何必需阶段失败即停止后续工作，

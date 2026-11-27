@@ -1,4 +1,10 @@
 """Replay minute consumers in dependency order after the source revision is published."""
+from __future__ import annotations
+
+__all__ = [
+    'rebuild_minute_consumers',
+]
+
 from contextlib import contextmanager
 from functools import partial
 from itertools import batched, groupby
@@ -177,7 +183,9 @@ def _review_production(factors):
 
 
 def rebuild_minute_consumers(job, dates, source_receipt):
-    source = ','.join(map(str, dates)) + REVISION + ''.join(x['digest'] for x in source_receipt['outputs'])
+    source = ','.join(map(str, dates)) + REVISION
+    if source_receipt is not None:
+        source += ''.join(x['digest'] for x in source_receipt['outputs'])
     revision = 'minute_consumers_v1_' + sha256(source.encode()).hexdigest()[:16]
     if job.read(revision, 'complete_v2'):
         return True

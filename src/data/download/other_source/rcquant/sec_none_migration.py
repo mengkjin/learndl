@@ -19,7 +19,7 @@ import pandas as pd
 import polars as pl
 import rqdatac
 
-from src.proj import CALENDAR, DB, Dates, Logger, PATH, Save
+from src.proj import Base, CALENDAR, DB, Dates, Logger, PATH, Save
 from src.proj.db.interface.db_path import DBPath
 
 from . import bar_min
@@ -705,7 +705,7 @@ class Migration:
             return True
 
     @staticmethod
-    def rebuild_minute_block(frame: str, key: str) -> dict:
+    def rebuild_minute_block(frame: Base.lit.DataBlockTimeFrame, key: str) -> dict:
         from src.data.preprocess.processors import PrePros
         from src.data.util import DataBlock
         from src.proj.db.io.mmap import ArrayMemoryMap

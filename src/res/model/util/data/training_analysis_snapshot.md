@@ -94,9 +94,9 @@ that upstream discrepancy is resolved; this change preserves existing analysis r
 Run from the repository root:
 
 ```sh
-.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py
-.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py --resume false
-.venv/bin/python scripts/2_data/4_create_training_analysis_snapshot.py --start 20240101 --end 20241231
+.venv/bin/python scripts/2_data/.4_create_training_analysis_snapshot.py
+.venv/bin/python scripts/2_data/.4_create_training_analysis_snapshot.py --resume false
+.venv/bin/python scripts/2_data/.4_create_training_analysis_snapshot.py --start 20240101 --end 20241231
 ```
 
 The default `resume=true` preserves existing coverage and rebuilds changed years.

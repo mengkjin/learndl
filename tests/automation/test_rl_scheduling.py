@@ -269,7 +269,7 @@ class RLSchedulingTest(unittest.TestCase):
         request = require_rl(self.store) | dict(id='argv-test', owner=idle.OWNER, phase='running')
         self.store.put(request)
         worker_args = ['idle_worklist.py', '_child', request['id']]
-        script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
+        script = PATH.scpt / '4_train' / '.3_train_rl_experiment.py'
         for fail in (False, True):
             with self.subTest(fail=fail):
                 def main(**kwargs):
@@ -396,7 +396,7 @@ class RLSchedulingTest(unittest.TestCase):
         from src.shared.dynamic_import import dynamic_modules
         from src.res.rl_experimental.data import make_synthetic_panel
         from src.res.rl_experimental import experiment
-        script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
+        script = PATH.scpt / '4_train' / '.3_train_rl_experiment.py'
         snapshot = self.root / 'snapshot'
         snapshot.mkdir()
         for name in ('manifest.json', 'quality_report.json'):

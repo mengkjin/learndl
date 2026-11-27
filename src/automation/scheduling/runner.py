@@ -114,7 +114,7 @@ def deferred_worker() -> int:
     return 0
 
 
-def supervise_nightly_script(entrypoint: str) -> None:
+def supervise_nightly_script(entrypoint: str, *, script_args: list[str] | None = None) -> None:
     """Only the registered child continues into ScriptTool. Direct launches supervise that child."""
     if entrypoint not in NIGHTLY_ENTRYPOINTS:
         raise ValueError(f'Unknown nightly entrypoint {entrypoint}')
@@ -135,7 +135,8 @@ def supervise_nightly_script(entrypoint: str) -> None:
                 config = load_config(PATH.main / 'configs/automation', MACHINE.name)
                 task_id = 'nightly_maintenance'
             slot = manual_nightly_slot(PATH.main, time.time())
-            code = _run(task_id, code_fd=fd, config_snapshot=config, scheduled_at=slot, script_args=sys.argv[1:])
+            code = _run(task_id, code_fd=fd, config_snapshot=config, scheduled_at=slot,
+                        script_args=sys.argv[1:] if script_args is None else script_args)
     except (MaintenanceBusy, version_patch.CodeBusy) as exc:
         logger.info('Manual nightly maintenance deferred: %s', exc)
         code = 75

@@ -98,6 +98,13 @@ class StockMinutePolarsTest(TestCase):
                         new = trade_min_reform_pl(pl.from_pandas(source), period).to_pandas()
                         pd.testing.assert_frame_equal(new, old, check_exact=True)
 
+    def test_trade_counts_accumulate_beyond_the_source_integer_width(self):
+        source = minute_frame()
+        source['num_trades'] = np.int16(30000)
+        bars = trade_min_reform_pl(pl.from_pandas(source), 5)
+        self.assertEqual(bars.schema['num_trades'], pl.Int64)
+        self.assertEqual(bars['num_trades'].to_list(), [150000] * 48)
+
     def test_rcquant_multiple_periods_read_source_once(self):
         downloader = bar_min.RcquantMinBarDownloader()
         with patch.object(bar_min, 'x_mins_to_update', return_value=[5, 30, 60]), \

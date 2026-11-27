@@ -35,7 +35,7 @@ class ScriptParamSchema:
         main = mains[0]
         for decorator in main.decorator_list:
             if not (isinstance(decorator, ast.Call) and isinstance(decorator.func, ast.Name)
-                    and decorator.func.id == 'ScriptTool'):
+                    and decorator.func.id in ('ScriptTool', 'checkpointed_script')):
                 return None
         positional = [*main.args.posonlyargs, *main.args.args]
         pairs = list(zip(positional[len(positional) - len(main.args.defaults):], main.args.defaults))

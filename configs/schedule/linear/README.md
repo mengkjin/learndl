@@ -36,7 +36,7 @@ input:
   final.refresh: false
 ```
 
-The script menu entry `5_test/3_test_linear.py` lists only linear schedules,
+The script menu entry `5_test/2_test_linear.py` lists only linear schedules,
 supports `start`/`end`, and defaults to `resume=False`. It writes normal results
 under `models/linear/<schedule_name>/` and includes a schedule config editor.
 

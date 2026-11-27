@@ -262,7 +262,7 @@ def execute(request: dict, store) -> int:
             doc = recheck(request, PATH.main)
             record(store, request['id'], output_directory=doc['run_directory'],
                    config_path=str(Path(doc['run_directory'])/'config.json'), resume_request_id=doc['request_id'])
-            script = PATH.scpt / '4_train' / '4_resume_rl_experiment.py'
+            script = PATH.scpt / '4_train' / '.4_resume_rl_experiment.py'
             previous_argv = sys.argv
             sys.argv = [str(script)]
             try:
@@ -299,7 +299,7 @@ def execute(request: dict, store) -> int:
         resolved = folder / 'experiment.json'
         resolved.write_text(json.dumps(config, ensure_ascii=False, indent=2))
         record(store, request['id'], output_directory=config[output_key], config_path=str(resolved))
-        script = PATH.scpt / '4_train' / '3_train_rl_experiment.py'
+        script = PATH.scpt / '4_train' / '.3_train_rl_experiment.py'
         # BackendTaskRecorder parses sys.argv even for Python keyword calls.
         # Never expose the worker's `_child RUN_ID` arguments to ScriptTool.
         previous_argv = sys.argv

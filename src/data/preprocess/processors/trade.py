@@ -60,7 +60,23 @@ class PrePro_day(TradePreProcessor):
         """Apply price adjustment and return the result."""
         return blocks['day'].adjust_price()
 
-class PrePro_15m(_VwapInfClosePreProcessor):
+class _AdjustedMinuteBars(_VwapInfClosePreProcessor):
+    bar_key: str
+    db_key: str
+    bar_features: tuple[str, ...] = ('close', 'high', 'low', 'open', 'volume', 'vwap')
+    AllowInactive : bool = TRADE_ALLOW_INACTIVE
+    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
+        return {
+            self.bar_key : BlockLoader('trade_ts', self.db_key, list(self.bar_features), **kwargs) ,
+            'day' : BlockLoader('trade_ts', 'day', ['turn_fl', 'preclose'], **kwargs)}
+
+    def process(self , blocks):
+        data_block = blocks[self.bar_key]
+        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
+        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
+        return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
+
+class PrePro_15m(_AdjustedMinuteBars):
     """
     15-minute bar preprocessor (key: ``'15m'``).
 
@@ -69,17 +85,8 @@ class PrePro_15m(_VwapInfClosePreProcessor):
     day's intraday volume sum (avoids day/minute volume unit mismatch), then
     clipped at 200%. The ``volume`` feature is renamed to ``turn_fl``.
     """
-    AllowInactive : bool = TRADE_ALLOW_INACTIVE
-    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        return {
-            '15m' : BlockLoader('trade_ts', '15min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
-            'day' : BlockLoader('trade_ts', 'day', ['turn_fl', 'preclose'], **kwargs)}
-
-    def process(self , blocks):
-        data_block = blocks['15m']
-        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
-        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
+    bar_key = '15m'
+    db_key = '15min'
 
 class PrePro_15mraw(TradePreProcessor):
     """
@@ -118,19 +125,10 @@ class PrePro_15mraw(TradePreProcessor):
                 fallback, torch.where(torch.isfinite(close), close, torch.nan), vwap)
         return block
     
-class PrePro_30m(_VwapInfClosePreProcessor):
+class PrePro_30m(_AdjustedMinuteBars):
     """30-minute bar preprocessor (key: ``'30m'``).  Same normalisation as ``PrePro_15m``."""
-    AllowInactive : bool = TRADE_ALLOW_INACTIVE
-    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        return {
-            '30m' : BlockLoader('trade_ts', '30min', ['close', 'high', 'low', 'open', 'volume', 'vwap'], **kwargs) ,
-            'day' : BlockLoader('trade_ts', 'day', ['turn_fl', 'preclose'], **kwargs)}
-
-    def process(self , blocks): 
-        data_block = blocks['30m']
-        db_day     = blocks['day'].align(data_block.secid , data_block.date , inplace = True)
-        data_block = data_block.adjust_price(divide = db_day.loc(feature = 'preclose'))
-        return self.allocate_turn_fl_by_bar_volume(data_block , db_day.loc(feature = 'turn_fl'))
+    bar_key = '30m'
+    db_key = '30min'
 
 class PrePro_30mcont(_VwapInfClosePreProcessor):
     """30-minute bar preprocessor (key: ``'30mcont'``).  Only convert volume to turn_fl."""
@@ -163,15 +161,10 @@ def standardize_num_trades(counts: torch.Tensor) -> torch.Tensor:
     return z.masked_fill(~valid | (n < 10), torch.nan).to(counts.dtype)
 
 
-class _TradeCount:
+class _TradeCount(_AdjustedMinuteBars):
     CalculationWindow = 21
-    bar_key: str
 
-    def block_loaders(self , **kwargs) -> dict[str,BlockLoader]:
-        loaders = super().block_loaders(**kwargs)
-        loader = loaders[self.bar_key]
-        loader.feature = [*loader.feature, 'num_trades']
-        return loaders
+    bar_features = (*_AdjustedMinuteBars.bar_features, 'num_trades')
 
     def process(self , blocks):
         bars = super().process(blocks).align_feature(self.final_feat(), inplace=True)
@@ -184,12 +177,10 @@ class _TradeCount:
 
 class PrePro_15mt(_TradeCount, PrePro_15m):
     """15-minute features with standardized trade counts."""
-    bar_key = '15m'
 
 
 class PrePro_30mt(_TradeCount, PrePro_30m):
     """30-minute features with standardized trade counts."""
-    bar_key = '30m'
     
 class PrePro_week(_VwapInfClosePreProcessor):
     """

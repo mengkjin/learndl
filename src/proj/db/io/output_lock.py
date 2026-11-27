@@ -1,4 +1,10 @@
 """Serialize cooperating writers of one filesystem output."""
+from __future__ import annotations
+
+__all__ = [
+    'output_lock',
+]
+
 import os
 from contextlib import contextmanager
 from pathlib import Path

@@ -259,7 +259,7 @@ LEARNDL_AUTOFIX_SANDBOX_TESTS=1 python -m unittest tests.automation.test_autofix
 
 `20261031_factor_sequence_verify_01` 使用 `blocking: none`，只提交一次性请求，不在
 无 GPU 的 autofix 沙箱内训练。已有 idle_worklist worker 启用且 GPU 插槽空闲时，执行
-`scripts/4_train/6_factor_sequence_verify.py`，run ID 与 autofix ID 相同。
+`scripts/4_train/.6_factor_sequence_verify.py`，run ID 与 autofix ID 相同。
 默认 2017 年至最新成熟标签，服务器探测最早因子历史，六模型各 3 epoch；
 完整多年份滚动验证可能耗时较长。正式执行期间占用共享训练插槽，不阻塞数据更新通道。
 

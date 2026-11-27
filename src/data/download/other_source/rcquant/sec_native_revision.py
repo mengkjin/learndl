@@ -1,4 +1,12 @@
 """One durable whole-market native download for the 2026-06-08 correction."""
+from __future__ import annotations
+
+__all__ = [
+    'DATE',
+    'REVISION',
+    'repair_native_day',
+]
+
 from pathlib import Path
 import os
 from time import perf_counter

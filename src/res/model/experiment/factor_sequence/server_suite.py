@@ -148,7 +148,7 @@ def run_suite(root, results_root, run_id, data_config, test_start=20170101, test
         report['code']={str(p.relative_to(root)):file_digest(p) for directory in (
             'src/data/preprocess/factor_sequence','src/res/algo/nn/model/factor_sequence')
             for p in (root/directory).glob('*.py')}
-        for p in [root/'scripts/4_train/6_factor_sequence_verify.py',
+        for p in [root/'scripts/4_train/.6_factor_sequence_verify.py',
                   *sorted((root/'configs/algo/nn').glob('factorseq_*.yaml'))]:
             report['code'][str(p.relative_to(root))]=file_digest(p)
         stage('offline',lambda:execute([sys.executable,'-m','unittest','discover','-s','tests',

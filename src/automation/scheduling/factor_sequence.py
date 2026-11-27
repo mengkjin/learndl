@@ -73,7 +73,7 @@ def execute(request, store):
     # owns its normal exclusive NN lock; holding that lock here would deadlock it.
     guard = FitLock.guard()
     guard.__enter__()
-    script = PATH.scpt / '4_train' / '6_factor_sequence_verify.py'
+    script = PATH.scpt / '4_train' / '.6_factor_sequence_verify.py'
     previous = sys.argv
     try:
         sys.argv = [str(script)]

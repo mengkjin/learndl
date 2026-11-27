@@ -527,7 +527,7 @@ class TradePreProcessor(PreProcessor):
     Restricts output features to ``TRADE_FEAT`` (open/close/high/low/vwap/turn_fl).
     Subclasses must implement ``process`` and ``block_loaders``.
     """
-    def final_feat(self) -> list[str] | None:
+    def final_feat(self) -> list[str]:
         """Return the standard OHLCV feature list."""
         return [*TRADE_FEAT]
 

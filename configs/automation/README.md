@@ -73,10 +73,10 @@ OHLC against Tushare and include the previous gate result when available.
 The archive format marker and file checksums govern the source used for repair.
 Interrupted publications resume from their staged files when
 using the same repair version. A quota interruption resumes on the next
-scheduled evening. The first handler checks the dedicated 2026-06-08 revision
-before resuming ordinary history. It reuses validated full-market native download
-batches and records volume discrepancies under `native_20260608_v1`. Raw minutes
-and all six period files must be verified before dependent work can start.
+scheduled evening. The dedicated 2026-06-08 native repair has completed. Its
+`native_20260608_v1` receipt identifies the published day and preserves downstream
+checkpoints across upgrades. Nightly resumes ordinary history directly. An archive
+without that receipt processes the date through the ordinary historical repair.
 
 Before resuming history, nightly removes staged duplicates whose checksums
 match the published output and its receipt. It transcodes published stock
@@ -474,7 +474,7 @@ worklist 仍可参与调度。YAML 内容或参数确实无效时仍按原规则
 
 ```bash
 python -m src.automation.scheduling.idle_worklist rl-status
-python scripts/4_train/3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
+python scripts/4_train/.3_train_rl_experiment.py --config_path configs/strategy/rl_experiment.yaml
 ```
 
 版本由该文件最后修改的 commit 与内容指纹组成；无关 Git 提交不会触发。

@@ -58,7 +58,7 @@ class _df_collection(ABC):
         self.long_frame : pd.DataFrame | Any = pd.DataFrame()
 
     @abstractmethod
-    def add_one_day(self , date : int , df : pd.DataFrame) -> None:
+    def add_one_day(self , date : int , df : pd.DataFrame | pl.DataFrame) -> None:
         """add a DataFrame with given (1) date"""
 
     @abstractmethod
@@ -270,8 +270,10 @@ class DFCollection(_df_collection):
             return pd.DataFrame()
         return super().gets(dates , field , rename_date_key , copy)
 
-    def add_one_day(self , date : int , df : pd.DataFrame):
+    def add_one_day(self , date : int , df : pd.DataFrame | pl.DataFrame):
         """add a DataFrame with given (1) date"""
+        if isinstance(df, pl.DataFrame):
+            df = df.to_pandas()
         df = df.reset_index([i for i in df.index.names if i] , drop = False).\
             assign(**{self.date_key:date}).set_index(self.date_key).dropna(how = 'all')
         self.data_frames[date] = df
