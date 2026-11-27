@@ -39,6 +39,8 @@ def _usable(frame: pl.DataFrame, expected: pl.DataFrame) -> pl.DataFrame:
 
 def _download(job: Migration, directory: Path, manifest: dict, expected: pl.DataFrame) -> pl.DataFrame | None:
     frames = []
+    requested = 0
+    started = perf_counter()
     for i, batch in enumerate(manifest['batches']):
         job.guard()
         wanted = expected.filter(pl.col(ID).is_in(batch))
@@ -53,9 +55,9 @@ def _download(job: Migration, directory: Path, manifest: dict, expected: pl.Data
                 Logger.warning(f'RCQuant {DATE}: unreadable native download batch {i}')
         missing = sorted(set(batch) - set(saved[ID].to_list()))
         if missing:
-            start = perf_counter()
+            job.check_space(directory, 0, operation=f'{DATE} download native batch {i + 1}')
+            requested += 1
             response = job.direct_none(DATE, missing)
-            downloaded = perf_counter()
             if not response.empty:
                 incoming = pl.from_pandas(response, nan_to_null=False).select(
                     ID, pl.col('datetime').cast(expected.schema['datetime']), pl.col(QUOTE).cast(pl.Float64),
@@ -65,12 +67,12 @@ def _download(job: Migration, directory: Path, manifest: dict, expected: pl.Data
                 # Store a durable batch before its receipt. A pending receipt lets a
                 # subsequent run adopt the exact file written before interruption.
                 job.mark(f'{REVISION}_batch', i, {'digest': None})
-                write_frame(saved, path, empty_ok=True)
-            Logger.stdout(f'RCQuant {DATE}: batch {i + 1}/{len(manifest["batches"])} '
-                          f'download={downloaded-start:.2f}s convert/stage={perf_counter()-downloaded:.2f}s')
+                job.write_frame(saved, path, empty_ok=True)
         if path.is_file() and not saved.is_empty():
             job.mark(f'{REVISION}_batch', i, {'digest': fingerprint(path), 'stocks': saved[ID].n_unique()})
         frames.append(saved)
+    Logger.stdout(f'RCQuant {DATE}: checked {len(frames)} native batches, '
+                  f'{requested} fetched, {perf_counter()-started:.1f}s')
     full = pl.concat(frames)
     missing = sorted(set(manifest['ids']) - set(full[ID].to_list()))
     if missing:
@@ -81,7 +83,7 @@ def _download(job: Migration, directory: Path, manifest: dict, expected: pl.Data
     return full
 
 
-def _audit(directory, old, native, stocks, old_mapping):
+def _audit(directory, old, native, stocks, old_mapping, *, save=write_frame):
     names = ['open_first', 'high_max', 'low_min', 'close_last', *TOTALS, 'bars']
     def one(bars):
         return bars.group_by(ID).agg(
@@ -114,8 +116,8 @@ def _audit(directory, old, native, stocks, old_mapping):
     minute_delta = (original.select(ID, 'datetime', *QUOTE).join(
         native.select(ID, 'datetime', *QUOTE), on=[ID, 'datetime'], suffix='_native', how='full', coalesce=True,
     ).filter(pl.any_horizontal(~pl.col(name).eq_missing(pl.col(f'{name}_native')) for name in QUOTE)))
-    write_frame(delta, directory / 'daily_comparison.feather')
-    write_frame(minute_delta, directory / 'minute_differences.feather', empty_ok=True)
+    save(delta, directory / 'daily_comparison.feather')
+    save(minute_delta, directory / 'minute_differences.feather', empty_ok=True)
     return {'stocks': native[ID].n_unique(), 'changed_minutes': minute_delta.height,
             'old_volume_mismatches': delta['old_volume_mismatch'].sum(),
             'native_volume_mismatches': delta['native_volume_mismatch'].sum()}
@@ -129,14 +131,17 @@ def _backup(path: Path, destination: Path) -> None:
 
 
 def repair_native_day(job: Migration) -> bool:
+    from .sec_storage_recovery import published_matches
+
     directory = job.state / REVISION
     with date_lock(job.root, SEC, DATE):
         done = job.read(f'{REVISION}_done', DATE)
         if done and len(done['outputs']) == 7 and all(
-            file_matches(Path(item['target']), item['digest']) for item in done['outputs']
+            published_matches(job, DATE, item) for item in done['outputs']
         ):
             Logger.stdout(f'RCQuant {DATE}: native revision verified, all 7 files already published')
             return True
+        Logger.stdout(f'RCQuant {DATE}: checking native minute download and publication')
         prepared = job.read(f'{REVISION}_prepared', DATE)
         archive = job.minute_path(DATE)
         previous = archive.parent / f'.{REVISION}_backup' / archive.name
@@ -148,6 +153,7 @@ def repair_native_day(job: Migration) -> bool:
             old = pl.read_ipc(previous if previous.exists() else archive, memory_map=False)
             manifest = job.read(f'{REVISION}_manifest', DATE)
             if manifest is None:
+                job.check_space(directory, 0, operation=f'{DATE} download stock list')
                 instruments = bar_min.rcquant_instrument_list(DATE, SEC, raise_on_quota=True)
                 if instruments.empty:
                     raise RuntimeError(f'RCQuant {DATE}: no dated stock universe')
@@ -168,7 +174,7 @@ def repair_native_day(job: Migration) -> bool:
                                            pl.lit('none').alias(bar_min.ADJUST_COLUMN))
             mapping = dict(restored.select('code', ID).unique().iter_rows())
             stocks = job.stock_mapping(mapping)
-            counts = _audit(directory, old, native, stocks, manifest['mapping'])
+            counts = _audit(directory, old, native, stocks, manifest['mapping'], save=job.write_frame)
             raw = restored.drop(ID).select(*KEYS, 'time', 'date', *QUOTE, bar_min.ADJUST_COLUMN)
             valid_raw_day(raw, DATE)
             prepared = job.stage(DATE, raw, counts, revision=REVISION, stocks=stocks)

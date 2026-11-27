@@ -365,7 +365,7 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
 
     def update_periodic_stats(
         self , stats_type : Base.lit.FactorStatsPeriod , dates : Base.alias.DateType , 
-        overwrite = False, *, save=None
+        overwrite = False, *, save=None, log_success=True
     ) -> None:
         """update factor daily or weekly stats"""
         target_dates = self.stats_target_dates()[stats_type]
@@ -389,7 +389,8 @@ class FactorCalculator(Base.BoundLogger , metaclass=_FactorCalculatorMeta):
                 DB.save(df , f'factor_stats_{stats_type}' , self.db_key , indent = self.indent + 1 , vb_level = self.vb_level)
             else:
                 save(df, f'factor_stats_{stats_type}', self.db_key)
-        self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
+        if log_success:
+            self.logger.stdout(f'Updated {stats_type} stats of {self.factor_name} at {Dates(dates)}' , idt = 1)
 
     def update_all_factors(self , start : int | None = None , end : int | None = None , overwrite = False) -> None:
         """update all factor data until date"""

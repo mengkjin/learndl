@@ -1,5 +1,5 @@
 """Concurrent provider calls, partial caches and atomic publication failure."""
-from contextlib import redirect_stdout
+from contextlib import ExitStack, redirect_stdout
 import io
 import multiprocessing
 from pathlib import Path
@@ -14,9 +14,25 @@ from src.data.download.other_source.rcquant import bar_min
 from src.data.download.other_source.rcquant.storage import atomic_frame, sample_size
 
 
-def download(updater, event, first_n=-1):
-    event.wait(5)
-    assert bar_min.RcquantMinBarDownloader.rcquant_bar_min(updater, 20261029, 'sec', first_n)
+def provider(root):
+    with (root / 'calls').open('a') as stream:
+        stream.write('request\n')
+    return pd.DataFrame({'order_book_id': ['000001.XSHE'], 'datetime': [pd.Timestamp('2026-10-29 09:31')],
+                         'total_turnover': [1.]})
+
+
+def download(root, event):
+    # A spawned worker mirrors the managed scripts and has its own Polars thread pool.
+    with ExitStack() as patches:
+        patches.enter_context(patch.object(bar_min, 'RQ_PATH', root))
+        patches.enter_context(patch.object(bar_min.RQInitializer, 'init', return_value=True))
+        patches.enter_context(patch.object(bar_min, 'rcquant_instrument_list',
+                                           return_value=pd.DataFrame({'code': ['000001.XSHE'], 'is_active': [True]})))
+        patches.enter_context(patch.object(bar_min, '_save_bar', return_value=True))
+        patches.enter_context(patch.object(bar_min, 'rq_get_price', side_effect=lambda *a, **kw: provider(root)))
+        updater = SimpleNamespace(indent=0, vb_level=0, rcquant_min_to_normal_min=lambda df, kind: df)
+        assert event.wait(10)
+        assert bar_min.RcquantMinBarDownloader.rcquant_bar_min(updater, 20261029, 'sec')
 
 
 class DownloadLockTest(unittest.TestCase):
@@ -30,21 +46,19 @@ class DownloadLockTest(unittest.TestCase):
         self.enterContext(patch.object(bar_min, '_save_bar', return_value=True))
         self.updater = SimpleNamespace(indent=0, vb_level=0, rcquant_min_to_normal_min=lambda df, kind: df)
         self.calls = self.root/'calls'
-        def provider(*args, **kwargs):
-            with self.calls.open('a') as stream:
-                stream.write('request\n')
-            return pd.DataFrame({'order_book_id':['000001.XSHE'], 'datetime':[pd.Timestamp('2026-10-29 09:31')], 'total_turnover':[1.]})
-        self.enterContext(patch.object(bar_min, 'rq_get_price', side_effect=provider))
+        self.enterContext(patch.object(bar_min, 'rq_get_price',
+                                      side_effect=lambda *a, **kw: provider(self.root)))
+
 
     def test_two_processes_download_once_and_reuse_after_conversion_failure(self):
-        context = multiprocessing.get_context('fork')
+        context = multiprocessing.get_context('spawn')
         event = context.Event()
-        jobs = [context.Process(target=download, args=(self.updater,event)) for _ in range(2)]
+        jobs = [context.Process(target=download, args=(self.root, event)) for _ in range(2)]
         for job in jobs:
             job.start()
         event.set()
         for job in jobs:
-            job.join(15)
+            job.join(25)
             if job.is_alive():
                 job.kill()
                 job.join()

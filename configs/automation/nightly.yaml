@@ -1,5 +1,6 @@
 timezone: Asia/Shanghai
 cutoff: '00:00'
 grace_minutes: 10
+disk_reserve_gib: 50
 tasks:
   - rcquant_minutes

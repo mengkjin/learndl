@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
+import errno
 import signal
 import sqlite3
 from tempfile import TemporaryDirectory
@@ -22,6 +23,8 @@ from src.automation.scheduling import runtime
 from src.automation.scheduling.calendar_lanes import eligibility
 from src.data.download.other_source.rcquant import sec_native_revision as native
 from src.data.download.other_source.rcquant import sec_none_migration as migration
+from src.data.download.other_source.rcquant import sec_storage_recovery as recovery
+from src.data.download.other_source.rcquant.storage import GIB, SpaceDeferred
 from src.data.preprocess.nightly_rebuild import rebuild_block
 from src.data.preprocess.processors.trade import (
     PrePro_15m, PrePro_15mt, PrePro_30m, PrePro_30mt, standardize_num_trades,
@@ -165,6 +168,126 @@ class NightlyTest(unittest.TestCase):
                 self.assertTrue(migration.file_matches(Path(output['target']), output['digest']))
                 self.assertEqual(pl.read_ipc(output['target'], memory_map=False)['num_trades'].sum(),
                                  response['num_trades'].sum())
+
+    def test_native_legacy_receipt_survives_zstd_with_interrupted_commit(self):
+        date = native.DATE
+        raw = self.job.minute_path(date)
+        raw.parent.mkdir()
+        frame = pl.from_pandas(minute_frame(date)).with_columns(pl.lit('none').alias('_adjust_type'))
+        frame.write_ipc(raw)
+        legacy = migration.fingerprint(raw)
+        backup = self.job.backup_path(date)
+        backup.parent.mkdir()
+        frame.write_ipc(backup)
+        backup_digest = migration.fingerprint(backup)
+        receipt = raw.parent / '.none_published' / raw.name
+        receipt.parent.mkdir()
+        pd.DataFrame([migration.bar_min.minute_identity(raw)]).to_feather(receipt)
+        outputs = []
+        for target in [raw, *(self.root / f'{p}min.feather' for p in migration.bar_min.SEC_PERIODS)]:
+            if target != raw:
+                frame.write_ipc(target)
+            staged = target.parent / f'.{native.REVISION}_stage' / target.name
+            staged.parent.mkdir(exist_ok=True)
+            staged.write_bytes(target.read_bytes())
+            outputs.append({'target': str(target), 'staged': str(staged), 'digest': migration.fingerprint(target)})
+        no_match = Path(outputs[-1]['staged'])
+        no_match.write_bytes(b'different')
+        prepared = {'outputs': outputs}
+        self.job.mark(f'{native.REVISION}_prepared', date, prepared)
+        self.job.mark(f'{native.REVISION}_done', date, prepared)
+        self.job.direct_none = Mock(side_effect=AssertionError('native download repeated'))
+        self.job.reserve_bytes = 50 * GIB
+        # On a low disk, cleanup and net-reclaiming compression can still run.
+        with patch('src.data.download.other_source.rcquant.storage.shutil.disk_usage',
+                   return_value=SimpleNamespace(free=3 * GIB)):
+            with patch.object(recovery, '_finish', side_effect=migration.EveningEnded), \
+                    self.assertRaises(migration.EveningEnded):
+                recovery.recover_storage(self.job)
+            self.assertNotEqual(migration.fingerprint(raw), legacy)
+            pending = self.job.require_record(recovery.TRANSCODE, date)
+            self.assertFalse(pending.get('complete', False))
+            recovery.recover_storage(self.job)
+            with self.assertRaisesRegex(SpaceDeferred, '50 GiB reserve'):
+                self.job.check_space(self.root, 0, operation='resume history')
+        self.assertEqual(pl.read_ipc(raw, memory_map=False).to_dicts(), frame.to_dicts())
+        self.assertEqual(pd.read_feather(receipt).to_dict('records'), [migration.bar_min.minute_identity(raw)])
+        self.assertEqual(migration.fingerprint(backup), backup_digest)
+        self.assertEqual(self.job.read(f'{native.REVISION}_done', date), prepared)
+        self.assertTrue(self.job.read(recovery.TRANSCODE, date)['complete'])
+        self.assertTrue(native.repair_native_day(self.job))
+        self.job.direct_none.assert_not_called()
+        self.assertFalse(Path(outputs[0]['staged']).exists())
+        self.assertEqual(no_match.read_bytes(), b'different')
+        for output in outputs[1:]:
+            self.assertTrue(migration.file_matches(Path(output['target']), output['digest']))
+
+    def test_prepared_transcode_is_adopted_after_interrupted_replace(self):
+        date = 20250422
+        raw = self.job.minute_path(date)
+        raw.parent.mkdir()
+        frame = pl.from_pandas(minute_frame(date))
+        frame.write_ipc(raw)
+        before = migration.fingerprint(raw)
+        prepared = {'outputs': [{'target': str(raw), 'staged': 'unused', 'digest': before}]}
+        replace = recovery.os.replace
+        def interrupt(src, target):
+            if target == raw:
+                raise migration.EveningEnded
+            replace(src, target)
+        with patch.object(recovery.os, 'replace', side_effect=interrupt), self.assertRaises(migration.EveningEnded):
+            recovery.transcode_raw(self.job, date, prepared)
+        self.assertEqual(migration.fingerprint(raw), before)
+        with patch.object(recovery, 'write_frame') as write:
+            recovery.transcode_raw(self.job, date, prepared)
+        write.assert_not_called()
+        self.assertTrue(recovery.published_matches(self.job, date, prepared['outputs'][0]))
+
+    def test_space_error_defers_before_history_or_downstream(self):
+        with patch.object(migration.bar_min, 'RQ_PATH', self.root), \
+                patch.object(native, 'repair_native_day', side_effect=OSError(errno.ENOSPC, 'disk full')), \
+                patch.object(migration.Migration, 'run') as history:
+            status, message = nightly_maintenance.rcquant_minutes(lambda: None, 0)
+        self.assertEqual(status, 'space deferred')
+        self.assertIn(str(native.DATE), message)
+        history.assert_not_called()
+
+    def test_history_success_is_logged_by_month(self):
+        days = [20250422, 20250423, 20250506]
+        self.job.scan = Mock(return_value={'dates': days, 'ids': [], 'missing': [], 'mapping_errors': {}})
+        self.job.get_events = Mock()
+        self.job.daily_factors = Mock(return_value=1)
+        self.job.repair_cohorts = Mock(return_value=(days, []))
+        self.job.migrate_date = Mock(return_value=True)
+        for day in days:
+            self.job.mark('scan', day, {'mapping': {}})
+        with patch.object(migration, 'Dates', return_value=days), patch.object(migration.Logger, 'stdout') as log:
+            self.assertEqual(self.job.run(rebuild=False), days)
+        lines = [call.args[0] for call in log.call_args_list]
+        self.assertEqual(sum('202504: 2 published' in line for line in lines), 1)
+        self.assertEqual(sum('202505: 1 published' in line for line in lines), 1)
+        self.assertEqual(sum('202504: 2 written' in line for line in lines), 1)
+
+    def test_daily_stock_writer_uses_zstd_for_raw_and_uncompressed_for_periods(self):
+        from src.proj.db.interface.db_path import DBPath
+
+        day = 20261127
+        frame = minute_frame(day)
+        bar_min = migration.bar_min
+        write_ipc = pl.DataFrame.write_ipc
+        def path_exact(descriptor, date):
+            return self.root / f'{descriptor.key}.{date}.feather'
+        with patch.object(bar_min, 'RQ_PATH', self.root), \
+                patch.object(DBPath, 'path_exact', path_exact), \
+                patch.object(pl.DataFrame, 'write_ipc', autospec=True, side_effect=write_ipc) as write:
+            bar_min.write_min(frame, day, bar_min.MinDataType.SEC)
+            for period in bar_min.SEC_PERIODS:
+                key = bar_min.src_key(bar_min.MinDataType.SEC, period)
+                bar_min._save_bar(frame, 'trade_ts', key, day, vb_level='never')
+        self.assertEqual([call.kwargs['compression'] for call in write.call_args_list],
+                         ['zstd', *['uncompressed'] * 6])
+        pd.testing.assert_frame_equal(pd.read_feather(self.root / 'secmin' / f'{day}.feather'), frame)
+        pd.testing.assert_frame_equal(pd.read_feather(self.root / f'min.{day}.feather'), frame)
 
     def test_receipt_missing_after_batch_write_reuses_download(self):
         response = pl.from_pandas(minute_frame(native.DATE).assign(order_book_id='000001.XSHE'))

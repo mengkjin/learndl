@@ -48,6 +48,8 @@ def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
             block = processor.pre_process(days[0], days[-1])
             record = not block.empty
             if record:
+                job.check_space(path.parent, block.values.numel() * block.values.element_size() + (1 << 20),
+                                operation=f'DataBlock {item} month {month}')
                 Save.mmap(block.values, path, index={'date': block.date, 'secid': block.secid,
                                                     'feature': block.feature})
             job.mark(stage, unit, record)
@@ -79,8 +81,13 @@ def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
         published = (same_layout and not bundle.path.exists() and canonical.is_dir()
                      and receipt == {'inode': canonical.stat().st_ino})
     if not published:
+        size = int(np.prod(shape)) * np.dtype(meta.dtype).itemsize
+        rebuild_layout = not same_layout or not bundle.data_path.exists() or not bundle.meta_path.exists()
+        allocated = bundle.data_path.stat().st_blocks * 512 if bundle.data_path.exists() else 0
+        job.check_space(base, max(0, size - allocated) + (1 << 20),
+                        operation=f'DataBlock {item} allocate merged bundle')
         bundle.prepare()
-        if not same_layout or not bundle.data_path.exists() or not bundle.meta_path.exists():
+        if rebuild_layout:
             # Offsets change if daily_update appended dates between nights. Reuse
             # the calculated month shards, but copy them into the new layout.
             prefix = f'{item}/copy/'
@@ -89,10 +96,15 @@ def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
                                '(substr(item,1,?)=? OR item IN (?,?))',
                                (stage, len(prefix), prefix, f'{item}/layout', f'{item}/publish_ready'))
             with bundle.data_path.open('wb') as data:
-                data.truncate(int(np.prod(shape)) * np.dtype(meta.dtype).itemsize)
+                data.truncate(size)
             torch_save(coords, bundle.path / 'index.pt')
             ArrayMeta('Tensor', meta.dtype, shape).to_json(bundle.meta_path)
             job.mark(stage, f'{item}/layout', layout)
+        # Reserve real blocks before mmap copying on the Linux server. A sparse
+        # file can otherwise raise SIGBUS instead of a recoverable ENOSPC.
+        if hasattr(os, 'posix_fallocate'):
+            with bundle.data_path.open('r+b') as data:
+                os.posix_fallocate(data.fileno(), 0, size)
         values = np.memmap(bundle.data_path, mode='r+', dtype=meta.dtype, shape=shape)
         for path, index in zip(shards, indexes):
             job.guard()
@@ -157,6 +169,9 @@ def rebuild_block(job, revision: str, frame: str, key: str) -> bool:
             job.guard()
             values = finished_bundle.view()
             historical = DataBlock(values, **index).slice_date(processor.hist_start, processor.hist_end)
+            from src.data.preprocess.hist_norm import PreProHistNorm
+            norm_path = PreProHistNorm.norm_path(key, frame)
+            job.check_space(norm_path.parent, 1 << 20, operation=f'DataBlock {item} save norm')
             processor.save_norm(historical)
         job.mark(stage, completion, {'path': str(canonical), 'dates': len(coords['date'])})
     shutil.rmtree(base)

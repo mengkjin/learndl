@@ -68,7 +68,7 @@ minutes with matching stock-time keys. VWAP outliers are saved separately in
 publishes `min`, `5min`, `10min`, `15min`, `30min` and `60min` with `num_trades`.
 
 The new repair uses checksum-verified source backups for dates written by the
-previous version. The log and `price_check` checkpoint compare `000001.XSHE`
+previous version. The `price_check` checkpoint compares `000001.XSHE`
 OHLC against Tushare and include the previous gate result when available.
 The archive format marker and file checksums govern the source used for repair.
 Interrupted publications resume from their staged files when
@@ -77,6 +77,22 @@ scheduled evening. The first handler checks the dedicated 2026-06-08 revision
 before resuming ordinary history. It reuses validated full-market native download
 batches and records volume discrepancies under `native_20260608_v1`. Raw minutes
 and all six period files must be verified before dependent work can start.
+
+Before resuming history, nightly removes staged duplicates whose checksums
+match the published output and its receipt. It transcodes published stock
+`secmin` files to Polars Feather IPC with Zstd and records both digests in the
+same ledger. The native-day and downstream receipts retain their original
+identities. Daily downloads also write stock `secmin` with Zstd. Every new stock
+`trade_ts/min` and 5/10/15/30/60-minute output uses uncompressed Polars IPC.
+Historical success messages are reported by month. Date-specific warnings and
+errors are emitted when found and VWAP audit details remain on disk.
+
+`disk_reserve_gib` in `configs/automation/nightly.yaml` defaults to 50 GiB.
+Normal nightly writes check the reserve plus temporary output size on the
+destination filesystem. Cleanup can run below the reserve. Space-reclaiming
+`secmin` conversions require room for one temporary archive plus 2 GiB. A
+`space deferred` result leaves checkpoints available for the next scheduled or
+manual run.
 
 After the full history is ready, the handler replays minute-derived risk tables,
 minute characteristics, factors and factor statistics, then rebuilds affected

@@ -34,7 +34,7 @@ from src.data.util import secid_adjust , trade_min_reform
 
 from .initializer import RQInitializer , MinDataType , RQ_PATH , QuotaExceeded , is_quota_exceeded
 
-from .storage import locked_day, date_lock, atomic_frame, sample_size
+from .storage import BAR_IPC, RAW_IPC, locked_day, date_lock, atomic_frame, sample_size
 
 __all__ = ['RcquantMinBarDownloader']
 
@@ -120,7 +120,8 @@ def load_min(date : int , data_type : MinDataType) -> pd.DataFrame | None:
 def write_min(df : pd.DataFrame , date : int , data_type : MinDataType) -> None:
     path = raw_min_path(date, data_type)
     path.parent.mkdir(exist_ok=True , parents=True)
-    atomic_frame(df, path, vb_level='max', prefix=f'RcQuant {data_type} min {date}')
+    atomic_frame(df, path, ipc_compression=RAW_IPC if data_type == MinDataType.SEC else None,
+                 vb_level='max', prefix=f'RcQuant {data_type} min {date}')
 
 def is_none_min(frame: pd.DataFrame | None) -> bool:
     return frame is not None and not frame.empty and ADJUST_COLUMN in frame and bool(
@@ -130,9 +131,12 @@ def is_none_min(frame: pd.DataFrame | None) -> bool:
 def _sec_receipt(date: int):
     return raw_min_path(date, MinDataType.SEC).parent / '.none_published' / f'{date}.feather'
 
-def _raw_identity(date: int) -> dict:
-    info = raw_min_path(date, MinDataType.SEC).stat()
+def minute_identity(path) -> dict:
+    info = path.stat()
     return {'size': info.st_size, 'mtime_ns': info.st_mtime_ns, 'inode': info.st_ino}
+
+def _raw_identity(date: int) -> dict:
+    return minute_identity(raw_min_path(date, MinDataType.SEC))
 
 def sec_none_published(date: int) -> bool:
     receipt = _sec_receipt(date)
@@ -149,7 +153,10 @@ def _save_bar(df, db_src, db_key, date=None, **kwargs):
     path = descriptor.path_exact(date)
     if sample_size.get() > 0:
         path = RQ_PATH / '.samples' / str(sample_size.get()) / db_key / f'{date}{path.suffix}'
-    result = atomic_frame(dfHandler.reset_index_pandas(df, reset=True), path, **kwargs)
+    stock_keys = {src_key(MinDataType.SEC, period) for period in SEC_PERIODS}
+    compression = BAR_IPC if db_src == 'trade_ts' and db_key in stock_keys else None
+    result = atomic_frame(dfHandler.reset_index_pandas(df, reset=True), path,
+                          ipc_compression=compression, **kwargs)
     if sample_size.get() <= 0:
         descriptor.clear_date_cache()
     return result

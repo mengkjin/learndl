@@ -1,5 +1,8 @@
 """Replay minute consumers in dependency order after the source revision is published."""
-from itertools import batched
+from contextlib import contextmanager
+from functools import partial
+from itertools import batched, groupby
+from time import perf_counter
 from hashlib import sha256
 
 import pandas as pd
@@ -10,23 +13,35 @@ from src.proj.db.basic import dfHandler
 from src.proj.db.interface.db_path import DBPath
 from src.proj.db.io.output_lock import output_lock
 
-from .sec_none_migration import MINUTE_DATABLOCKS, write_frame
+from .sec_none_migration import MINUTE_DATABLOCKS
 from .sec_native_revision import REVISION
 
 HF_KEYS = ('hf_correlation', 'hf_liquidity', 'hf_momentum', 'hf_volatility')
 
 
-def _save_frame(frame, src, key, date=None):
+def _save_frame(job, frame, src, key, date=None):
     if frame.empty:
         raise ValueError(f'{src}/{key} produced no rows for {date}')
     descriptor = DBPath(src, key)
-    write_frame(dfHandler.reset_index_pandas(frame), descriptor.path_exact(date))
+    job.write_frame(dfHandler.reset_index_pandas(frame), descriptor.path_exact(date))
     descriptor.clear_date_cache()
 
 
-def _save_daily(frame, src, key, date):
+def _save_daily(job, frame, src, key, date):
     with output_lock(DB.path(src, key, date)):
-        _save_frame(frame, src, key, date)
+        _save_frame(job, frame, src, key, date)
+
+
+@contextmanager
+def _month_progress(label, month):
+    start = perf_counter()
+    counts = {'written': 0, 'reused': 0}
+    try:
+        yield counts
+    finally:
+        if counts['written']:
+            Logger.stdout(f'Nightly {label} {month}: {counts["written"]} written, '
+                          f'{counts["reused"]} reused, {perf_counter()-start:.1f}s')
 
 
 def _tables(job, revision, start, end):
@@ -47,28 +62,40 @@ def _tables(job, revision, start, end):
         target = DB.dates('trade_ts', key, use_alt=True).slice(start=max(start, cls.START_DATE), end=end)
         if cls is MinCharsTaggedUpdater:
             target = target.intersect(DB.dates('min_chars', 'min_chars_roll'))
-        for date in map(int, target):
-            job.guard()
-            item = f'{cls.DB_SRC}/{cls.DB_KEY}/{date}'
-            if job.read(stage, item) and DB.path(cls.DB_SRC, cls.DB_KEY, date).is_file():
-                continue
-            if cls is MinCharsRollUpdater and len(trailing_aligned_dates(date, ROLL_WINDOW, 'min_chars')) < ROLL_WINDOW:
-                continue
-            _save_daily(calculate(date), cls.DB_SRC, cls.DB_KEY, date)
-            job.mark(stage, item)
+        label = f'{cls.DB_SRC}/{cls.DB_KEY}'
+        for month, dates in groupby(map(int, target), key=lambda day: day // 100):
+            with _month_progress(label, month) as counts:
+                for date in dates:
+                    job.guard()
+                    item = f'{label}/{date}'
+                    if job.read(stage, item) and DB.path(cls.DB_SRC, cls.DB_KEY, date).is_file():
+                        counts['reused'] += 1
+                        continue
+                    if cls is MinCharsRollUpdater and len(trailing_aligned_dates(date, ROLL_WINDOW, 'min_chars')) < ROLL_WINDOW:
+                        continue
+                    _save_daily(job, calculate(date), cls.DB_SRC, cls.DB_KEY, date)
+                    job.mark(stage, item)
+                    counts['written'] += 1
         Logger.stdout(f'Nightly replay {cls.DB_SRC}/{cls.DB_KEY}: checked through {end}')
 
     target = DB.dates('trade_ts', '5min', use_alt=True).slice(start=max(start, MarketRisk.START_DATE), end=end)
-    pending = [int(date) for date in target if not job.read(stage, f'market_daily/risk/{date}')]
-    for dates in batched(pending, 10):
-        job.guard()
-        data = pd.concat([MarketRisk.calculate(day, backend='polars') for day in dates])
-        if set(data['date']) != set(dates):
-            raise ValueError(f'Market risk did not cover all required dates {dates}')
-        MarketRisk.append_result(data, save=_save_frame)
-        for day in dates:
-            job.mark(stage, f'market_daily/risk/{day}')
-        Logger.stdout(f'Nightly market risk replay through {dates[-1]}')
+    for month, days in groupby(map(int, target), key=lambda day: day // 100):
+        with _month_progress('market_daily/risk', month) as counts:
+            pending = []
+            for day in days:
+                if job.read(stage, f'market_daily/risk/{day}'):
+                    counts['reused'] += 1
+                else:
+                    pending.append(day)
+            for dates in batched(pending, 10):
+                job.guard()
+                data = pd.concat([MarketRisk.calculate(day, backend='polars') for day in dates])
+                if set(data['date']) != set(dates):
+                    raise ValueError(f'Market risk did not cover all required dates {dates}')
+                MarketRisk.append_result(data, save=partial(_save_frame, job))
+                for day in dates:
+                    job.mark(stage, f'market_daily/risk/{day}')
+                counts['written'] += len(dates)
 
 
 def _factors(job, revision, start, end):
@@ -83,22 +110,34 @@ def _factors(job, revision, start, end):
             continue
         name = factor.factor_name
         updated.append(name)
-        for day in map(int, factor.target_dates(start=start, end=end, overwrite=True)):
-            job.guard()
-            item = f'{name}/{day}'
-            if job.read(stage, item) and DB.path(factor.db_src, factor.db_key, day).is_file():
-                continue
-            data = factor.validate_value(factor(day), day, strict=True)
-            _save_daily(data, factor.db_src, factor.db_key, day)
-            job.mark(stage, item)
-        for period, dates in factor.stats_target_dates(start, end, overwrite=True).items():
-            for offset in range(0, len(dates), 40):
-                job.guard()
-                batch = list(map(int, dates[offset:offset + 40]))
-                item = f'{name}/{period}/{batch[0]}-{batch[-1]}'
-                if not job.read(stage, item):
-                    factor.update_periodic_stats(period, batch, overwrite=True, save=_save_frame)
+        days = factor.target_dates(start=start, end=end, overwrite=True)
+        for month, dates in groupby(map(int, days), key=lambda day: day // 100):
+            with _month_progress(name, month) as counts:
+                for day in dates:
+                    job.guard()
+                    item = f'{name}/{day}'
+                    if job.read(stage, item) and DB.path(factor.db_src, factor.db_key, day).is_file():
+                        counts['reused'] += 1
+                        continue
+                    data = factor.validate_value(factor(day), day, strict=True)
+                    _save_daily(job, data, factor.db_src, factor.db_key, day)
                     job.mark(stage, item)
+                    counts['written'] += 1
+        for period, dates in factor.stats_target_dates(start, end, overwrite=True).items():
+            # Preserve established batch keys on resume.
+            batches = batched(map(int, dates), 40)
+            for month, month_batches in groupby(batches, key=lambda batch: batch[-1] // 100):
+                with _month_progress(f'{name} {period} stats', month) as counts:
+                    for batch in month_batches:
+                        job.guard()
+                        item = f'{name}/{period}/{batch[0]}-{batch[-1]}'
+                        if job.read(stage, item):
+                            counts['reused'] += len(batch)
+                            continue
+                        factor.update_periodic_stats(period, list(batch), overwrite=True,
+                                                     save=partial(_save_frame, job), log_success=False)
+                        job.mark(stage, item)
+                        counts['written'] += len(batch)
         Logger.stdout(f'Nightly factor replay completed {name}')
     if not updated:
         raise RuntimeError('Nightly factor registry contains no minute-derived factors')
