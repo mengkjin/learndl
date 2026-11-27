@@ -138,6 +138,21 @@ class NightlyTest(unittest.TestCase):
         self.assertEqual(run['kill_at'], 1000)
         terminate.assert_called_once_with(run, [worker], signal.SIGKILL)
 
+    def test_child_created_across_cutoff_keeps_its_admitted_deadline(self):
+        record = {'id': 'crossed-cutoff', 'phase': 'running', 'nightly_admitted_at': 399,
+                  'nightly_cutoff': 400, 'process_created': 401, 'started_at': 402,
+                  'hard_deadline': 1000, 'timeout_seconds': None}
+        store = Mock()
+        store.active.return_value = [record]
+        worker = object()
+        self.assertEqual(runtime.nightly_hard_deadline(record), 1000)
+        with (patch.object(runtime, 'members', return_value=[worker]),
+              patch.object(runtime, 'signal_members') as terminate):
+            runtime.inspect_timeouts(store, now=999, run_id=record['id'])
+            terminate.assert_not_called()
+            runtime.inspect_timeouts(store, now=1000, run_id=record['id'])
+            terminate.assert_called_once_with(record, [worker], signal.SIGKILL)
+
     def test_trade_count_transform_has_no_lookahead_and_preserves_missing(self):
         counts = torch.arange(1., 46.).reshape(1, -1, 1)
         counts[:, 6] = 0

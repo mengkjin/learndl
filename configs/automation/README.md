@@ -36,7 +36,7 @@ once to replace the old `rcquant_sec_none` timer. An installed timer that still
 uses that task name runs the current nightly entrypoint. The configured handlers, cutoff and grace period are
 read from `configs/automation/nightly.yaml` on each run. By default an active run
 stops starting work at midnight. At 00:10 the supervisor forcibly ends runs
-that started before that cutoff.
+admitted before that cutoff, including a child whose creation crossed midnight.
 
 For an immediate foreground run on the server, execute
 `PYTHONPATH=. .venv/bin/python scripts/1_autorun/8_nightly_maintenance.py` from the checkout,

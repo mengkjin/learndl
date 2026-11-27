@@ -218,6 +218,7 @@ class ChannelsTest(unittest.TestCase):
                     execution.result(timeout=12)
                 self.assertEqual(stopped.exception.code, 128 + signal.SIGKILL)
                 run, = self.runs.active()
+                self.assertLess(run['nightly_admitted_at'], cutoff)
                 self.assertEqual(run['hard_deadline'], cutoff + 1)
                 self.assertGreaterEqual(run['kill_at'], run['hard_deadline'])
 

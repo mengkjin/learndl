@@ -305,11 +305,13 @@ def signal_members(run: dict, processes: list[psutil.Process], sig: signal.Signa
 
 
 def nightly_hard_deadline(run: dict) -> float | None:
-    """A night's grace period applies to processes started before its cutoff."""
+    """Use the admitted window even if child creation crosses its cutoff."""
     deadline = run.get('hard_deadline')
     cutoff = run.get('nightly_cutoff')
-    started = run.get('process_created', run.get('started_at'))
-    if cutoff is not None and started is not None and started >= cutoff:
+    admitted = run.get('nightly_admitted_at')
+    if admitted is None:  # Older runners recorded only the child start time.
+        admitted = run.get('process_created', run.get('started_at'))
+    if cutoff is not None and admitted is not None and admitted >= cutoff:
         return None
     return deadline
 

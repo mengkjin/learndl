@@ -193,10 +193,12 @@ def _run(task_id: str, *, code_fd: int, retry_busy: bool = False, request_id: st
             else:
                 slot = scheduled_at if scheduled_at is not None else latest_nightly_slot(now)
             window = load_window(PATH.main, now if manual else slot, manual=manual)
-            if time.time() >= window.cutoff:
+            admitted_at = time.time()
+            if admitted_at >= window.cutoff:
                 logger.info('SCHEDULER SKIPPED: %s: nightly cutoff already passed', task_id)
                 return 0
-            run_record.update(nightly_cutoff=window.cutoff, hard_deadline=window.hard_deadline)
+            run_record.update(nightly_admitted_at=admitted_at, nightly_cutoff=window.cutoff,
+                              hard_deadline=window.hard_deadline)
             nightly_env.update(LEARNDL_NIGHTLY_SLOT=str(slot), LEARNDL_NIGHTLY_CUTOFF=str(window.cutoff))
         store.put(run_record)
         read_fd, write_fd = os.pipe()

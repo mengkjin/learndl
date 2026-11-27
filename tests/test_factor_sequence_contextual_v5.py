@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -15,9 +16,13 @@ import torch
 from src.res.algo.nn.model.factor_sequence.contextual_v4 import FactorContextualV4
 from src.res.algo.nn.model.factor_sequence.contextual_v5 import FactorContextualV5
 from src.res.model.analytic.factor_sequence.compare_v5 import (
+    CAMPAIGN_FIELDS,
+    SOURCES,
     _event_table,
+    _fit_detail,
     _hac_interval,
     _snapshot_rows,
+    compare_v5,
 )
 from src.res.model.experiment.factor_sequence.repaired_schedule import (
     GRAPH_LR_PROBE_NODES,
@@ -210,6 +215,62 @@ class V5ScheduleTests(unittest.TestCase):
 
 
 class V5ReportTests(unittest.TestCase):
+    def test_best_epoch_joins_numeric_attempt_and_redo(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            node = 20161230
+            fit = root / "results/factor_context_v4/fit"
+            metrics = root / "snapshot/metrics"
+            fit.mkdir(parents=True)
+            metrics.mkdir(parents=True)
+            (root / "logs").mkdir()
+            (root / "logs/train.md").write_text(f"graph #0 @{node}|Trial0-1 ModelEpoch#2 early stop|\n")
+            epochs = pd.DataFrame({
+                "attempt": [0, 0, 0], "redo": [0, 0, 1], "phase": [0, 0, 0],
+                "epoch": [0, 1, 0], "rankic": [.1, .2, .3],
+            })
+            with pd.ExcelWriter(metrics / f"model.0.{node}.xlsx") as book:
+                for name in ("train_epoch_totals", "valid_epoch_totals"):
+                    epochs.to_excel(book, sheet_name=name, index=False)
+                epochs.iloc[[0, 0, 1, 2, 2, 2]].to_excel(book, sheet_name="train_batch_totals", index=False)
+            for trial, epoch, steps in [("Trial0-0", 0, 2), ("Trial0-1", 0, 6)]:
+                with self.subTest(trial=trial):
+                    (fit / f"{node}.0.json").write_text(json.dumps(
+                        {"best_attempt": trial, "phase": 0, "best_epoch": epoch}
+                    ))
+                    summary, curve = _fit_detail(root, node)
+                    self.assertEqual(summary["steps_to_peak"], steps)
+                    self.assertEqual(summary["stop_reason"], "early stop")
+                    self.assertEqual(curve.cumulative_steps.tolist(), [2, 3, 6])
+
+    def test_compare_rejects_wrong_daily_node_in_each_report(self):
+        folds = [dict(model_date=n, test=[n + 1, n + 2]) for n in range(100, 174, 2)]
+        config = dict.fromkeys(CAMPAIGN_FIELDS)
+        config["train.factor_sequence.folds"] = folds
+        daily = pd.DataFrame({
+            "date": range(101, 175),
+            "model_date": np.repeat(range(100, 174, 4), 4)[:74],
+            "model_num": 0, "submodel": "best",
+        })
+        # Date 104 is the next training node's date, and must still use node 100.
+        wrong = daily.copy()
+        wrong.loc[wrong.date == 104, "model_date"] = 104
+        self.assertEqual(wrong.model_date.unique().tolist(), daily.model_date.unique().tolist())
+        with TemporaryDirectory() as temp, patch(
+            "src.res.model.analytic.factor_sequence.compare_v5._config", return_value=config
+        ):
+            roots = [Path(temp) / name for name in SOURCES]
+            for root in roots:
+                (root / "snapshot/basic_test").mkdir(parents=True)
+            for incorrect in roots:
+                with self.subTest(incorrect=incorrect):
+                    for root in roots:
+                        frame = wrong if root == incorrect else daily
+                        frame.to_feather(root / "snapshot/basic_test/test_by_date.feather")
+                    with self.assertRaisesRegex(ValueError, f"Wrong training node on 104 in {incorrect}"):
+                        graph, market, events = roots
+                        compare_v5(graph, market, events, Path(temp) / "output")
+
     def test_event_segments_and_constant_hac(self):
         from src.data.preprocess.factor_sequence.schema import EVENTS
 
@@ -247,6 +308,13 @@ class V5ReportTests(unittest.TestCase):
             (row,) = _snapshot_rows(a, b, daily)
             self.assertAlmostEqual(row["same_weights_delta_std_ic"], -2)
             self.assertEqual(row["top50_replaced"], 1)
+            for branch in ("market_factor_correction", "market_stock_correction", "event_factor_correction"):
+                with self.subTest(branch=branch):
+                    incomplete = right.copy()
+                    incomplete.loc[0, branch] = np.nan
+                    incomplete.to_feather(file)
+                    with self.assertRaisesRegex(ValueError, "Non-finite.*20170101"):
+                        list(_snapshot_rows(a, b, daily))
             right.loc[0, "label"] = -100
             right.to_feather(file)
             with self.assertRaisesRegex(ValueError, "labels differ"):

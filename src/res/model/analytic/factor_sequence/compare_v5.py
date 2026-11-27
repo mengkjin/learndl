@@ -56,15 +56,23 @@ def _campaign(config, baseline):
             raise ValueError(f"Incomparable campaigns: {key}")
 
 
-def _test_metrics(root):
+def _test_metrics(root, expected_nodes):
     from src.res.model.analytic.original_comparison import daily_results
 
     rows = daily_results(root)
     if rows is None:
         raise FileNotFoundError(f"Server BasicTest snapshot unavailable: {root}")
-    return _unique_index(
+    daily = _unique_index(
         rows.query('model_num == 0 and submodel == "best"'), "date"
     ).sort_index()
+    if not daily.index.equals(expected_nodes.index):
+        raise ValueError(f"BasicTest dates differ from the frozen benchmark in {root}")
+    mismatch = ~daily.model_date.eq(expected_nodes).fillna(False)
+    if mismatch.any():
+        date = mismatch[mismatch].index[0]
+        raise ValueError(f"Wrong training node on {date} in {root}: "
+                         f"expected {expected_nodes.at[date]}, found {daily.at[date, 'model_date']}")
+    return daily
 
 
 def _unique_index(frame, keys):
@@ -98,9 +106,10 @@ def _snapshot_rows(left, right, daily):
             a.label.to_numpy(), b.label.reindex(a.index).to_numpy(), equal_nan=True
         ):
             raise ValueError(f"Training labels differ on {date}")
-        if not np.allclose(
-            b.pred, b.graph_score + b[list(BRANCHES)].sum(axis=1), atol=1e-6
-        ):
+        scores = b[["pred", "graph_score", *BRANCHES]].to_numpy(dtype=float, na_value=np.nan)
+        if not np.isfinite(scores).all():
+            raise ValueError(f"Non-finite prediction or score contribution on {date}")
+        if not np.allclose(b.pred, b.graph_score + b[list(BRANCHES)].sum(axis=1), atol=1e-6):
             raise ValueError(f"Market score decomposition differs on {date}")
         b["same_weights_base"] = b.graph_score
         if "market_stock_correction" in a and "event_factor_correction" in b:
@@ -277,22 +286,20 @@ def _html(path, title, description, tables, charts=()):
 def compare_v5(graph, market, events, output):
     roots = (graph, market, events)
     reference = _config(graph, SOURCES[0], 0.001)
+    folds = reference["train.factor_sequence.folds"]
+    nodes = [int(f["model_date"]) for f in folds[::2]]
+    if len(nodes) != 19 or len(set(nodes)) != len(nodes):
+        raise ValueError("Reports must match the frozen 19-node sparse benchmark")
+    # Each fitted node covers its own test fold and the following skipped fold.
+    dates, daily_nodes = [], []
+    for i, fold in enumerate(folds):
+        dates.extend(int(day) for day in fold["test"])
+        daily_nodes.extend([nodes[i // 2]] * len(fold["test"]))
+    expected_nodes = pd.Series(daily_nodes, index=pd.Index(dates, name="date"))
     tests = []
     for root, name in zip(roots, SOURCES, strict=True):
         _campaign(_config(root, name, 0.001), reference)
-        tests.append(_test_metrics(root))
-    nodes = [
-        int(f["model_date"]) for f in reference["train.factor_sequence.folds"][::2]
-    ]
-    dates = [
-        int(d) for f in reference["train.factor_sequence.folds"] for d in f["test"]
-    ]
-    if len(nodes) != 19 or any(
-        not t.index.equals(pd.Index(dates, name="date"))
-        or t.model_date.unique().tolist() != nodes
-        for t in tests
-    ):
-        raise ValueError("Reports must match the frozen 19-node sparse benchmark")
+        tests.append(_test_metrics(root, expected_nodes))
 
     portfolio = _portfolio(roots, SOURCES)
     context = pd.read_csv(events / "results/factor_context_v5/daily_context.csv")
@@ -403,7 +410,7 @@ def _fit_detail(root, node):
     report = root / "results/factor_context_v4/fit" / f"{node}.0.json"
     best = json.loads(report.read_text())
     path = root / "snapshot/metrics" / f"model.0.{node}.xlsx"
-    keys = ["attempt", "phase", "epoch"]
+    keys = ["attempt", "redo", "phase", "epoch"]
     with pd.ExcelFile(path) as book:
         train = _unique_index(pd.read_excel(book, "train_epoch_totals"), keys)
         valid = _unique_index(pd.read_excel(book, "valid_epoch_totals"), keys)
@@ -415,8 +422,15 @@ def _fit_detail(root, node):
     )
     if curve.isna().any().any():
         raise ValueError(f"Incomplete training metrics for {node}")
+    # Workbook order follows training, including retries and phase transitions.
+    curve = curve.reindex(train.index)
     curve["cumulative_steps"] = curve.batch_steps.cumsum()
-    point = (best["best_attempt"], best["phase"], best["best_epoch"])
+    trial = re.fullmatch(r"Trial(\d+)-(\d+)", best["best_attempt"])
+    if trial is None:
+        raise ValueError(f"Invalid best_attempt in {report}: {best['best_attempt']!r}")
+    point = (int(trial[1]), int(trial[2]), best["phase"], best["best_epoch"])
+    if point not in curve.index:
+        raise ValueError(f"Best epoch {point} missing from {path}")
     steps = int(cast(Any, curve.at[point, "cumulative_steps"]))
     log = (root / "logs/train.md").read_text()
     reasons = re.findall(rf"@{node}\|Trial\d+-\d+ ModelEpoch#\d+ ([^|]+)\|", log)
