@@ -48,7 +48,7 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
         job = Migration(root, PATH.miscel / 'exfactor', db, started_at=None)
         job.guard = guard
         job.reserve_bytes = reserve * GIB
-        Logger.stdout(f'Nightly RCQuant Polars {pl.__version__}, threads={pl.thread_pool_size()}')
+        Logger.info(f'Nightly RCQuant Polars {pl.__version__}, threads={pl.thread_pool_size()}', vb_level=0)
         old = job.read('manifest', 'history') or {}
         published = sum(1 for _ in db.execute('SELECT item FROM checkpoints WHERE stage=?', (f'{REPAIR}_done',)))
         prepared = db.execute(
@@ -58,14 +58,14 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
         ).fetchone()[0]
         total = len(old.get('dates', [])) + len(old.get('missing', [])) + len(old.get('mapping_errors', {}))
         job.history_progress = (published, total)
-        Logger.stdout(f'Nightly RCQuant reused ledger {state / "progress.sqlite"}, '
-                      f'{published} published, {prepared} staged, {max(0, total-published)} pending')
+        Logger.info(f'Nightly RCQuant reused ledger {state / "progress.sqlite"}, '
+                    f'{published} published, {prepared} staged, {max(0, total-published)} pending', vb_level=0)
         reason = 'staging cleanup and secmin compression'
         try:
             recover_storage(job)
-            reason = 'historical minute publication blocks downstream'
             if job.read('quota_exhausted', night):
-                return 'quota deferred', reason
+                return 'quota deferred', f'RcQuant quota exceeded earlier on {night} (Asia/Shanghai), downloads deferred'
+            reason = 'historical minute publication blocks downstream'
             guard()
             source_receipt = job.read(f'{REVISION}_done', DATE)
             history_stage = f'{REVISION}_history'
@@ -99,6 +99,7 @@ def rcquant_minutes(guard, slot: float) -> tuple[str, str]:
             guard()
             from src.data.download.other_source.rcquant.sec_minute_downstream import rebuild_minute_consumers
             reason = f'downstream replay, native audit {state / REVISION}'
+            Logger.info('Nightly RCQuant entering downstream replay', vb_level=0)
             if not rebuild_minute_consumers(job, dates, source_receipt, refreshed=refreshed):
                 return 'waiting on data', reason
             return 'complete', f'{len(dates)} history dates and all downstream stages complete'
@@ -128,8 +129,8 @@ def run():
     slot = manual_nightly_slot(PATH.main, time.time()) if slot_text is None else float(slot_text)
     window = load_window(PATH.main, slot)
     cutoff = float(os.environ.get('LEARNDL_NIGHTLY_CUTOFF', window.cutoff))
-    Logger.stdout(f'Nightly maintenance checkpoint cutoff {datetime.fromtimestamp(cutoff, ZoneInfo("Asia/Shanghai"))}',
-                  vb_level=0)
+    Logger.info(f'Nightly maintenance checkpoint cutoff {datetime.fromtimestamp(cutoff, ZoneInfo("Asia/Shanghai"))}',
+                vb_level=0)
     if set(window.tasks) - HANDLERS.keys() or len(set(window.tasks)) != len(window.tasks):
         raise ValueError('Unknown or duplicate nightly maintenance tasks')
 
@@ -149,8 +150,12 @@ def run():
                 raise
             status, details = 'space deferred', str(exc)
         summary = f'Nightly {name} {status}, {details}'
-        Logger.conclude(summary)
-        Logger.stdout(summary, vb_level=0)
+        if status in ('quota deferred', 'deadline deferred', 'space deferred', 'waiting on data', HISTORY_NOTICE_DEFERRED):
+            Logger.conclude(summary, level='warning')
+            Logger.warning(summary, vb_level=0)
+        else:
+            Logger.conclude(summary, level='info')
+            Logger.info(summary, vb_level=0)
         if status in (HISTORY_COMPLETE, HISTORY_NOTICE_DEFERRED, 'deadline deferred', 'space deferred',
                       'quota deferred'):
             break

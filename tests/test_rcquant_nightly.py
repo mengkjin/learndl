@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
+from contextlib import closing, redirect_stderr
 from datetime import datetime
 from pathlib import Path
 import errno
+from io import StringIO
 import signal
 import sqlite3
 from tempfile import TemporaryDirectory
@@ -364,7 +365,9 @@ class NightlyTest(unittest.TestCase):
               patch('src.data.download.other_source.rcquant.sec_minute_downstream.rebuild_minute_consumers',
                     return_value=True) as replay):
             self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'quota deferred')
-            self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 0)[0], 'quota deferred')
+            status, details = nightly_maintenance.rcquant_minutes(lambda: None, 0)
+            self.assertEqual(status, 'quota deferred')
+            self.assertIn('RcQuant quota exceeded earlier on 19700101', details)
             refresh.assert_called_once()
             self.assertEqual(nightly_maintenance.rcquant_minutes(lambda: None, 86400)[0], 'waiting on data')
             replay.assert_not_called()
@@ -503,7 +506,25 @@ class NightlyTest(unittest.TestCase):
                 patch.object(nightly_maintenance, 'HANDLERS', {'rcquant_minutes': first, 'later': later}), \
                 patch.object(nightly_maintenance.Logger, 'conclude') as conclusion:
             nightly_maintenance.run()
-        conclusion.assert_called_once_with('Nightly rcquant_minutes history complete, history handoff')
+        conclusion.assert_called_once_with('Nightly rcquant_minutes history complete, history handoff', level='info')
+        later.assert_not_called()
+
+    def test_nightly_quota_and_cutoff_use_timestamped_stderr(self):
+        first = Mock(return_value=('quota deferred', 'RcQuant quota exceeded earlier today'))
+        later = Mock()
+        output = StringIO()
+        window = SimpleNamespace(cutoff=4_000_000_000, tasks=('rcquant_minutes', 'later'))
+        with (patch.object(nightly_maintenance, 'MACHINE', SimpleNamespace(name='mengkjin-server')),
+              patch.object(nightly_maintenance, 'manual_nightly_slot', return_value=0),
+              patch.object(nightly_maintenance, 'load_window', return_value=window),
+              patch.object(nightly_maintenance, 'HANDLERS', {'rcquant_minutes': first, 'later': later}),
+              patch.object(nightly_maintenance.Logger, 'conclude') as conclusion, redirect_stderr(output)):
+            nightly_maintenance.run()
+        log = output.getvalue()
+        self.assertRegex(log, r'\d{2}:\d{2}:\d{2}\|INFO[^\n]*Nightly maintenance checkpoint cutoff')
+        self.assertRegex(log, r'\d{2}:\d{2}:\d{2}\|WARNING[^\n]*RcQuant quota exceeded earlier today')
+        conclusion.assert_called_once_with(
+            'Nightly rcquant_minutes quota deferred, RcQuant quota exceeded earlier today', level='warning')
         later.assert_not_called()
 
     def test_legacy_rcquant_schedule_uses_the_current_entrypoint(self):

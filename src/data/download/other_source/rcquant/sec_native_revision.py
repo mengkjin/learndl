@@ -293,5 +293,5 @@ def redownload_flagged_days(job: Migration) -> str | None:
             if updated:
                 Logger.stdout(f'Nightly RCQuant native refresh {month}: {updated} published, {reused} reused, '
                               f'{len(identities)}/{len(FLAGGED_DATES)} total')
-    Logger.stdout(f'Nightly RCQuant native refresh: all {len(identities)} dates verified')
+    Logger.info(f'Nightly RCQuant native refresh: all {len(identities)} dates verified', vb_level=0)
     return sha256((FLAGGED_REVISION + '|'.join(identities)).encode()).hexdigest()
