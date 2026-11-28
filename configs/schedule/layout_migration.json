@@ -9,18 +9,6 @@
       "old": "configs/schedule/current/astgnn_day.yaml",
       "sha256": "d7adf59e2ac991f327de4ee66677f4f1f2fbfe86217a510cff0b899537d65e49"
     },
-    "configs/schedule/current/astgnn/astgnn_legacy_15m.yaml": {
-      "old": "configs/schedule/current/astgnn_legacy_15m.yaml",
-      "sha256": "b0f1b66840d09764817cb32797aadd128709a292750a19ec7614acbb21cb4dc8"
-    },
-    "configs/schedule/current/astgnn/astgnn_legacy_day.yaml": {
-      "old": "configs/schedule/current/astgnn_legacy_day.yaml",
-      "sha256": "3a617d5e014270a81948c6d45495d7e4cbbc86b0d2f444b0e6aa7ea59cb65264"
-    },
-    "configs/schedule/current/astgnn/astgnn_legacy_mincr.yaml": {
-      "old": "configs/schedule/current/astgnn_legacy_mincr.yaml",
-      "sha256": "717ea39f84128cdf688aa33ef1a54e3c9f43227936467f489e19e3733f4119c4"
-    },
     "configs/schedule/current/astgnn/astgnn_mincr.yaml": {
       "old": "configs/schedule/current/astgnn_mincr.yaml",
       "sha256": "3da8f6807ef30067a50311de6ba7a24981c6a6c729be6d8663a27644641d425f"

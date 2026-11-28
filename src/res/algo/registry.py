@@ -26,7 +26,6 @@ NN_MODULES = {
     'moe_gru': 'MoE.moe_gru',
     'tft': 'TFT.TemporalFusionTransformer',
     'astgnn': 'gnn.Astgnn',
-    'astgnn_legacy': 'gnn.AstgnnLegacy',
     'resnet_gru': 'resnet_gru.resnet_gru',
     'resnet_gru_new': 'resnet_gru.resnet_gru_new',
     'resnet_gru_simp': 'resnet_gru.resnet_gru_simp',

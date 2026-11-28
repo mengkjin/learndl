@@ -209,7 +209,7 @@ class AstgnnConfigTest(unittest.TestCase):
         return ModelConfig(schedule_name=schedule, override=override, short_test=False,
                            stage=1, resume=0, selection=0, vb_level='never')
 
-    def test_schedules_and_legacy_defaults(self):
+    def test_full_model_schedules(self):
         with patch('builtins.input', side_effect=AssertionError('No prompts')):
             for path in ('day', '15m', 'mincr'):
                 config = self.config(f'astgnn_{path}')
@@ -219,11 +219,6 @@ class AstgnnConfigTest(unittest.TestCase):
                 self.assertEqual(config.sample_method, 'sequential')
                 self.assertEqual(config.algo_config.params[0]['fit_loss'], 'mse')
                 self.assertFalse(config.algo_config.params[0]['pred_batchnorm'])
-                legacy = self.config(f'astgnn_legacy_{path}')
-                self.assertEqual(legacy.model_module, 'astgnn_legacy')
-                self.assertEqual(legacy.label_normalization, 'standardize')
-                self.assertEqual(legacy.labels, ['std_lag1_10', 'rtn_lag1_10'])
-                self.assertEqual(legacy.algo_config.params[0]['fit_loss'], 'ccc')
             config = self.config(**{'model.labels': ['rtn_lag1_10', 'rtn_lag1_5']})
             self.assertEqual(config.labels, ['rtn_lag1_10', 'rtn_lag1_5'])
 
@@ -257,7 +252,8 @@ class AstgnnConfigTest(unittest.TestCase):
 
 class AstgnnCheckpointTest(unittest.TestCase):
     def test_legacy_keys_and_new_checkpoint_roundtrip(self):
-        self.assertIs(get_nn_module('astgnn_legacy'), AstgnnLegacy)
+        with self.assertRaises(KeyError):
+            get_nn_module('astgnn_legacy')
         self.assertIs(get_nn_module('astgnn'), Astgnn)
         legacy = AstgnnLegacy(3)
         legacy_copy = AstgnnLegacy(3)
@@ -266,7 +262,7 @@ class AstgnnCheckpointTest(unittest.TestCase):
         self.assertNotIn('beta_net.1.query.weight', legacy.state_dict())
         model = Astgnn(3)
         for strict in (True, False):
-            with self.assertRaisesRegex(RuntimeError, 'astgnn_legacy'):
+            with self.assertRaisesRegex(RuntimeError, 'retired'):
                 model.load_state_dict(legacy.state_dict(), strict=strict)
         stream = io.BytesIO()
         torch.save(model.state_dict(), stream)

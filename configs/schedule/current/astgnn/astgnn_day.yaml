@@ -27,5 +27,11 @@ train:
 
 algo:
   astgnn:
+    # Full graph model; create a fresh training run (old weights are retired).
+    fit_loss: mse
+    pred_batchnorm: false
+    loss_fit_weight: 1.0
+    loss_rsquare_weight: 1.0
+    loss_corr_lamb: 0.1
+    loss_turnover_lamb: 1.0
     beta_into_pred: [false]
-  

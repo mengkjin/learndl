@@ -19,7 +19,7 @@ from src.res.algo.nn.loss.loss import Loss
 
 from .RNN import mod_gru
 
-__all__ = ['Astgnn', 'AstgnnLegacy']
+__all__ = ['Astgnn']
 
 _FIT_LOSSES = ('mse', 'pearson', 'ccc')
 
@@ -105,7 +105,7 @@ def _fit_weight(weight: Tensor | None) -> Tensor | None:
 
 
 class AstgnnLegacy(_AstgnnLoss):
-    """Original graph-free GRU. Registry key: ``'astgnn_legacy'``.
+    """Retired graph-free GRU, retained as an implementation base only.
 
     ``ab_split_input=False`` concatenates every input stream and runs one GRU.
     ``ab_split_input=True`` sends ``input[:ab_split_pos]`` through the alpha
@@ -325,8 +325,8 @@ class Astgnn(AstgnnLegacy):
         if prefix + 'beta_net.0.weight' in state_dict and prefix + 'beta_net.1.query.weight' not in state_dict:
             error_msgs.append(
                 'Graph-free ASTGNN weights cannot load into the full astgnn. '
-                'Use AstgnnLegacy / astgnn_legacy with the original configuration, '
-                'or retrain astgnn; no automatic weight migration is performed.'
+                'The graph-free model is retired. '
+                'Retrain astgnn; no automatic weight migration is performed.'
             )
         super()._load_from_state_dict(state_dict, prefix, local_metadata, strict,
                                       missing_keys, unexpected_keys, error_msgs)

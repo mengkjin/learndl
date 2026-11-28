@@ -8,6 +8,7 @@ from torch import nn
 import yaml
 
 from src.res.algo.nn.api import get_nn_module
+from src.res.algo.nn.model.gnn import AstgnnLegacy
 from src.res.algo.nn.model.CNN import (
     _resnet_block_1d, _resnet_block_2d, mod_resnet_1d, mod_resnet_2d,
 )
@@ -139,10 +140,10 @@ class ResNetTest(unittest.TestCase):
                 y.square().mean().backward()
 
     def test_graph_projector_propagates_activation(self):
-        for name in ('astgnn', 'astgnn_legacy'):
-            model = get_nn_module(name)(input_dim=[5, 3], hidden_dim=16, enc_in_dim=8,
+        for factory in (get_nn_module('astgnn'), AstgnnLegacy):
+            model = cast(Any, factory(input_dim=[5, 3], hidden_dim=16, enc_in_dim=8,
                                         ab_split_input=True, resnet_projector=True,
-                                        inday_dim=8, dim_med=6, act_type='gelu')
+                                        inday_dim=8, dim_med=6, act_type='gelu'))
             for block in model.alpha_fc_enc_in.blocks:
                 self.assertEqual(block.dim_med, 6)
                 self.assertIsInstance(block.act, nn.GELU)

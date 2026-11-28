@@ -1,0 +1,12 @@
+# Full graph ASTGNN; start fresh rather than resume retired graph-free weights.
+fit:
+  - astgnn/astgnn_day
+  - astgnn/astgnn_15m
+  - astgnn/astgnn_mincr
+
+mode: sparse
+stage: 0
+short_test: false
+resume: false
+force: false
+rerun_mark: 1
