@@ -1,0 +1,14 @@
+# 50 five-session packs. First four cross loss and readout; the fifth narrows the Pearson encoder.
+fit:
+  - resnet_gru/resnet_gru_week
+  - resnet_gru/resnet_gru_week_pearson
+  - resnet_gru/resnet_gru_week_learned
+  - resnet_gru/resnet_gru_week_pearson_learned
+  - resnet_gru/resnet_gru_week_pearson_dim64
+
+mode: sparse
+stage: 0
+short_test: false
+resume: false
+force: false
+rerun_mark: 1

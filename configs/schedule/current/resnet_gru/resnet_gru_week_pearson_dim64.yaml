@@ -1,0 +1,48 @@
+model:
+  name: resnet_gru_week_pearson_dim64
+  module: resnet_gru_simp
+  submodels: [best]
+  window: 2400
+  labels: [rtn_lag1_10]
+  special:
+    global2top: false
+env:
+  random_seed: 0
+input:
+  type: data
+  data.types: week
+  data.prenorm.week: {channelnorm: true}
+  sequence.lens: {week: 50}
+  sequence.steps: {week: 5}
+train:
+  max_epoch: 200
+  label_normalization: standardize
+  criterion.loss:
+    pearson_hcorr: {alpha: 0.01}
+  criterion.weight:
+    fit: equal
+    test: equal
+  criterion.accuracy:
+    spearman: {which_output: [0], which_label: [0]}
+  trainer.learn_rate:
+    base: 0.001
+  trainer.scheduler:
+    name: cycle
+    param: {base_lr: 1.0e-7, step_size_up: 12}
+callbacks:
+  LearnRateReset:
+    num_reset: 2
+    trigger: 40
+    recover_level: 0.3
+    speedup2x: true
+algo:
+  resnet_gru_simp:
+    seqlens: [{week: 50}]
+    hidden_dim: [64]
+    inday_resnet_dim: [64]
+    enc_in: [false]
+    enc_in_dim: [16]
+    resnet_kernel_size: [3]
+    rnn_layers: [1]
+    hidden_as_factors: [true]
+    hidden_mean_pool: [true]
