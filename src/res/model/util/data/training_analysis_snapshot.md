@@ -39,23 +39,48 @@ and existing generator fallback rules still apply.
 ## Maintenance
 
 `UpdateAPI.weekly` runs the **Training Analysis Snapshot** paragraph before the
-CUDA server refreshes fit data. It covers available daily data from 2017-01-03, preserves existing history,
-checks source revisions and rebuilds affected annual partitions. New dates and
-newly available future returns trigger rebuilds; unchanged files are hard-linked.
-Calendar files and next/label-end mappings
-are dependencies too. Source fingerprints use path/size/mtime/ctime; source files
-must be updated normally, not altered while preserving all metadata.
+CUDA server refreshes fit data. It covers available daily data from 2017-01-03
+and checks each year's file dependencies by path, size, mtime and ctime.
+Dependencies include cross-year quote input, listing reference prices, risk
+exposures and universe files. Routine full-table rewrites of Tushare `calendar`,
+`industry`, `description` and `change_name` are excluded from invalidation.
+Their fingerprints are recorded for context when a year is recomputed. Changes
+limited to those tables are picked up when another dependency or a manual
+rebuild triggers that year. New coverage and label maturity also trigger checks.
 
-Before computing any tables, the paragraph lists years to rebuild and reuse,
-then gives each affected year's reasons. File changes are grouped by dataset and
-fingerprint field with a count and an example path. New annual manifests retain
-the file fingerprints behind daily universe dependency hashes. Older manifests
-can identify affected universe dates but may lack the underlying file detail.
-Build reports also return `reused_years` and `rebuild_reasons`.
+The log lists years to recompute or reuse before it calculates any tables.
+It groups file changes by dataset and fingerprint field. The first run with
+the new dependency version recomputes all saved years against the last
+published generation. Readers use the existing fallback until that baseline is
+published if the manifest uses an earlier dependency version.
+
+Each of the three tables is aligned by `(date, secid)`. Floats use
+`rtol=1e-6` and `atol=1e-8` relative to the published value. The comparison
+includes row and column presence and distinguishes missing values from populated
+ones. Equal tables retain their existing values and checksums through hard links.
+A metadata-only generation records updated fingerprints when all recalculated
+tables are equal. An unreadable or missing baseline table is marked and
+regenerated. Build reports list `recomputed_years`, `rewritten_years`,
+directly `reused_years` and `rebuild_reasons`.
+
+The weekly log includes grouped differences and historical samples. Complete
+audits live under `results/custom/training_analysis_snapshot_audit/<generation>/`.
+Weekly updates register the directory for Syncthing artifact exchange. The local
+receiver archives it under
+`results/external/training_analysis_snapshot_audit/<host>/weekly_update/`.
+The directory contains `summary.json`, `dependencies.json.gz` and a compressed
+CSV for each changed table. Values in the CSV are JSON-encoded. Added and removed
+rows contain the full row in the old or new value. Summaries distinguish new
+coverage, expected label maturation and historical changes. Dependency entries
+record before and after file metadata and the fields that could use each input.
+In a dependency entry, a JSON null denotes an untracked path and `[null]`
+denotes a tracked path with a missing file. A source file rewrite alone cannot
+establish which input caused a difference.
 
 Publication and garbage collection share a writer lock. Readers pin generations
-with leases under that lock. Publication occurs only after all files are written
-and source fingerprints rechecked. Failed builds leave the current pointer intact.
+with leases under that lock. Publication waits for all data files and audit
+details to be written and source fingerprints to be rechecked. Failed builds
+leave the current pointer intact.
 GC retains current, previous and all leased generations; unchanged annual files
 share disk blocks. Weekly maintenance logs snapshot failures and continues to
 the fit data refresh. A missing or unreadable partition in auto mode uses the original
@@ -73,8 +98,9 @@ python -m src.res.model.util.data.training_analysis_snapshot validate --start 20
 python -m src.res.model.util.data.training_analysis_snapshot rebuild --start 20240101 --end 20241231
 ```
 
-`rebuild` forces regeneration of the requested plus existing snapshot coverage.
-Preparation reports compute, save and total wall time separately.
+`rebuild` forces recomputation and comparison of the requested plus existing
+snapshot coverage. Preparation reports compute, save and total wall time
+separately.
 
 ## Historical data limitation
 

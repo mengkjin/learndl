@@ -1,3 +1,6 @@
+import csv
+import gzip
+import json
 from typing import cast
 import tempfile
 import unittest
@@ -103,7 +106,8 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             self.assertIn("此前没有", second["rebuild_reasons"][2025][0])
             old = root / "generations" / first["generation"] / "2024/market.feather"
             new = root / "generations" / second["generation"] / "2024/market.feather"
-            self.assertEqual(old.stat().st_ino, new.stat().st_ino)
+            original_inode = old.stat().st_ino
+            self.assertEqual(original_inode, new.stat().st_ino)
             self.assertEqual(build_snapshot([20250102], root)["rewritten_years"], [])
             import fcntl
 
@@ -130,7 +134,11 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 TrainingAnalysisSnapshot(root)
             repaired = build_snapshot([20240102], root)
-            self.assertEqual(repaired["rewritten_years"], [2024])
+            self.assertEqual(repaired["recomputed_years"], [2024])
+            self.assertEqual(repaired["rewritten_years"], [])
+            repaired_path = root / "generations" / repaired["generation"] / "2024/market.feather"
+            self.assertEqual(original_inode, repaired_path.stat().st_ino)
+            self.assertEqual(build_snapshot([20240102], root)["recomputed_years"], [])
             self.assertIn("mtime 变化", repaired["rebuild_reasons"][2024][0])
             self.assertIn("day.20240102.feather", repaired["rebuild_reasons"][2024][0])
             third = build_snapshot([20250103], root)
@@ -190,14 +198,14 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         messages = []
         def market(ds):
             messages.append(f"compute {ds[0]}")
-            return pd.DataFrame({"date": ds})
+            return pd.DataFrame({"date": ds, "secid": 1})
 
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch.object(snap, "source_state", side_effect=source),
             patch.object(snap, "market_frame", side_effect=market),
-            patch.object(snap, "evaluation_frame", side_effect=lambda ds: pd.DataFrame({"date": ds})),
-            patch.object(snap, "membership_frame", side_effect=lambda ds: pd.DataFrame({"date": ds})),
+            patch.object(snap, "evaluation_frame", side_effect=lambda ds: pd.DataFrame({"date": ds, "secid": 1})),
+            patch.object(snap, "membership_frame", side_effect=lambda ds: pd.DataFrame({"date": ds, "secid": 1})),
             patch.object(snap.DATAVENDOR, "clear_all"),
             patch.object(snap.Logger, "info", side_effect=messages.append),
         ):
@@ -205,6 +213,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             first = build_snapshot(dates, root)
             manifest = root / "generations" / first["generation"] / "manifest.json"
             old = json.loads(manifest.read_text())
+            old.pop("dependency_version")
             old["years"]["2024"].pop("universe_files")  # Previous manifest format.
             old["schema"] -= 1
             old["contract"]["price_semantics"] = "previous"
@@ -218,6 +227,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             self.assertIn("计划重算年度 [2024, 2025]，复用年度 []", messages[:first_compute])
             for year, entries in reasons.items():
                 self.assertTrue(any("快照格式版本" in s for s in entries))
+                self.assertIn("首次建立审计基线", entries)
                 self.assertTrue(any("price_semantics" in s and "previous" in s for s in entries))
                 for reason in entries:
                     self.assertIn(f"{year} 年重算 · {reason}", messages[:first_compute])
@@ -244,7 +254,7 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
             patch(
                 "src.res.model.util.data.training_analysis_snapshot.weekly_update",
                 side_effect=lambda: calls.append("snapshot") or {
-                    "rewritten_years": [2025], "reused_years": [2024], "compute_seconds": 2,
+                    "rewritten_years": [2025], "recomputed_years": [2025], "reused_years": [2024], "compute_seconds": 2,
                     "save_seconds": 1, "total_seconds": 4, "generation": "test",
                 },
             ),
@@ -272,6 +282,154 @@ class TrainingAnalysisSnapshotTest(unittest.TestCase):
         ):
             module.UpdateAPI.weekly()
             models.assert_called_once()
+
+    def test_source_policy_ignores_routine_reports_and_tracks_cross_year_quotes(self):
+        from src.res.model.util.data import training_analysis_snapshot as snap
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+
+            def path(src, key, date=None):
+                return root / src / (f"{key}.{date}.feather" if date else f"{key}.feather")
+
+            with patch.object(snap.DB, "path", side_effect=path), patch.object(snap.DB, "dates", return_value=[]):
+                dates = [20241231]
+                digest = snap.source_state(dates)
+                for key in snap.ROUTINE_INFO:
+                    file = path("information_ts", key)
+                    file.parent.mkdir(exist_ok=True)
+                    file.write_bytes(b"rewritten")
+                self.assertEqual(snap.source_state(dates), digest)
+                day = path("trade_ts", "day", 20250227)
+                day.parent.mkdir()
+                day.write_bytes(b"may affect the evaluation security axis")
+                revised = snap.source_state(dates)
+                self.assertNotEqual(revised[str(day)], digest[str(day)])
+                listing = path("information_ts", "list_day_price")
+                listing.write_bytes(b"reference prices changed")
+                self.assertNotEqual(snap.source_state(dates)[str(listing)], revised[str(listing)])
+
+    def test_historical_diffs_and_delivery(self):
+        from src.automation.artifact_exchange import ArtifactSpec, Config, publish_artifacts, receive
+        from src.res.model.util.data import training_analysis_snapshot as snap
+
+        dates = [20240102, 20240103]
+        updated = 20240103
+        revision = 1
+
+        def source(ds, *, universe_files=None):
+            key = "/db/trade/day.20240102.feather"
+            return {key: [key, 10, revision, 1]}
+
+        def stable(ds):
+            # Independent of coverage in this fixture so only evaluation needs replacement.
+            return pd.DataFrame({"date": [dates[0]], "secid": [1]})
+
+        def labels(ds):
+            revised = revision > 1
+            rows = [
+                (dates[0], 1, 20240103, True, 0.25 if revised else 0.1),
+                (dates[0], 2, 20240104, revised, 0.2 if revised else float("nan")),
+                (dates[1], 1, 20240103, True, 0.3 + (1e-10 if revised else 0)),
+            ]
+            if revised:
+                rows += [(20240104, 1, 20240119, False, float("nan"))]
+            return pd.DataFrame(rows, columns=[
+                "date", "secid", "label_end", "label_mature", "forward_return_10_2_close",
+            ])
+
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(snap, "source_state", side_effect=source),
+            patch.object(snap.CALENDAR, "updated", side_effect=lambda: updated),
+            patch.object(snap, "market_frame", side_effect=stable),
+            patch.object(snap, "membership_frame", side_effect=stable),
+            patch.object(snap, "evaluation_frame", side_effect=labels),
+            patch.object(snap.DATAVENDOR, "clear_all"),
+        ):
+            root = Path(tmp).resolve()
+            first = snap.build_snapshot(dates, root)
+            revision, updated = 2, 20240104
+            dates = [*dates, 20240104]
+            second = snap.build_snapshot(dates, root)
+            self.assertEqual(second["rewritten_years"], [2024])
+            self.assertEqual(second["recomputed_years"], [2024])
+            self.assertIn("audit_path", second)
+            assert "audit_path" in second
+            audit = Path(second["audit_path"])
+            result = json.loads((audit / "summary.json").read_text())["years"]["2024"]
+            self.assertEqual(result["market"]["status"], "equal")
+            self.assertEqual(result["membership"]["status"], "equal")
+            self.assertEqual(result["evaluation"]["differences"], 4)
+            for table in ("market", "membership"):
+                old = root / "generations" / first["generation"] / f"2024/{table}.feather"
+                new = root / "generations" / second["generation"] / f"2024/{table}.feather"
+                self.assertEqual(old.stat().st_ino, new.stat().st_ino)
+
+            shared = root / "share"
+            (shared / ".stfolder").mkdir(parents=True)
+            publisher = Config(enabled=True, role="publisher", shared_root=shared,
+                               state=root / "publisher", results=root / "source", source_host="fixture")
+            receiver = Config(enabled=True, shared_root=shared, state=root / "receiver",
+                              results=root / "archive")
+            sent = publish_artifacts("weekly_update", second["generation"], [
+                ArtifactSpec(audit, category=snap.AUDIT_CATEGORY, experiment="weekly_update"),
+            ], config=publisher)
+            self.assertEqual(sent[0]["status"], "published")
+            received = receive(receiver)
+            self.assertEqual(received[0]["status"], "received")
+            archived = next(receiver.results.rglob("2024-evaluation.csv.gz"))
+            with gzip.open(archived, "rt") as file:
+                rows = list(csv.DictReader(file))
+            self.assertEqual(sum(row["classification"] == "label_maturity" for row in rows), 2)
+            self.assertEqual(sum(row["classification"] == "new_coverage" for row in rows), 1)
+            historical, = [row for row in rows if row["classification"] == "historical"]
+            self.assertEqual((historical["date"], historical["secid"]), ("20240102", "1"))
+            self.assertEqual((json.loads(historical["old"]), json.loads(historical["new"])), (0.1, 0.25))
+            with gzip.open(audit / "dependencies.json.gz", "rt") as file:
+                files = json.load(file)["2024"]["files"]
+            changed, = [entry for entry in files if entry["path"].endswith("day.20240102.feather")]
+            self.assertEqual((changed["old"], changed["new"]), ([10, 1, 1], [10, 2, 1]))
+
+            from src.automation.artifact_exchange import research
+
+            owner = MagicMock()
+            with (
+                patch.object(snap, "build_snapshot", return_value=second),
+                patch.object(snap.DB, "dates", return_value=dates),
+                patch.object(research, "CURRENT_TASK", MagicMock(get=MagicMock(return_value=owner))),
+            ):
+                self.assertEqual(snap.weekly_update(), second)
+            spec, = owner.register_artifact.call_args.args
+            self.assertEqual((spec.source, spec.run_id), (audit, second["generation"]))
+
+            unavailable = Config(enabled=True, role="publisher", shared_root=root / "offline-share",
+                                 state=root / "offline", results=root / "source")
+            with patch.object(research.Config, "load", return_value=unavailable):
+                delivery = research.publish_safe("weekly_update", second["generation"], [spec])
+            self.assertEqual(delivery[0]["status"], "failed")
+            self.assertTrue((audit / "summary.json").is_file())
+            self.assertEqual(json.loads((root / "current.json").read_text())["generation"], second["generation"])
+
+            revision = 3
+            with patch.object(snap.snapshot_audit, "write_summary", side_effect=OSError("full disk")):
+                with self.assertRaisesRegex(OSError, "full disk"):
+                    snap.build_snapshot(dates, root)
+            self.assertEqual(json.loads((root / "current.json").read_text())["generation"], second["generation"])
+
+    def test_table_diff_keeps_historical_structure_and_missingness(self):
+        from src.res.model.util.data import snapshot_audit
+
+        writer = MagicMock()
+        diff = snapshot_audit.TableDiff(writer, 2024, "membership")
+        old = pd.DataFrame({"date": [20240102] * 2, "secid": [1, 2], "flag": [True, False],
+                            "old_column": [1, 2], "value": [None, 0.3]})
+        new = pd.DataFrame({"date": [20240102] * 2, "secid": [3, 1], "flag": [True, False],
+                            "new_column": [1, 2], "value": [None, 0.5]})
+        snapshot_audit.compare_tables(old, new, diff, {20240102}, {20240102}, 20240102, 20240102)
+        self.assertEqual(diff.count, 8)
+        with self.assertRaisesRegex(ValueError, "invalid.*20240102, 1"):
+            snapshot_audit.compare_tables(old, pd.concat([new, new]), diff, set(), set(), 0, 0)
 
     def test_callback_auto_fallback_and_required_failure(self):
         from contextlib import nullcontext

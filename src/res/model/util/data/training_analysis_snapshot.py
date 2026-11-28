@@ -17,11 +17,13 @@ __all__ = [
     'main',
 ]
 import contextlib
+import csv
 import fcntl
 import hashlib
 import json
 import os
 import shutil
+import tempfile
 import uuid
 from collections import defaultdict, OrderedDict
 from pathlib import Path
@@ -33,7 +35,8 @@ import pandas as pd
 
 from src.data import DATAVENDOR
 from src.proj import PATH, DB, CALENDAR, Const, Load, Logger
-from src.res.factor.fmp.prepared_market import default_contract, fingerprints
+from src.proj.env.machine import DFDATA_PATH
+from src.res.factor.fmp.prepared_market import default_contract
 from src.res.factor.util.classes.prepared_universe import PreparedUniverse
 
 from src.res.factor.util.classes.analysis_inputs import (
@@ -45,8 +48,13 @@ from src.res.factor.util.classes.analysis_inputs import (
     Quote,
     return_label_scope,
 )
+from . import snapshot_audit
 
 SCHEMA = 4
+DEPENDENCY_VERSION = 1
+ROUTINE_INFO = ("calendar", "industry", "description", "change_name")
+TABLES = ("market", "evaluation", "membership")
+AUDIT_CATEGORY = "training_analysis_snapshot_audit"
 
 
 class SnapshotBuildReport(TypedDict):
@@ -54,11 +62,13 @@ class SnapshotBuildReport(TypedDict):
     save_seconds: float
     total_seconds: float
     rewritten_years: list[int]
+    recomputed_years: list[int]
     reused_years: list[int]
     rebuild_reasons: dict[int, list[str]]
     generation: str
     bytes: NotRequired[int]
     removed_generations: NotRequired[list[str]]
+    audit_path: NotRequired[str]
 
 
 def root_path():
@@ -67,22 +77,48 @@ def root_path():
 
 def source_state(dates, *, universe_files=None):
     dates = sorted(set(map(int, dates)))
-    paths: dict[str, object] = dict(fingerprints(dates))
-    calendar = DB.path("information_ts", "calendar")
-    paths[str(calendar)] = PreparedUniverse.fingerprint(calendar)
-    paths["next_dates"] = [int(CALENDAR.td(d, 1)) for d in dates]
-    paths["label_ends"] = [int(CALENDAR.td(d, 11)) for d in dates]
-    extended = DATAVENDOR.td_within(
-        int(CALENDAR.td(dates[0], -30)), int(CALENDAR.td(dates[-1], 30))
-    )
-    for d in extended:
-        for src, key in [("trade_ts", "day"), ("models", "tushare_cne5_exp")]:
-            p = DB.path(src, key, int(d))
-            paths[str(p)] = PreparedUniverse.fingerprint(p)
+    first, last = dates[0], dates[-1]
+    # Quote security coverage uses ±60 natural days. Forward returns also load
+    # prices from 20 natural days before their own lookback window.
+    return_start = CALENDAR.cd(CALENDAR.td(first, -10), -20)
+    return_end = int(CALENDAR.td(last, LABEL[0] + LABEL[1] + 10))
+    quote_start = min(CALENDAR.cd(first, -60), return_start)
+    quote_end = max(CALENDAR.cd(last, 60), return_end)
+    # Fingerprint civil dates, including absent files, independently of routine
+    # changes to the calendar or the current update horizon. The small tail
+    # covers the next market endpoint across weekends and exchange holidays.
+    price_end = max(CALENDAR.cd(last, 14), int(CALENDAR.td(last, 1)))
+
+    def civil_days(start, end):
+        return map(int, pd.date_range(str(start), str(end)).strftime("%Y%m%d"))
+
+    industry_mapping = DFDATA_PATH / "mapping/industry/tushare.yaml"
+    if not industry_mapping.exists():
+        industry_mapping = industry_mapping.with_suffix(".json")
+    paths_to_check = {
+        DB.path("information_ts", "list_day_price"),
+        industry_mapping,
+    }
+    paths_to_check.update(DB.path("trade_ts", "day", d) for d in civil_days(quote_start, quote_end))
+    paths_to_check.update(DB.path("trade_ts", "adjprice", d) for d in civil_days(first, price_end))
+    paths_to_check.update(DB.path("models", "tushare_cne5_exp", d) for d in dates)
+    paths: dict[str, object] = {
+        str(p): PreparedUniverse.fingerprint(p) for p in sorted(paths_to_check)
+    }
     universe = PreparedUniverse(root_path() / "unused", "top-1000")
-    paths["universe_dependencies"] = universe.dependencies(dates, file_fingerprints=universe_files)
+    paths["universe_dependencies"] = universe.dependencies(
+        dates, file_fingerprints=universe_files, exclude_info=ROUTINE_INFO
+    )
     paths["universe_sources"] = universe.sources(dates)
     return paths
+
+
+def _routine_info_files():
+    return {
+        str(path): PreparedUniverse.fingerprint(path)[1:]
+        for key in ROUTINE_INFO
+        for path in [DB.path("information_ts", key)]
+    }
 
 
 def market_frame(dates):
@@ -164,13 +200,14 @@ def membership_frame(dates):
 def build_snapshot(
     dates, root=None, *, force=False, resume=True
 ) -> SnapshotBuildReport:
+    audit_root = PATH.rslt_custom / AUDIT_CATEGORY if root is None else Path(root) / "audit"
     root = Path(root) if root is not None else root_path()
     root.mkdir(parents=True, exist_ok=True)
     with (root / "writer.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         token = CURRENT.set(None)
         try:
-            report = _build(dates, root, force=force or not resume, resume=resume)
+            report = _build(dates, root, audit_root, force=force or not resume, resume=resume)
             try:
                 report["removed_generations"] = _prune_generations(root)
             except OSError as error:
@@ -206,7 +243,7 @@ def _file_changes(old, new):
             for (name, reason), files in groups.items()]
 
 
-def _source_changes(prior, sources, dates, universe_files):
+def _source_changes(prior, sources, universe_files):
     old = prior["sources"]
     reasons = []
     # Absolute source keys store [path, size, mtime, ctime] or [path, None].
@@ -214,14 +251,11 @@ def _source_changes(prior, sources, dates, universe_files):
         return {key: value[1:] for key, value in state.items() if Path(key).is_absolute()}
 
     reasons.extend(_file_changes(files(old), files(sources)))
-    for key, label in (("next_dates", "下一交易日"), ("label_ends", "标签结束日"),
-                       ("universe_sources", "股票池成分文件"), ("universe_dependencies", "股票池依赖指纹")):
+    for key, label in (("universe_sources", "股票池成分文件"),
+                       ("universe_dependencies", "股票池依赖指纹")):
         if old.get(key) == sources.get(key):
             continue
         before, after = old.get(key, {}), sources.get(key, {})
-        if key in ("next_dates", "label_ends"):
-            before = dict(zip(prior["dates"], before))
-            after = dict(zip(dates, after))
         changed = [date for date in before.keys() & after.keys() if before[date] != after[date]]
         if changed:
             reasons.append(f"{label}变化（{_date_summary(changed)}）")
@@ -248,11 +282,13 @@ def _contract_changes(before, after, prefix=""):
             yield f"组合计算设置 {field} 从 {a} 改为 {b}"
 
 
-def _year_reasons(old, manifest, year, dates, sources, universe_files, old_folder, global_reasons):
+def _year_reasons(old, manifest, year, dates, sources, universe_files, global_reasons):
     reasons = global_reasons.copy()
     prior = old["years"].get(str(year))
     if not prior:
         return reasons or ["此前没有该年度分区"]
+    if old.get("dependency_version") != DEPENDENCY_VERSION:
+        reasons.append("首次建立审计基线")
     for key, label in (("schema", "快照格式版本"), ("label", "收益标签参数")):
         if old.get(key) != manifest[key]:
             reasons.append(f"{label} {old.get(key)} → {manifest[key]}")
@@ -261,30 +297,126 @@ def _year_reasons(old, manifest, year, dates, sources, universe_files, old_folde
         added = set(dates).difference(prior["dates"])
         reasons.append(f"新增覆盖日期（{_date_summary(added)}）" if added else "交易日期列表变化")
     if prior.get("sources") != sources:
-        changes = _source_changes(prior, sources, dates, universe_files) if prior.get("sources") else []
+        changes = _source_changes(prior, sources, universe_files) if prior.get("sources") else []
         reasons.extend(changes or ["数据源指纹变化"])
-    cutoff = min(int(CALENDAR.updated()), int(CALENDAR.td(dates[-1], 11)))
+    last_label_end = prior.get("last_label_end")
+    if last_label_end is None:
+        last_label_end = int(CALENDAR.td(dates[-1], LABEL[0] + LABEL[1] - 1))
+    cutoff = min(int(CALENDAR.updated()), last_label_end)
     if "maturity_cutoff" not in prior:
         reasons.append("缺少旧版标签成熟截止日")
     elif prior["maturity_cutoff"] < cutoff:
         reasons.append(f"标签成熟截止日从 {prior['maturity_cutoff']} 推进到 {cutoff}")
-    if not reasons:
-        for kind, checksum in prior["hashes"].items():
-            path = old_folder / str(year) / f"{kind}.feather"
-            if not path.is_file():
-                reasons.append(f"年度文件缺失 {path.name}")
-            elif hashlib.sha256(path.read_bytes()).hexdigest() != checksum:
-                reasons.append(f"年度文件校验失败 {path.name}")
     return reasons
 
 
-def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
+def _checksum(path):
+    with path.open("rb") as file:
+        return hashlib.file_digest(file, "sha256").hexdigest()
+
+
+def _baseline_problems(folder, prior):
+    problems = {}
+    for kind in TABLES:
+        path = folder / f"{kind}.feather"
+        try:
+            if _checksum(path) != prior.get("hashes", {}).get(kind):
+                problems[kind] = f"年度文件校验失败 {path.name}"
+        except FileNotFoundError:
+            problems[kind] = f"年度文件缺失 {path.name}"
+        except OSError as error:
+            problems[kind] = f"年度文件读取失败 {path.name}: {error}"
+    return problems
+
+
+def _audit_files(sources, universe_files, info_files):
+    files = {key: value[1:] for key, value in sources.items() if Path(key).is_absolute()}
+    return files | universe_files | info_files
+
+
+def _audit_dependencies(prior, sources, universe_files, info_files, reasons):
+    previous_info = prior.get("routine_info_files", {})
+    previous_sources = prior.get("sources", {})
+    previous_universe = prior.get("universe_files", {})
+    before = _audit_files(previous_sources, previous_universe, previous_info)
+    after = _audit_files(sources, universe_files, info_files)
+    universe_paths = set(universe_files) | set(previous_universe)
+    for state in (sources, previous_sources):
+        universe_paths.update(value[0] for value in state.get("universe_sources", {}).values())
+    changes = []
+    for path in sorted(before.keys() | after.keys()):
+        if before.get(path) == after.get(path):
+            continue
+        name = Path(path).name.split(".")[0]
+        if path in info_files:
+            candidates = {
+                "calendar": ["market.*", "evaluation.*"],
+                "industry": ["market.generator_industry", "market.row"],
+                "description": ["membership.*"],
+                "change_name": ["membership.*"],
+            }[name]
+        elif path in universe_paths:
+            candidates = ["membership.*"]
+        else:
+            candidates = {
+                "day": ["evaluation.forward_return_10_2_close", "evaluation.row"],
+                "adjprice": ["market.close_to_next_*", "market.row"],
+                "list_day_price": ["evaluation.forward_return_10_2_close"],
+                "tushare_cne5_exp": ["evaluation.risk_industry", "evaluation.style_*"],
+                "tushare": ["market.generator_industry", "market.row"],
+            }.get(name, [])
+        changes.append(dict(path=path, old=before.get(path), new=after.get(path),
+                            observed_only=path in info_files, candidate_fields=candidates))
+    return dict(reasons=reasons, files=changes,
+                legacy_universe_details_missing=bool(prior) and "universe_files" not in prior,
+                attribution="candidate_inputs_only")
+
+
+def _compare_and_save(audit, year, kind, path, frame, old_folder, prior, problem, dates, cutoff):
+    summary = {"status": "new", "rows": len(frame)}
+    if prior and not problem:
+        old_path = old_folder / str(year) / path.name
+        try:
+            original = pd.read_feather(old_path)
+        except (OSError, ValueError) as error:
+            problem = f"年度文件无法解码 {path.name}: {error}"
+        else:
+            with snapshot_audit.open_details(audit, year, kind) as file:
+                writer = csv.writer(file)
+                writer.writerow(snapshot_audit.FIELDS)
+                diff = snapshot_audit.TableDiff(writer, year, kind)
+                snapshot_audit.compare_tables(
+                    original, frame, diff, set(prior["dates"]), set(dates),
+                    prior.get("maturity_cutoff", 0), cutoff,
+                )
+            if not diff.count:
+                (audit / f"{year}-{kind}.csv.gz").unlink()
+                os.link(old_path, path)
+                Logger.info(f"{year}/{kind} 重算后一致，复用原表")
+                return summary | {"status": "equal"}
+            summary |= {"status": "changed", "differences": diff.count, "fields": diff.summary()}
+            Logger.info(f"{year}/{kind} 发现 {diff.count} 项差异，将替换此表")
+            for item in summary["fields"]:
+                Logger.info(f"{year}/{kind} {json.dumps(item, ensure_ascii=False)}")
+            for sample in diff.samples:
+                Logger.info(f"{year}/{kind} 历史差异样例 {json.dumps(sample, ensure_ascii=False)}")
+    if problem:
+        summary |= {"status": "baseline_unavailable", "reason": problem}
+        Logger.warning(f"{year}/{kind} 基准缺失或损坏，将重建 · {problem}")
+    if summary["status"] != "changed":
+        snapshot_audit.validate_keys(frame, year, kind)
+    frame.to_feather(path, compression="lz4")
+    return summary
+
+
+def _build(dates, root, audit_root, force=False, resume=True) -> SnapshotBuildReport:
     start = perf_counter()
     compute = save = 0.0
     pointer = root / "current.json"
     previous = None
     old = {"years": {}}
     global_reasons = []
+    unavailable_baseline = None
     try:
         if pointer.exists():
             previous = json.loads(pointer.read_text())
@@ -295,13 +427,16 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
             if resume:
                 old_folder = root / "generations" / previous["generation"]
                 old = json.loads((old_folder / "manifest.json").read_text())
+                if not isinstance(old, dict) or not isinstance(old.get("years"), dict):
+                    raise ValueError("Invalid previous snapshot manifest")
     except (OSError, ValueError, KeyError) as error:
         Logger.warning(
             f"Previous snapshot unavailable; rebuilding requested dates: {error}"
         )
         previous = None
         old = {"years": {}}
-        global_reasons.append(f"上一版快照无法读取（{error}）")
+        unavailable_baseline = f"上一版快照无法读取（{error}）"
+        global_reasons.append(unavailable_baseline)
     if force:
         global_reasons.append("请求强制重建" if resume else "本次关闭了增量复用")
     if not previous and not global_reasons:
@@ -318,6 +453,7 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
     folder.mkdir(parents=True)
     manifest = {
         "schema": SCHEMA,
+        "dependency_version": DEPENDENCY_VERSION,
         "generation": generation,
         "label": list(LABEL),
         "contract": default_contract(),
@@ -329,66 +465,32 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
     rebuild_reasons = {}
     rebuild_inputs = {}
     reused = []
+    rewritten = []
+    audit_target = audit_stage = None
+    summaries = {}
+    dependencies = {}
     try:
+        info_files = _routine_info_files()
         Logger.info(f"检查快照覆盖的 {len(annual_dates)} 个年度（{dates[0]} 至 {dates[-1]}）")
         for year, ds in annual_dates.items():
+            prior = old["years"].get(str(year))
             universe_files = {}
             before = source_state(ds, universe_files=universe_files)
-            reasons = _year_reasons(old, manifest, year, ds, before, universe_files, old_folder, global_reasons)
+            reasons = _year_reasons(old, manifest, year, ds, before, universe_files, global_reasons)
+            problems = {}
+            if prior:
+                assert old_folder is not None
+                problems = _baseline_problems(old_folder / str(year), prior)
+            reasons.extend(problems.values())
             if reasons:
                 rebuild_reasons[year] = reasons
-                rebuild_inputs[year] = (before, universe_files)
+                rebuild_inputs[year] = (before, universe_files, problems)
             else:
                 reused.append(year)
         Logger.info(f"计划重算年度 {list(rebuild_reasons)}，复用年度 {reused}")
         for year, reasons in rebuild_reasons.items():
             for reason in reasons:
                 Logger.info(f"{year} 年重算 · {reason}")
-        for year, ds in annual_dates.items():
-            target = folder / str(year)
-            target.mkdir()
-            if year not in rebuild_inputs:
-                assert old_folder is not None
-                for p in (old_folder / str(year)).glob("*.feather"):
-                    os.link(p, target / p.name)
-                manifest["years"][str(year)] = old["years"][str(year)]
-                continue
-            before, universe_files = rebuild_inputs.pop(year)
-            Logger.info(f"开始重算 {year} 年，共 {len(ds)} 个交易日")
-            at = perf_counter()
-            DATAVENDOR.clear_all()
-            market = market_frame(ds)
-            evaluation = evaluation_frame(ds)
-            membership = membership_frame(ds)
-            compute += perf_counter() - at
-            at = perf_counter()
-            checksums = {}
-            for name, frame in [
-                ("market", market),
-                ("evaluation", evaluation),
-                ("membership", membership),
-            ]:
-                path = target / f"{name}.feather"
-                frame.to_feather(path, compression="lz4")
-                checksums[name] = hashlib.sha256(path.read_bytes()).hexdigest()
-            save += perf_counter() - at
-            if before != source_state(ds):
-                raise RuntimeError(f"{year}: sources changed during snapshot build")
-            manifest["years"][str(year)] = {
-                "dates": ds,
-                "sources": before,
-                "universe_files": universe_files,
-                "hashes": checksums,
-                "maturity_cutoff": int(CALENDAR.updated()),
-                "columns": {
-                    k: list(v.columns)
-                    for k, v in [
-                        ("market", market),
-                        ("evaluation", evaluation),
-                        ("membership", membership),
-                    ]
-                },
-            }
         if not rebuild_reasons and previous:
             shutil.rmtree(folder)
             return {
@@ -396,11 +498,71 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
                 "save_seconds": save,
                 "total_seconds": perf_counter() - start,
                 "rewritten_years": [],
+                "recomputed_years": [],
                 "reused_years": reused,
                 "rebuild_reasons": {},
                 "generation": previous["generation"],
             }
+        audit_root.mkdir(parents=True, exist_ok=True)
+        audit_stage = Path(tempfile.mkdtemp(prefix=f".{generation}-", dir=audit_root))
+        for year, ds in annual_dates.items():
+            target = folder / str(year)
+            target.mkdir()
+            prior = old["years"].get(str(year))
+            if year not in rebuild_inputs:
+                assert old_folder is not None
+                for kind in TABLES:
+                    name = f"{kind}.feather"
+                    os.link(old_folder / str(year) / name, target / name)
+                manifest["years"][str(year)] = prior
+                summaries[year] = {kind: {"status": "reused"} for kind in TABLES}
+                continue
+            before, universe_files, problems = rebuild_inputs[year]
+            dependencies[year] = _audit_dependencies(
+                prior or {}, before, universe_files, info_files, rebuild_reasons[year]
+            )
+            Logger.info(f"开始重算 {year} 年，共 {len(ds)} 个交易日")
+            at = perf_counter()
+            DATAVENDOR.clear_all()
+            checksums = {}
+            columns = {}
+            summaries[year] = {}
+            updated = int(CALENDAR.updated())
+            last_label_end = int(CALENDAR.td(ds[-1], LABEL[0] + LABEL[1] - 1))
+            for kind, make_frame in zip(TABLES, (market_frame, evaluation_frame, membership_frame)):
+                frame = make_frame(ds)
+                compute += perf_counter() - at
+                at = perf_counter()
+                path = target / f"{kind}.feather"
+                summary = _compare_and_save(
+                    audit_stage, year, kind, path, frame,
+                    old_folder, prior, problems.get(kind, unavailable_baseline), ds, updated,
+                )
+                summaries[year][kind] = summary
+                if summary["status"] == "equal":
+                    assert prior is not None
+                    checksums[kind] = prior["hashes"][kind]
+                    columns[kind] = prior["columns"][kind]
+                else:
+                    checksums[kind] = _checksum(path)
+                    columns[kind] = list(frame.columns)
+                save += perf_counter() - at
+                at = perf_counter()
+            if any(summary["status"] != "equal" for summary in summaries[year].values()):
+                rewritten.append(year)
+            manifest["years"][str(year)] = {
+                "dates": ds,
+                "sources": before,
+                "universe_files": universe_files,
+                "routine_info_files": info_files,
+                "hashes": checksums,
+                "maturity_cutoff": updated,
+                "last_label_end": last_label_end,
+                "columns": columns,
+            }
         at = perf_counter()
+        snapshot_audit.write_summary(audit_stage, previous["generation"] if previous else None,
+                                     generation, summaries, dependencies)
         (folder / "manifest.json").write_text(json.dumps(manifest))
         tmp = root / f".{generation}.json"
         tmp.write_text(
@@ -411,20 +573,34 @@ def _build(dates, root, force=False, resume=True) -> SnapshotBuildReport:
                 }
             )
         )
+        if info_files != _routine_info_files():
+            raise RuntimeError("Routine information files changed during snapshot build")
+        for year, ds in annual_dates.items():
+            if manifest["years"][str(year)]["sources"] != source_state(ds):
+                raise RuntimeError(f"{year}: sources changed during snapshot build")
+        audit_path = audit_root / generation
+        os.replace(audit_stage, audit_path)
+        audit_target = audit_path
         os.replace(tmp, pointer)
         save += perf_counter() - at
     except BaseException:
         shutil.rmtree(folder)
+        if audit_stage is not None and audit_stage.exists():
+            shutil.rmtree(audit_stage)
+        if audit_target is not None:
+            shutil.rmtree(audit_target)
         (root / f".{generation}.json").unlink(missing_ok=True)
         raise
     return {
         "compute_seconds": compute,
         "save_seconds": save,
         "total_seconds": perf_counter() - start,
-        "rewritten_years": list(rebuild_reasons),
+        "rewritten_years": rewritten,
+        "recomputed_years": list(rebuild_reasons),
         "reused_years": reused,
         "rebuild_reasons": rebuild_reasons,
         "generation": generation,
+        "audit_path": str(audit_target),
         "bytes": sum(p.stat().st_size for p in folder.rglob("*.feather")),
     }
 
@@ -467,6 +643,7 @@ class TrainingAnalysisSnapshot:
         if (
             self.meta.get("label") != list(LABEL)
             or self.meta["schema"] != SCHEMA
+            or self.meta.get("dependency_version") != DEPENDENCY_VERSION
             or self.meta["contract"] != json.loads(json.dumps(default_contract()))
         ):
             raise ValueError("snapshot schema/default configuration mismatch")
@@ -656,7 +833,21 @@ def weekly_update():
         for d in DB.dates("trade_ts", "day")
         if int(d) >= 20170103 and int(d) <= int(CALENDAR.updated())
     ]
-    return build_snapshot(dates)
+    report = build_snapshot(dates)
+    if "audit_path" in report:
+        from src.automation.artifact_exchange import ArtifactSpec
+        from src.automation.artifact_exchange.research import CURRENT_TASK, publish_safe
+
+        path = Path(report["audit_path"])
+        Logger.info(f"快照一致性审计明细 · {path}")
+        spec = ArtifactSpec(path, category=AUDIT_CATEGORY, experiment="weekly_update",
+                            run_id=report["generation"])
+        owner = CURRENT_TASK.get()
+        if owner is None:
+            publish_safe("weekly_update", report["generation"], [spec])
+        else:
+            owner.register_artifact(spec)
+    return report
 
 
 def prune_generations(root=None):

@@ -123,7 +123,8 @@ class UpdateAPI:
         with Logger.Paragraph('Training Analysis Snapshot', 3):
             try:
                 report = weekly_update()
-                Logger.info(f"重算 {len(report['rewritten_years'])} 年，复用 {len(report['reused_years'])} 年。"
+                Logger.info(f"重算 {len(report['recomputed_years'])} 年，写入数据 {len(report['rewritten_years'])} 年，"
+                            f"直接复用 {len(report['reused_years'])} 年。"
                             f"计算 {report['compute_seconds']:.1f} 秒，保存 {report['save_seconds']:.1f} 秒，"
                             f"构建总计 {report['total_seconds']:.1f} 秒。快照版本 {report['generation']}")
             except Exception as error:
@@ -150,5 +151,3 @@ class UpdateAPI:
         """
         from src.res.trading import TrackingPortfolioManager
         TrackingPortfolioManager.update()
-
-    

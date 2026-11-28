@@ -60,7 +60,7 @@ class PreparedUniverse:
         return {str(d): self.fingerprint(DB.path('universe', self.name, d))
                 for d in sorted(set(map(int, dates)))}
 
-    def dependencies(self, dates, *, file_fingerprints=None):
+    def dependencies(self, dates, *, file_fingerprints=None, exclude_info=()):
         """Track absent files too, so late-arriving records invalidate old packs.
 
         Conservative for information tables; precise 90-calendar-day windows for
@@ -81,7 +81,8 @@ class PreparedUniverse:
             if key not in memo:
                 memo[key] = self.fingerprint(path)
             return memo[key]
-        shared = [dbpath('information_ts', key) for key in ('description', 'change_name')]
+        shared = [dbpath('information_ts', key) for key in ('description', 'change_name')
+                  if key not in exclude_info]
         result = {}
         for date in sorted(set(map(int, dates))):
             previous = [d for d in values if d <= date]
