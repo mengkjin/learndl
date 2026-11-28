@@ -47,6 +47,7 @@ class ModuleDataConfig:
     filter_date: str | None
     dtype: torch.dtype
     factor_sequence_view: str = "full"
+    factor_sequence_label_snapshot: str | None = None
     factor_sequence_dataset: str | None = None
 
     def __post_init__(self):
@@ -72,6 +73,7 @@ class ModuleDataConfig:
             self.filter_secid == other.filter_secid and
             self.filter_date == other.filter_date and
             self.dtype == other.dtype and
+            self.factor_sequence_label_snapshot == getattr(other, "factor_sequence_label_snapshot", None) and
             self.factor_sequence_view == getattr(other, "factor_sequence_view", "full") and
             self.factor_sequence_dataset == getattr(other, "factor_sequence_dataset", None)
         )
@@ -131,7 +133,8 @@ class ModuleData(Base.BoundLogger):
         filter_secid: str | None = None,
         filter_date: str | None = None,
         indent: int = 1, vb_level: Base.lit.VerbosityLevel = 2, dtype=torch.float,
-        factor_sequence_dataset: str | None = None, factor_sequence_view: str = "full"
+        factor_sequence_dataset: str | None = None, factor_sequence_view: str = "full",
+        factor_sequence_label_snapshot: str | None = None,
     ) -> ModuleData:
         config = ModuleDataConfig(
             data_type_list=tuple(sorted([cls.abbr(data_type) for data_type in data_type_list])),
@@ -143,8 +146,11 @@ class ModuleData(Base.BoundLogger):
             filter_secid=filter_secid,
             filter_date=filter_date,
             dtype=ModuleDataConfig.get_torch_dtype(dtype),
+            factor_sequence_label_snapshot=factor_sequence_label_snapshot,
             factor_sequence_dataset=factor_sequence_dataset, factor_sequence_view=factor_sequence_view,
         )
+        if factor_sequence_label_snapshot and (not factor_sequence_dataset or config.y_labels != ["std_lag1_10"]):
+            raise ValueError("Graph label snapshot requires a factor-sequence dataset and std_lag1_10")
         if factor_sequence_dataset:
             from src.data.preprocess.factor_sequence.schema import KEYS
             streams = set(config.data_type_list)
@@ -411,6 +417,10 @@ class ModuleData(Base.BoundLogger):
     ) -> DataBlock:
         """Load a block via the registered ``PreProcessor`` for ``key``."""
         from src.data.preprocess import PrePros
+        if key == "y" and self.config.factor_sequence_label_snapshot:
+            from src.res.model.experiment.factor_sequence.label_snapshot import load_label_snapshot
+            block = load_label_snapshot(self.config.factor_sequence_label_snapshot)
+            return block.align_date(dates, inplace=True).align_secid(secid, inplace=True)
         type = "predict" if self.use_data == "predict" else "fit"
         vb_level = kwargs.pop('vb_level', self.vb_level + 2)
         if key in ('factorseq','factorperf','factormarket'):

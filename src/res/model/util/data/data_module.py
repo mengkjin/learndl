@@ -140,6 +140,7 @@ class DataModule(Base.BoundLogger):
             filter_secid = self.config.input_filter_secid , 
             filter_date = self.config.input_filter_date , 
             dtype = self.config.precision,
+            factor_sequence_label_snapshot=self.config.Param.get('input.factor_sequence.label_snapshot'),
             factor_sequence_dataset=self.config.Param.get('input.factor_sequence.dataset'),
             factor_sequence_view=self.config.Param.get('input.factor_sequence.view','full'))
 

@@ -15,6 +15,12 @@
 
 学习率小试选择 `factorseq_v4_graph_lr_probe`，设置 **stage 1（只训练）、sparse、步长 18**，首次 `resume=False`，日期使用默认完整范围。检查器要求实际命中 20161230、20210827、20260512 三期。该模型结构和停机规则与 Graph 相同，基础学习率为 0.0003。研究结论以这三折的验证表现为依据。
 
+## 与旧 Graph 核对标签
+
+三个任务共用同一份 `std_lag1_10` 快照。首个任务先校验旧 pin 的数据 manifest 和标签哈希。若公共 fit/Y 已向后扩展，核对时仅将旧末折测试日之后的标签在内存中恢复为 NaN，并要求复现原 SHA-256。随后逐日核对旧 Graph 的样本外批次股票集合和标准化标签。训练与验证日期由旧 pin 逐折确定，样本外记录来自旧 Graph 的 `snapshot/factor_residual`。
+
+通过后在 pin 旁的 `repaired_20261117.labels-v1.<pin摘要>/` 生成 `verification.json` 和按内容哈希命名的标签文件。配置中的 `input.factor_sequence.label_snapshot` 指向该文件，训练、验证及测试按原日历对齐，各折日期的并集仅存一份。核对失败会在 Setup 记录具体错误。若原始哈希无法复现，需要用旧 fit/Y 备份核对；保留原 pin，避免改写研究基准。
+
 ## 从服务器快照构建报告
 
 以下命令使用服务端实际模型目录。报告输出到 `results/custom/factor_sequence` 下的独立运行目录。加入 `--publish` 可经既有投递系统发布报告与明细 CSV。
