@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
 from uuid import uuid4
+
+from .label_snapshot import graph_label_snapshot, label_digest, read_live_labels
 
 import numpy as np
 
@@ -107,25 +108,8 @@ def _validate_contract(manifest):
 
 
 def _label_state(dataset, dates):
-    from src.data.util import DataBlock
-
-    labels = DataBlock.load_preprocess("y", frame="fit")
-    if not labels.initiated or "std_lag1_10" not in labels.feature:
-        raise ValueError("Missing label std_lag1_10")
-    labels = (
-        labels.align_feature(["std_lag1_10"])
-        .align_secid(np.load(dataset / "secids.npy"))
-        .align_date(dates)
-    )
-    values = labels.values[:, :, 0, 0].detach().cpu().numpy()
-    ready = np.asarray(np.isfinite(values).any(axis=0), dtype=bool)
-    # Hash only this frozen dataset interval: future label dates cannot change the pin.
-    digest = hashlib.sha256()
-    for offset in range(0, len(values), 256):
-        chunk = values[offset : offset + 256].astype("<f4", copy=True)
-        chunk[np.isnan(chunk)] = np.nan
-        digest.update(chunk.tobytes())
-    return ready, digest.hexdigest()
+    values = read_live_labels(dataset, dates)
+    return np.asarray(np.isfinite(values).any(axis=0), dtype=bool), label_digest(values)
 
 
 def resolve_repaired(source, model, name, mode):
@@ -171,18 +155,18 @@ def resolve_repaired(source, model, name, mode):
     mature_dates = dates[ends <= dates[-1]]
     if not len(mature_dates):
         raise ValueError("No mature label dates")
-    ready, label_hash = _label_state(dataset, mature_dates)
+    snapshot = None
     if pinned:
-        if (
-            pinned["manifest_sha256"] != manifest_hash
-            or pinned["label_sha256"] != label_hash
-        ):
-            raise ValueError(
-                "Frozen research inputs changed; use a new campaign, not old weights"
-            )
+        if pinned["manifest_sha256"] != manifest_hash:
+            raise ValueError(f"Frozen dataset manifest changed: expected {pinned['manifest_sha256']}, got {manifest_hash}")
         folds = pinned["folds"]
+        if model == "factorseq_contextual_v5" or mode == "graph_lr_probe":
+            graph = PATH.model_nn / "factorseq_contextual_v4@factorseq_v4_graph"
+            snapshot = graph_label_snapshot(pin_path, pinned, dataset, mature_dates, graph)
+        elif _label_state(dataset, mature_dates)[1] != pinned["label_sha256"]:
+            raise ValueError("Frozen research inputs changed: historical label hash differs")
     else:
-        # Maturity was checked against full input dates above.
+        ready, label_hash = _label_state(dataset, mature_dates)
         full_ready = np.zeros(len(dates), dtype=bool)
         full_ready[: len(ready)] = ready
         folds = expanded_folds(dates, ends, full_ready)
@@ -206,4 +190,7 @@ def resolve_repaired(source, model, name, mode):
             return resolve_repaired(source, model, name, mode)
         finally:
             staged.unlink(missing_ok=True)
-    return residual_config(dataset, name, model, folds, mode, view="compact")
+    config = residual_config(dataset, name, model, folds, mode, view="compact")
+    if snapshot:
+        config["input.factor_sequence.label_snapshot"] = snapshot
+    return config

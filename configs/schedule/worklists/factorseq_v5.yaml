@@ -13,4 +13,4 @@ stage: 0
 short_test: false
 resume: false
 force: false
-rerun_mark: 1
+rerun_mark: 2

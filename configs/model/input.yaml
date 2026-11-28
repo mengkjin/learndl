@@ -51,5 +51,6 @@ final.refresh: false
 
 # Explicit immutable dataset for opt-in factor-sequence experiments.
 factor_sequence.dataset: null
+factor_sequence.label_snapshot: null
 
 data.prenorm.30mcont: {divlast: true, histnorm: true}
