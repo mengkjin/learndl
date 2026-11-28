@@ -1,4 +1,4 @@
-"""Graph label migration, archived batch replay and frozen trainer input."""
+"""Current-label freezing and reuse through the ordinary data loader."""
 
 from __future__ import annotations
 
@@ -9,14 +9,9 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import numpy as np
-import pandas as pd
-import torch
-import yaml
 
-from src.data.preprocess.factor_sequence.bundle import file_digest
 from src.res.model.experiment.factor_sequence import label_snapshot as labels
 from src.res.model.util.data.module_data import ModuleData
-from src.shared.numeric.tensor import standardize
 from tests.test_factor_sequence_repaired_schedule import fixture
 
 __all__ = ["GraphLabelSnapshotTests"]
@@ -40,55 +35,29 @@ class GraphLabelSnapshotTests(unittest.TestCase):
         self.live = np.tile(np.arange(9, dtype=np.float32), (2, 1))
         self.live[1] *= -0.5
         self.live[0, 5] = np.nan
-        original = self.live.copy()
-        original[:, 7:] = np.nan
-        self.pin = dict(folds=self.folds, label_sha256=labels.label_digest(original))
         self.pin_path = root / "pin.json"
-        self.graph = root / "graph"
-        conf = self.graph / "configs"
-        conf.mkdir(parents=True)
-        (conf / "model.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "model.name": "factorseq_v4_graph",
-                    "model.labels": [labels.LABEL],
-                    "input.factor_sequence.dataset": str(self.dataset),
-                    "train.factor_sequence.folds": self.folds,
-                }
-            )
-        )
-        src = np.load(self.dataset / "factorseq.npy", mmap_mode="r+")
-        src[:, :, 0, len(labels.FACTORS)] = 1.0
-        src.flush()
-        manifest_path = self.dataset / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        manifest["files"]["factorseq.npy"] = file_digest(self.dataset / "factorseq.npy")
-        manifest_path.write_text(json.dumps(manifest))
-        self.archive = self.graph / "snapshot/factor_residual"
-        self.archive.mkdir(parents=True)
-        for i in (5, 6):
-            col = torch.tensor(self.live[:, i])
-            scores = standardize(standardize(col))
-            mask = torch.isfinite(col)
-            pd.DataFrame(
-                dict(secid=np.array([1, 2])[mask.numpy()], label=scores[mask].numpy())
-            ).to_feather(self.archive / f"{self.dates[i]}.feather")
         self.read = self.enterContext(
-            patch.object(labels, "read_live_labels", return_value=self.live)
+            patch.object(
+                labels,
+                "read_live_labels",
+                side_effect=lambda dataset, dates: self.live[
+                    :, np.searchsorted(self.dates, dates)
+                ],
+            )
         )
 
     def freeze(self):
         return Path(
-            labels.graph_label_snapshot(
-                self.pin_path, self.pin, self.dataset, self.dates, self.graph
+            labels.current_label_snapshot(
+                self.pin_path, "bundle-sha", self.folds, self.dataset, self.dates
             )
         )
 
     def test_recover_reuse_and_real_label_loader(self):
         path = self.freeze()
         info = json.loads((path.parent / "verification.json").read_text())
-        self.assertNotEqual(info["live_label_sha256"], info["legacy_label_sha256"])
-        self.assertEqual(info["test_rows"], 3)
+        self.assertEqual(info["source"], "fit/Y")
+        self.assertEqual(info["fold_days"], len(self.used))
         self.assertEqual(info["cutoff"], self.dates[6])
         self.assertEqual(self.live[0, -1], 8)
         self.read.side_effect = AssertionError("live Y must not be read")
@@ -126,26 +95,17 @@ class GraphLabelSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Corrupt"):
             module.load_one("y", dates=self.dates)
 
-    def test_changed_historical_value_and_mask_block_publication(self):
-        for value in [5.0, np.nan]:
-            with self.subTest(value=value):
-                self.live[1, 2] = value
-                with self.assertRaisesRegex(
-                    ValueError, "Cannot reproduce Graph label pin"
-                ):
-                    self.freeze()
-                self.assertFalse(list(self.pin_path.parent.glob("*.labels-v1.*")))
+    def test_first_snapshot_uses_current_values_and_masks(self):
+        self.live[1, 2] = np.nan
+        self.live[0, 2] = 37.0
+        path = self.freeze()
+        self.live[:, 2] = -100.0
+        self.assertEqual(path, self.freeze())
+        block = labels.load_label_snapshot(path)
+        np.testing.assert_equal(block.values[:, 1, 0, 0].numpy(), [37.0, np.nan])
 
-    def test_mismatch_in_actual_graph_output_blocks_publication(self):
-        path = self.archive / f"{self.dates[6]}.feather"
-        frame = pd.read_feather(path)
-        frame["label"] += 0.1
-        frame.to_feather(path)
-        with self.assertRaisesRegex(ValueError, "Graph test batch labels differ"):
+    def test_missing_entire_fold_date_blocks_publication(self):
+        self.live[:, 2] = np.nan
+        with self.assertRaisesRegex(ValueError, "Missing labels"):
             self.freeze()
-        frame.iloc[:1].to_feather(path)
-        with self.assertRaisesRegex(ValueError, "Graph test security set changed"):
-            self.freeze()
-        path.unlink()
-        with self.assertRaisesRegex(ValueError, "Incomplete Graph"):
-            self.freeze()
+        self.assertFalse(list(self.pin_path.parent.glob("*.v5-current-labels.*")))

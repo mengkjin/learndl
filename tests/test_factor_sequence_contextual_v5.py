@@ -319,3 +319,6 @@ class V5ReportTests(unittest.TestCase):
             right.to_feather(file)
             with self.assertRaisesRegex(ValueError, "labels differ"):
                 list(_snapshot_rows(a, b, daily))
+            (a / "snapshot/factor_residual/20170101.feather").unlink()
+            (historical,) = _snapshot_rows(a, b, daily, historical_graph=True)
+            self.assertEqual(historical["n_stocks"], len(right))

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from uuid import uuid4
 
-from .label_snapshot import graph_label_snapshot, label_digest, read_live_labels
+from .label_snapshot import current_label_snapshot, label_digest, read_live_labels
 
 import numpy as np
 
@@ -161,8 +161,7 @@ def resolve_repaired(source, model, name, mode):
             raise ValueError(f"Frozen dataset manifest changed: expected {pinned['manifest_sha256']}, got {manifest_hash}")
         folds = pinned["folds"]
         if model == "factorseq_contextual_v5" or mode == "graph_lr_probe":
-            graph = PATH.model_nn / "factorseq_contextual_v4@factorseq_v4_graph"
-            snapshot = graph_label_snapshot(pin_path, pinned, dataset, mature_dates, graph)
+            snapshot = current_label_snapshot(pin_path, manifest_hash, folds, dataset, mature_dates)
         elif _label_state(dataset, mature_dates)[1] != pinned["label_sha256"]:
             raise ValueError("Frozen research inputs changed: historical label hash differs")
     else:

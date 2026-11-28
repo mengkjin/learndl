@@ -86,33 +86,36 @@ def _score_ic(frame, score, label):
     return frame[score].corr(frame[label], method="spearman")
 
 
-def _snapshot_rows(left, right, daily):
+def _snapshot_rows(left, right, daily, *, historical_graph=False):
     """Verify stock/label identity and attribute rank/Top 50 changes one date at a time."""
     baseline, candidate = residual_snapshot(left), residual_snapshot(right)
     expected = {f"{date}.feather" for date in daily.index}
     if any(
         {p.name for p in folder.glob("*.feather")} != expected
-        for folder in (baseline, candidate)
+        for folder in ((candidate,) if historical_graph else (baseline, candidate))
     ):
         raise ValueError("Residual snapshots and BasicTest dates differ")
     for date, row in daily.iterrows():
-        a = _unique_index(pd.read_feather(baseline / f"{date}.feather"), "secid")
         b = _unique_index(
             pd.read_feather(candidate / f"{date}.feather"), "secid"
         ).sort_index()
-        if len(a) != len(b) or not a.index.isin(b.index).all():
-            raise ValueError(f"Stock membership differs on {date}")
-        if not np.array_equal(
-            a.label.to_numpy(), b.label.reindex(a.index).to_numpy(), equal_nan=True
-        ):
-            raise ValueError(f"Training labels differ on {date}")
+        include_market_branch = False
+        if not historical_graph:
+            a = _unique_index(pd.read_feather(baseline / f"{date}.feather"), "secid")
+            include_market_branch = "market_stock_correction" in a
+            if len(a) != len(b) or not a.index.isin(b.index).all():
+                raise ValueError(f"Stock membership differs on {date}")
+            if not np.array_equal(
+                a.label.to_numpy(), b.label.reindex(a.index).to_numpy(), equal_nan=True
+            ):
+                raise ValueError(f"Training labels differ on {date}")
         scores = b[["pred", "graph_score", *BRANCHES]].to_numpy(dtype=float, na_value=np.nan)
         if not np.isfinite(scores).all():
             raise ValueError(f"Non-finite prediction or score contribution on {date}")
         if not np.allclose(b.pred, b.graph_score + b[list(BRANCHES)].sum(axis=1), atol=1e-6):
             raise ValueError(f"Market score decomposition differs on {date}")
         b["same_weights_base"] = b.graph_score
-        if "market_stock_correction" in a and "event_factor_correction" in b:
+        if include_market_branch and "event_factor_correction" in b:
             b["same_weights_base"] += (
                 b.market_factor_correction + b.market_stock_correction
             )
@@ -314,7 +317,7 @@ def compare_v5(graph, market, events, output):
                 "delta_ic": b.rankic_rtn - a.rankic_rtn,
             }
         )
-        x = pd.DataFrame(_snapshot_rows(roots[i], roots[j], paired))
+        x = pd.DataFrame(_snapshot_rows(roots[i], roots[j], paired, historical_graph=i == 0))
         low, high = _hac_interval(x.delta_ic)
         summary = pd.DataFrame(
             [
@@ -347,7 +350,7 @@ def compare_v5(graph, market, events, output):
     _html(
         output / "market-vs-graph.html",
         "每日市场状态对照",
-        f"{SOURCES[1]} 对比 {SOURCES[0]}。Top 50 换入换出明细使用训练标签，组合绩效采用项目评价器。",
+        f"{SOURCES[1]} 对比历史结果 {SOURCES[0]}，差异包含训练标签版本的影响。Top 50 换入换出明细使用训练标签，组合绩效采用项目评价器。",
         [
             ("整体差异与 Newey–West 区间（滞后 20 日）", market_summary),
             ("年度原始收益 ΔRank IC", market_annual),
@@ -370,7 +373,7 @@ def compare_v5(graph, market, events, output):
     _html(
         output / "events-vs-market.html",
         "稀疏市场事件对照",
-        f"{SOURCES[2]} 对比 {SOURCES[1]}，并附相对 {SOURCES[0]} 的总体差异。Top 50 换入换出明细使用训练标签。",
+        f"{SOURCES[2]} 对比 {SOURCES[1]}，并附相对历史参考 {SOURCES[0]} 的总体差异。Top 50 换入换出明细使用训练标签。",
         [
             ("事件层增量与 Newey–West 区间（滞后 20 日）", event_summary),
             ("相对 Graph 的总差异", total_summary),
