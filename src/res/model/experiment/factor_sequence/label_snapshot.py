@@ -1,4 +1,4 @@
-"""Verify legacy Graph labels and publish the fold union for ordinary training."""
+"""Freeze the current fit labels once for the V5 schedules and learning-rate probe."""
 
 from __future__ import annotations
 
@@ -9,19 +9,15 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import numpy as np
-import pandas as pd
 import torch
-import yaml
 
 from src.data.preprocess.factor_sequence.bundle import file_digest, write_json
-from src.data.preprocess.factor_sequence.schema import FACTORS, STOCK_CHANNELS
-from src.shared.numeric.tensor import standardize
 
 __all__ = [
     "LABEL",
     "read_live_labels",
     "label_digest",
-    "graph_label_snapshot",
+    "current_label_snapshot",
     "load_label_snapshot",
 ]
 
@@ -43,119 +39,36 @@ def read_live_labels(dataset, dates):
     return block.values[:, :, 0, 0].detach().cpu().numpy()
 
 
-def label_digest(values, *, nan_from=None):
+def label_digest(values):
     """Reproduce the original stock-major little-endian float32 pin without editing Y."""
     digest = hashlib.sha256()
     for offset in range(0, len(values), 256):
         chunk = values[offset : offset + 256].astype("<f4", copy=True)
-        if nan_from is not None:
-            chunk[:, nan_from:] = np.nan
         chunk[np.isnan(chunk)] = np.nan
         digest.update(chunk.tobytes())
     return digest.hexdigest()
 
 
-def _check_graph(graph, dataset, folds, dates, secids, values):
-    """Check the saved Graph configuration and each actual OOS batch's securities and label."""
-    from src.res.model.analytic.factor_sequence.context_diagnostics import (
-        residual_snapshot,
-    )
-
-    config = yaml.safe_load((graph / "configs/model.yaml").read_text())
-    if (
-        config["model.name"] != "factorseq_v4_graph"
-        or config["model.labels"] != [LABEL]
-        or Path(config["input.factor_sequence.dataset"]) != dataset
-        or config["train.factor_sequence.folds"] != folds
-    ):
-        raise ValueError(f"Graph benchmark dataset, target or folds differ: {graph}")
-    days = sorted(day for f in folds for day in f["test"])
-    folder = residual_snapshot(graph)
-    if sorted(int(p.stem) for p in folder.glob("*.feather")) != days:
-        raise ValueError(f"Incomplete Graph test label archive: {folder}")
-
-    # The compact view selects the full bundle's endpoint validity channels.
-    stock = np.load(dataset / "factorseq.npy", mmap_mode="r")
-    axis = np.load(dataset / "dates.npy")
-    begin = np.searchsorted(axis, days[0])
-    end = np.searchsorted(axis, days[-1]) + 1
-    k = len(FACTORS)
-    feature = STOCK_CHANNELS.index("valid") * k
-    valid = np.empty((len(secids), end - begin), dtype=bool)
-    for offset in range(0, len(secids), 32):
-        part = stock[offset : offset + 32, begin:end, 0, feature : feature + k]
-        valid[offset : offset + 32] = (part > 0).any(axis=-1)
-
-    largest_error = 0.0
-    rows = 0
-    for day in days:
-        frame = pd.read_feather(
-            folder / f"{day}.feather", columns=["secid", "label"]
-        ).set_index("secid")
-        column = values[:, np.searchsorted(dates, day)]
-        effective = valid[:, np.searchsorted(axis, day) - begin] & np.isfinite(column)
-        ids = secids[effective]
-        if (
-            not len(ids)
-            or not frame.index.is_unique
-            or len(frame) != len(ids)
-            or not np.isin(ids, frame.index).all()
-        ):
-            raise ValueError(f"Graph test security set changed on {day}")
-        # DataModule standardizes first on the full cross-section, then on the effective batch.
-        score = standardize(torch.from_numpy(column.copy()), dim=0)
-        score[~torch.from_numpy(effective)] = torch.nan
-        expected = standardize(score, dim=0).numpy()[effective]
-        actual = frame["label"].reindex(ids).to_numpy()
-        # Only this replay of floating-point reductions allows rounding error.
-        # The separately verified pre-standardization input hash is bit-exact.
-        if not np.allclose(actual, expected, rtol=1e-6, atol=1e-6):
-            raise ValueError(
-                f"Graph test batch labels differ on {day}: max abs error {np.max(np.abs(actual - expected))}"
-            )
-        largest_error = max(largest_error, float(np.max(np.abs(actual - expected))))
-        rows += len(ids)
-    return dict(
-        graph=str(graph),
-        test_days=len(days),
-        test_rows=rows,
-        max_abs_batch_error=largest_error,
-    )
-
-
-def graph_label_snapshot(pin_path, pin, dataset, mature_dates, graph):
-    """Publish a verified snapshot once per immutable pin, including simultaneous first users."""
-    identity = hashlib.sha256(json.dumps(pin, sort_keys=True).encode()).hexdigest()
-    folder = pin_path.parent / f"{pin_path.stem}.labels-v1.{identity}"
+def current_label_snapshot(pin_path, manifest_hash, folds, dataset, mature_dates):
+    """Share one immutable current-label snapshot across the three schedules."""
+    identity = hashlib.sha256(
+        json.dumps(
+            {"manifest": manifest_hash, "folds": folds, "label": LABEL},
+            sort_keys=True,
+        ).encode()
+    ).hexdigest()
+    folder = pin_path.parent / f"{pin_path.stem}.v5-current-labels.{identity}"
     receipt = folder / "verification.json"
     if not folder.exists():
-        folds = pin["folds"]
         dates = np.unique(
             [d for f in folds for split in ("train", "valid", "test") for d in f[split]]
         )
         if not dates.size or not np.isin(dates, mature_dates).all():
             raise ValueError("Frozen fold dates outside mature label grid")
         secids = np.load(dataset / "secids.npy")
-        live = read_live_labels(dataset, mature_dates)
-        cutoff = int(dates[-1])
-        full = label_digest(live)
-        replay = full
-        if full != pin["label_sha256"]:
-            replay = label_digest(
-                live, nan_from=np.searchsorted(mature_dates, cutoff, side="right")
-            )
-        if replay != pin["label_sha256"]:
-            raise ValueError(
-                f"Cannot reproduce Graph label pin through {cutoff}. Expected {pin['label_sha256']}, "
-                f"live {full}, restored NaN tail {replay}. Original fit/Y required."
-            )
-        values = np.ascontiguousarray(
-            live[:, np.searchsorted(mature_dates, dates)], dtype="<f4"
-        )
-        del live
+        values = np.ascontiguousarray(read_live_labels(dataset, dates), dtype="<f4")
         if not np.isfinite(values).any(axis=0).all():
             raise ValueError("Missing labels on a pinned fold date")
-        checked = _check_graph(graph, dataset, folds, dates, secids, values)
         with TemporaryDirectory(dir=pin_path.parent) as tmp:
             stage = Path(tmp) / "snapshot"
             stage.mkdir()
@@ -166,14 +79,12 @@ def graph_label_snapshot(pin_path, pin, dataset, mature_dates, graph):
             write_json(
                 stage / receipt.name,
                 dict(
-                    pin_sha256=identity,
+                    campaign_sha256=identity,
                     snapshot_sha256=checksum,
-                    legacy_label_sha256=replay,
-                    live_label_sha256=full,
-                    cutoff=cutoff,
+                    source="fit/Y",
+                    cutoff=int(dates[-1]),
                     fold_days=len(dates),
                     securities=len(secids),
-                    **checked,
                 ),
             )
             try:
@@ -182,10 +93,7 @@ def graph_label_snapshot(pin_path, pin, dataset, mature_dates, graph):
                 if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST):
                     raise
     info = json.loads(receipt.read_text())
-    if (
-        info["pin_sha256"] != identity
-        or info["legacy_label_sha256"] != pin["label_sha256"]
-    ):
+    if info["campaign_sha256"] != identity:
         raise ValueError(f"Wrong verification receipt: {receipt}")
     path = folder / f"{info['snapshot_sha256']}.npz"
     if not path.is_file():
@@ -193,8 +101,8 @@ def graph_label_snapshot(pin_path, pin, dataset, mature_dates, graph):
     from src.proj import Logger
 
     Logger.info(
-        f"Verified Graph labels through {info['cutoff']}, {info['fold_days']} fold dates, "
-        f"{info['test_rows']} archived test labels. Receipt: {receipt}"
+        f"Frozen current fit/Y labels through {info['cutoff']}, {info['fold_days']} fold dates, "
+        f"{info['securities']} securities. Receipt: {receipt}"
     )
     return str(path)
 
